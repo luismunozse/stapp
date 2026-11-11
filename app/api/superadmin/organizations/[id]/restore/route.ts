@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 /**
  * POST /api/superadmin/organizations/[id]/restore
@@ -9,7 +10,7 @@ import { supabaseAdmin } from "@/lib/supabase"
  * vuelve a suscribirse.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -54,18 +55,14 @@ export async function POST(
       return NextResponse.json({ error: "La organización no está archivada" }, { status: 409 })
     }
 
-    try {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: id,
-        user_id: null,
-        action: "RESTORE",
-        entity: "organizations",
-        entity_id: id,
-        changes: { superadmin_email: email },
-      })
-    } catch {
-      // best effort
-    }
+    await createSuperadminAuditLogger(email, request).log({
+      action: "RESTORE",
+      entity: "organizations",
+      entityId: id,
+      organizationId: id,
+      description: `Organización "${org.nombre}" restaurada`,
+      metadata: { orgName: org.nombre },
+    })
 
     return NextResponse.json({ success: true, message: `Organización "${org.nombre}" restaurada` })
   } catch (error) {

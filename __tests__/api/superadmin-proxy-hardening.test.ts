@@ -14,7 +14,7 @@ const { getToken, checkSuperadminLoginLimit } = vi.hoisted(() => ({
 }))
 
 vi.mock("next-auth/jwt", () => ({ getToken }))
-vi.mock("@/lib/superadmin-login-limit-edge", () => ({ checkSuperadminLoginLimit }))
+vi.mock("@/lib/superadmin-login-limit-edge", () => ({ checkSuperadminLoginLimit, checkTenantLoginLimit: vi.fn() }))
 vi.mock("@/lib/user-status-edge", () => ({
   // 397: el superadmin real tiene la fila marcada (es_superadmin).
   getUserDeletedStatus: vi.fn().mockResolvedValue({ kind: "ok", deleted: false, bloqueado: false, esSuperadmin: true }),

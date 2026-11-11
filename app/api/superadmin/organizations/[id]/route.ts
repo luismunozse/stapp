@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { purgeOrganization } from "@/lib/account-deletion/purge-organization"
 import type { OrganizationDetailResponse, PaymentWithOrg } from "@/types/superadmin"
 
@@ -244,6 +245,17 @@ export async function DELETE(
         // sin body es válido
       }
 
+      // Auditoría fail-closed ANTES de archivar.
+      const intento = await createSuperadminAuditLogger(email, request).exigir({
+        action: "ARCHIVE",
+        entity: "organizations",
+        entityId: id,
+        organizationId: id,
+        description: `Organización "${org.nombre}" archivada`,
+        metadata: { orgName: org.nombre, slug: org.slug, reason },
+      })
+      if (!intento.ok) return intento.respuesta
+
       const { data: archivedRows, error: archiveError } = await supabaseAdmin
         .from("organizations")
         .update({
@@ -256,26 +268,17 @@ export async function DELETE(
         .select("id")
 
       if (archiveError) {
+        await intento.completar({ error: archiveError.message }, "fallido")
         console.error("Error archiving organization:", archiveError)
         return NextResponse.json({ error: "Error al archivar la organización" }, { status: 500 })
       }
       if (!archivedRows || archivedRows.length === 0) {
+        await intento.completar({ error: "ya archivada" }, "fallido")
         // Otra request la archivó entre el pre-check y este update (TOCTOU)
         return NextResponse.json({ error: "La organización ya está archivada" }, { status: 409 })
       }
 
-      try {
-        await supabaseAdmin.from("audit_logs").insert({
-          organization_id: id,
-          user_id: null,
-          action: "ARCHIVE",
-          entity: "organizations",
-          entity_id: id,
-          changes: { superadmin_email: email, reason },
-        })
-      } catch {
-        // best effort
-      }
+      await intento.completar()
 
       return NextResponse.json({
         success: true,
@@ -302,8 +305,20 @@ export async function DELETE(
     // Cancela la suscripción en el proveedor, vacía storage (recursivo, todos
     // los buckets) y borra la fila. Antes esto solo barría 6 buckets a un nivel
     // y no cancelaba el cobro: un taller pago purgado seguía cobrándose.
+    // Auditoría fail-closed ANTES de purgar. organization_id va en null: el
+    // borrado de la org cascadea sus audit_logs y se llevaría esta fila.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "DELETE",
+      entity: "organizations",
+      entityId: id,
+      description: `Organización "${org.nombre}" eliminada permanentemente`,
+      metadata: { deleted_org: { id, nombre: org.nombre, slug: org.slug } },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const purge = await purgeOrganization(id)
     if (!purge.ok) {
+      await intento.completar({ error: String(purge.error), step: purge.step }, "fallido")
       console.error(`Error purging organization ${id} (paso ${purge.step}):`, purge.error)
       return NextResponse.json(
         { error: `Error al eliminar la organización (paso: ${purge.step})`, step: purge.step },
@@ -311,21 +326,7 @@ export async function DELETE(
       )
     }
 
-    try {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: null,
-        user_id: null,
-        action: "DELETE",
-        entity: "organizations",
-        entity_id: id,
-        changes: {
-          deleted_org: { id, nombre: org.nombre, slug: org.slug },
-          superadmin_email: email,
-        },
-      })
-    } catch {
-      // best effort
-    }
+    await intento.completar()
 
     return NextResponse.json({
       success: true,
@@ -370,17 +371,8 @@ export async function PUT(
 
     if (dbError) throw dbError
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: id,
-      user_id: null,
-      action: "UPDATE",
-      entity: "organizations",
-      entity_id: id,
-      changes: {
-        updated_fields: Object.keys(updateData),
-        superadmin_email: email,
-      },
+    await createSuperadminAuditLogger(email, request).orgUpdate(id, data?.nombre ?? id, {
+      updated_fields: Object.keys(updateData),
     })
 
     return NextResponse.json(data)

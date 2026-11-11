@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server"
 import { supabaseAdmin } from "./supabase"
 import type { Json } from "@/types/database"
 
@@ -22,6 +23,9 @@ export type SuperadminAuditAction =
   | "BULK_ACTION"
   | "TICKET_REPLY"
   | "VERIFY_EMAIL"
+  | "ARCHIVE"
+  | "RESTORE"
+  | "BULK_DELETE"
 
 /**
  * Entidades de auditoría extendidas
@@ -32,6 +36,7 @@ export type SuperadminAuditEntity =
   | "subscriptions"
   | "plans"
   | "payments"
+  | "subscription_payments"
   | "broadcasts"
   | "email_campaigns"
   | "support_tickets"
@@ -40,6 +45,8 @@ export type SuperadminAuditEntity =
   | "changelog"
   | "waitlist"
   | "system"
+  | "email_templates"
+  | "audit_alert_config"
   // Entidades de tenant
   | "ordenes_servicio"
   | "clientes"
@@ -66,28 +73,42 @@ interface SuperadminAuditParams {
   userAgent?: string | null
 }
 
+/** Lo que describe una acción; el email, la IP y el user agent los pone el logger. */
+export type SuperadminAuditEvent = Omit<SuperadminAuditParams, "email" | "ipAddress" | "userAgent">
+
+/** Estado de un registro exigido: se escribe como "intento" ANTES de la acción. */
+export type EstadoAuditoria = "intento" | "completado" | "fallido"
+
+function construirFila(params: SuperadminAuditParams, extra?: { id: string; estado: EstadoAuditoria }) {
+  const changes: Record<string, unknown> = {
+    description: params.description || null,
+    metadata: params.metadata || null,
+    performer_email: params.email || null,
+    is_superadmin_action: true,
+  }
+  if (extra) changes.estado = extra.estado
+  return {
+    ...(extra ? { id: extra.id } : {}),
+    organization_id: params.organizationId || null,
+    user_id: params.userId || null,
+    action: params.action,
+    entity: params.entity,
+    entity_id: params.entityId || null,
+    changes: changes as Json,
+    description: params.description || null,
+    ip_address: params.ipAddress || null,
+    user_agent: params.userAgent || null,
+  }
+}
+
 /**
- * Registrar un log de auditoría de superadmin
+ * Registrar un log de auditoría de superadmin — modo best-effort: si el INSERT falla
+ * se loguea y se sigue. Para acciones sensibles usar `exigirAuditoriaSuperadmin`.
  * Usa la misma tabla audit_logs pero con campos extendidos en changes/metadata
  */
 export async function logSuperadminAudit(params: SuperadminAuditParams): Promise<void> {
   try {
-    const { error } = await supabaseAdmin.from("audit_logs").insert({
-      organization_id: params.organizationId || null,
-      user_id: params.userId || null,
-      action: params.action,
-      entity: params.entity,
-      entity_id: params.entityId || null,
-      changes: {
-        description: params.description || null,
-        metadata: params.metadata || null,
-        performer_email: params.email || null,
-        is_superadmin_action: true,
-      } as Json,
-      description: params.description || null,
-      ip_address: params.ipAddress || null,
-      user_agent: params.userAgent || null,
-    })
+    const { error } = await supabaseAdmin.from("audit_logs").insert(construirFila(params))
 
     if (error) {
       console.error("Error logging superadmin audit:", error)
@@ -97,17 +118,93 @@ export async function logSuperadminAudit(params: SuperadminAuditParams): Promise
   }
 }
 
+export type AuditoriaExigida =
+  | {
+      ok: true
+      id: string
+      /**
+       * Anota el resultado en la misma fila (best-effort: la acción ya ocurrió y quedó
+       * registrada como intento; si este UPDATE falla solo se pierde el detalle).
+       */
+      completar: (resultado?: Record<string, unknown>, estado?: Exclude<EstadoAuditoria, "intento">) => Promise<void>
+    }
+  | { ok: false; respuesta: NextResponse }
+
+/**
+ * Auditoría fail-closed para acciones sensibles.
+ *
+ * Escribe la fila (estado "intento") ANTES de ejecutar la acción. Si el INSERT falla,
+ * o no hay superadmin identificado, devuelve `{ ok: false, respuesta }` con un 500 y la
+ * ruta debe cortar sin ejecutar nada: nunca hay una acción sensible sin rastro. Si la
+ * acción después falla, queda un "intento" de más — es el modo de falla aceptable.
+ *
+ *   const intento = await audit.exigir({ ... })
+ *   if (!intento.ok) return intento.respuesta
+ *   ...acción...
+ *   await intento.completar({ count })
+ */
+export async function exigirAuditoriaSuperadmin(params: SuperadminAuditParams): Promise<AuditoriaExigida> {
+  const fallo = (motivo: unknown): AuditoriaExigida => {
+    console.error("Auditoría obligatoria de superadmin falló; se cancela la acción:", motivo)
+    return {
+      ok: false,
+      respuesta: NextResponse.json(
+        { error: "No se pudo registrar la auditoría; la acción no se ejecutó" },
+        { status: 500 }
+      ),
+    }
+  }
+
+  if (!params.email) return fallo("sin email de superadmin")
+
+  const id = crypto.randomUUID()
+  const fila = construirFila(params, { id, estado: "intento" })
+  try {
+    const { error } = await supabaseAdmin.from("audit_logs").insert(fila)
+    if (error) return fallo(error)
+  } catch (err) {
+    return fallo(err)
+  }
+
+  return {
+    ok: true,
+    id,
+    completar: async (resultado, estado = "completado") => {
+      try {
+        const { error } = await supabaseAdmin
+          .from("audit_logs")
+          .update({ changes: { ...(fila.changes as Record<string, unknown>), estado, resultado: resultado ?? null } as Json })
+          .eq("id", id)
+        if (error) console.error("Error completando auditoría de superadmin:", error)
+      } catch (err) {
+        console.error("Error completando auditoría de superadmin:", err)
+      }
+    },
+  }
+}
+
+/**
+ * IP del cliente para auditoría. En Vercel `x-vercel-forwarded-for` y `x-real-ip` los
+ * pone la plataforma; el primer elemento de `x-forwarded-for` lo puede mandar el
+ * cliente, así que solo se usa como último recurso (fuera de Vercel / en local).
+ * Mismo orden que `clientIp()` de `proxy.ts`.
+ */
+export function clientIpForAudit(headers: Headers): string | null {
+  const primera = (valor: string | null) => valor?.split(",")[0]?.trim() || null
+  return (
+    primera(headers.get("x-vercel-forwarded-for")) ||
+    primera(headers.get("x-real-ip")) ||
+    primera(headers.get("x-forwarded-for"))
+  )
+}
+
 /**
  * Helper para extraer IP y User-Agent de un request
  */
 export function extractRequestInfo(request?: Request | null) {
   if (!request) return { ipAddress: null, userAgent: null }
 
-  const ipAddress =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    request.headers.get("x-real-ip") ||
-    null
-
+  const ipAddress = clientIpForAudit(request.headers)
   const userAgent = request.headers.get("user-agent") || null
 
   return { ipAddress, userAgent }
@@ -116,12 +213,22 @@ export function extractRequestInfo(request?: Request | null) {
 /**
  * Crear un logger pre-configurado para acciones de superadmin
  */
-export function createSuperadminAuditLogger(email: string | null, request?: Request) {
+export function createSuperadminAuditLogger(email: string | null, request?: Request | null) {
   const { ipAddress, userAgent } = extractRequestInfo(request)
 
   return {
-    log: (params: Omit<SuperadminAuditParams, "email" | "ipAddress" | "userAgent">) =>
+    /** Best-effort: registra y sigue aunque el INSERT falle. */
+    log: (params: SuperadminAuditEvent) =>
       logSuperadminAudit({
+        ...params,
+        email,
+        ipAddress,
+        userAgent,
+      }),
+
+    /** Fail-closed: registra ANTES de la acción; si no puede, devuelve el 500 a retornar. */
+    exigir: (params: SuperadminAuditEvent) =>
+      exigirAuditoriaSuperadmin({
         ...params,
         email,
         ipAddress,

@@ -55,8 +55,19 @@ describe("POST /api/superadmin/users/[userId]/toggle-active", () => {
     expect(u2.acceso_bloqueado_at).toBeNull()
     expect(mem.filas("refresh_tokens").map((t) => t.id)).toEqual(["rt2"])
 
-    const audit = mem.escrituras.find((e) => e.tabla === "audit_logs")
-    expect(audit?.carga).toMatchObject({ entity_id: "u1", changes: { after: "bloqueado" } })
+    // Auditoría fail-closed: el intento se escribe ANTES de bloquear, a nombre del superadmin.
+    const iAudit = mem.escrituras.findIndex((e) => e.tabla === "audit_logs" && e.operacion === "insert")
+    const iBloqueo = mem.escrituras.findIndex((e) => e.tabla === "users" && e.operacion === "update")
+    expect(iAudit).toBeGreaterThanOrEqual(0)
+    expect(iAudit).toBeLessThan(iBloqueo)
+    expect(mem.escrituras[iAudit].carga).toMatchObject({
+      entity_id: "u1",
+      changes: {
+        performer_email: "root@stapp.com.ar",
+        estado: "intento",
+        metadata: { field: "acceso_bloqueado_at", before: "habilitado", after: "bloqueado" },
+      },
+    })
   })
 
   it("habilitar limpia el bloqueo y no revoca nada", async () => {

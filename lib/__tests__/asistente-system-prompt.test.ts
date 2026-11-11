@@ -51,3 +51,20 @@ describe('buildAsistenteSystemPrompt', () => {
     expect(buildAsistenteSystemPrompt()).toContain('/notas-credito')
   })
 })
+
+describe('base de conocimiento actualizada', () => {
+  it('incluye las secciones de facturación electrónica y comisiones', () => {
+    const prompt = buildAsistenteSystemPrompt()
+    expect(prompt).toContain('## Facturación electrónica (ARCA)')
+    expect(prompt).toContain('## Comisiones')
+    expect(prompt).toMatch(/Anular factura/)
+    expect(prompt).toMatch(/Marcar como pagadas/)
+  })
+
+  it('puede linkear roles y permisos y las pestañas de configuración', () => {
+    const prompt = buildAsistenteSystemPrompt()
+    expect(prompt).toContain('/configuracion/roles')
+    expect(prompt).toContain('/configuracion?tab=facturacion')
+    expect(prompt).toContain('/ordenes/recepcion')
+  })
+})

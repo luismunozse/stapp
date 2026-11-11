@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 // GET - leer un template
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -138,6 +139,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         notes: typeof notes === "string" ? notes : null,
       })
     }
+
+    await createSuperadminAuditLogger(email, req).log({
+      action: "UPDATE",
+      entity: "email_templates",
+      entityId: id,
+      description: `Template de email "${prev.type}" actualizado${actions.length ? ` (${actions.join(", ")})` : ""}`,
+      metadata: {
+        type: prev.type,
+        actions,
+        status_before: prev.status,
+        status_after: updated.status,
+        subjectChanged,
+        bodyChanged,
+      },
+    })
 
     return NextResponse.json({ template: updated })
   } catch (err) {

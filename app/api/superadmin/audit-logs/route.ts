@@ -45,19 +45,13 @@ export async function GET(request: Request) {
     if (tab === "security") {
       query = query.in("action", ["LOGIN", "LOGOUT", "LOGIN_FAILED"])
     } else if (tab === "superadmin") {
-      query = query.in("action", [
-        "TOGGLE_STATUS",
-        "BROADCAST",
-        "EMAIL_CAMPAIGN",
-        "CRON_RUN",
-        "SUBSCRIPTION_RENEW",
-        "TRIAL_EXTENSION",
-        "PLAN_TOGGLE",
-        "BULK_ACTION",
-        "TICKET_REPLY",
-        "VERIFY_EMAIL",
-        "EXPORT",
-      ])
+      // Toda acción registrada por el helper de superadmin lleva la marca, sea
+      // cual sea su `action` (CREATE/UPDATE/ARCHIVE/...); antes se filtraba por
+      // una lista fija de acciones y quedaban afuera cambios de rol, archivados,
+      // planes, etc. Los logins también llevan la marca: van en "security".
+      query = query
+        .eq("changes->>is_superadmin_action", "true")
+        .not("action", "in", "(LOGIN,LOGOUT,LOGIN_FAILED)")
     }
 
     // Filtros

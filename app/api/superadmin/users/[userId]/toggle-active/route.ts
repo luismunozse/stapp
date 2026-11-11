@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { invalidateRefreshToken } from "@/lib/auth-tokens"
 
@@ -54,6 +55,25 @@ export async function POST(
     }
 
     const bloqueadoAntes = !!user.acceso_bloqueado_at
+
+    // Auditoría fail-closed ANTES de cambiar el acceso del usuario.
+    const intento = await createSuperadminAuditLogger(adminEmail, request).exigir({
+      action: "TOGGLE_STATUS",
+      entity: "users",
+      entityId: userId,
+      organizationId: user.organization_id,
+      description: activo
+        ? `Acceso de "${user.nombre}" (${user.email}) habilitado por superadmin`
+        : `Acceso de "${user.nombre}" (${user.email}) bloqueado por superadmin`,
+      metadata: {
+        field: "acceso_bloqueado_at",
+        before: bloqueadoAntes ? "bloqueado" : "habilitado",
+        after: activo ? "habilitado" : "bloqueado",
+        userEmail: user.email,
+      },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { error: updateError } = await supabaseAdmin
       .from("users")
       .update(
@@ -63,28 +83,16 @@ export async function POST(
       )
       .eq("id", userId)
 
-    if (updateError) throw updateError
+    if (updateError) {
+      await intento.completar({ error: updateError.message }, "fallido")
+      throw updateError
+    }
 
     // Sin refresh tokens no puede restaurar la sesión desde la PWA ni pasar la
     // próxima revalidación del JWT.
     if (!activo) await invalidateRefreshToken(userId)
 
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: user.organization_id,
-      user_id: userId,
-      action: "UPDATE",
-      entity: "users",
-      entity_id: userId,
-      changes: {
-        field: "acceso_bloqueado_at",
-        before: bloqueadoAntes ? "bloqueado" : "habilitado",
-        after: activo ? "habilitado" : "bloqueado",
-        superadmin_email: adminEmail,
-        action_description: activo
-          ? `Acceso de "${user.nombre}" (${user.email}) habilitado por superadmin`
-          : `Acceso de "${user.nombre}" (${user.email}) bloqueado por superadmin`,
-      },
-    })
+    await intento.completar()
 
     return NextResponse.json({
       success: true,

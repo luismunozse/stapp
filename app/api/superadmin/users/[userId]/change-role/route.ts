@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { getPrincipalId } from "@/lib/sucursal"
 import { isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
@@ -68,6 +69,17 @@ export async function POST(
     }
     // else: non-admin already has a branch — leave sucursal_id untouched
 
+    // Auditoría fail-closed ANTES de cambiar el rol.
+    const intento = await createSuperadminAuditLogger(adminEmail, request).exigir({
+      action: "UPDATE",
+      entity: "users",
+      entityId: userId,
+      organizationId: user.organization_id,
+      description: `Rol de "${user.nombre}" (${user.email}) cambiado de ${previousRole} a ${rol} por superadmin`,
+      metadata: { field: "rol", before: previousRole, after: rol, userEmail: user.email },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { error: updateError } = await supabaseAdmin
       .from("users")
       .update(updates)
@@ -84,26 +96,14 @@ export async function POST(
     // hay una regla de negocio con nombre y número. Los helpers ya existían
     // para el alta; el cambio de rol es la segunda puerta al mismo límite.
     if (updateError) {
+      await intento.completar({ error: updateError.message }, "fallido")
       if (isPlanLimitError(updateError)) {
         return planLimitErrorResponse(updateError)
       }
       throw updateError
     }
 
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: user.organization_id,
-      user_id: userId,
-      action: "UPDATE",
-      entity: "users",
-      entity_id: userId,
-      changes: {
-        field: "rol",
-        before: previousRole,
-        after: rol,
-        superadmin_email: adminEmail,
-        action_description: `Rol de "${user.nombre}" cambiado de ${previousRole} a ${rol} por superadmin`,
-      },
-    })
+    await intento.completar()
 
     return NextResponse.json({
       success: true,
