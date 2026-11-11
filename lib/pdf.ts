@@ -1,4 +1,4 @@
-import { PDFDocument as PDFLib, rgb, type PDFFont, type RGB } from "pdf-lib"
+import { PDFDocument as PDFLib, rgb, type PDFFont, type PDFImage, type RGB } from "pdf-lib"
 import fontkitModule from "@pdf-lib/fontkit"
 import { readFile } from "fs/promises"
 import { join } from "path"
@@ -12,6 +12,21 @@ import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, 
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
+import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+
+/**
+ * Descarga, normaliza (EXIF, recorte de bordes, formato) y embebe el logo.
+ * null si no hay logo o no se pudo cargar: el documento sale sin logo.
+ */
+async function embedLogo(pdfDoc: PDFLib, logoUrl: string | null | undefined): Promise<PDFImage | null> {
+  const logo = await fetchLogo(logoUrl)
+  if (!logo) return null
+  try {
+    return logo.format === "png" ? await pdfDoc.embedPng(logo.data) : await pdfDoc.embedJpg(logo.data)
+  } catch {
+    return null
+  }
+}
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -296,29 +311,16 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   let logoOffset = 0
 
   // Logo + Company info - vertically centered together
-  let embeddedLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  const embeddedLogo = await embedLogo(pdfDoc, data.logoUrl)
   let logoW = 0
   let logoH = 0
-  if (data.logoUrl) {
-    try {
-      const res = await fetch(data.logoUrl)
-      if (res.ok) {
-        const buf = await res.arrayBuffer()
-        const bytes = new Uint8Array(buf)
-        const ct = res.headers.get("content-type") || ""
-        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png"))
-          embeddedLogo = await pdfDoc.embedPng(bytes)
-        else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg"))
-          embeddedLogo = await pdfDoc.embedJpg(bytes)
-        if (embeddedLogo) {
-          const s = embeddedLogo.scale(1)
-          const ratio = Math.min(50 / s.height, 50 / s.width)
-          logoW = s.width * ratio
-          logoH = s.height * ratio
-          logoOffset = logoW + 12
-        }
-      }
-    } catch { /* ignore logo errors */ }
+  if (embeddedLogo) {
+    // Caja máxima 80x50 (antes 50x50): un logo horizontal ya no queda chico.
+    const s = embeddedLogo.scale(1)
+    const ratio = Math.min(50 / s.height, 80 / s.width)
+    logoW = s.width * ratio
+    logoH = s.height * ratio
+    logoOffset = logoW + 12
   }
 
   // Calculate text block height: company name + details line + gap
@@ -1316,32 +1318,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const headerTopY = ey
     const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
-    let enLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
-    if (data.logoUrl) {
-      try {
-        const res = await fetch(data.logoUrl)
-        if (res.ok) {
-          const buf = new Uint8Array(await res.arrayBuffer())
-          const ct = res.headers.get("content-type") || ""
-          if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-            enLogo = await pdfDoc.embedPng(buf)
-          } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-            enLogo = await pdfDoc.embedJpg(buf)
-          }
-        }
-      } catch { /* logo no disponible — se omite, sin placeholder */ }
-    }
-    if (enLogo) {
-      page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
-      const s = enLogo.scale(1)
-      const inset = 5
-      const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
-      const lw = s.width * ratio
-      const lh = s.height * ratio
-      page.drawImage(enLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
+    const enLogo = await embedLogo(pdfDoc, data.logoUrl)
+    // Marco de alto fijo y ancho según la proporción del logo (lib/pdf-logo.ts).
+    const enLogoMarco = enLogo ? marcoLogo(enLogo.scale(1), logoBoxSize, 5) : null
+    if (enLogo && enLogoMarco) {
+      page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: enLogoMarco.anchoMarco, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+      page.drawImage(enLogo, { x: rxMargin + enLogoMarco.dx, y: headerTopY - logoBoxSize + enLogoMarco.dy, width: enLogoMarco.ancho, height: enLogoMarco.alto })
     }
 
-    const bizX = rxMargin + (enLogo ? logoBoxSize + 12 : 0)
+    const bizX = rxMargin + (enLogoMarco ? enLogoMarco.anchoMarco + 12 : 0)
 
     const reingresoLabelEn = data.esReingreso && data.ordenOrigenNumero
       ? `Reingreso de #${String(data.ordenOrigenNumero).padStart(4, "0")}`
@@ -1975,33 +1960,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const headerTopY = ry
   const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
-  let rxLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
-  if (data.logoUrl) {
-    try {
-      const res = await fetch(data.logoUrl)
-      if (res.ok) {
-        const buf = new Uint8Array(await res.arrayBuffer())
-        const ct = res.headers.get("content-type") || ""
-        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          rxLogo = await pdfDoc.embedPng(buf)
-        } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          rxLogo = await pdfDoc.embedJpg(buf)
-        }
-      }
-    } catch { /* logo no disponible — no se dibuja la caja (skip, no placeholder) */ }
+  const rxLogo = await embedLogo(pdfDoc, data.logoUrl)
+  // Marco de alto fijo y ancho según la proporción del logo (lib/pdf-logo.ts).
+  const rxLogoMarco = rxLogo ? marcoLogo(rxLogo.scale(1), logoBoxSize, 5) : null
+  if (rxLogo && rxLogoMarco) {
+    page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: rxLogoMarco.anchoMarco, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+    page.drawImage(rxLogo, { x: rxMargin + rxLogoMarco.dx, y: headerTopY - logoBoxSize + rxLogoMarco.dy, width: rxLogoMarco.ancho, height: rxLogoMarco.alto })
   }
 
-  if (rxLogo) {
-    page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
-    const s = rxLogo.scale(1)
-    const inset = 5
-    const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
-    const lw = s.width * ratio
-    const lh = s.height * ratio
-    page.drawImage(rxLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
-  }
-
-  const bizX = rxMargin + (rxLogo ? logoBoxSize + 12 : 0)
+  const bizX = rxMargin + (rxLogoMarco ? rxLogoMarco.anchoMarco + 12 : 0)
 
   // idbox: se calcula primero su ancho reservado para poder acotar el
   // ancho disponible del bloque de empresa/sucursal a su izquierda.
@@ -2492,43 +2459,23 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    page.drawImage(logoImage, {
+      x: margin,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
+    logoWidth = scaledWidth + 15
   }
 
   // === HEADER: Empresa ===
@@ -2941,43 +2888,23 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    page.drawImage(logoImage, {
+      x: margin,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
+    logoWidth = scaledWidth + 15
   }
 
   // === HEADER: Empresa ===
@@ -3259,33 +3186,16 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 45
-          const maxLogoWidth = 60
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-          page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
-          logoWidth = scaledWidth + 12
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 45
+    const maxLogoWidth = 60
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
+    page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
+    logoWidth = scaledWidth + 12
   }
 
   // === HEADER: Empresa ===
@@ -3660,43 +3570,25 @@ export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Bu
 
   // === LOGO ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    // Inset de 10pt desde el borde del marco (igual que el texto, innerPad):
+    // antes el logo arrancaba justo sobre la línea del marco.
+    page.drawImage(logoImage, {
+      x: margin + 10,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
+    logoWidth = scaledWidth + 15
   }
 
   // === LETTER BOX geometry (classic Argentine comprobante "letra" box) ===

@@ -51,6 +51,7 @@ import QRCode from "qrcode"
 import { embedExpedienteFonts, type OrdenPDFData } from "@/lib/pdf"
 import { ORDEN_PAGE_POINTS } from "@/lib/orden-papel"
 import { MONO, drawRule, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
+import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
@@ -471,19 +472,15 @@ export async function generateOrdenCompactPDF(
     }
   }
 
+  // Normalized once (EXIF rotation, border trim, WEBP/GIF -> PNG) by the
+  // shared loader; a missing or broken logo is skipped, no placeholder.
   let logo: PDFImage | null = null
-  if (data.logoUrl) {
+  const logoData = await fetchLogo(data.logoUrl)
+  if (logoData) {
     try {
-      const res = await fetch(data.logoUrl)
-      if (res.ok) {
-        const buf = new Uint8Array(await res.arrayBuffer())
-        const ct = res.headers.get("content-type") || ""
-        const url = data.logoUrl.toLowerCase()
-        if (ct.includes("png") || url.includes(".png")) logo = await pdfDoc.embedPng(buf)
-        else if (ct.includes("jpeg") || ct.includes("jpg") || url.includes(".jpg") || url.includes(".jpeg")) logo = await pdfDoc.embedJpg(buf)
-      }
+      logo = logoData.format === "png" ? await pdfDoc.embedPng(logoData.data) : await pdfDoc.embedJpg(logoData.data)
     } catch {
-      /* logo unavailable: skipped, no placeholder (same as A4) */
+      logo = null
     }
   }
 
@@ -757,16 +754,17 @@ export async function generateOrdenCompactPDF(
     // HEADER: logo, workshop, order number
     // ============================================================
     const headerTop = y
-    if (logo) {
-      page.drawRectangle({ x: left, y: headerTop - F.logo, width: F.logo, height: F.logo, borderColor: MONO.ink, borderWidth: 1 })
-      const s = logo.scale(1)
-      const inset = 3 * f
-      const ratio = Math.min((F.logo - inset * 2) / s.width, (F.logo - inset * 2) / s.height)
+    // Fixed-height frame whose width follows the logo's aspect ratio
+    // (lib/pdf-logo.ts marcoLogo): a wide logo no longer sits as a thin
+    // strip in the middle of a square.
+    const logoMarco = logo ? marcoLogo(logo.scale(1), F.logo, 3 * f) : null
+    if (logo && logoMarco) {
+      page.drawRectangle({ x: left, y: headerTop - F.logo, width: logoMarco.anchoMarco, height: F.logo, borderColor: MONO.ink, borderWidth: 1 })
       page.drawImage(logo, {
-        x: left + (F.logo - s.width * ratio) / 2,
-        y: headerTop - F.logo + (F.logo - s.height * ratio) / 2,
-        width: s.width * ratio,
-        height: s.height * ratio,
+        x: left + logoMarco.dx,
+        y: headerTop - F.logo + logoMarco.dy,
+        width: logoMarco.ancho,
+        height: logoMarco.alto,
       })
     }
 
@@ -782,7 +780,7 @@ export async function generateOrdenCompactPDF(
     }
 
     // left column: workshop name, branch, contact
-    const bizX = left + (logo ? F.logo + 8 * f : 0)
+    const bizX = left + (logoMarco ? logoMarco.anchoMarco + 8 * f : 0)
     const bizW = right - rightColW - 8 * f - bizX
     let by = headerTop
     for (const l of wr(name(empresaNombre), black, F.heading, bizW)) {

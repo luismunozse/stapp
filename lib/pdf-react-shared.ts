@@ -51,34 +51,9 @@ export const safe = (val: unknown): string => {
   return ""
 }
 
-export type PdfLogo = { data: Buffer; format: "png" | "jpg" }
-
-/**
- * Fetches an organization logo for embedding, sniffing the format from the
- * content-type and falling back to the URL's extension.
- *
- * Never rejects: a network error, a non-OK response, or an unrecognized
- * format all degrade to "no logo". A broken logo_url must never be able to
- * kill document generation.
- */
-export async function fetchLogo(logoUrl: string | null | undefined): Promise<PdfLogo | null> {
-  if (!logoUrl) return null
-  try {
-    const res = await fetch(logoUrl)
-    if (!res.ok) return null
-    const bytes = Buffer.from(await res.arrayBuffer())
-    const contentType = res.headers.get("content-type") || ""
-    const lowerUrl = logoUrl.toLowerCase()
-    if (contentType.includes("png") || lowerUrl.includes(".png")) return { data: bytes, format: "png" }
-    if (contentType.includes("jpeg") || contentType.includes("jpg") || lowerUrl.includes(".jpg") || lowerUrl.includes(".jpeg")) {
-      return { data: bytes, format: "jpg" }
-    }
-    return null
-  } catch (logoError) {
-    console.error("Error loading logo:", logoError)
-    return null
-  }
-}
+// Logo: descarga + normalización (EXIF, recorte de bordes, formatos) viven
+// en lib/pdf-logo.ts, compartidas con los documentos de pdf-lib.
+export { fetchLogo, type PdfLogo } from "./pdf-logo"
 
 /**
  * Helvetica metrics for pre-render text measurement. pdf-lib's StandardFonts
