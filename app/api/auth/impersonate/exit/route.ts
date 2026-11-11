@@ -29,9 +29,11 @@ export async function POST() {
 
     // Only proceed if the current session is genuinely an impersonation token.
     // This prevents a normal user from poking the endpoint to swap cookies.
+    // An expired impersonation is still accepted here: ending it (audit +
+    // restore or clear the cookie) is exactly what should happen to it.
     let claims = null
     if (currentSession && secret) {
-      claims = await verifyImpersonationToken(currentSession, secret)
+      claims = await verifyImpersonationToken(currentSession, secret, { allowExpired: true })
     }
 
     if (!claims) {

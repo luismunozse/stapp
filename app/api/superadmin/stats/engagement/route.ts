@@ -3,7 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchAllRows } from "@/lib/fetch-all-rows"
 
-/** Lo que devuelve superadmin_engagement_metricas (migración 396). */
+/** Lo que devuelve superadmin_engagement_metricas (migración 398). */
 interface MetricasEngagement {
   orgs?: Array<{
     id: string

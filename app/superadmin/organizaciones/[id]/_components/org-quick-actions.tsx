@@ -474,6 +474,8 @@ export function OrgQuickActions({
                 <DialogDescription className="mt-1">
                   ¿Cancelar la suscripción de{" "}
                   <span className="font-medium">{organization.nombre}</span>?
+                  También se cancela el débito automático en MercadoPago, si
+                  tiene uno.
                 </DialogDescription>
               </div>
             </div>

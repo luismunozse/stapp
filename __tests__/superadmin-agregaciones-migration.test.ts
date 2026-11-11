@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest"
 import { collapse, readByMarker, readBySuffix, stripComments } from "./helpers/sql-text"
 
 // Migrations are applied by hand and CI has no Postgres: this pins by text what vitest cannot
-// execute (verify/396_probes.sql compares each function with a direct query on the real schema).
+// execute (verify/398_probes.sql compares each function with a direct query on the real schema).
 
 const mig = () => readBySuffix("_superadmin_agregaciones_sql.sql")
 const rollback = () => readByMarker("rollback", "Rollback de superadmin_agregaciones_sql")
