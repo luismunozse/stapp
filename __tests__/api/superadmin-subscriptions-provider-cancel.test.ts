@@ -103,7 +103,7 @@ describe("superadmin: cancelación del débito automático de MercadoPago", () =
   describe("renew", () => {
     it("cancela la preapproval antes de pasar a MANUAL", async () => {
       const mem = montarSupabaseEnMemoria({ subscriptions: [sub({})], plans: [PLAN] })
-      const res = await renew(post({ organizationId: "o1" }))
+      const res = await renew(post({ organizationId: "o1", idempotencyKey: "clave-renovacion-1" }))
       expect(res.status).toBe(200)
       expect(mp.cancelPreApproval).toHaveBeenCalledWith("pre-1")
       expect(mem.filas("subscriptions")[0].payment_provider).toBe("MANUAL")
@@ -112,7 +112,7 @@ describe("superadmin: cancelación del débito automático de MercadoPago", () =
     it("si MercadoPago falla: 502, sin renovar ni registrar pago", async () => {
       mp.cancelPreApproval.mockRejectedValue(new Error("timeout"))
       const mem = montarSupabaseEnMemoria({ subscriptions: [sub({})], plans: [PLAN] })
-      const res = await renew(post({ organizationId: "o1" }))
+      const res = await renew(post({ organizationId: "o1", idempotencyKey: "clave-renovacion-1" }))
       expect(res.status).toBe(502)
       expect(mem.escrituras.filter((e) => e.operacion !== "rpc")).toEqual([])
     })

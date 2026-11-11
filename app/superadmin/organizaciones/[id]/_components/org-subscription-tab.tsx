@@ -46,6 +46,12 @@ export function OrgSubscriptionTab({
   const [renewModalOpen, setRenewModalOpen] = useState(false)
   const [renewPeriod, setRenewPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [renewSuccess, setRenewSuccess] = useState("")
+  // Una clave por apertura del diálogo: el doble clic o el reintento no renuevan dos veces.
+  const [renewKey, setRenewKey] = useState("")
+  const openRenewModal = () => {
+    setRenewKey(crypto.randomUUID())
+    setRenewModalOpen(true)
+  }
   const { mutate, loading: renewLoading } = useSuperadminMutation()
 
   const handleRenewSubscription = async () => {
@@ -55,6 +61,7 @@ export function OrgSubscriptionTab({
       body: {
         organizationId,
         billingPeriod: renewPeriod,
+        idempotencyKey: renewKey,
       },
       errorMessage: "Error al renovar suscripción",
       onSuccess: (data: any) => {
@@ -79,7 +86,7 @@ export function OrgSubscriptionTab({
               <CreditCard className="h-5 w-5" />
               Suscripción
             </CardTitle>
-            <Button onClick={() => setRenewModalOpen(true)}>
+            <Button onClick={openRenewModal}>
               <RefreshCw className="h-4 w-4 mr-2" />
               {isActive ? "Extender suscripción" : "Activar Premium"}
             </Button>
@@ -206,7 +213,7 @@ export function OrgSubscriptionTab({
               <p className="text-muted-foreground">
                 Esta organización no tiene una suscripción activa (Plan Free)
               </p>
-              <Button onClick={() => setRenewModalOpen(true)}>
+              <Button onClick={openRenewModal}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Activar Premium
               </Button>
