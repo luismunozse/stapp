@@ -188,6 +188,15 @@ export async function PUT(
       .single()
 
     if (updateError) {
+      // Dato unico repetido (hoy, el telefono dentro de la organizacion): es un
+      // error del operador, no del servidor.
+      if (updateError.code === "23505") {
+        const esTelefono = `${updateError.message ?? ""} ${updateError.details ?? ""}`.includes("telefono")
+        return NextResponse.json(
+          { error: esTelefono ? "Ya existe un cliente con ese teléfono" : "Ya existe otro cliente con esos datos" },
+          { status: 409 }
+        )
+      }
       throw updateError
     }
 
