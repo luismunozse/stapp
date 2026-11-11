@@ -8,9 +8,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         // El disallow de /api/ es correcto por defecto, pero se lleva puestas
-        // dos rutas que las paginas publicas necesitan. Se habilitan por
+        // una ruta que las paginas publicas necesitan. Se habilita por
         // separado: en la especificacion de robots.txt gana la regla mas
-        // especifica, y estas son mas largas que "/api/".
+        // especifica, y esta es mas larga que "/api/".
         allow: [
           "/",
           // Imagen de Open Graph. La usan las tarjetas de compartido de todo
@@ -19,11 +19,6 @@ export default function robots(): MetadataRoute.Robots {
           // schema. Bloqueada, los crawlers de WhatsApp, Twitter, LinkedIn y
           // Google no pueden traerla y el preview sale sin imagen.
           "/api/og",
-          // Info de la APK. /descargar/android la pide desde el cliente para
-          // renderizar version, tamano y el boton de descarga. Googlebot
-          // ejecuta JS: bloqueada, indexa la pagina en su estado "APK no
-          // disponible".
-          "/api/download/apk-info",
         ],
         disallow: [
           "/api/",

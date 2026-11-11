@@ -75,7 +75,7 @@ const categories = [
   {
     icon: Smartphone,
     title: "App móvil y PWA",
-    description: "App Android (APK), PWA instalable y acceso desde el navegador",
+    description: "App Android (beta en Google Play), PWA instalable y acceso desde el navegador",
     color: "text-cyan-600 dark:text-cyan-400",
     bgColor: "bg-cyan-50 dark:bg-cyan-950/50",
   },
@@ -100,7 +100,7 @@ const faqs = [
       {
         question: "¿Necesito instalar algo en mi computadora?",
         answer:
-          "No. STApp funciona en cualquier navegador moderno desde computadora, tablet o celular. Si querés una experiencia tipo app, podés instalarla como PWA en uno o dos clics, o descargar la app nativa para Android (APK) desde la sección Descargas del menú.",
+          "No. STApp funciona en cualquier navegador moderno desde computadora, tablet o celular. Si querés una experiencia tipo app, podés instalarla como PWA en uno o dos clics, o sumarte a la beta de la app para Android en Google Play desde el aviso del panel.",
       },
       {
         question: "¿Cómo configuro mi taller por primera vez?",
@@ -230,7 +230,7 @@ const faqs = [
       {
         question: "¿Cómo instalo la app de Android?",
         answer:
-          "Desde el menú entrá a \"Descargar app\" → Android. Vas a poder bajar el APK e instalarlo en tu celular. Como es una instalación fuera de la Play Store, Android te va a pedir habilitar \"Instalar de fuentes desconocidas\" la primera vez.",
+          "La app de Android está en beta en Google Play. En el panel tocá el aviso \"Sumate a la beta de Android\" y dejá el correo de tu cuenta de Google. Cuando te sumemos a la lista de prueba, el mismo aviso te muestra el enlace de invitación: aceptala con esa cuenta e instalá STApp desde Play Store.",
       },
       {
         question: "¿Puedo usar STApp como PWA?",

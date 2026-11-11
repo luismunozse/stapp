@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback, type FormEvent } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
-  Download,
   Smartphone,
   Shield,
   Zap,
@@ -21,14 +21,6 @@ import {
 } from "lucide-react"
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
-
-interface ApkInfo {
-  available: boolean
-  version?: string
-  buildDate?: string
-  fileSizeMB?: string
-}
 
 /**
  * Screenshots de la app real.
@@ -289,28 +281,9 @@ function IosWaitlist() {
   )
 }
 
+// The Android app is a closed beta on Google Play: there is no public APK any
+// more. People sign up from the panel and get a Play invitation (lib/android-beta.ts).
 export function DownloadApp() {
-  const [apkInfo, setApkInfo] = useState<ApkInfo>({ available: false })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch("/api/download/apk-info", { signal: controller.signal })
-      .then((res) => res.json())
-      .then((data) => { setApkInfo(data); setLoading(false) })
-      .catch(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
-  }, [])
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("es-AR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: DEFAULT_TIMEZONE,
-    })
-  }
-
   return (
     <LazyMotion features={domAnimation}>
       <section id="download" className="py-16 sm:py-20 relative overflow-hidden">
@@ -368,45 +341,22 @@ export function DownloadApp() {
                 ))}
               </div>
 
-              {/* Download button */}
-              {loading ? (
-                <div className="flex items-center justify-center lg:justify-start gap-2">
-                  <div className="animate-pulse bg-muted rounded-lg h-12 w-48" />
+              <Card className="p-4 bg-muted/50 max-w-md mx-auto lg:mx-0 text-left">
+                <p className="text-sm font-medium text-foreground">Beta en Google Play</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Creá tu cuenta, anotate en la beta desde el aviso del panel con tu correo de Google y te
+                  mandamos la invitación para instalarla desde Play Store. Mientras tanto, STApp funciona
+                  completa desde el navegador del celular.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                  <Button asChild size="sm">
+                    <Link href="/registro">Crear cuenta gratis</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/descargar/android">Cómo funciona la beta</Link>
+                  </Button>
                 </div>
-              ) : apkInfo.available ? (
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
-                    <a href="/api/download/apk">
-                      <Button size="lg" className="text-base px-6 py-5 shadow-lg hover:shadow-xl transition-shadow group">
-                        <Download className="mr-2 w-5 h-5 transition-transform group-hover:translate-y-0.5" />
-                        Descargar APK
-                      </Button>
-                    </a>
-                    {apkInfo.fileSizeMB && (
-                      <span className="text-sm text-muted-foreground">
-                        {apkInfo.fileSizeMB}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 justify-center lg:justify-start text-xs text-muted-foreground">
-                    <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                    {apkInfo.version && <span>v{apkInfo.version}</span>}
-                    {apkInfo.buildDate && (
-                      <span>
-                        {apkInfo.version && " \u00B7 "}
-                        Actualizado el {formatDate(apkInfo.buildDate)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <Card className="p-4 bg-muted/50 max-w-sm mx-auto lg:mx-0">
-                  <p className="text-sm text-muted-foreground text-center lg:text-left">
-                    La app para Android estará disponible pronto. Mientras tanto, podés usar
-                    STApp desde el navegador de tu celular.
-                  </p>
-                </Card>
-              )}
+              </Card>
             </m.div>
           </div>
 

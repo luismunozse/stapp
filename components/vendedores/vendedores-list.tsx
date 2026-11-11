@@ -52,7 +52,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json())
 export function VendedoresList() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
-  const { confirm, showError, showWarning } = useModal()
+  const { confirm, showError, showSuccess } = useModal()
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingVendedor, setEditingVendedor] = useState<Vendedor | null>(null)
@@ -109,14 +109,12 @@ export function VendedoresList() {
     e.preventDefault()
     e.stopPropagation()
 
-    if (vendedor.ventasTotal > 0) {
-      await showWarning(`No se puede eliminar un vendedor con ${vendedor.ventasTotal} venta(s) asociada(s)`)
-      return
-    }
-
+    // The API decides: with history (sales, orders or cash) it deactivates the
+    // vendedor and keeps the history; without it, it deletes. Same as the detail page.
     const confirmed = await confirm({
       title: "Eliminar Vendedor",
-      description: "¿Estás seguro de eliminar este vendedor? Esta acción no se puede deshacer.",
+      description:
+        "¿Estás seguro de eliminar este vendedor? Si tiene historial (ventas, órdenes o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -128,7 +126,9 @@ export function VendedoresList() {
     try {
       const res = await fetch(`/api/vendedores/${vendedor.id}`, { method: "DELETE" })
       if (res.ok) {
+        const data = await res.json().catch(() => null)
         mutate()
+        if (data?.baja && data.message) await showSuccess(data.message)
       } else {
         const data = await res.json()
         await showError(data.error || "Error al eliminar")
@@ -244,6 +244,7 @@ export function VendedoresList() {
                           size="icon"
                           className="h-7 w-7 sm:h-8 sm:w-8"
                           onClick={(e) => handleEdit(vendedor, e)}
+                          aria-label={`Editar ${vendedor.nombre}`}
                         >
                           <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
@@ -253,6 +254,7 @@ export function VendedoresList() {
                           className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                           onClick={(e) => handleDelete(vendedor, e)}
                           disabled={deletingId === vendedor.id}
+                          aria-label={`Eliminar ${vendedor.nombre}`}
                         >
                           <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
