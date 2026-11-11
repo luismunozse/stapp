@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
@@ -50,7 +50,10 @@ import {
   Timer,
   ArrowRight,
   Sparkles,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react"
+import type { TimelineEvent } from "./visual-timeline"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
@@ -89,6 +92,19 @@ const WarrantyInfo = dynamic(
   () => import("./warranty-info").then((mod) => ({ default: mod.WarrantyInfo })),
   { loading: () => null, ssr: false }
 )
+
+/** Respuesta no-OK de /api/public/ordenes/[token], con su status HTTP. */
+class FetchError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`HTTP ${status}`)
+    this.status = status
+  }
+}
+
+// Respuestas definitivas de getOrderByPublicToken: token inválido (400),
+// orden inexistente (404) o enlace vencido (410). Reintentar no cambia nada.
+const NOT_FOUND_STATUSES = new Set([400, 404, 410])
 
 function TimelineSkeleton() {
   return (
@@ -283,13 +299,22 @@ interface TrackingData {
 }
 
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export function SeguimientoContent({ token }: { token: string }) {
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // Error de la carga inicial (sin datos todavía): "not_found" es definitivo
+  // (token inválido, orden inexistente o enlace vencido); "network" es un
+  // fallo de red/servidor y se ofrece reintentar.
+  const [loadError, setLoadError] = useState<"not_found" | "network" | null>(null)
+  // Un poll falló pero ya hay datos: se siguen mostrando con un aviso discreto.
+  const [pollFailed, setPollFailed] = useState(false)
+  const hasDataRef = useRef(false)
+  // Estado para el que ya se pidieron timeline/fotos/garantía. Las fotos salen
+  // con URL firmada nueva en cada pedido: refetchearlas en cada poll hace que
+  // el navegador vuelva a descargar todas las imágenes cada 15 s.
+  const enhancedEstadoRef = useRef<string | null>(null)
 
-  const [timelineEvents, setTimelineEvents] = useState<any[] | null>(null)
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[] | null>(null)
   const [photosData, setPhotosData] = useState<any | null>(null)
   const [warrantyData, setWarrantyData] = useState<any | null>(null)
 
@@ -299,7 +324,7 @@ export function SeguimientoContent({ token }: { token: string }) {
   const fetchEnhancedData = useCallback((t: string) => {
     fetch(`/api/public/ordenes/${t}/timeline`)
       .then((res) => res.ok ? res.json() : null)
-      .then((d) => { if (d) setTimelineEvents(d) })
+      .then((d) => { if (d && Array.isArray(d.timeline)) setTimelineEvents(d.timeline) })
       .catch(() => {})
 
     fetch(`/api/public/ordenes/${t}/photos`)
@@ -317,17 +342,38 @@ export function SeguimientoContent({ token }: { token: string }) {
     const controller = new AbortController()
     fetch(`/api/public/ordenes/${token}`, { signal: controller.signal, cache: "no-store" })
       .then((res) => {
-        if (!res.ok) throw new Error("Not found")
+        if (!res.ok) throw new FetchError(res.status)
         return res.json()
       })
-      .then((d) => {
+      .then((d: TrackingData) => {
+        hasDataRef.current = true
         setData(d)
-        fetchEnhancedData(token)
+        setLoadError(null)
+        setPollFailed(false)
+        if (enhancedEstadoRef.current !== d.estado) {
+          enhancedEstadoRef.current = d.estado
+          fetchEnhancedData(token)
+        }
       })
-      .catch(() => { if (!controller.signal.aborted) setError(true) })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return
+        if (hasDataRef.current) {
+          // Fallo de un poll: no se tira abajo lo que el cliente ya está viendo.
+          setPollFailed(true)
+          return
+        }
+        const status = err instanceof FetchError ? err.status : null
+        setLoadError(status !== null && NOT_FOUND_STATUSES.has(status) ? "not_found" : "network")
+      })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return controller
   }, [token, fetchEnhancedData])
+
+  const retry = useCallback(() => {
+    setLoadError(null)
+    setLoading(true)
+    fetchData()
+  }, [fetchData])
 
   useEffect(() => {
     const controller = fetchData()
@@ -350,7 +396,25 @@ export function SeguimientoContent({ token }: { token: string }) {
     )
   }
 
-  if (error || !data) {
+  if (!data && loadError === "network") {
+    return (
+      <div className="text-center py-20">
+        <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-6">
+          <WifiOff className="h-10 w-10 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-bold">No pudimos cargar tu orden</h2>
+        <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+          Revisá tu conexión e intentá de nuevo en unos segundos.
+        </p>
+        <Button className="mt-6" onClick={retry}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Reintentar
+        </Button>
+      </div>
+    )
+  }
+
+  if (!data) {
     return (
       <div className="text-center py-20">
         <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-6">
@@ -392,6 +456,16 @@ export function SeguimientoContent({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
+      {pollFailed && (
+        <p
+          role="status"
+          className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <WifiOff className="h-3.5 w-3.5" />
+          Sin conexión, reintentando…
+        </p>
+      )}
+
       {/* ══════════ HERO HEADER ══════════ */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/90 via-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
         <div className="absolute inset-0 opacity-[0.07]">
