@@ -210,7 +210,7 @@ Instrucciones:
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error en chatbot:", error)
     return NextResponse.json({ error: "Error al procesar el mensaje. Por favor intentá de nuevo." }, { status: 500 })

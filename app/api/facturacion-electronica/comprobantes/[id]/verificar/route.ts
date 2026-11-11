@@ -7,6 +7,7 @@ import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { decidirConciliacion } from "@/lib/facturacion/arca/conciliar-nota-credito"
 import type { DecisionConciliacion, NotaCreditoPorConciliar } from "@/lib/facturacion/arca/conciliar-nota-credito"
 import { cargarCredencialesArca } from "@/lib/facturacion/arca/credenciales-ruta"
+import { verificarFacturaArca, type FacturaPorVerificar } from "@/lib/facturacion/arca/factura-ruta"
 import {
   COLUMNAS_NC,
   FORMA_ID,
@@ -28,6 +29,9 @@ export const maxDuration = 60
 /**
  * "Verificar con ARCA": concilia una nota de crédito que quedó sin resolver con lo
  * que ARCA tiene. `[id]` es el de la NC (no el de la factura).
+ *
+ * También concilia una FACTURA ARCA cuyo envío quedó incierto (migración 389):
+ * esa rama vive en `lib/facturacion/arca/factura-ruta.ts`.
  *
  * Aplica a una NC `pendiente` (el envío se cortó y no sabemos qué pasó) y a una
  * `rechazado` (por si ARCA igual la emitió: adopción tardía). Una NC `emitido` solo
@@ -55,6 +59,7 @@ const COLUMNAS_VERIFICAR = `${COLUMNAS_NC}, fecha_emision, cuit_emisor, cbte_tip
 interface FilaNotaCredito {
   id: string
   estado: string
+  provider: string | null
   punto_venta: number
   numero: string | null
   cae: string | null
@@ -73,6 +78,7 @@ interface FilaNotaCredito {
 }
 
 const MSG_NO_ES_NC = "Solo se puede verificar una nota de crédito electrónica."
+const MSG_NO_ES_ARCA = "Solo se pueden verificar comprobantes emitidos por ARCA."
 const MSG_ESTADO = "Esta nota de crédito no se puede verificar."
 const MSG_ARCA_NO_EMITIO = "ARCA no emitió la nota de crédito. Podés volver a anular la factura."
 const ERROR_MSG_ARCA_NO_EMITIO = "ARCA no emitió esta nota de crédito (verificado con ARCA)."
@@ -255,6 +261,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (!fila) return json({ error: MSG_NO_ENCONTRADO }, 404)
   const nc = fila as unknown as FilaNotaCredito
+
+  // ---- una FACTURA ARCA (migración 389): misma conciliación, sin anulación de por medio ----
+  if (!nc.comprobante_asociado_id && !esNotaCreditoFiscal(nc.cbte_tipo)) {
+    if (nc.provider !== "arca" && nc.provider !== "arca_delegado") return json({ error: MSG_NO_ES_ARCA }, 422)
+    const cargadasFactura = await cargarCredencialesArca(org)
+    if (!cargadasFactura.ok) return json({ error: cargadasFactura.error }, cargadasFactura.status)
+    return verificarFacturaArca(org, fila as unknown as FacturaPorVerificar, cargadasFactura.creds)
+  }
 
   // ---- elegibilidad: nada de esto llama a ARCA ----
   if (!nc.comprobante_asociado_id || !esNotaCreditoFiscal(nc.cbte_tipo)) return json({ error: MSG_NO_ES_NC }, 422)

@@ -6,6 +6,27 @@ const BUILD_ID =
   process.env.VERCEL_DEPLOYMENT_ID ||
   String(Date.now())
 
+// Headers de seguridad para todas las respuestas.
+// - frame-ancestors: solo STApp puede embeber sus páginas (la vista previa
+//   del catálogo usa un iframe propio). Reemplaza a X-Frame-Options, que no
+//   puede expresar "mis subdominios".
+// - La CSP es deliberadamente acotada: directivas que no afectan qué scripts
+//   carga la app (GA, MercadoPago, Google OAuth, Supabase). Una CSP de
+//   script-src necesita relevar esos orígenes antes, en modo Report-Only.
+const SECURITY_HEADERS = [
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "frame-ancestors 'self' https://stapp.com.ar https://*.stapp.com.ar",
+      "base-uri 'self'",
+      "object-src 'none'",
+    ].join('; '),
+  },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
+]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -96,6 +117,10 @@ const nextConfig = {
   // PWA + SEO headers
   async headers() {
     return [
+      {
+        source: '/:path*',
+        headers: SECURITY_HEADERS,
+      },
       {
         source: '/manifest.json',
         headers: [

@@ -3,6 +3,13 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { verifyCreemSignature } from "@/lib/creem"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
+import {
+  REGISTERED_PAYMENT_COLUMNS,
+  findSubscriptionPayment,
+  revokeSubscriptionPayment,
+  type RegisteredSubscriptionPayment,
+  type ReversalKind,
+} from "@/lib/subscription-reversals"
 
 /**
  * Webhook de Creem (cobro internacional, MoR).
@@ -16,6 +23,10 @@ import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
  *    duplicar, el PAGO lo registra SOLO `subscription.paid` (cada cobro,
  *    incluido el primero). checkout.completed y subscription.active solo
  *    ACTIVAN la suscripción (sin insertar pago).
+ *
+ * Reversiones: `refund.created` (reembolso) y `dispute.created` (contracargo)
+ * revocan el acceso del pago revertido (ver lib/subscription-reversals.ts). Un
+ * reembolso parcial solo se registra.
  *
  * Idempotencia: subscription_payments (provider_payment_id + payment_provider).
  */
@@ -81,6 +92,12 @@ export async function POST(request: NextRequest) {
       case "subscription.canceled":
       case "subscription.expired":
         result = await handleSubscriptionEnded(object, eventType)
+        break
+      case "refund.created":
+        result = await handlePaymentReversal(object, "REFUND")
+        break
+      case "dispute.created":
+        result = await handlePaymentReversal(object, "CHARGEBACK")
         break
       default:
         console.log(`[creem-webhook] Unhandled event: ${eventType}`)
@@ -397,6 +414,78 @@ async function handleSubscriptionEnded(
     throw error
   }
   return { status: "PROCESSED", reason: `subscription_${newStatus.toLowerCase()}`, organizationId }
+}
+
+/** Id de una referencia de Creem que puede venir expandida (objeto) o como string. */
+function refId(value: unknown): string | null {
+  if (typeof value === "string" && value) return value
+  if (value && typeof value === "object" && "id" in value) {
+    const id = (value as { id?: unknown }).id
+    if (typeof id === "string" && id) return id
+  }
+  return null
+}
+
+function likeEscape(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`)
+}
+
+/**
+ * Ubica el pago revertido. Pago único: se registró con el id de la orden.
+ * Cobro recurrente: con `${subscriptionId}:${periodEnd}`; si la transacción trae
+ * el fin de período se busca exacto, si no el último cobro de esa suscripción.
+ */
+async function findCreemPaymentForReversal(
+  object: any
+): Promise<RegisteredSubscriptionPayment | null> {
+  const transaction = object?.transaction ?? {}
+
+  const orderId = refId(object?.order) ?? refId(transaction?.order)
+  if (orderId) {
+    const byOrder = await findSubscriptionPayment("CREEM", orderId)
+    if (byOrder) return byOrder
+  }
+
+  const subId = refId(object?.subscription) ?? refId(transaction?.subscription)
+  if (!subId) return null
+
+  const periodEndRaw = transaction?.period_end
+  if (periodEndRaw != null) {
+    const periodEnd = new Date(periodEndRaw)
+    if (!isNaN(periodEnd.getTime())) {
+      const exact = await findSubscriptionPayment("CREEM", `${subId}:${periodEnd.toISOString()}`)
+      if (exact) return exact
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("subscription_payments")
+    .select(REGISTERED_PAYMENT_COLUMNS)
+    .eq("payment_provider", "CREEM")
+    .like("provider_payment_id", `${likeEscape(subId)}:%`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return (data as RegisteredSubscriptionPayment | null) ?? null
+}
+
+async function handlePaymentReversal(object: any, kind: ReversalKind): Promise<HandleResult> {
+  // Reembolso parcial: se registra en webhook_events y no se revoca. Montos en
+  // centavos, como el resto de los objetos de Creem.
+  if (kind === "REFUND") {
+    const refunded = Number(object?.refund_amount)
+    const paid = Number(object?.transaction?.amount_paid ?? object?.transaction?.amount)
+    if (Number.isFinite(refunded) && Number.isFinite(paid) && refunded < paid) {
+      console.warn(
+        `[creem-webhook] Reembolso parcial ${object?.id ?? ""} (${refunded} de ${paid}) - no se revoca el acceso`
+      )
+      return { status: "SKIPPED", reason: "refund_partial" }
+    }
+  }
+
+  const registered = await findCreemPaymentForReversal(object)
+  return revokeSubscriptionPayment(registered, kind, "CREEM")
 }
 
 // GET para verificación / health-check.

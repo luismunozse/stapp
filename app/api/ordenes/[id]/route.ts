@@ -8,7 +8,8 @@ import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
-import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO, ESTADOS_MONTO_CERRADO } from "@/lib/orden-state-machine"
+import type { EstadoOrden } from "@/types"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
@@ -352,7 +353,31 @@ export async function PUT(
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
-    if (data.costoFinal !== undefined) {
+    // Reenviar el costo final que la orden ya tiene no es un cambio: no se valida
+    // ni se escribe (un formulario que manda todos los campos no debe chocar con
+    // el bloqueo de estados cerrados de abajo).
+    const costoFinalActual = orden.costo_final == null ? null : Number(orden.costo_final)
+    const cambiaCostoFinal = data.costoFinal !== undefined && (data.costoFinal ?? null) !== costoFinalActual
+
+    // En una orden entregada o cancelada el monto está cerrado: el saldo ya se
+    // cargó a cuenta corriente y la comisión se calculó sobre él. Cambiarlo acá
+    // los desalinea sin asiento. Se mira el estado resultante para no trabar la
+    // reactivación de una cancelada (CANCELADO -> RECIBIDO) en el mismo pedido.
+    const estadoResultante = (data.estado ?? orden.estado) as EstadoOrden
+    if (
+      cambiaCostoFinal &&
+      ESTADOS_MONTO_CERRADO.includes(orden.estado) &&
+      ESTADOS_MONTO_CERRADO.includes(estadoResultante)
+    ) {
+      return NextResponse.json(
+        {
+          error: `No se puede cambiar el costo final de una orden en estado "${ESTADO_LABELS[orden.estado as keyof typeof ESTADO_LABELS] ?? orden.estado}". Para corregir lo cobrado hay que usar una nota de crédito o una devolución.`,
+        },
+        { status: 409 }
+      )
+    }
+
+    if (cambiaCostoFinal && data.costoFinal !== undefined) {
       // costo_final es la base de la comisión del técnico (migración 119) y del
       // saldo que se carga a cuenta corriente al entregar. Las columnas DECIMAL
       // llegan como string desde supabase-js, así que se coercionan con Number()
@@ -612,7 +637,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

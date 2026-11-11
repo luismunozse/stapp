@@ -237,7 +237,7 @@ export async function PUT(
 
       const parsed = editVentaSchema.safeParse(body)
       if (!parsed.success) {
-        const first = parsed.error.errors[0]
+        const first = parsed.error.issues[0]
         const field = first.path.join(".")
         return NextResponse.json(
           { error: field ? `${field}: ${first.message}` : first.message },

@@ -1,4 +1,5 @@
 import Script from "next/script"
+import { serializeJsonLd } from "@/lib/seo/serialize-json-ld"
 import { getAllPlanPrices } from "@/lib/pricing"
 import { blogPostingSchema, type BlogPostingSchemaInput } from "@/lib/blog-seo"
 import { CONTACT_EMAIL, CONTACT_PHONE_E164 } from "@/lib/contact"
@@ -13,7 +14,7 @@ export function BlogPostingJsonLd({ post }: { post: BlogPostingSchemaInput }) {
     <Script
       id={`jsonld-blogposting-${post.slug}`}
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -78,7 +79,7 @@ export function OrganizationJsonLd() {
     <Script
       id="jsonld-organization"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -173,7 +174,7 @@ export async function SoftwareApplicationJsonLd() {
     <Script
       id="jsonld-software-application"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -197,7 +198,7 @@ export function WebSiteJsonLd() {
     <Script
       id="jsonld-website"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -226,7 +227,7 @@ export function FAQPageJsonLd({ faqs }: { faqs: FAQItem[] }) {
     <Script
       id="jsonld-faq"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -279,7 +280,7 @@ export function HowToJsonLd() {
     <Script
       id="jsonld-howto"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -329,7 +330,7 @@ export function UseCasesListJsonLd() {
     <Script
       id="jsonld-usecases-list"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }
@@ -356,7 +357,7 @@ export function BreadcrumbJsonLd({ items }: { items: BreadcrumbItem[] }) {
     <Script
       id="jsonld-breadcrumb"
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   )
 }

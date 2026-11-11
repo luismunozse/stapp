@@ -12,17 +12,14 @@ const MAX_DETALLE = 120
 
 const bodySchema = z.object(
   {
-    rubro: z.string({
-      required_error: "Elegí qué reparás",
-      invalid_type_error: "Elegí qué reparás",
-    }),
+    rubro: z.string({ error: "Elegí qué reparás" }),
     rubroDetalle: z
-      .string({ invalid_type_error: "Datos inválidos" })
+      .string({ error: "Datos inválidos" })
       .max(MAX_DETALLE, `Contanos qué reparás en menos de ${MAX_DETALLE} caracteres`)
       .nullable()
       .optional(),
   },
-  { required_error: "Datos inválidos", invalid_type_error: "Datos inválidos" }
+  { error: "Datos inválidos" }
 )
 
 const ERROR_INTERNO = "No pudimos cambiar el rubro. Probá de nuevo."
@@ -49,7 +46,7 @@ export async function PUT(request: Request) {
     const parsed = bodySchema.safeParse(raw)
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors[0]?.message ?? "Datos inválidos" },
+        { error: parsed.error.issues[0]?.message ?? "Datos inválidos" },
         { status: 400 }
       )
     }

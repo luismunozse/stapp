@@ -109,7 +109,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
@@ -180,7 +180,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, cantidad: data.cantidad })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error updating repuesto cantidad:", error)
     return NextResponse.json(

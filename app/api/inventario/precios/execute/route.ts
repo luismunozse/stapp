@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error executing precios import:", err)
     return NextResponse.json({ error: "Error al aplicar los cambios" }, { status: 500 })

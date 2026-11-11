@@ -12,6 +12,7 @@ import { CONTACT_EMAIL } from "@/lib/contact"
 import {
   etiquetaMotivoAnulacion,
   mensajeFacturaAnulada,
+  verificarFacturaArca,
   verificarNotaCreditoArca,
   type ResultadoAnulacion,
   type ResultadoVerificacion,
@@ -144,7 +145,7 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
     verificandoRef.current = true
     setVerificandoId(nota.id)
     setAviso(null)
-    const resultado = await verificarNotaCreditoArca(nota.id)
+    const resultado = nota.esNotaCredito ? await verificarNotaCreditoArca(nota.id) : await verificarFacturaArca(nota.id)
     if (resultado.kind === "ok") toast.success(resultado.message)
     else setAviso(avisoDeVerificacion(resultado))
     await cargar()
@@ -292,7 +293,31 @@ function FacturaBloque({ grupo, puedeAnular = false, onAnular, verificandoId = n
         />
       )}
 
-      {factura.estado === "pendiente" && (
+      {factura.estado === "pendiente" && factura.verificable && onVerificar && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            ARCA puede haber emitido esta factura, pero todavía no pudimos confirmarlo. No la vuelvas a emitir: primero
+            verificá con ARCA.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onVerificar(factura)}
+            disabled={verificandoId === factura.id}
+          >
+            {verificandoId === factura.id ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                Verificando...
+              </>
+            ) : (
+              "Verificar con ARCA"
+            )}
+          </Button>
+        </div>
+      )}
+
+      {factura.estado === "pendiente" && !(factura.verificable && onVerificar) && (
         <p className="text-sm text-muted-foreground">
           La factura se está procesando. Recargá la página en unos minutos. Si sigue así, escribinos a {CONTACT_EMAIL} y
           lo revisamos antes de volver a emitir, para no duplicar la factura.

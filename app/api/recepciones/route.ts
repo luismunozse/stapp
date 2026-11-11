@@ -30,7 +30,7 @@ const equipoSchema = z.object({
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   fotos: z.array(fotoSchema).optional(),
 })
 
@@ -86,6 +86,19 @@ export async function POST(request: Request) {
           )
         }
       }
+    }
+
+    // El cliente tiene que ser de esta organización: la RPC inserta con
+    // service_role y no lo comprueba.
+    const { data: cliente, error: clienteError } = await supabaseAdmin
+      .from("clientes")
+      .select("id")
+      .eq("id", data.clienteId)
+      .eq("organization_id", organizationId!)
+      .maybeSingle()
+    if (clienteError) throw clienteError
+    if (!cliente) {
+      return NextResponse.json({ error: "Cliente no encontrado" }, { status: 400 })
     }
 
     const sucursalId = await sucursalParaEscritura({
@@ -233,7 +246,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error creating recepcion:", error)
     return NextResponse.json({ error: "Error al crear la recepcion" }, { status: 500 })

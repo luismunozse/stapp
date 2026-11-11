@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
@@ -52,7 +54,7 @@ const equipoSchema = z.object({
 const checklistSchema = z.object({
   templateId: z.string(),
   tipoDispositivoId: z.string().optional().nullable(),
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
   notas: z.string().optional().nullable(),
 })
 
@@ -240,6 +242,8 @@ export async function GET(request: Request) {
         .select("id")
         .eq("organization_id", organizationId!)
         .ilike("nombre", `%${escaped}%`)
+        .order("id", { ascending: false })
+        .limit(MAX_CLIENTES_EN_BUSQUEDA)
 
       const clienteIds = (clientesMatch || []).map((c) => c.id)
       if (clienteIds.length > 0) {
@@ -405,6 +409,16 @@ export async function POST(request: Request) {
         )
       }
       clienteIdForInsert = data.clienteId
+    }
+
+    // El sector tiene que ser de ese cliente (y por lo tanto de la organización).
+    if (data.sectorId) {
+      const errorRef = clienteIdForInsert
+        ? await validarClienteYSector(organizationId!, clienteIdForInsert, data.sectorId)
+        : "Sector no válido para este cliente"
+      if (errorRef) {
+        return NextResponse.json({ error: errorRef }, { status: 400 })
+      }
     }
 
     // Validate fecha_vencimiento is not in the past — comparado por DÍA calendario
@@ -583,7 +597,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

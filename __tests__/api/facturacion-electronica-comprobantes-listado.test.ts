@@ -406,8 +406,13 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
       expect((await (await get()).json()).items[0].verificable).toBe(false)
     })
 
-    it("una factura pendiente nunca es verificable (solo las NC)", async () => {
+    it("una factura ARCA pendiente con número pedido es verificable (migración 389)", async () => {
       mockDb(() => ({ data: [{ ...FILA, estado: "pendiente", cbte_nro_solicitado: 3 }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].verificable).toBe(true)
+    })
+
+    it("una factura pendiente sin número pedido (legada) no es verificable", async () => {
+      mockDb(() => ({ data: [{ ...FILA, estado: "pendiente", cbte_nro_solicitado: null }], error: null, count: 1 }))
       expect((await (await get()).json()).items[0].verificable).toBe(false)
     })
 

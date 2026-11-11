@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// La pertenencia de cliente/sector se prueba en ordenes-referencias-org.test.ts.
+vi.mock("@/lib/referencias-cliente", () => ({ validarClienteYSector: vi.fn().mockResolvedValue(null) }))
 import { NextResponse } from "next/server"
 import {
   mockAuthSuccess,

@@ -7,6 +7,7 @@ import { ClienteOrdenesPendientes } from "@/components/clientes/detalle/cliente-
 // puedeCobrar is the single switch: ADMIN / VENDEDOR with permission = true,
 // VENDEDOR without permission or still unknown = false (fail-closed).
 const puedeCobrarMock = vi.fn(() => true)
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { role: "ADMIN" } } }) }))
 vi.mock("@/hooks/use-puede-cobrar", () => ({ usePuedeCobrar: () => puedeCobrarMock() }))
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }))

@@ -73,9 +73,20 @@ const equipoSchema = z.object({
 const checklistSchema = z.object({
   templateId: z.string(),
   tipoDispositivoId: z.string().optional().nullable(),
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
   notas: z.string().optional().nullable(),
 })
+
+// Cambios de estado que el PUT genérico acepta. ACEPTADA no es destino de
+// ninguno: se llega solo por /aprobar (firma) o el portal público, que además
+// reservan el stock. Una ACEPTADA solo se puede rechazar (libera su reserva).
+// Reenviar el estado actual es un no-op y no pasa por esta tabla.
+const TRANSICIONES_ESTADO_PUT: Record<string, string[]> = {
+  BORRADOR: ["ENVIADA", "RECHAZADA"],
+  ENVIADA: ["BORRADOR", "RECHAZADA"],
+  ACEPTADA: ["RECHAZADA"],
+  RECHAZADA: ["BORRADOR", "ENVIADA"],
+}
 
 const updateCotizacionSchema = z.object({
   estado: z.enum(["BORRADOR", "ENVIADA", "ACEPTADA", "RECHAZADA"]).optional(),
@@ -375,6 +386,26 @@ export async function PUT(
           error:
             "Una solicitud del catálogo rechazada no se puede reabrir: su stock ya se devolvió. Creá una solicitud nueva.",
         },
+        { status: 400 }
+      )
+    }
+
+    // Transición de estado. ACEPTADA no se asigna por acá: aceptar exige la
+    // firma que pide /aprobar (o el portal público) y es lo que reserva el
+    // stock; marcarla aceptada a mano saltea las dos cosas.
+    const cambiaEstado = data.estado !== undefined && data.estado !== existing.estado
+    if (cambiaEstado && data.estado === "ACEPTADA") {
+      return NextResponse.json(
+        {
+          error:
+            "Una cotización se acepta con la aprobación del cliente (Aprobar, con su firma) o desde el link público, no cambiando su estado.",
+        },
+        { status: 400 }
+      )
+    }
+    if (cambiaEstado && !(TRANSICIONES_ESTADO_PUT[existing.estado] ?? []).includes(data.estado!)) {
+      return NextResponse.json(
+        { error: `No se puede pasar una cotización de ${existing.estado} a ${data.estado}.` },
         { status: 400 }
       )
     }
@@ -754,14 +785,25 @@ export async function PUT(
         )
     }
 
-    // Update cotizacion
-    const { error: updateError } = await supabaseAdmin
+    // Update cotizacion. Si cambia el estado, el UPDATE se condiciona al estado
+    // leído: dos pedidos simultáneos (rechazar mientras el cliente aprueba, o un
+    // doble click) no pueden aplicar los dos su transición y sus efectos.
+    const updateQuery = supabaseAdmin
       .from("cotizaciones")
       .update(updateData)
       .eq("id", id)
+    const { data: filasActualizadas, error: updateError } = cambiaEstado
+      ? await updateQuery.eq("estado", existing.estado).select("id")
+      : await updateQuery
 
     if (updateError) {
       throw updateError
+    }
+    if (cambiaEstado && Array.isArray(filasActualizadas) && filasActualizadas.length === 0) {
+      return NextResponse.json(
+        { error: "La cotización cambió de estado mientras se guardaba. Recargá para ver su estado actual." },
+        { status: 409 }
+      )
     }
 
     // ── El puntero `reemplazada_por` de la original, en las dos direcciones ──
@@ -854,7 +896,13 @@ export async function PUT(
         }
       }
 
-      if (usarCaminoLegacy) {
+      // Un PRESUPUESTO nunca reservó al aprobarse (aprobar_cotizacion_atomica
+      // solo reserva si tipo <> 'PRESUPUESTO'): no hay nada que devolver, y
+      // antes de la migración 388 liberar_items_cotizacion le restaría el
+      // stock_reservado a otra cotización u orden que sí lo tiene tomado.
+      // Desde la 388 la función libera según el libro de movimientos de esta
+      // cotización, así que esto queda como defensa en profundidad.
+      if (usarCaminoLegacy && existing.tipo !== "PRESUPUESTO") {
         const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
           p_cotizacion_id: id,
           p_user_id: userId,
@@ -953,7 +1001,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

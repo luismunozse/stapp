@@ -10,13 +10,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
 import { Loader2 } from "lucide-react"
+import { useNotasCreditoOrden } from "./notas-credito-orden"
+import { disponibleParaNotaCredito } from "@/lib/notas-credito/tope"
 
 interface NotaCreditoDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  ventaId?: string | null
-  ordenId?: string | null
-  montoMaximo: number
+  ordenId: string
+  /** Lo cobrado de la orden; el máximo descuenta las NC activas previas. */
+  totalCobrado: number
   onSuccess?: () => void
 }
 
@@ -42,12 +44,17 @@ const METODOS = [
 export function NotaCreditoDialog({
   open,
   onOpenChange,
-  ventaId,
   ordenId,
-  montoMaximo,
+  totalCobrado,
   onSuccess,
 }: NotaCreditoDialogProps) {
   const { showError } = useModal()
+  const { data: previas, mutate: refrescarPrevias } = useNotasCreditoOrden(ordenId)
+  const cargando = previas === undefined
+  const montoMaximo = disponibleParaNotaCredito(totalCobrado, previas ?? [])
+  // Una clave por intento: un reintento (doble clic, error de red tras crearla)
+  // devuelve la NC ya creada en vez de emitir otra. Se renueva tras emitirla.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
   const [motivo, setMotivo] = useState<string>("DEVOLUCION")
   const [monto, setMonto] = useState<string>("")
   const [metodo, setMetodo] = useState<string>("EFECTIVO")
@@ -61,6 +68,7 @@ export function NotaCreditoDialog({
     setMonto("")
     setMetodo("EFECTIVO")
     setNotas("")
+    setIdempotencyKey(crypto.randomUUID())
   }
 
   const handleSubmit = async () => {
@@ -68,7 +76,8 @@ export function NotaCreditoDialog({
       await showError("El monto debe ser mayor a 0")
       return
     }
-    if (montoNum > montoMaximo + 0.01) {
+    // Sin tolerancia: el servidor rechaza cualquier centavo por encima.
+    if (Math.round(montoNum * 100) / 100 > montoMaximo) {
       await showError(`Monto excede el máximo (${montoMaximo.toFixed(2)})`)
       return
     }
@@ -78,16 +87,18 @@ export function NotaCreditoDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ventaId: ventaId || null,
-          ordenId: ordenId || null,
+          ordenId,
           motivo,
           monto: montoNum,
           metodoDevolucion: metodo,
           notas: notas || null,
+          idempotencyKey,
         }),
       })
       const json = await res.json()
       if (!res.ok) {
+        // 409: otra NC se emitió mientras tanto; el máximo se vuelve a calcular.
+        if (res.status === 409) void refrescarPrevias()
         await showError(json.error || "Error al crear nota de crédito")
         return
       }
@@ -111,6 +122,7 @@ export function NotaCreditoDialog({
         <div className="space-y-4">
           <div className="text-xs text-muted-foreground">
             Resta del ingreso devengado. Máximo: ${montoMaximo.toFixed(2)}
+            {previas && previas.some((nc) => !nc.anulada) ? " (descontadas las notas de crédito previas)" : null}
           </div>
           <div>
             <Label className="text-xs">Motivo</Label>
@@ -155,7 +167,7 @@ export function NotaCreditoDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={pending}>
+          <Button onClick={handleSubmit} disabled={pending || cargando}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Emitir NC
           </Button>

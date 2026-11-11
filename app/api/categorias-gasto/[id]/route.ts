@@ -69,7 +69,7 @@ export async function PATCH(
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error updating categoria:", err)
     return NextResponse.json({ error: "Error al actualizar categoría" }, { status: 500 })

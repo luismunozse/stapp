@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
-import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
+import { emitirFacturaArca } from "@/lib/facturacion/arca/factura-ruta"
 import { isArcaProduction } from "@/lib/facturacion/arca/env"
 import { ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import {
@@ -154,8 +154,21 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "No se pudieron leer las credenciales" }, { status: 500 })
   }
-  const creds = resuelto.creds
   const input = mapVentaToEmitirInput(venta, items || [])
+
+  // ARCA (directa y delegada): número explícito y resultado incierto, para que un
+  // corte después del envío nunca termine en una segunda factura (ver factura-ruta.ts).
+  if (resuelto.provider !== "tusfacturas") {
+    return emitirFacturaArca({
+      organizationId: organizationId!,
+      ventaId,
+      total: venta.total,
+      creds: resuelto.creds,
+      provider: resuelto.provider,
+      input,
+    })
+  }
+  const creds = resuelto.creds
 
   // El INSERT es el gate real contra la carrera: el índice único parcial
   // uq_comprobante_venta_activo (estado IN ('pendiente','emitido')) rechaza
@@ -208,14 +221,7 @@ export async function POST(request: Request) {
 
   let result
   try {
-    // La condición se escribe por TusFacturas y no por ARCA a propósito: así
-    // TypeScript estrecha la rama `else` a las DOS variantes ARCA (directa y
-    // delegada) y agregar una tercera no puede caer en silencio del lado
-    // equivocado.
-    result =
-      resuelto.provider === "tusfacturas"
-        ? await tusFacturasProvider.emitir(resuelto.creds, input)
-        : await arcaDirectProvider.emitir(resuelto.creds, input)
+    result = await tusFacturasProvider.emitir(creds, input)
   } catch (err) {
     // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
     // una excepción (timeout, red, etc.), lo marcamos rechazado para que se

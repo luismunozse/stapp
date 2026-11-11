@@ -133,7 +133,7 @@ export async function POST(
     )
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error adding servicio a orden:", err)
     return NextResponse.json({ error: "Error al agregar el servicio" }, { status: 500 })

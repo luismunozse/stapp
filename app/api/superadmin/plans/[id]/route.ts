@@ -18,7 +18,7 @@ const updatePlanSchema = z.object({
   limite_vendedores: z.number().positive().nullable().optional(),
   limite_storage_mb: z.number().positive().nullable().optional(),
   features: z.array(z.string()).optional(),
-  feature_flags: z.record(z.boolean()).optional(),
+  feature_flags: z.record(z.string(), z.boolean()).optional(),
 })
 
 interface RouteParams {

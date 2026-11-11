@@ -205,11 +205,22 @@ async function putArcaDelegado(organizationId: string, body: any) {
   // Si la lectura falla se asume "nuevo": un aviso de más pesa menos que uno perdido.
   const { data: previa } = await supabaseAdmin
     .from("facturacion_credenciales")
-    .select("provider, cuit")
+    .select("provider, cuit, estado")
     .eq("organization_id", organizationId)
     .maybeSingle()
   const requiereAviso =
     !previa || previa.provider !== "arca_delegado" || previa.cuit !== cuitNormalizado
+
+  // La delegación en ARCA es al CUIT de la plataforma, no a una org: nada
+  // impide declarar el CUIT de otro contribuyente. Por eso una delegación
+  // nueva (o con otro CUIT) nace pendiente y solo un superadmin la pasa a
+  // 'conectado' después de verificar que el CUIT es de esta org. Re-guardar
+  // el mismo CUIT conserva el estado que ya tenía.
+  const estado = requiereAviso
+    ? "pendiente_verificacion"
+    : previa?.estado === "conectado"
+      ? "conectado"
+      : "pendiente_verificacion"
 
   const { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert({
     organization_id: organizationId,
@@ -225,13 +236,20 @@ async function putArcaDelegado(organizationId: string, body: any) {
     cert_fingerprint: null,
     cert_not_before: null,
     cert_not_after: null,
-    estado: "conectado",
+    estado,
     updated_at: new Date().toISOString(),
   })
 
   if (dbError) {
     if (isMissingColumnError(dbError)) {
       return NextResponse.json({ error: "Migración pendiente: contactar soporte" }, { status: 503 })
+    }
+    // Índice único de la migración 385: un CUIT delegado pertenece a una sola org.
+    if (dbError.code === "23505") {
+      return NextResponse.json(
+        { error: "Ese CUIT ya está vinculado a otra cuenta de STApp. Escribinos a soporte si es tuyo." },
+        { status: 409 }
+      )
     }
     return NextResponse.json({ error: "No se pudo guardar" }, { status: 500 })
   }
@@ -248,7 +266,7 @@ async function putArcaDelegado(organizationId: string, body: any) {
   return NextResponse.json({
     conectado: true,
     provider: "arca_delegado",
-    estado: "conectado",
+    estado,
     cuit: cuitNormalizado,
     puntoVenta: puntoVentaValidado,
     condicionFiscal: cond,

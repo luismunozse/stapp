@@ -184,7 +184,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating reparaciones express:", err)
     return NextResponse.json({ error: "Error al cargar las reparaciones" }, { status: 500 })

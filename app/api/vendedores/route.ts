@@ -21,7 +21,7 @@ const vendedorCreateSchema = z.object({
     .default(0),
   // null (or absent) leaves the shop default in force; never coerced, so null is not 0.
   porcentajeComisionRecepcion: z
-    .number({ invalid_type_error: "El porcentaje de recepción debe estar entre 0 y 100" })
+    .number({ error: "El porcentaje de recepción debe estar entre 0 y 100" })
     .min(0, "El porcentaje de recepción debe estar entre 0 y 100")
     .max(100, "El porcentaje de recepción debe estar entre 0 y 100")
     .nullable()
@@ -220,7 +220,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
