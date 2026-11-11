@@ -31,6 +31,7 @@ import { POST as changeRole } from "@/app/api/superadmin/users/[userId]/change-r
 import { POST as toggleActive } from "@/app/api/superadmin/users/[userId]/toggle-active/route"
 import { POST as togglePlan } from "@/app/api/superadmin/plans/[id]/toggle/route"
 import { POST as createPlan } from "@/app/api/superadmin/plans/route"
+import { PATCH as updatePlan } from "@/app/api/superadmin/plans/[id]/route"
 import { POST as cancelSub } from "@/app/api/superadmin/subscriptions/cancel/route"
 import { POST as impersonate } from "@/app/api/superadmin/impersonate/route"
 import { PUT as maintenanceBanner } from "@/app/api/superadmin/maintenance-banner/route"
@@ -169,6 +170,8 @@ describe("fail-closed: si la auditoría no se puede escribir, la acción no ocur
     expect(orden).toEqual(["audit", "update"])
     const fila = audit.insert.mock.calls[0][0]
     expect(fila.changes).toMatchObject({ estado: "intento", performer_email: SUPERADMIN })
+    // El trigger de plans_audit toma al autor de este header (migración 403).
+    expect(plans.setHeader).toHaveBeenCalledWith("x-stapp-superadmin", SUPERADMIN)
   })
 })
 
@@ -196,6 +199,22 @@ describe("rutas que antes no auditaban: dejan fila con el superadmin real", () =
     expect(fila.changes.performer_email).toBe(SUPERADMIN)
     // Ya no se llama al rpc("set_config") inexistente que dejaba todo como "system".
     expect(db.escrituras.some((e) => e.operacion === "rpc")).toBe(false)
+    // El autor viaja en el header del mismo insert, que es lo que lee el trigger de plans_audit.
+    const insertPlan = db.escrituras.find((e) => e.tabla === "plans" && e.operacion === "insert")
+    expect(insertPlan?.headers).toEqual({ "x-stapp-superadmin": SUPERADMIN })
+  })
+
+  it("plans PATCH manda el autor en el header del update", async () => {
+    const db = montarSupabaseEnMemoria({
+      plans: [{ id: "p1", nombre: "Pro", tipo: "PREMIUM", precio_mensual: 10 }],
+      audit_logs: [],
+    })
+
+    const res = await updatePlan(json("PATCH", { precio_mensual: 12 }), params({ id: "p1" }))
+
+    expect(res.status).toBe(200)
+    const update = db.escrituras.find((e) => e.tabla === "plans" && e.operacion === "update")
+    expect(update?.headers).toEqual({ "x-stapp-superadmin": SUPERADMIN })
   })
 
   it("maintenance-banner PUT", async () => {

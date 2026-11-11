@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import type { PlanWithUsage } from "@/types/superadmin"
 
@@ -140,8 +140,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Auditoría fail-closed: si no queda registrado quién crea el plan, no se crea.
-    // (El `rpc("set_config")` que había acá llamaba a una función inexistente y
-    // fallaba en silencio: `plans_audit` siempre quedaba como "system".)
+    // El autor para `plans_audit` viaja en el header del insert (ver
+    // HEADER_AUTOR_PLANES): un set_config en otra llamada no llega al trigger.
     const intento = await createSuperadminAuditLogger(email, request).exigir({
       action: "CREATE",
       entity: "plans",
@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
         feature_flags: data.feature_flags,
         activo: true,
       })
+      .setHeader(HEADER_AUTOR_PLANES, email ?? "")
       .select()
       .single()
 

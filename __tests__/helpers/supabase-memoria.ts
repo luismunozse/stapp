@@ -30,6 +30,8 @@ export interface Escritura {
   carga?: unknown
   /** The filters chained onto the write, in order: `[method, ...args]`. */
   filtros: Filtro[]
+  /** Headers set on the write with `.setHeader(name, value)`. */
+  headers?: Record<string, string>
 }
 
 interface Opciones {
@@ -155,6 +157,10 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
         }
         return cadena
       }
+    }
+    cadena.setHeader = (header: string, valor: string) => {
+      escritura.headers = { ...escritura.headers, [header]: valor }
+      return cadena
     }
     cadena.single = async () => {
       seleccionada = true
