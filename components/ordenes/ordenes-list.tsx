@@ -36,6 +36,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 import { useSession } from "next-auth/react"
+import {
+  parseOrdenesFiltros,
+  serializeOrdenesFiltros,
+  urlListaConFiltros,
+  ordenesHref,
+  apiParamsDeFiltroRapido,
+  guardarUltimaListaOrdenes,
+  type FiltroRapido,
+  type OrdenesFiltros,
+  type OrdenesSort,
+} from "@/lib/ordenes/filtros-url"
 
 const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"]
 
@@ -104,6 +115,16 @@ const SEARCH_PLACEHOLDERS = [
   "Buscar por IMEI: 358273...",
   "Buscar por N° de Serie: SN12345...",
 ]
+
+type QuickFilterKey = FiltroRapido
+
+function tieneFiltrosDePanel(f: OrdenesFiltros): boolean {
+  return Boolean(
+    f.estado || f.estadoCobro || f.tecnicoId || f.tipoDispositivo || f.marca ||
+    f.conPresupuesto || f.conSena || f.fechaDesde || f.fechaHasta ||
+    f.fechaPrometidaDesde || f.fechaPrometidaHasta || f.fechaEntregaDesde || f.fechaEntregaHasta
+  )
+}
 
 interface OrdenesListProps {
   canRecepcionMultiple?: boolean
@@ -220,34 +241,37 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     }
   }
 
-  // Filters
-  const [search, setSearch] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [estado, setEstado] = useState<EstadoOrden | "">("")
-  const [fechaDesde, setFechaDesde] = useState("")
-  const [fechaHasta, setFechaHasta] = useState("")
-  const [tecnicoIdFilter, setTecnicoIdFilter] = useState("")
-  const [tipoDispositivoFilter, setTipoDispositivoFilter] = useState("")
-  const [marcaFilter, setMarcaFilter] = useState("")
-  const [estadoCobroFilter, setEstadoCobroFilter] = useState("")
-  const [conPresupuestoFilter, setConPresupuestoFilter] = useState("")
-  const [conSenaFilter, setConSenaFilter] = useState("")
-  const [fechaPrometidaDesde, setFechaPrometidaDesde] = useState("")
-  const [fechaPrometidaHasta, setFechaPrometidaHasta] = useState("")
-  const [fechaEntregaDesde, setFechaEntregaDesde] = useState("")
-  const [fechaEntregaHasta, setFechaEntregaHasta] = useState("")
-  const [showFilters, setShowFilters] = useState(false)
+  // Filters: arrancan desde la URL (links del dashboard, volver desde el detalle,
+  // recargar) y se escriben de vuelta en ella más abajo.
+  const [inicial] = useState(() => parseOrdenesFiltros(searchParams))
+  const [search, setSearch] = useState(inicial.search)
+  const [debouncedSearch, setDebouncedSearch] = useState(inicial.search)
+  const [estado, setEstado] = useState<EstadoOrden | "">(inicial.estado)
+  const [fechaDesde, setFechaDesde] = useState(inicial.fechaDesde)
+  const [fechaHasta, setFechaHasta] = useState(inicial.fechaHasta)
+  const [tecnicoIdFilter, setTecnicoIdFilter] = useState(inicial.tecnicoId)
+  const [tipoDispositivoFilter, setTipoDispositivoFilter] = useState(inicial.tipoDispositivo)
+  const [marcaFilter, setMarcaFilter] = useState(inicial.marca)
+  const [estadoCobroFilter, setEstadoCobroFilter] = useState(inicial.estadoCobro)
+  const [conPresupuestoFilter, setConPresupuestoFilter] = useState<OrdenesFiltros["conPresupuesto"]>(inicial.conPresupuesto)
+  const [conSenaFilter, setConSenaFilter] = useState<OrdenesFiltros["conSena"]>(inicial.conSena)
+  const [fechaPrometidaDesde, setFechaPrometidaDesde] = useState(inicial.fechaPrometidaDesde)
+  const [fechaPrometidaHasta, setFechaPrometidaHasta] = useState(inicial.fechaPrometidaHasta)
+  const [fechaEntregaDesde, setFechaEntregaDesde] = useState(inicial.fechaEntregaDesde)
+  const [fechaEntregaHasta, setFechaEntregaHasta] = useState(inicial.fechaEntregaHasta)
+  // Si se llega con un filtro del panel ya aplicado, el panel arranca abierto para que se vea.
+  const [showFilters, setShowFilters] = useState(() => tieneFiltrosDePanel(inicial))
 
   // Quick filter for vencimiento (separate from estado quick filters)
-  const [quickFilterActive, setQuickFilterActive] = useState("")
+  const [quickFilterActive, setQuickFilterActive] = useState<QuickFilterKey | "">(inicial.filtro)
 
   // Fetch técnicos for filter dropdown
   const { data: tecnicosData } = useSWR(!isTecnico ? "/api/tecnicos" : null, fetcher)
-  const tecnicos: { id: string; nombre: string }[] = tecnicosData || []
+  const tecnicos: { id: string; nombre: string }[] = Array.isArray(tecnicosData) ? tecnicosData : []
 
   // Fetch tipos de dispositivo for filter dropdown
   const { data: tiposData } = useSWR("/api/tipos-dispositivo", fetcher)
-  const tiposDispositivo: { id: string; nombre: string; codigo: string }[] = tiposData || []
+  const tiposDispositivo: { id: string; nombre: string; codigo: string }[] = Array.isArray(tiposData) ? tiposData : []
 
   const tecnicoQuickFilters = isTecnico ? [
     { label: "Sin diagnóstico", value: "RECIBIDO" as EstadoOrden },
@@ -256,32 +280,23 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     { label: "Listo para entregar", value: "REPARADO" as EstadoOrden },
   ] : []
 
-  type QuickFilterKey = "vencidas" | "venceHoy" | "pendientesCobro" | "sinTecnico"
   const generalQuickFilters: { label: string; value: QuickFilterKey }[] = [
+    { label: "En curso", value: "activas" },
     { label: "Vencidas", value: "vencidas" },
     { label: "Vence hoy", value: "venceHoy" },
     { label: "Pendientes de cobro", value: "pendientesCobro" },
     ...(!isTecnico ? [{ label: "Sin técnico", value: "sinTecnico" as QuickFilterKey }] : []),
   ]
 
-  // Sorting
-  const [sortKey, setSortKey] = useState<string>("fechaIngreso")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
-  const [sortInitialized, setSortInitialized] = useState(false)
-
-  useEffect(() => {
-    if (!sortInitialized && session) {
-      if (isTecnico) {
-        setSortKey("fechaPrometida")
-        setSortDirection("asc")
-      }
-      setSortInitialized(true)
-    }
-  }, [session, isTecnico, sortInitialized])
+  // Sorting: null = orden por defecto del rol (el técnico ve primero lo que vence
+  // antes). Sólo un orden elegido a mano va a la URL.
+  const [sort, setSort] = useState<OrdenesSort | null>(inicial.sort)
+  const sortKey = sort?.key ?? (isTecnico ? "fechaPrometida" : "fechaIngreso")
+  const sortDirection = sort?.direction ?? (isTecnico ? "asc" : "desc")
 
   // Pagination
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [page, setPage] = useState(inicial.page)
+  const [pageSize, setPageSize] = useState(inicial.pageSize)
 
   // Debounce search
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -294,6 +309,84 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   useEffect(() => {
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
   }, [])
+
+  // --- Filtros <-> URL -------------------------------------------------------
+  const filtrosActuales: OrdenesFiltros = useMemo(() => ({
+    search: debouncedSearch,
+    estado,
+    estadoCobro: estadoCobroFilter,
+    tecnicoId: tecnicoIdFilter,
+    tipoDispositivo: tipoDispositivoFilter,
+    marca: marcaFilter,
+    conPresupuesto: conPresupuestoFilter,
+    conSena: conSenaFilter,
+    fechaDesde,
+    fechaHasta,
+    fechaPrometidaDesde,
+    fechaPrometidaHasta,
+    fechaEntregaDesde,
+    fechaEntregaHasta,
+    filtro: quickFilterActive,
+    page,
+    pageSize,
+    sort,
+  }), [debouncedSearch, estado, estadoCobroFilter, tecnicoIdFilter, tipoDispositivoFilter, marcaFilter, conPresupuestoFilter, conSenaFilter, fechaDesde, fechaHasta, fechaPrometidaDesde, fechaPrometidaHasta, fechaEntregaDesde, fechaEntregaHasta, quickFilterActive, page, pageSize, sort])
+  const filtrosQs = serializeOrdenesFiltros(filtrosActuales).toString()
+  const urlFiltrosQs = serializeOrdenesFiltros(parseOrdenesFiltros(searchParams)).toString()
+
+  // Último qs (canónico) visto de cada lado, y los que escribimos y la URL todavía
+  // no reflejó: evita que una URL intermedia pise un filtro más nuevo.
+  const ultimoUrlQs = useRef(urlFiltrosQs)
+  const ultimoEstadoQs = useRef(filtrosQs)
+  const escritosPendientes = useRef<string[]>([])
+
+  // URL -> estado: navegación que no desmonta la lista (link "Órdenes" del menú
+  // estando filtrado, atrás/adelante del navegador).
+  useEffect(() => {
+    if (urlFiltrosQs === ultimoUrlQs.current) return
+    ultimoUrlQs.current = urlFiltrosQs
+    const idx = escritosPendientes.current.indexOf(urlFiltrosQs)
+    if (idx >= 0) {
+      escritosPendientes.current.splice(0, idx + 1)
+      return
+    }
+    if (urlFiltrosQs === ultimoEstadoQs.current) return
+    ultimoEstadoQs.current = urlFiltrosQs
+    const f = parseOrdenesFiltros(searchParams)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    setSearch(f.search)
+    setDebouncedSearch(f.search)
+    setEstado(f.estado)
+    setEstadoCobroFilter(f.estadoCobro)
+    setTecnicoIdFilter(f.tecnicoId)
+    setTipoDispositivoFilter(f.tipoDispositivo)
+    setMarcaFilter(f.marca)
+    setConPresupuestoFilter(f.conPresupuesto)
+    setConSenaFilter(f.conSena)
+    setFechaDesde(f.fechaDesde)
+    setFechaHasta(f.fechaHasta)
+    setFechaPrometidaDesde(f.fechaPrometidaDesde)
+    setFechaPrometidaHasta(f.fechaPrometidaHasta)
+    setFechaEntregaDesde(f.fechaEntregaDesde)
+    setFechaEntregaHasta(f.fechaEntregaHasta)
+    setQuickFilterActive(f.filtro)
+    setPage(f.page)
+    setPageSize(f.pageSize)
+    setSort(f.sort)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlFiltrosQs])
+
+  // Estado -> URL: replace (sin ensuciar el historial) y sin saltar al tope.
+  // También recuerda la lista para el "volver" del detalle de la orden.
+  useEffect(() => {
+    guardarUltimaListaOrdenes(ordenesHref(filtrosActuales))
+    if (filtrosQs === ultimoEstadoQs.current) return
+    ultimoEstadoQs.current = filtrosQs
+    if (filtrosQs === urlFiltrosQs) return
+    escritosPendientes.current.push(filtrosQs)
+    router.replace(urlListaConFiltros(pathname, searchParams ?? new URLSearchParams(), filtrosActuales), { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtrosQs])
 
   // Construir URL con parámetros para SWR
   const apiUrl = useMemo(() => {
@@ -313,10 +406,9 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     if (fechaEntregaDesde) params.append("fechaEntregaDesde", fechaEntregaDesde)
     if (fechaEntregaHasta) params.append("fechaEntregaHasta", fechaEntregaHasta)
     // Quick filters that map to backend params
-    if (quickFilterActive === "vencidas") params.append("vencimiento", "vencidas")
-    if (quickFilterActive === "venceHoy") params.append("vencimiento", "venceHoy")
-    if (quickFilterActive === "pendientesCobro") params.append("estadoCobro", "PENDIENTE")
-    if (quickFilterActive === "sinTecnico") params.append("sinTecnico", "true")
+    for (const [key, value] of Object.entries(apiParamsDeFiltroRapido(quickFilterActive))) {
+      params.append(key, value)
+    }
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
     params.append("sortBy", sortKey)
@@ -339,10 +431,9 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+      setSort({ key, direction: sortDirection === "asc" ? "desc" : "asc" })
     } else {
-      setSortKey(key)
-      setSortDirection("asc")
+      setSort({ key, direction: "asc" })
     }
   }
 
@@ -840,7 +931,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             <Select
               value={conPresupuestoFilter || "all"}
               onValueChange={(value) => {
-                setConPresupuestoFilter(value === "all" ? "" : value)
+                setConPresupuestoFilter(value === "si" || value === "no" ? value : "")
                 setPage(1)
               }}
             >
@@ -857,7 +948,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             <Select
               value={conSenaFilter || "all"}
               onValueChange={(value) => {
-                setConSenaFilter(value === "all" ? "" : value)
+                setConSenaFilter(value === "si" || value === "no" ? value : "")
                 setPage(1)
               }}
             >

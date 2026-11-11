@@ -3,6 +3,7 @@ import { AlertTriangle, DollarSign, Package, ShieldCheck, type LucideIcon } from
 import { Card } from "@/components/ui/card"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
+import { ordenesHref } from "@/lib/ordenes/filtros-url"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,7 +43,7 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: DollarSign,
       label: "Cobros pendientes",
       value: `${formatCurrency(input.deudaTotal, input.moneda)} · ${input.cobrosCount} orden${input.cobrosCount !== 1 ? "es" : ""}`,
-      href: "/ordenes?estado_cobro=PENDIENTE",
+      href: ordenesHref({ filtro: "pendientesCobro" }),
     })
   }
 
@@ -53,7 +54,7 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: AlertTriangle,
       label: "Fecha prometida vencida",
       value: `${input.slaVencidasCount} orden${input.slaVencidasCount !== 1 ? "es" : ""}`,
-      href: "/ordenes",
+      href: ordenesHref({ filtro: "vencidas" }),
     })
   }
 

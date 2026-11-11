@@ -24,6 +24,7 @@ import { resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 import { countRealOrders } from "@/lib/onboarding/practica"
 import { HeroMetric } from "@/components/dashboard/hero-metric"
 import { ActionStrip, buildAdminActions } from "@/components/dashboard/action-strip"
+import { ordenesHref } from "@/lib/ordenes/filtros-url"
 
 // Cachear datos del dashboard por 2 minutos
 // Cache key = args: organizationId + the order read scope (branch, and user id
@@ -444,7 +445,7 @@ export default async function DashboardPage() {
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
       tone: "info",
-      href: "/ordenes",
+      href: ordenesHref({ filtro: "activas" }),
       compact: true,
     },
     {
@@ -466,7 +467,7 @@ export default async function DashboardPage() {
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
       tone: "info",
-      href: "/ordenes",
+      href: ordenesHref({ filtro: "activas" }),
     },
     {
       title: "Clientes",
@@ -501,7 +502,7 @@ export default async function DashboardPage() {
       description: "Asignadas a mí",
       icon: ClipboardList,
       tone: "info",
-      href: "/ordenes",
+      href: ordenesHref({ filtro: "activas" }),
     },
     {
       title: "Sin Diagnóstico",
@@ -510,7 +511,7 @@ export default async function DashboardPage() {
       icon: AlertTriangle,
       tone: misSinDiagnostico > 0 ? "warning" : "success",
       urgent: misSinDiagnostico > 0,
-      href: "/ordenes?estado=RECIBIDO",
+      href: ordenesHref({ estado: "RECIBIDO" }),
     },
     {
       title: "Esperando Repuesto",
@@ -518,7 +519,7 @@ export default async function DashboardPage() {
       description: "En espera de piezas",
       icon: Clock,
       tone: misEsperandoRepuesto > 0 ? "warning" : "success",
-      href: "/ordenes?estado=ESPERANDO_REPUESTO",
+      href: ordenesHref({ estado: "ESPERANDO_REPUESTO" }),
     },
     {
       title: "Completadas (Mes)",
@@ -692,7 +693,7 @@ export default async function DashboardPage() {
                 <AlertItem
                   tone="info"
                   icon={ClipboardList}
-                  href="/ordenes?estado=pendientes"
+                  href={ordenesHref({ filtro: "activas" })}
                   title={`${ordenesPendientes} órdenes pendientes`}
                 />
               )}
@@ -752,7 +753,7 @@ export default async function DashboardPage() {
                 <AlertItem
                   tone="info"
                   icon={Clock}
-                  href="/ordenes?estado=ESPERANDO_REPUESTO"
+                  href={ordenesHref({ estado: "ESPERANDO_REPUESTO" })}
                   title={`${misEsperandoRepuesto} orden${misEsperandoRepuesto > 1 ? "es" : ""} esperando repuesto`}
                 />
               )}
@@ -760,7 +761,7 @@ export default async function DashboardPage() {
                 <AlertItem
                   tone="warning"
                   icon={Wrench}
-                  href="/ordenes?estado=RECIBIDO"
+                  href={ordenesHref({ estado: "RECIBIDO" })}
                   title={`${misSinDiagnostico} orden${misSinDiagnostico > 1 ? "es" : ""} sin diagnóstico`}
                 />
               )}

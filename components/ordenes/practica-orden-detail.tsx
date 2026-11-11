@@ -14,6 +14,7 @@ import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { useBorrarPractica } from "@/components/onboarding/use-borrar-practica"
 import { VerLoQueVeTuCliente } from "@/components/onboarding/ver-lo-que-ve-tu-cliente"
 import type { OrdenServicio } from "@/types"
+import { useUltimaListaOrdenes } from "@/hooks/use-ultima-lista-ordenes"
 
 interface PracticaOrdenDetailProps {
   orden: OrdenServicio
@@ -28,9 +29,10 @@ interface PracticaOrdenDetailProps {
  */
 export function PracticaOrdenDetail({ orden, isAdmin }: PracticaOrdenDetailProps) {
   const router = useRouter()
+  const listaHref = useUltimaListaOrdenes()
   const term = useTerminologia()
   const { formatPrice, formatDate } = useCurrency()
-  const { borrar, borrando } = useBorrarPractica(() => router.push("/ordenes"))
+  const { borrar, borrando } = useBorrarPractica(() => router.push(listaHref))
   const entregada = orden.estado === "ENTREGADO_SIN_COBRO"
 
   return (
@@ -38,7 +40,7 @@ export function PracticaOrdenDetail({ orden, isAdmin }: PracticaOrdenDetailProps
       <div className="flex flex-col gap-4">
         <div className="flex items-start gap-4">
           <Button asChild variant="outline" size="icon" className="shrink-0">
-            <Link href="/ordenes" aria-label="Volver a órdenes">
+            <Link href={listaHref} aria-label="Volver a órdenes">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
