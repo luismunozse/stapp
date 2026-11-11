@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { safeCallbackPath } from "@/lib/safe-callback-path"
+import { safeCallbackPath, safeSuperadminCallbackPath } from "@/lib/safe-callback-path"
 
 describe("safeCallbackPath", () => {
   it.each([
@@ -33,4 +33,27 @@ describe("safeCallbackPath", () => {
   it("acepta un fallback propio", () => {
     expect(safeCallbackPath("//evil.com", "/inicio")).toBe("/inicio")
   })
+})
+
+describe("safeSuperadminCallbackPath", () => {
+  it.each([
+    ["/superadmin/organizaciones", "/superadmin/organizaciones"],
+    ["/superadmin/organizaciones/abc?tab=usuarios", "/superadmin/organizaciones/abc?tab=usuarios"],
+  ])("acepta %s", (raw, esperado) => expect(safeSuperadminCallbackPath(raw)).toBe(esperado))
+
+  it.each([
+    null,
+    "",
+    "javascript:alert(document.cookie)",
+    "JavaScript:fetch('/api/superadmin/organizations')",
+    "https://evil.com",
+    "//evil.com",
+    "/%2F%2Fevil.com",
+    "/dashboard",
+    "/superadmin",
+    "/superadminfalso/x",
+    "/superadmin/../dashboard",
+    "/api/superadmin/organizations",
+  ])("rechaza %j y cae al dashboard del panel", (raw) =>
+    expect(safeSuperadminCallbackPath(raw as string | null)).toBe("/superadmin/dashboard"))
 })
