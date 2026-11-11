@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
+import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
 
 const renewSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -91,6 +92,23 @@ export async function POST(request: Request) {
 
     let subscriptionId: string
     const previousStatus = existingSub?.status || null
+
+    // Renovar a mano pasa la suscripción a payment_provider MANUAL. Si la
+    // preapproval de MercadoPago quedaba viva, MP seguía cobrando y su
+    // webhook extendía el período otra vez y volvía a MERCADOPAGO: cobro doble
+    // y período inflado. Se cancela antes de tocar la fila; si falla, nada
+    // cambia y el operador reintenta.
+    let mercadopagoCanceled = false
+    if (existingSub) {
+      const mpCancel = await cancelMercadoPagoPreapproval(organizationId)
+      if (!mpCancel.ok) {
+        return NextResponse.json(
+          { error: "No se pudo cancelar el débito automático en MercadoPago. La suscripción no se renovó; reintentá." },
+          { status: 502 }
+        )
+      }
+      mercadopagoCanceled = mpCancel.canceled
+    }
 
     if (existingSub) {
       // Si la suscripción actual está activa y no ha vencido, extender desde la fecha de vencimiento
@@ -219,6 +237,7 @@ export async function POST(request: Request) {
         superadmin_email: email,
         previous_status: previousStatus,
         custom_date: !!customEndDate,
+        mercadopago_preapproval_canceled: mercadopagoCanceled,
       },
     })
 
