@@ -6,6 +6,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { condicionesGarantiaDePresupuesto } from "@/lib/garantias/condiciones"
 import { randomBytes } from "crypto"
 
 /**
@@ -123,8 +124,10 @@ export async function POST(
     const condiciones = (equipo.condiciones || {}) as Record<string, any>
     const diagnostico: string | null = condiciones.diagnostico || null
     const plazoEstimadoDias: number | null = typeof condiciones.plazoEstimadoDias === "number" && condiciones.plazoEstimadoDias > 0 ? condiciones.plazoEstimadoDias : null
-    const garantiaDias: number = typeof condiciones.garantiaDias === "number" ? condiciones.garantiaDias : 0
-    const garantiaAlcance: string = condiciones.garantiaAlcance || "NINGUNA"
+    // La garantía corre desde la entrega: acá solo se guardan las condiciones
+    // en la orden y la entrega las aplica (antes se creaba la garantía con la
+    // orden en RECIBIDO, y por el UNIQUE(orden_id) la de la entrega fallaba).
+    const garantiaPresupuesto = condicionesGarantiaDePresupuesto(condiciones)
     const politicaAbandonoDias: number | null = typeof condiciones.politicaAbandonoDias === "number" && condiciones.politicaAbandonoDias > 0 ? condiciones.politicaAbandonoDias : null
     const anticipoTipo: string = condiciones.anticipoTipo || "porcentaje"
     const anticipoValor: number = typeof condiciones.anticipoValor === "number" ? condiciones.anticipoValor : 0
@@ -180,6 +183,8 @@ export async function POST(
         sucursal_id: sucursalId,
         recibido_por: recibidoPor,
         sector_id: cotizacion.sector_id || null,
+        garantia_presupuesto_dias: garantiaPresupuesto.dias,
+        garantia_presupuesto_alcance: garantiaPresupuesto.alcance,
         metadata: equipo.modelo || equipo.numeroSerie
           ? { modelo: equipo.modelo, numeroSerie: equipo.numeroSerie }
           : {},
@@ -197,25 +202,6 @@ export async function POST(
       await deletePracticeData(organizationId!)
     } catch (err) {
       console.error("[practica] automatic deletion failed:", err)
-    }
-
-    // Crear garantía si corresponde
-    if (garantiaAlcance !== "NINGUNA" && garantiaDias > 0) {
-      const inicio = new Date()
-      const vencimiento = new Date()
-      vencimiento.setDate(vencimiento.getDate() + garantiaDias)
-      const alcanceLabel = garantiaAlcance === "AMBOS"
-        ? "Repuesto y mano de obra"
-        : garantiaAlcance === "REPUESTO"
-          ? "Solo repuesto"
-          : "Solo mano de obra"
-      await supabaseAdmin.from("garantias").insert({
-        orden_id: orden.id,
-        dias_validez: garantiaDias,
-        fecha_inicio: inicio.toISOString(),
-        fecha_vencimiento: vencimiento.toISOString(),
-        notas: `Alcance: ${alcanceLabel}. Garantía generada desde presupuesto ${cotizacion.numero_cotizacion}.`,
-      })
     }
 
     // Si hay checklist_snapshot, copiarlo a checklist_recepcion

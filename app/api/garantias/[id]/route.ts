@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
+import { formatReclamos } from "@/lib/garantias/formato"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 const updateGarantiaSchema = z.object({
@@ -80,9 +81,7 @@ export async function GET(
         dispositivo: garantia.ordenes_servicio.dispositivo,
         cliente: garantia.ordenes_servicio.clientes,
       },
-      reclamos: garantia.reclamos_garantia?.sort((a: any, b: any) =>
-        new Date(b.fecha_reclamo).getTime() - new Date(a.fecha_reclamo).getTime()
-      ),
+      reclamos: formatReclamos(garantia.reclamos_garantia),
     })
   } catch (error) {
     console.error("Error fetching garantia:", error)
@@ -202,7 +201,7 @@ export async function PUT(
         dispositivo: garantia.ordenes_servicio.dispositivo,
         cliente: garantia.ordenes_servicio.clientes,
       },
-      reclamos: garantia.reclamos_garantia,
+      reclamos: formatReclamos(garantia.reclamos_garantia),
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

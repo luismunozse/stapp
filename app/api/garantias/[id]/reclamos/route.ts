@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumber } from "@/lib/counters"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { z } from "zod"
+import { formatReclamo } from "@/lib/garantias/formato"
 import { ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 const reclamoSchema = z.object({
@@ -84,7 +85,7 @@ export async function POST(
       .update({ estado: "RECLAMADA" })
       .eq("id", garantiaId)
 
-    return NextResponse.json(reclamo, { status: 201 })
+    return NextResponse.json(formatReclamo(reclamo), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
@@ -125,7 +126,7 @@ export async function PUT(
         garantias (
           *,
           ordenes_servicio (
-            id, organization_id, cliente_id, dispositivo, tipo_dispositivo, numero_orden
+            id, organization_id, sucursal_id, cliente_id, dispositivo, tipo_dispositivo, numero_orden
           )
         )
       `)
@@ -167,6 +168,13 @@ export async function PUT(
           problema_reportado: `[RECLAMO GARANTÍA] ${reclamo.descripcion}`,
           observaciones: `Reclamo de garantía de la orden #${reclamo.garantias.ordenes_servicio.numero_orden}`,
           estado: "RECIBIDO",
+          // Re-ingreso vinculado, igual que POST /api/ordenes/[id]/reingreso:
+          // sin estos campos la orden no entraba en las métricas de reingreso,
+          // no se podía rastrear y caía sin sucursal.
+          sucursal_id: reclamo.garantias.ordenes_servicio.sucursal_id ?? null,
+          es_reingreso: true,
+          orden_origen_id: reclamo.garantias.ordenes_servicio.id,
+          garantia_origen_id: garantiaId,
         })
         .select()
         .single()
@@ -240,7 +248,7 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json(updatedReclamo)
+    return NextResponse.json(formatReclamo(updatedReclamo))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 })

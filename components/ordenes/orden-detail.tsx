@@ -896,7 +896,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
                   <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
                     <Shield className="h-4 w-4 mr-2" />
-                    Re-ingreso por Garantia
+                    Re-ingreso por garantía
                   </DropdownMenuItem>
                 )}
                 {(orden.totalCobrado || 0) > 0 && (
@@ -939,8 +939,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Banner de re-ingreso */}
       {orden.esReingreso && orden.ordenOrigenId && (
         <StatusBanner tone="info" icon={Shield}>
-          Re-ingreso por garantia — Orden original:{" "}
-          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
+          Re-ingreso por garantía — Orden original:{" "}
+          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-primary">
             ver orden original
           </Link>
         </StatusBanner>
@@ -1250,7 +1250,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Garantia (no aplica para retiros ni sin cobro) */}
           {!isRetiro && !isSinCobro && (
-            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} />
+            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} isAdmin={isAdmin} />
           )}
 
           {/* Notas de crédito: las ve quien ve la orden (spec, Permisos). */}
@@ -1501,6 +1501,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}
           sinCobro={sinCobroEntrega}
           garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30}
+          garantiaPresupuesto={{
+            dias: (orden as any).garantiaPresupuestoDias ?? null,
+            alcance: (orden as any).garantiaPresupuestoAlcance ?? null,
+          }}
         />
       )}
 

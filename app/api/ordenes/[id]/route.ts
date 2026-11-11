@@ -204,6 +204,10 @@ export async function GET(
       organizationMoneda: org?.moneda || null,
       organizationZonaHoraria: org?.zona_horaria || null,
       organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
+      // Condiciones de garantía del presupuesto del que nació la orden: el
+      // diálogo de entrega las precarga en vez del valor por defecto de la org.
+      garantiaPresupuestoDias: (orden as any).garantia_presupuesto_dias ?? null,
+      garantiaPresupuestoAlcance: (orden as any).garantia_presupuesto_alcance ?? null,
       // The branch that works the order: the screen lists that branch's technicians.
       sucursalAtiendeId: sucursalQueAtiende(orden),
       // The picker lists that branch's technicians, so only an ADMIN or someone of that branch

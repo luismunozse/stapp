@@ -8,6 +8,8 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { resolverEstadoEntrega, esTransicionValida, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
+import { notasGarantiaConAlcance } from "@/lib/garantias/condiciones"
+import { notificarGarantiaCreada } from "@/lib/garantias/notificar"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
@@ -268,17 +270,36 @@ export async function POST(
 
     const zonaHoraria = org?.zona_horaria || DEFAULT_TIMEZONE
 
-    // Create warranty if requested (only for normal deliveries, not returns or sin cobro)
+    // Garantía de la reparación: corre desde la entrega (solo entregas
+    // normales, no retiros ni sin cobro). Los días los manda la UI, que los
+    // precarga del presupuesto o del valor por defecto de la org; el alcance
+    // del presupuesto queda en las notas.
+    //
+    // Un fallo acá NO cancela la entrega (el equipo ya se entregó), pero antes
+    // se tragaba en silencio: ahora se registra y se devuelve como
+    // `garantiaWarning` para que la UI avise y se pueda crear a mano.
+    let garantiaCreada: { id: string; dias_validez: number; fecha_vencimiento: string } | null = null
+    let garantiaWarning: string | null = null
     if (data.diasGarantia && !esRetiro && !sinCobro) {
-      await supabaseAdmin
+      const { data: garantia, error: garantiaError } = await supabaseAdmin
         .from("garantias")
         .insert({
           orden_id: id,
           dias_validez: data.diasGarantia,
           fecha_inicio: new Date().toISOString(),
           fecha_vencimiento: addDaysInTimeZone(data.diasGarantia, zonaHoraria),
-          notas: data.notasGarantia || null,
+          notas: notasGarantiaConAlcance(data.notasGarantia, (orden as any).garantia_presupuesto_alcance),
         })
+        .select("id, dias_validez, fecha_vencimiento")
+        .single()
+
+      if (garantiaError || !garantia) {
+        console.error(`[entregar] no se pudo registrar la garantía de la orden ${id}:`, garantiaError)
+        garantiaWarning =
+          "La orden se entregó pero no se pudo registrar la garantía. Registrala desde el detalle de la orden."
+      } else {
+        garantiaCreada = garantia
+      }
     }
 
     // Consume reserved stock: deduct from physical stock + release reservation.
@@ -360,6 +381,18 @@ export async function POST(
       }).catch(err => console.error("Error queueing notification:", err))
     }
 
+    // Mismo aviso que el alta manual de garantía (POST /api/garantias).
+    if (garantiaCreada) {
+      notificarGarantiaCreada({
+        organizationId: organizationId!,
+        sucursalId: (orden as any).sucursal_id ?? null,
+        org,
+        cliente,
+        orden: { ...orden, estado: nuevoEstado },
+        garantia: garantiaCreada,
+      })
+    }
+
     return NextResponse.json({
       id: updatedOrden.id,
       numeroOrden: updatedOrden.numero_orden,
@@ -373,6 +406,8 @@ export async function POST(
       // Presente solo si el descuento de stock fallo: la entrega se completo
       // igual, pero el inventario quedo sin ajustar y hay que revisarlo.
       ...(stockWarning ? { warning: stockWarning } : {}),
+      // Presente solo si la garantía pedida no se pudo registrar.
+      ...(garantiaWarning ? { garantiaWarning } : {}),
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

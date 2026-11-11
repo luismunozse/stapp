@@ -7,7 +7,15 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select } from "@/components/ui/select"
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog"
+import Link from "next/link"
 import {
   Shield,
   ShieldCheck,
@@ -24,6 +32,7 @@ import {
 import { ReclamoForm } from "./reclamo-form"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import type { BadgeProps } from "@/components/ui/badge"
 
 interface Reclamo {
   id: string
@@ -50,23 +59,54 @@ interface GarantiaCardProps {
   ordenId: string
   ordenEstado: string
   garantiaDiasDefault?: number
+  /** Crear, editar y decidir reclamos es solo de ADMIN (la API responde 403 al
+   *  resto). Registrar un reclamo lo puede hacer cualquier rol. */
+  isAdmin?: boolean
 }
 
-const estadoGarantiaConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
-  ACTIVA: { label: "Activa", icon: ShieldCheck, color: "bg-green-100 text-green-800" },
-  VENCIDA: { label: "Vencida", icon: ShieldX, color: "bg-gray-100 text-gray-800" },
-  RECLAMADA: { label: "En Reclamo", icon: ShieldAlert, color: "bg-yellow-100 text-yellow-800" },
+type BadgeVariant = NonNullable<BadgeProps["variant"]>
+
+const estadoGarantiaConfig: Record<string, { label: string; icon: typeof Shield; variant: BadgeVariant }> = {
+  ACTIVA: { label: "Activa", icon: ShieldCheck, variant: "successSoft" },
+  VENCIDA: { label: "Vencida", icon: ShieldX, variant: "secondary" },
+  RECLAMADA: { label: "En reclamo", icon: ShieldAlert, variant: "warningSoft" },
 }
 
-const estadoReclamoConfig: Record<string, { label: string; color: string }> = {
-  PENDIENTE: { label: "Pendiente", color: "bg-yellow-100 text-yellow-800" },
-  EN_REVISION: { label: "En Revisión", color: "bg-blue-100 text-blue-800" },
-  ACEPTADO: { label: "Aceptado", color: "bg-green-100 text-green-800" },
-  RECHAZADO: { label: "Rechazado", color: "bg-red-100 text-red-800" },
-  RESUELTO: { label: "Resuelto", color: "bg-gray-100 text-gray-800" },
+const estadoReclamoConfig: Record<string, { label: string; variant: BadgeVariant }> = {
+  PENDIENTE: { label: "Pendiente", variant: "warningSoft" },
+  EN_REVISION: { label: "En revisión", variant: "infoSoft" },
+  ACEPTADO: { label: "Aceptado", variant: "successSoft" },
+  RECHAZADO: { label: "Rechazado", variant: "destructiveSoft" },
+  RESUELTO: { label: "Resuelto", variant: "secondary" },
 }
 
-export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }: GarantiaCardProps) {
+/** Rechazar o resolver un reclamo pide un texto: motivo o resolución. */
+type MotivoPendiente = { reclamoId: string; estado: "RECHAZADO" | "RESUELTO" }
+
+const motivoDialogCopy: Record<
+  MotivoPendiente["estado"],
+  { title: string; description: string; label: string; confirm: string }
+> = {
+  RECHAZADO: {
+    title: "Rechazar reclamo",
+    description: "El motivo queda registrado en el historial del reclamo.",
+    label: "Motivo del rechazo",
+    confirm: "Rechazar reclamo",
+  },
+  RESUELTO: {
+    title: "Marcar reclamo como resuelto",
+    description: "Contá cómo se resolvió. Queda registrado en el historial del reclamo.",
+    label: "Descripción de la resolución",
+    confirm: "Marcar resuelto",
+  },
+}
+
+export function GarantiaCard({
+  ordenId,
+  ordenEstado,
+  garantiaDiasDefault = 30,
+  isAdmin = false,
+}: GarantiaCardProps) {
   const { confirm, showError } = useModal()
   const { formatDate } = useCurrency()
   const [garantia, setGarantia] = useState<Garantia | null>(null)
@@ -81,13 +121,17 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
   const [editDias, setEditDias] = useState("30")
   const [editNotas, setEditNotas] = useState("")
   const [saving, setSaving] = useState(false)
+  const [motivoPendiente, setMotivoPendiente] = useState<MotivoPendiente | null>(null)
+  const [motivo, setMotivo] = useState("")
 
   const fetchGarantia = async () => {
     try {
-      const res = await fetch(`/api/garantias?ordenId=${ordenId}`)
+      const res = await fetch(`/api/garantias?ordenId=${encodeURIComponent(ordenId)}`)
       const data = await res.json()
-      // Buscar la garantía de esta orden
-      const garantiaOrden = data.find((g: Garantia) => g.ordenId === ordenId)
+      // La API ya filtra por orden; el find es una red de seguridad.
+      const garantiaOrden = Array.isArray(data)
+        ? data.find((g: Garantia) => g.ordenId === ordenId)
+        : null
       setGarantia(garantiaOrden || null)
     } catch (error) {
       console.error("Error fetching garantia:", error)
@@ -177,7 +221,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
     crearOrden?: boolean,
     resolucion?: string
   ) => {
-    if (!garantia) return
+    if (!garantia) return false
 
     setUpdatingReclamo(reclamoId)
     try {
@@ -197,15 +241,35 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
       if (!res.ok) {
         const error = await res.json()
         await showError(error.error || "Error al actualizar reclamo")
-        return
+        return false
       }
 
       fetchGarantia()
+      return true
     } catch (error) {
       console.error("Error:", error)
+      await showError("Error al actualizar reclamo")
+      return false
     } finally {
       setUpdatingReclamo(null)
     }
+  }
+
+  const abrirMotivo = (reclamoId: string, estado: MotivoPendiente["estado"]) => {
+    setMotivo("")
+    setMotivoPendiente({ reclamoId, estado })
+  }
+
+  const confirmarMotivo = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!motivoPendiente || !motivo.trim()) return
+    const ok = await handleUpdateReclamo(
+      motivoPendiente.reclamoId,
+      motivoPendiente.estado,
+      false,
+      motivo.trim()
+    )
+    if (ok) setMotivoPendiente(null)
   }
 
   // Solo mostrar si la orden está ENTREGADO
@@ -234,15 +298,17 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!showCreateForm ? (
+          {!showCreateForm || !isAdmin ? (
             <div className="text-center py-4">
               <p className="text-muted-foreground mb-4">
                 Esta orden no tiene garantía registrada
               </p>
-              <Button onClick={() => setShowCreateForm(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Garantía
-              </Button>
+              {isAdmin && (
+                <Button onClick={() => setShowCreateForm(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear garantía
+                </Button>
+              )}
             </div>
           ) : (
             <form onSubmit={handleCreateGarantia} className="space-y-4">
@@ -277,7 +343,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                   Cancelar
                 </Button>
                 <Button type="submit" disabled={creating}>
-                  {creating ? "Creando..." : "Crear Garantía"}
+                  {creating ? "Creando..." : "Crear garantía"}
                 </Button>
               </div>
             </form>
@@ -304,11 +370,10 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
             Garantía
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Badge className={config.color}>
-              <Icon className="mr-1 h-3 w-3" />
+            <Badge variant={config.variant} icon={Icon} showIcon>
               {config.label}
             </Badge>
-            {!showEditForm && (
+            {isAdmin && !showEditForm && (
               <Button variant="ghost" size="sm" onClick={openEditForm} title="Editar garantía">
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -317,7 +382,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {showEditForm ? (
+        {isAdmin && showEditForm ? (
           <form onSubmit={handleUpdateGarantia} className="space-y-4">
             <div>
               <Label htmlFor="editDias">Días de validez</Label>
@@ -379,10 +444,10 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
             <div
               className={`font-medium ${
                 diasRestantes <= 7
-                  ? "text-red-600"
+                  ? "text-destructive"
                   : diasRestantes <= 14
-                  ? "text-yellow-600"
-                  : "text-green-600"
+                  ? "text-warning-700 dark:text-warning-500"
+                  : "text-success-700 dark:text-success-400"
               }`}
             >
               {diasRestantes > 0 ? `${diasRestantes} días` : "Vencida"}
@@ -401,11 +466,11 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
         {garantia.estado === "ACTIVA" && !showReclamoForm && (
           <Button
             variant="outline"
-            className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+            className="w-full"
             onClick={() => setShowReclamoForm(true)}
           >
             <AlertTriangle className="mr-2 h-4 w-4" />
-            Registrar Reclamo
+            Registrar reclamo
           </Button>
         )}
 
@@ -426,7 +491,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
           <div className="space-y-3">
             <h4 className="font-medium flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Historial de Reclamos ({garantia.reclamos.length})
+              Historial de reclamos ({garantia.reclamos.length})
             </h4>
             {garantia.reclamos.map((reclamo) => {
               const reclamoConfig =
@@ -440,7 +505,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <Badge className={reclamoConfig.color}>
+                      <Badge variant={reclamoConfig.variant}>
                         {reclamoConfig.label}
                       </Badge>
                       <span className="text-xs text-muted-foreground ml-2">
@@ -457,13 +522,18 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                   )}
 
                   {reclamo.ordenReparacionId && (
-                    <p className="text-sm text-blue-600">
-                      Nueva orden de reparación creada
+                    <p className="text-sm">
+                      <Link
+                        href={`/ordenes/${reclamo.ordenReparacionId}`}
+                        className="text-primary underline-offset-4 hover:underline"
+                      >
+                        Nueva orden de reparación creada
+                      </Link>
                     </p>
                   )}
 
                   {/* Acciones según estado */}
-                  {reclamo.estado === "PENDIENTE" && (
+                  {isAdmin && reclamo.estado === "PENDIENTE" && (
                     <div className="flex gap-2 pt-2">
                       <Button
                         size="sm"
@@ -477,15 +547,14 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                     </div>
                   )}
 
-                  {reclamo.estado === "EN_REVISION" && (
+                  {isAdmin && reclamo.estado === "EN_REVISION" && (
                     <div className="flex gap-2 pt-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-green-600"
                         onClick={async () => {
                           const crearOrden = await confirm({
-                            title: "Crear Orden",
+                            title: "Crear orden",
                             description: "¿Desea crear una nueva orden de reparación?",
                             confirmText: "Sí, crear",
                             cancelText: "No",
@@ -501,13 +570,8 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-red-600"
-                        onClick={() => {
-                          const resolucion = prompt("Motivo del rechazo:")
-                          if (resolucion) {
-                            handleUpdateReclamo(reclamo.id, "RECHAZADO", false, resolucion)
-                          }
-                        }}
+                        className="text-destructive"
+                        onClick={() => abrirMotivo(reclamo.id, "RECHAZADO")}
                         disabled={isUpdating}
                       >
                         <XCircle className="mr-1 h-3 w-3" />
@@ -516,20 +580,15 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
                     </div>
                   )}
 
-                  {reclamo.estado === "ACEPTADO" && (
+                  {isAdmin && reclamo.estado === "ACEPTADO" && (
                     <div className="flex gap-2 pt-2">
                       <Button
                         size="sm"
-                        onClick={() => {
-                          const resolucion = prompt("Descripción de la resolución:")
-                          if (resolucion) {
-                            handleUpdateReclamo(reclamo.id, "RESUELTO", false, resolucion)
-                          }
-                        }}
+                        onClick={() => abrirMotivo(reclamo.id, "RESUELTO")}
                         disabled={isUpdating}
                       >
                         <CheckCircle className="mr-1 h-3 w-3" />
-                        Marcar Resuelto
+                        Marcar resuelto
                       </Button>
                     </div>
                   )}
@@ -541,6 +600,57 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
         </>
         )}
       </CardContent>
+
+      <ResponsiveDialog
+        open={motivoPendiente !== null}
+        onOpenChange={(open) => {
+          if (!open && !updatingReclamo) setMotivoPendiente(null)
+        }}
+      >
+        {motivoPendiente && (
+          <ResponsiveDialogContent>
+            <form onSubmit={confirmarMotivo} className="space-y-4">
+              <ResponsiveDialogHeader>
+                <ResponsiveDialogTitle>{motivoDialogCopy[motivoPendiente.estado].title}</ResponsiveDialogTitle>
+                <ResponsiveDialogDescription>
+                  {motivoDialogCopy[motivoPendiente.estado].description}
+                </ResponsiveDialogDescription>
+              </ResponsiveDialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="motivo-reclamo">{motivoDialogCopy[motivoPendiente.estado].label}</Label>
+                <Textarea
+                  id="motivo-reclamo"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  rows={3}
+                  required
+                  autoFocus
+                  disabled={updatingReclamo !== null}
+                />
+              </div>
+              <ResponsiveDialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMotivoPendiente(null)}
+                  disabled={updatingReclamo !== null}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant={motivoPendiente.estado === "RECHAZADO" ? "destructive" : "default"}
+                  disabled={!motivo.trim() || updatingReclamo !== null}
+                >
+                  {updatingReclamo !== null
+                    ? "Guardando..."
+                    : motivoDialogCopy[motivoPendiente.estado].confirm}
+                </Button>
+              </ResponsiveDialogFooter>
+            </form>
+          </ResponsiveDialogContent>
+        )}
+      </ResponsiveDialog>
     </Card>
   )
 }
