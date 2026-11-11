@@ -8,7 +8,7 @@ import { getTaxIdLabel, getPersonalIdLabel, getCombinedIdLabel } from "@/lib/cou
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
-import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
+import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
@@ -1932,10 +1932,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (data.checklistNotas) chequeoParts.push(safe(data.checklistNotas))
   const chequeoText = chequeoParts.join(" · ") || "Sin chequeo registrado"
   const chequeoLines = rxWrap(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2).slice(0, 4)
-  const isPatternCode = !!codigoAccesoDispositivo && /^patr[oó]n:/i.test(codigoAccesoDispositivo)
+  const isPatternCode = !!codigoAccesoDispositivo && isPatternLockCode(codigoAccesoDispositivo)
   const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
 
-  const notasMostrador = [problemaReportado, tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
+  const notasMostrador = [problemaReportado.replace(/[.\s]+$/, ""), tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
   const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
     .slice(0, 3)
     .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
@@ -2359,26 +2359,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   drawSectionLabel(page, archivoBold, "Código de acceso", rxMargin + rxCellPadX, sy - rxCellPadY - 6)
   if (codigoAccesoDispositivo) {
     if (isPatternCode) {
-      const patternMatch = codigoAccesoDispositivo.match(/[\d-]+$/)
-      const patternNumbers = patternMatch
-        ? patternMatch[0].split("-").map(n => parseInt(n.trim(), 10)).filter(n => n >= 1 && n <= 9)
-        : []
-      const patCenterX = rxMargin + colGridW - 60
-      const patTopY = sy - rxCellPadY - 16
-      const cellSize = 11
-      const dotR = 2.2
-      const getPos = (num: number) => ({ x: patCenterX + ((num - 1) % 3 - 1) * cellSize, y: patTopY - Math.floor((num - 1) / 3) * cellSize })
-      for (let i = 0; i < patternNumbers.length - 1; i++) {
-        const s = getPos(patternNumbers[i])
-        const e = getPos(patternNumbers[i + 1])
-        page.drawLine({ start: s, end: e, thickness: 1, color: MONO.ink })
-      }
-      for (let num = 1; num <= 9; num++) {
-        const pos = getPos(num)
-        const inPat = patternNumbers.includes(num)
-        page.drawCircle({ x: pos.x, y: pos.y, size: dotR, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
-        if (inPat) page.drawCircle({ x: pos.x, y: pos.y, size: dotR - 1, color: MONO.white, borderWidth: 0 })
-      }
+      drawPatternLock(page, codigoAccesoDispositivo, rxMargin + colGridW - 60, sy - rxCellPadY - 16)
       page.drawText("Patrón — solo talón interno", { x: rxMargin + rxCellPadX, y: sy - rxCellPadY - 32, size: 6.5, font: archivoRegular, color: MONO.label })
     } else {
       page.drawText(codigoAccesoDispositivo.substring(0, 20), { x: rxMargin + rxCellPadX, y: sy - rxCellPadY - 22, size: 9, font: plexMonoRegular, color: MONO.ink })
