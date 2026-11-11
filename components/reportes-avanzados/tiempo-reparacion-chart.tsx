@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useReporte } from "./use-reporte"
+import { ReporteBloqueado, ReporteCargando, ReporteError } from "./reporte-estados"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
 import {
   BarChart,
@@ -23,40 +24,25 @@ interface TiempoData {
 }
 
 export function TiempoReparacionChart() {
-  const [data, setData] = useState<TiempoData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const { resultado, reintentar } = useReporte<{ data?: TiempoData[] }>("/api/reportes/tiempo-reparacion")
 
-  useEffect(() => {
-    fetch("/api/reportes/tiempo-reparacion")
-      .then((res) => {
-        if (!res.ok) throw new Error()
-        return res.json()
-      })
-      .then((result) => setData(result.data || []))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
-    )
+  if (resultado.estado === "cargando") return <ReporteCargando />
+  if (resultado.estado === "bloqueado") return <ReporteBloqueado reporte="tiempo-reparacion" />
+  if (resultado.estado === "error") {
+    return <ReporteError mensaje={resultado.mensaje} onReintentar={reintentar} />
   }
 
-  if (error || data.length === 0) {
+  const data = resultado.data.data || []
+
+  if (data.length === 0) {
     return (
       <Card>
         <CardContent className="py-4">
           <EmptyState
             icon={AlertCircle}
-            title={error ? "Error al cargar datos" : "Sin datos suficientes"}
-            description={error ? "No se pudo cargar el reporte de tiempos" : "No hay datos suficientes para este reporte"}
-            variant={error ? "error" : "search"}
+            title="Sin datos suficientes"
+            description="No hay datos suficientes para este reporte"
+            variant="search"
           />
         </CardContent>
       </Card>

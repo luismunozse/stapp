@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart } from "lucide-react"
+import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart, Lock } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ExportButton } from "./export-button"
 import { BranchScopeLabel } from "./branch-scope-label"
+import { ReporteBloqueado } from "./reporte-estados"
+import { esReportePro, type ReportePro } from "./reportes-pro"
 
 // Loading skeleton para reportes
 function ReporteSkeleton() {
@@ -94,9 +96,26 @@ const RentabilidadTecnicos = dynamic(
  * Default `true`: quien no pase la prop ve la pestaña, que es la conducta
  * previa a este permiso. Esconder de más sería una denegación fabricada; del
  * lado del servidor requireIngresosAccess() decide de verdad igual.
+ *
+ * `reportesAvanzados` — si la organización tiene la feature `advanced_reports`
+ * (plan Profesional). Sin ella, las pestañas de REPORTES_PRO siguen visibles
+ * con un candado y adentro muestran la invitación a pasarse de plan, en vez de
+ * pedirle a la API un 403 que el gráfico pintaba como "Error al cargar datos".
+ * Default `true` por el mismo motivo que `verTopClientes`: la API decide igual
+ * y, si este valor se equivoca, el gráfico reconoce el 403 FEATURE_REQUIRED y
+ * muestra el mismo bloqueo.
  */
-export function ReportesAvanzadosView({ verTopClientes = true }: { verTopClientes?: boolean }) {
+export function ReportesAvanzadosView({
+  verTopClientes = true,
+  reportesAvanzados = true,
+}: {
+  verTopClientes?: boolean
+  reportesAvanzados?: boolean
+}) {
   const [activeTab, setActiveTab] = useState("tecnicos")
+  const bloqueado = (tab: string) => !reportesAvanzados && esReportePro(tab)
+  const contenidoPro = (tab: ReportePro, reporte: ReactNode) =>
+    reportesAvanzados ? reporte : <ReporteBloqueado reporte={tab} />
 
   // Map tab values to report types for export
   const exportableReports: Record<string, string> = {
@@ -115,11 +134,11 @@ export function ReportesAvanzadosView({ verTopClientes = true }: { verTopCliente
         <div>
           <h1 className="text-headline">Reportes</h1>
           <p className="text-muted-foreground">
-            Analiza el rendimiento de tu taller con métricas detalladas
+            Analizá el rendimiento de tu taller con métricas detalladas
           </p>
           <BranchScopeLabel />
         </div>
-        {exportableReports[activeTab] && (
+        {exportableReports[activeTab] && !bloqueado(activeTab) && (
           <ExportButton reportType={exportableReports[activeTab]} />
         )}
       </div>
@@ -149,26 +168,32 @@ export function ReportesAvanzadosView({ verTopClientes = true }: { verTopCliente
             <TabsTrigger value="tiempo-reparacion" className="gap-2">
               <Clock className="h-4 w-4" />
               <span className="hidden sm:inline">Tiempos</span>
+              {bloqueado("tiempo-reparacion") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="tasa-retorno" className="gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Retorno</span>
+              {bloqueado("tasa-retorno") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="fallas" className="gap-2">
               <AlertTriangle className="h-4 w-4" />
               <span className="hidden sm:inline">Fallas</span>
+              {bloqueado("fallas") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="rentabilidad" className="gap-2">
               <DollarSign className="h-4 w-4" />
               <span className="hidden sm:inline">Rentabilidad</span>
+              {bloqueado("rentabilidad") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="rentabilidad-tecnicos" className="gap-2">
               <DollarSign className="h-4 w-4" />
               <span className="hidden sm:inline">Rentab. tecnico</span>
+              {bloqueado("rentabilidad-tecnicos") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="prediccion" className="gap-2">
               <Boxes className="h-4 w-4" />
               <span className="hidden sm:inline">Prediccion</span>
+              {bloqueado("prediccion") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -192,27 +217,27 @@ export function ReportesAvanzadosView({ verTopClientes = true }: { verTopCliente
         </TabsContent>
 
         <TabsContent value="tiempo-reparacion" className="mt-6">
-          <TiempoReparacionChart />
+          {contenidoPro("tiempo-reparacion", <TiempoReparacionChart />)}
         </TabsContent>
 
         <TabsContent value="tasa-retorno" className="mt-6">
-          <TasaRetornoChart />
+          {contenidoPro("tasa-retorno", <TasaRetornoChart />)}
         </TabsContent>
 
         <TabsContent value="fallas" className="mt-6">
-          <FallasComunesChart />
+          {contenidoPro("fallas", <FallasComunesChart />)}
         </TabsContent>
 
         <TabsContent value="rentabilidad" className="mt-6">
-          <RentabilidadChart />
+          {contenidoPro("rentabilidad", <RentabilidadChart />)}
         </TabsContent>
 
         <TabsContent value="rentabilidad-tecnicos" className="mt-6">
-          <RentabilidadTecnicos />
+          {contenidoPro("rentabilidad-tecnicos", <RentabilidadTecnicos />)}
         </TabsContent>
 
         <TabsContent value="prediccion" className="mt-6">
-          <PrediccionRepuestosChart />
+          {contenidoPro("prediccion", <PrediccionRepuestosChart />)}
         </TabsContent>
       </Tabs>
     </div>
