@@ -117,7 +117,11 @@ export function DecidirReclamoDialog({ pendiente, onClose, onDecidido }: Decidir
                 required
                 autoFocus
                 disabled={enviando}
+                aria-describedby="reclamo-motivo-rechazo-ayuda"
               />
+              <p id="reclamo-motivo-rechazo-ayuda" className="text-xs text-muted-foreground">
+                El cliente va a ver este motivo en el seguimiento de su orden.
+              </p>
             </div>
           )}
           {error ? (
