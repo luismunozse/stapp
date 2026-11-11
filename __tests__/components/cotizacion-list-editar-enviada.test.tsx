@@ -60,8 +60,18 @@ describe("CotizacionList — quien puede editarse", () => {
     expect(renderEnEstado("BORRADOR")).toBeInTheDocument()
   })
 
-  it("no ofrece editar una ACEPTADA: hay firma del cliente y stock reservado", () => {
-    expect(renderEnEstado("ACEPTADA")).not.toBeInTheDocument()
+  it("ofrece editar una ACEPTADA: al guardar se elige si sigue aceptada o pide firma", () => {
+    expect(renderEnEstado("ACEPTADA")).toBeInTheDocument()
+  })
+
+  it("no ofrece editar una ACEPTADA ya convertida en venta", () => {
+    cotizaciones.value = [{ ...cotizacionEn("ACEPTADA"), ventaId: "venta-1" }]
+    render(
+      <ModalProvider>
+        <CotizacionList ordenId="orden-1" />
+      </ModalProvider>
+    )
+    expect(screen.queryByRole("button", { name: /Editar/ })).not.toBeInTheDocument()
   })
 
   it("no ofrece editar una RECHAZADA", () => {

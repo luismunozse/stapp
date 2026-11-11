@@ -470,7 +470,7 @@ describe("PUT /api/cotizaciones/[id] — query error handling on the new cost-re
 describe("PUT /api/cotizaciones/[id] — el guard de edición en ACEPTADA no se relaja con el camino de revisión", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("sigue rechazando editar los items de una ACEPTADA, aunque exista el camino de revision", async () => {
+  it("sigue rechazando editar los items de una ACEPTADA sin elegir el modo", async () => {
     mockAuthSuccess()
     mockSupabaseFrom({
       cotizaciones: createChainMock({
@@ -488,6 +488,8 @@ describe("PUT /api/cotizaciones/[id] — el guard de edición en ACEPTADA no se 
     const { status, body: resBody } = await parseResponse(res)
 
     expect(status).toBe(400)
-    expect(resBody.error).toMatch(/aceptada o rechazada/i)
+    // Editar una ACEPTADA exige modoAceptada (MANTENER o PEDIR_FIRMA); ver
+    // cotizaciones-editar-aceptada.test.ts.
+    expect(resBody.error).toMatch(/firmarla de nuevo/i)
   })
 })

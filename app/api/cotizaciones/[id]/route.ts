@@ -10,6 +10,7 @@ import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/co
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
+import { motivoNoEditableAceptada } from "@/lib/cotizacion-puede-revisar"
 import { cotizacionEnAlcance, ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 // The typed client infers an embedded to-one relation as an array; the row carries one order.
@@ -106,6 +107,9 @@ const updateCotizacionSchema = z.object({
   diagnosticoTecnico: z.string().max(4000).nullable().optional(),
   causaDano: causaDanoSchema.nullable().optional(),
   presentadoAnte: z.string().max(200).nullable().optional(),
+  // Solo para editar los items de una ACEPTADA: el usuario elige si la firma
+  // del cliente sigue valiendo (MANTENER) o si vuelve a pedirla (PEDIR_FIRMA).
+  modoAceptada: z.enum(["MANTENER", "PEDIR_FIRMA"]).optional(),
 })
 
 // Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto
@@ -320,6 +324,31 @@ export async function GET(
   }
 }
 
+// Vencimiento para una cotización que vuelve a pedir firma: hoy + la validez
+// configurada por la organización (misma regla que enviar/ y duplicar/).
+async function vencimientoPorDefecto(organizationId: string): Promise<string> {
+  const { data: orgConfig } = await supabaseAdmin
+    .from("organizations")
+    .select("cotizacion_validez_dias")
+    .eq("id", organizationId)
+    .single()
+  const vencimiento = new Date()
+  vencimiento.setDate(vencimiento.getDate() + (orgConfig?.cotizacion_validez_dias || 30))
+  return vencimiento.toISOString()
+}
+
+// Vuelve a dejar los items como estaban (mismos ids: items_factura los
+// referencia). Best effort: si falla, queda en el log para arreglarlo a mano.
+async function restaurarItems(cotizacionId: string, items: Record<string, unknown>[]) {
+  const { error: delErr } = await supabaseAdmin.from("items_cotizacion").delete().eq("cotizacion_id", cotizacionId)
+  const { error: insErr } = items.length
+    ? await supabaseAdmin.from("items_cotizacion").insert(items)
+    : { error: null }
+  if (delErr || insErr) {
+    console.error(`[cotizaciones] MANUAL ATTENTION: no se pudieron restaurar los items de ${cotizacionId}`, delErr ?? insErr)
+  }
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -343,7 +372,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id), ordenes_servicio!cotizaciones_orden_id_fkey(id, sucursal_id, tecnico_id)")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, venta_id, convertida_a_orden_id, reemplazada_por, fecha_vencimiento, items_cotizacion(id), ordenes_servicio!cotizaciones_orden_id_fkey(id, sucursal_id, tecnico_id)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -410,19 +439,57 @@ export async function PUT(
       )
     }
 
-    // No modificar items de cotizaciones aceptadas/rechazadas
-    if (["ACEPTADA", "RECHAZADA"].includes(existing.estado) && data.items) {
+    // Una RECHAZADA no se edita: se reabre (BORRADOR/ENVIADA) o se duplica.
+    if (existing.estado === "RECHAZADA" && data.items) {
       return NextResponse.json(
-        { error: "No se puede modificar una cotización aceptada o rechazada" },
+        { error: "No se puede modificar una cotización rechazada" },
         { status: 400 }
       )
     }
+
+    // Editar los items de una ACEPTADA. Tiene firma del cliente y stock
+    // reservado contra esos items, así que el usuario elige explícitamente:
+    //  - MANTENER: sigue ACEPTADA con la firma; la reserva se concilia con los
+    //    items nuevos (reservar_items_cotizacion reserva lo que falta y devuelve
+    //    lo que sobra). Sin stock, se restauran los items anteriores.
+    //  - PEDIR_FIRMA: se borra la firma, se libera la reserva y vuelve a
+    //    ENVIADA para que el cliente firme de nuevo.
+    const editaAceptada = existing.estado === "ACEPTADA" && data.items !== undefined
+    const modoAceptada = editaAceptada ? data.modoAceptada : undefined
+    if (editaAceptada) {
+      const rechazo = motivoNoEditableAceptada(existing)
+      if (rechazo) {
+        return NextResponse.json({ error: rechazo }, { status: 400 })
+      }
+      if (!modoAceptada) {
+        return NextResponse.json(
+          { error: "Elegí si la cotización sigue aceptada o si el cliente tiene que firmarla de nuevo" },
+          { status: 400 }
+        )
+      }
+      if (cambiaEstado) {
+        return NextResponse.json(
+          { error: "No se puede cambiar el estado y editar los items de una cotización aceptada a la vez" },
+          { status: 400 }
+        )
+      }
+    }
+
+    // El vencimiento de una ACEPTADA ya no importa mientras siga aceptada; si
+    // vuelve a pedir firma, necesita uno vigente (se asigna más abajo si el que
+    // trae el formulario ya pasó).
+    if (modoAceptada === "MANTENER") {
+      data.fechaVencimiento = undefined
+    }
+    let vencimientoVencido = false
 
     // Validate fecha_vencimiento is not in the past
     if (data.fechaVencimiento) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      if (new Date(data.fechaVencimiento) < today) {
+      if (new Date(data.fechaVencimiento) < today && modoAceptada === "PEDIR_FIRMA") {
+        vencimientoVencido = true
+      } else if (new Date(data.fechaVencimiento) < today) {
         return NextResponse.json(
           { error: "La fecha de vencimiento no puede ser anterior a hoy" },
           { status: 400 }
@@ -752,14 +819,73 @@ export async function PUT(
       updateData.iva = iva
       updateData.total = total
 
+      // Items actuales, para restaurarlos si la reserva de los nuevos falla.
+      let itemsAnteriores: Record<string, unknown>[] = []
+      if (modoAceptada === "MANTENER") {
+        const { data: previos, error: previosErr } = await supabaseAdmin
+          .from("items_cotizacion")
+          .select("*")
+          .eq("cotizacion_id", id)
+        if (previosErr) throw previosErr
+        itemsAnteriores = previos || []
+      }
+
+      if (modoAceptada === "PEDIR_FIRMA") {
+        // Primero se reclama la transición, condicionada a que siga ACEPTADA:
+        // si en el medio se convirtió en venta o se rechazó, no se toca nada.
+        // Una fecha válida elegida en el formulario manda; si no hay, o la que
+        // queda ya pasó, se asigna la validez por defecto de la organización.
+        const fechaDelFormularioValida = !!data.fechaVencimiento && !vencimientoVencido
+        const nuevoVencimiento =
+          !fechaDelFormularioValida &&
+          (vencimientoVencido || !existing.fecha_vencimiento || new Date(existing.fecha_vencimiento) < new Date())
+            ? await vencimientoPorDefecto(organizationId!)
+            : undefined
+        const { data: reclamada, error: reclamoErr } = await supabaseAdmin
+          .from("cotizaciones")
+          .update({
+            estado: "ENVIADA",
+            firma_aprobacion: null,
+            firma_mime: null,
+            fecha_aprobacion: null,
+            ...(nuevoVencimiento ? { fecha_vencimiento: nuevoVencimiento } : {}),
+          })
+          .eq("id", id)
+          .eq("estado", "ACEPTADA")
+          .is("venta_id", null)
+          .select("id")
+        if (reclamoErr) throw reclamoErr
+        if (!reclamada || reclamada.length === 0) {
+          return NextResponse.json(
+            { error: "La cotización cambió mientras se guardaba. Recargá para ver su estado actual." },
+            { status: 409 }
+          )
+        }
+        if (nuevoVencimiento) delete updateData.fecha_vencimiento
+
+        // Un PRESUPUESTO nunca reservó. Para el resto, se libera según el libro
+        // de movimientos de esta cotización (idempotente, migración 388).
+        if (existing.tipo !== "PRESUPUESTO") {
+          const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
+            p_cotizacion_id: id,
+            p_user_id: userId,
+            p_motivo: "Cotización modificada: vuelve a pedir la firma del cliente",
+          })
+          if (releaseErr) {
+            console.error("Error releasing stock reservations (PEDIR_FIRMA):", releaseErr)
+          }
+        }
+      }
+
       // Delete existing items
-      await supabaseAdmin
+      const { error: deleteItemsErr } = await supabaseAdmin
         .from("items_cotizacion")
         .delete()
         .eq("cotizacion_id", id)
+      if (deleteItemsErr && editaAceptada) throw deleteItemsErr
 
       // Create new items
-      await supabaseAdmin
+      const { error: insertItemsErr } = await supabaseAdmin
         .from("items_cotizacion")
         .insert(
           items.map((item: any) => ({
@@ -783,6 +909,31 @@ export async function PUT(
             variante_etiqueta: item.origen.varianteEtiqueta,
           }))
         )
+      if (insertItemsErr && editaAceptada) {
+        if (modoAceptada === "MANTENER") await restaurarItems(id, itemsAnteriores)
+        throw insertItemsErr
+      }
+
+      // Sigue ACEPTADA: la reserva tiene que describir los items nuevos.
+      if (modoAceptada === "MANTENER" && existing.tipo !== "PRESUPUESTO") {
+        const { error: reserveErr } = await supabaseAdmin.rpc("reservar_items_cotizacion", {
+          p_cotizacion_id: id,
+          p_user_id: userId || "system",
+        })
+        if (reserveErr) {
+          await restaurarItems(id, itemsAnteriores)
+          const sinStock =
+            reserveErr.code === "P0003" || (reserveErr.message ?? "").toLowerCase().includes("stock insuficiente")
+          return NextResponse.json(
+            {
+              error: sinStock
+                ? `No hay stock para reservar los items nuevos: ${reserveErr.message}. La cotización quedó como estaba.`
+                : "No se pudo reservar el stock de los items nuevos. La cotización quedó como estaba.",
+            },
+            { status: sinStock ? 409 : 500 }
+          )
+        }
+      }
     }
 
     // Update cotizacion. Si cambia el estado, el UPDATE se condiciona al estado
@@ -995,6 +1146,7 @@ export async function PUT(
       estado: data.estado,
       items_updated: !!data.items,
       total: cotizacion?.total,
+      ...(modoAceptada ? { editada_aceptada: modoAceptada } : {}),
     })
 
     return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))

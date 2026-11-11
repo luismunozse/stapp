@@ -118,7 +118,15 @@ interface CotizacionFormProps {
     equipo?: EquipoData | null
     checklist?: ChecklistPickerValue | null
   }
+  /**
+   * La cotización que se edita ya fue aceptada por el cliente. Al guardar hay
+   * que elegir si sigue aceptada con su firma o si el cliente la firma de nuevo
+   * (el PUT exige `modoAceptada`).
+   */
+  aceptada?: boolean
 }
+
+type ModoAceptada = "MANTENER" | "PEDIR_FIRMA"
 
 export function CotizacionForm({
   tipo = "ORDEN",
@@ -128,6 +136,7 @@ export function CotizacionForm({
   onSuccess,
   mostrarCostos,
   initialData,
+  aceptada,
 }: CotizacionFormProps) {
   const isPresupuesto = tipo === "PRESUPUESTO"
   const [loading, setLoading] = useState(false)
@@ -206,6 +215,8 @@ export function CotizacionForm({
   const [tiposDispositivo, setTiposDispositivo] = useState<Array<{ id: string; codigo: string; nombre: string }>>([])
 
   const isEditing = !!initialData?.id
+  const editaAceptada = isEditing && !!aceptada
+  const [modoAceptada, setModoAceptada] = useState<ModoAceptada | null>(null)
   const [linkedOrdenId, setLinkedOrdenId] = useState<string | null>(ordenId || null)
   const isStandalone = !linkedOrdenId
 
@@ -405,7 +416,14 @@ export function CotizacionForm({
       }
     }
 
-    if (fechaVencimiento) {
+    if (editaAceptada && !modoAceptada) {
+      await showWarning("Elegí si la cotización sigue aceptada o si el cliente tiene que firmarla de nuevo")
+      return
+    }
+
+    // En una aceptada el vencimiento viejo no frena: si sigue aceptada no
+    // importa, y si vuelve a pedir firma el servidor le asigna uno vigente.
+    if (fechaVencimiento && !editaAceptada) {
       const today = new Date().toISOString().split("T")[0]
       if (fechaVencimiento < today) {
         await showWarning("La fecha de vencimiento no puede ser anterior a hoy")
@@ -432,6 +450,7 @@ export function CotizacionForm({
         tipoCambio: tipoCambio || undefined,
       }
 
+      if (editaAceptada && modoAceptada) payload.modoAceptada = modoAceptada
       if (linkedOrdenId) payload.ordenId = linkedOrdenId
       if (isStandalone && clienteId) payload.clienteId = clienteId
       if (selectedSectorId) payload.sectorId = selectedSectorId
@@ -1030,6 +1049,48 @@ export function CotizacionForm({
               />
             </div>
           </CollapsibleSection>
+
+          {editaAceptada && (
+            <fieldset className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+              <legend className="px-1 text-sm font-medium">
+                Esta cotización ya fue aceptada por el cliente. ¿Cómo guardamos los cambios?
+              </legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {([
+                  {
+                    value: "MANTENER" as const,
+                    titulo: "Sigue aceptada",
+                    detalle: "Para cambios ya acordados con el cliente. Se mantiene su firma y se ajusta el stock reservado.",
+                  },
+                  {
+                    value: "PEDIR_FIRMA" as const,
+                    titulo: "Pedir la firma de nuevo",
+                    detalle: "Se borra la firma, se libera el stock reservado y vuelve a Enviada para que el cliente la apruebe.",
+                  },
+                ]).map((opcion) => (
+                  <label
+                    key={opcion.value}
+                    className={`flex cursor-pointer gap-3 rounded-md border bg-background p-3 text-sm transition-colors ${
+                      modoAceptada === opcion.value ? "border-primary ring-1 ring-primary" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="modoAceptada"
+                      value={opcion.value}
+                      checked={modoAceptada === opcion.value}
+                      onChange={() => setModoAceptada(opcion.value)}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block font-medium">{opcion.titulo}</span>
+                      <span className="block text-muted-foreground">{opcion.detalle}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
 
           {/* Actions */}
           <FormActionBar>
