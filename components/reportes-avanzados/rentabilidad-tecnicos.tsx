@@ -5,8 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-picker"
-import { Loader2, TrendingUp, DollarSign, Clock, Users, Lock, AlertCircle } from "lucide-react"
+import { Loader2, TrendingUp, DollarSign, Clock, Users } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { fetchReporte } from "@/lib/reportes/fetch-reporte"
+import { ReporteBloqueado, ReporteError } from "./reporte-estados"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -142,16 +144,15 @@ export function RentabilidadTecnicos() {
       const desdeISO = new Date(`${desde}T00:00:00`).toISOString()
       const hastaISO = new Date(`${hasta}T23:59:59.999`).toISOString()
       const params = new URLSearchParams({ desde: desdeISO, hasta: hastaISO })
-      const response = await fetch(`/api/reportes/rentabilidad-tecnicos?${params}`)
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null)
-        if (response.status === 403 && errData?.code === "FEATURE_REQUIRED") {
-          setFeatureLocked(true)
-          return
-        }
-        throw new Error(errData?.error || "Error al cargar datos")
+      const resultado = await fetchReporte<RentabilidadTecnicosData>(
+        `/api/reportes/rentabilidad-tecnicos?${params}`,
+      )
+      if (resultado.estado === "bloqueado") {
+        setFeatureLocked(true)
+        return
       }
-      const result: RentabilidadTecnicosData = await response.json()
+      if (resultado.estado === "error") throw new Error(resultado.mensaje)
+      const result = resultado.data
       setData(result.data)
       setTotales(result.totales)
       setMargenPromedio(result.margenPromedio)
@@ -219,38 +220,14 @@ export function RentabilidadTecnicos() {
     )
   }
 
-  if (featureLocked) {
-    return (
-      <div className="space-y-4">
-        {toolbar}
-        <Card>
-          <CardContent className="py-4">
-            <EmptyState
-              icon={Lock}
-              title="Función no disponible"
-              description="Este reporte requiere el plan Profesional"
-              variant="default"
-            />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Sin toolbar: cambiar el rango no destraba nada y solo invitaría a probar.
+  if (featureLocked) return <ReporteBloqueado reporte="rentabilidad-tecnicos" />
 
   if (error) {
     return (
       <div className="space-y-4">
         {toolbar}
-        <Card>
-          <CardContent className="py-4">
-            <EmptyState
-              icon={AlertCircle}
-              title="Error al cargar datos"
-              description={error}
-              variant="error"
-            />
-          </CardContent>
-        </Card>
+        <ReporteError mensaje={error} onReintentar={() => fetchData(from, to)} />
       </div>
     )
   }

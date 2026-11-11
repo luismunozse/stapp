@@ -1,41 +1,14 @@
 import { redirect } from "next/navigation"
-import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
-import { ReportesAvanzadosView } from "@/components/reportes-avanzados/reportes-avanzados-view"
-import { FeatureLockedView } from "@/components/billing/feature-locked-view"
 
-export const dynamic = "force-dynamic"
-
-export default async function ReportesAvanzadosPage() {
-  const { error, organizationId } = await requireAuth()
-
-  if (error || !organizationId) {
-    redirect("/login")
-  }
-
-  const premium = await isPremium(organizationId)
-
-  if (!premium) {
-    return (
-      <div className="container py-8">
-        <FeatureLockedView
-          featureName="Reportes avanzados"
-          description="Detectá patrones de falla, tiempos de reparación y rentabilidad por técnico — datos que tu plan Free no expone."
-          benefits={[
-            "Tiempo de reparación por tipo de equipo y técnico",
-            "Tasa de retorno y fallas más comunes",
-            "Rentabilidad por orden y predicción de repuestos",
-            "Performance de vendedores y comisiones consolidadas",
-          ]}
-          upgradeKey="reportes-avanzados"
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="container py-6">
-      <ReportesAvanzadosView />
-    </div>
-  )
+/**
+ * /reportes-avanzados dibujaba la misma ReportesAvanzadosView que /reportes,
+ * pero cerrada entera en Free y sin el permiso `vendedores_ven_ingresos` de la
+ * pestaña Clientes. Además no la cubría el filtro de rutas por rol del
+ * middleware (/reportes sí: un TECNICO no entra). Ahora /reportes bloquea
+ * pestaña por pestaña lo que es del plan Profesional, así que esta ruta queda
+ * como alias para no romper links viejos (el asistente la cita, y puede haber
+ * favoritos).
+ */
+export default function ReportesAvanzadosPage() {
+  redirect("/reportes")
 }
