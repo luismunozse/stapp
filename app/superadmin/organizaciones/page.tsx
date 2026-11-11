@@ -22,6 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { formatDate } from "@/lib/utils"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
@@ -54,6 +56,8 @@ export default function OrganizacionesPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false)
   const [confirmToggleOrg, setConfirmToggleOrg] = useState<{ id: string; nombre: string; activo: boolean } | null>(null)
+  // La API exige un motivo para suspender (queda en suspension_reason y en el audit log).
+  const [suspendReason, setSuspendReason] = useState("")
   const [confirmDeleteOrg, setConfirmDeleteOrg] = useState<{ id: string; nombre: string } | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -154,13 +158,16 @@ export default function OrganizacionesPage() {
     URL.revokeObjectURL(url)
   }
 
-  const performToggle = async (org: { id: string; nombre: string; activo: boolean }) => {
+  const performToggle = async (
+    org: { id: string; nombre: string; activo: boolean },
+    reason?: string
+  ) => {
     setTogglingId(org.id)
     await mutate(
       `/api/superadmin/organizations/${org.id}/toggle-status`,
       {
         method: "POST",
-        body: { activo: !org.activo },
+        body: org.activo ? { activo: false, reason } : { activo: true },
         successMessage: org.activo
           ? `${org.nombre} desactivada`
           : `${org.nombre} activada`,
@@ -178,6 +185,7 @@ export default function OrganizacionesPage() {
     e.stopPropagation()
     if (org.activo) {
       // Desactivar: pedir confirmación antes (acción visible, reversible pero impacta usuarios)
+      setSuspendReason("")
       setConfirmToggleOrg({ id: org.id, nombre: org.nombre, activo: org.activo })
       return
     }
@@ -772,8 +780,20 @@ export default function OrganizacionesPage() {
             <DialogDescription>
               Estás por desactivar <strong>&quot;{confirmToggleOrg?.nombre}&quot;</strong>.
               Sus usuarios perderán acceso al sistema. Esta acción se puede revertir.
+              El motivo queda registrado en el audit log.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="list-suspend-reason">Motivo de la suspensión</Label>
+            <Textarea
+              id="list-suspend-reason"
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="Ej: falta de pago, uso indebido, solicitud del cliente…"
+              rows={3}
+              maxLength={500}
+            />
+          </div>
           <div className="flex gap-3 justify-end pt-2">
             <Button
               variant="outline"
@@ -787,10 +807,12 @@ export default function OrganizacionesPage() {
               onClick={async () => {
                 if (!confirmToggleOrg) return
                 const target = confirmToggleOrg
+                const reason = suspendReason.trim()
                 setConfirmToggleOrg(null)
-                await performToggle(target)
+                setSuspendReason("")
+                await performToggle(target, reason)
               }}
-              disabled={togglingId === confirmToggleOrg?.id}
+              disabled={togglingId === confirmToggleOrg?.id || !suspendReason.trim()}
             >
               {togglingId === confirmToggleOrg?.id ? (
                 <>
