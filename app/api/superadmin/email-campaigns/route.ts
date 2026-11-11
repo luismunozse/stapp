@@ -4,13 +4,15 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
+import { fetchAllRowsIn } from "@/lib/fetch-all-rows"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 
 const emailCampaignSchema = z.object({
   segmentId: z.string().optional(),
-  organizationIds: z.array(z.string().uuid()).min(1, "Debe seleccionar al menos una organización"),
+  // organizations.id es un cuid (TEXT), no un UUID: .uuid() rechazaba toda campaña.
+  organizationIds: z.array(z.string().min(1).max(64)).min(1, "Debe seleccionar al menos una organización"),
   subject: z.string().min(1, "Asunto requerido").max(200),
   htmlContent: z.string().min(1, "Contenido requerido").max(100000),
   emailType: z.string().optional(),
@@ -28,41 +30,14 @@ export async function GET() {
     in3Days.setDate(in3Days.getDate() + 3)
     const in7Days = new Date(now)
     in7Days.setDate(in7Days.getDate() + 7)
-    const sevenDaysAgo = new Date(now)
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    const thirtyDaysAgo = new Date(now)
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    // Todo en paralelo - sin loops N+1
-    const [
-      allTrialingSubs,
-      canceledRes,
-      historialRes,
-      allActiveOrgsRes,
-      recentOrdenes7Res,
-      recentOrdenes30Res,
-    ] = await Promise.all([
-      // Todos los trials (vencidos y activos) de orgs activas
-      supabaseAdmin
-        .from("subscriptions")
-        .select(`
-          organization_id,
-          trial_end,
-          organizations!inner (id, nombre, slug, activo)
-        `)
-        .eq("status", "TRIALING")
-        .not("trial_end", "is", null)
-        .eq("organizations.activo", true),
-
-      // Cancelados
-      supabaseAdmin
-        .from("subscriptions")
-        .select(`
-          organization_id,
-          organizations!inner (id, nombre, slug, activo)
-        `)
-        .eq("status", "CANCELED")
-        .eq("organizations.activo", true),
+    // Las audiencias se resuelven en SQL (superadmin_campania_segmentos). Antes
+    // se leían suscripciones, orgs y órdenes de 7/30 días por PostgREST, que
+    // corta en 1000 filas sin error; y la de órdenes filtraba por created_at,
+    // que ordenes_servicio no tiene: fallaba en silencio y TODAS las orgs
+    // activas caían en "inactivos".
+    const [segmentosRes, historialRes] = await Promise.all([
+      supabaseAdmin.rpc("superadmin_campania_segmentos"),
 
       // Historial de campañas
       supabaseAdmin
@@ -71,30 +46,20 @@ export async function GET() {
         .in("email_type", ["CAMPAIGN_CUSTOM", "CAMPAIGN_TRIAL_EXPIRED", "CAMPAIGN_TRIAL_EXPIRING", "CAMPAIGN_WIN_BACK", "CAMPAIGN_UPGRADE"])
         .order("sent_at", { ascending: false })
         .limit(50),
-
-      // Todas las orgs activas
-      supabaseAdmin
-        .from("organizations")
-        .select("id, nombre, slug")
-        .eq("activo", true),
-
-      // Orgs con órdenes en últimos 7 días (una sola query bulk)
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id")
-        .eq("es_practica", false)
-        .gte("created_at", sevenDaysAgo.toISOString()),
-
-      // Orgs con órdenes en últimos 30 días
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id")
-        .eq("es_practica", false)
-        .gte("created_at", thirtyDaysAgo.toISOString()),
     ])
 
+    if (segmentosRes.error) throw segmentosRes.error
+
+    type OrgSegmento = { id: string; nombre: string; slug: string; trial_end?: string | null }
+    const seg = (segmentosRes.data ?? {}) as {
+      trials?: OrgSegmento[]
+      cancelados?: OrgSegmento[]
+      inactivas_7?: OrgSegmento[]
+      inactivas_30?: OrgSegmento[]
+    }
+
     // Clasificar trials por estado
-    const allTrials = allTrialingSubs.data || []
+    const allTrials = seg.trials ?? []
     const trialExpiredData = allTrials.filter(s => new Date(s.trial_end!) <= now)
     const trialExpiring3Data = allTrials.filter(s => {
       const te = new Date(s.trial_end!)
@@ -106,24 +71,17 @@ export async function GET() {
     })
     const allTrialingActiveData = allTrials.filter(s => new Date(s.trial_end!) > now)
 
-    // Calcular inactivos con sets (O(1) lookup, no loops)
-    const activeIn7d = new Set((recentOrdenes7Res.data || []).map(o => o.organization_id))
-    const activeIn30d = new Set((recentOrdenes30Res.data || []).map(o => o.organization_id))
-    const allActiveOrgs = allActiveOrgsRes.data || []
+    const inactivos7 = seg.inactivas_7 ?? []
+    const inactivos30 = seg.inactivas_30 ?? []
+    const cancelados = seg.cancelados ?? []
 
-    const inactivos7 = allActiveOrgs.filter(o => !activeIn7d.has(o.id))
-    const inactivos30 = allActiveOrgs.filter(o => !activeIn30d.has(o.id))
-
-    const formatOrgs = (data: any[] | null) =>
-      (data || []).map((d: any) => {
-        const org = d.organizations || d
-        return {
-          id: org.id || d.organization_id,
-          nombre: org.nombre,
-          slug: org.slug,
-          trialEnd: d.trial_end || null,
-        }
-      })
+    const formatOrgs = (data: OrgSegmento[]) =>
+      data.map((o) => ({
+        id: o.id,
+        nombre: o.nombre,
+        slug: o.slug,
+        trialEnd: o.trial_end ?? null,
+      }))
 
     const segments = [
       {
@@ -163,7 +121,7 @@ export async function GET() {
         nombre: "Inactivos 7+ dias",
         descripcion: "Organizaciones sin ordenes en los ultimos 7 dias",
         count: inactivos7.length,
-        orgs: inactivos7.map(o => ({ ...o, trialEnd: null })),
+        orgs: formatOrgs(inactivos7),
         color: "yellow",
       },
       {
@@ -171,15 +129,15 @@ export async function GET() {
         nombre: "Inactivos 30+ dias",
         descripcion: "Organizaciones sin ordenes en los ultimos 30 dias",
         count: inactivos30.length,
-        orgs: inactivos30.map(o => ({ ...o, trialEnd: null })),
+        orgs: formatOrgs(inactivos30),
         color: "red",
       },
       {
         id: "canceled",
         nombre: "Cancelados",
         descripcion: "Organizaciones que cancelaron su suscripcion",
-        count: canceledRes.data?.length || 0,
-        orgs: formatOrgs(canceledRes.data),
+        count: cancelados.length,
+        orgs: formatOrgs(cancelados),
         color: "gray",
       },
     ]
@@ -239,12 +197,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Obtener admins de las organizaciones seleccionadas
-    const { data: admins } = await supabaseAdmin
-      .from("users")
-      .select("id, nombre, email, organization_id")
-      .in("organization_id", organizationIds)
-      .eq("rol", "ADMIN")
+    // Admins de las organizaciones seleccionadas. Paginado y por tramos de ids:
+    // un segmento puede tener miles de orgs (y más de 1000 admins), y una
+    // lectura sin paginar se corta en 1000 filas sin error. Si falla, lanza (500).
+    const ids = [...new Set(organizationIds)]
+    const admins = await fetchAllRowsIn<{ id: string; nombre: string | null; email: string | null; organization_id: string }>(
+      "users",
+      "id, nombre, email, organization_id",
+      "organization_id",
+      ids,
+      (q) => q.eq("rol", "ADMIN")
+    )
 
     if (!admins || admins.length === 0) {
       return NextResponse.json(
@@ -254,12 +217,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Obtener nombres de orgs para personalización
-    const { data: orgs } = await supabaseAdmin
-      .from("organizations")
-      .select("id, nombre, slug")
-      .in("id", organizationIds)
+    const orgs = await fetchAllRowsIn<{ id: string; nombre: string; slug: string }>(
+      "organizations",
+      "id, nombre, slug",
+      "id",
+      ids
+    )
 
-    const orgMap = new Map((orgs || []).map(o => [o.id, o]))
+    const orgMap = new Map(orgs.map(o => [o.id, o]))
 
     let sent = 0
     let failed = 0

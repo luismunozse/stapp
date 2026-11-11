@@ -4,7 +4,7 @@
  * ignores every filter and so gives a false green on anything about scope).
  *
  * Honoured: select (column projection, `alias:col`, embeds kept by alias), eq, neq, in, is,
- * ilike, gt/gte/lt/lte, `or(...)` with nested and(...)/or(...) (each `.or()` call ANDs with the
+ * ilike, gt/gte/lt/lte, `not(col, "is", null)`, `or(...)` with nested and(...)/or(...) (each `.or()` call ANDs with the
  * others, like repeated `or` params), order, range, limit, single, maybeSingle.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
  * slip through unverified. Like PostgREST, a `.single()` / `.maybeSingle()` over several rows is an
@@ -180,7 +180,12 @@ function proyectar(fila: Fila, columnas: string): Fila {
   return salida
 }
 
-export function tablaPostgrest(filas: Fila[]) {
+/**
+ * `maxFilas` emulates PostgREST's `max_rows`: every read answers at most that many rows (after
+ * `range`/`limit`), with no error, while `count` still reports the full total. Use it to prove a
+ * route paginates or counts in SQL instead of trusting one read.
+ */
+export function tablaPostgrest(filas: Fila[], { maxFilas }: { maxFilas?: number } = {}) {
   const consultas: Array<{ columnas: string; or: string[] }> = []
   const conocidas = new Set(filas.flatMap((f) => Object.keys(f)))
   const exigir = (columna: string) => {
@@ -207,6 +212,13 @@ export function tablaPostgrest(filas: Fila[]) {
         gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) >= 0), q),
         lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) < 0), q),
         lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) <= 0), q),
+        not: (c: string, op: string, v: unknown) => {
+          // Only `.not(col, "is", null)` (IS NOT NULL); anything else must not pass unverified.
+          if (op !== "is" || v !== null) throw new Error(`postgrest-memoria: not(${c}, ${op}, ${String(v)}) is not supported`)
+          exigir(c)
+          predicados.push((f) => f[c] != null)
+          return q
+        },
         or: (lista: string) => {
           const arbol = parsearLista(lista)
           columnasDeLaLista(arbol).forEach(exigir)
@@ -229,6 +241,7 @@ export function tablaPostgrest(filas: Fila[]) {
         }
         const total = rows.length
         if (rango) rows = rows.slice(rango[0], rango[1] + 1)
+        if (maxFilas !== undefined) rows = rows.slice(0, maxFilas)
         return { rows: rows.map((f) => proyectar(f, columnas)), total }
       }
       // PostgREST answers PGRST116 when .single() finds zero or several rows, and when

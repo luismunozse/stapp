@@ -39,6 +39,8 @@ interface Opciones {
   resultadoRpc?: (nombre: string, args: unknown) => unknown
   /** Makes an rpc fail: when it returns an error the rpc answers `{ data: null, error }` (the call is recorded either way). */
   errorRpc?: (nombre: string, args: unknown) => { code?: string; message: string } | null
+  /** PostgREST's `max_rows`: each read answers at most this many rows, silently (see `tablaPostgrest`). */
+  maxFilas?: number
 }
 
 const copia = <T>(valor: T): T => JSON.parse(JSON.stringify(valor))
@@ -69,7 +71,7 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
       const filas = copia(tablas[nombre] ?? [])
       filasDe.set(nombre, filas)
       columnas.set(nombre, new Set(filas.flatMap((f) => Object.keys(f))))
-      memoria.set(nombre, tablaPostgrest(filas))
+      memoria.set(nombre, tablaPostgrest(filas, { maxFilas: opciones.maxFilas }))
     }
     return memoria.get(nombre)!
   }

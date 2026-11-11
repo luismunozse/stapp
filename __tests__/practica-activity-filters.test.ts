@@ -12,9 +12,10 @@ const RUTAS = [
   "app/api/cron/trial-management/route.ts",
   "app/api/cron/engagement/route.ts",
   "app/api/superadmin/subscriptions/route.ts",
-  "app/api/superadmin/stats/feature-usage/route.ts",
-  "app/api/superadmin/stats/engagement/route.ts",
 ]
+// stats/engagement counts in SQL now (superadmin_engagement_metricas: its filter is pinned in
+// superadmin-agregaciones-migration.test.ts) and stats/feature-usage reads what the
+// feature-usage cron computed (checked below).
 
 const leer = (ruta: string) => readFileSync(join(process.cwd(), ruta), "utf8")
 

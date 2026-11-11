@@ -1,6 +1,31 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
+
+/** Lo que devuelve superadmin_engagement_metricas (migración 396). */
+interface MetricasEngagement {
+  orgs?: Array<{
+    id: string
+    nombre: string
+    slug: string
+    created_at: string
+    sub_status: string | null
+    trial_end: string | null
+    plan_tipo: string | null
+    ordenes7d: number
+    ordenes_completadas7d: number
+    ordenes30d: number
+    ventas7d: number
+    ventas30d: number
+    clientes_nuevos7d: number
+    ultima_actividad: string | null
+  }>
+  tendencia_engagement?: Array<{ fecha: string; suma_score: number; cantidad: number; ordenes: number }>
+  ultimo_calculo?: string | null
+  tendencia_actividad?: Array<{ fecha: string; total: number; orgs: number }>
+  emails?: Record<string, { sent: number; failed: number }>
+}
 
 // Datos cambian 1x/día (cuando corre el cron de engagement). Cache 1h.
 export const revalidate = 3600
@@ -16,97 +41,39 @@ export async function GET() {
     const sevenDaysAgo = new Date(now)
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-    const results = await Promise.allSettled([
-      // 0 - Organizaciones con info (excluye org del panel admin y archivadas).
-      // Archivar setea deleted_at pero NO activo=false, así que sin este filtro
-      // las archivadas se colaban en todas las métricas de engagement.
-      supabaseAdmin
-        .from("organizations")
-        .select("id, nombre, slug, activo, created_at")
-        .eq("activo", true)
-        .neq("slug", "superadmin")
-        .is("deleted_at", null),
+    // Conteos por org, tendencia y emails se resuelven en SQL
+    // (superadmin_engagement_metricas). Antes se traían las filas de órdenes,
+    // ventas, clientes, emails y engagement y se contaban en JS: PostgREST corta
+    // cada lectura en 1000 filas sin error (el .limit(10000) no lo evita), y la
+    // de órdenes además filtraba por created_at, que ordenes_servicio no tiene,
+    // así que fallaba en silencio y las órdenes no contaban nunca.
+    const [metricasRes, churned, expiredTrialsRes] = await Promise.all([
+      supabaseAdmin.rpc("superadmin_engagement_metricas", {
+        p_desde_30d: thirtyDaysAgo.toISOString(),
+        p_desde_7d: sevenDaysAgo.toISOString(),
+      }),
 
-      // 1 - Suscripciones con plan y trial_end
+      // Orgs que cancelaron en los últimos 30 días (churn), paginado
+      fetchAllRows<{ organization_id: string; canceled_at: string; organizations: { nombre: string; slug: string } | null }>(
+        "subscriptions",
+        "id, organization_id, canceled_at, organizations(nombre, slug)",
+        (q) => q.eq("status", "CANCELED").not("canceled_at", "is", null).gte("canceled_at", thirtyDaysAgo.toISOString())
+      ),
+
+      // Trials vencidos sin conversión (solo el conteo)
       supabaseAdmin
         .from("subscriptions")
-        .select("organization_id, status, trial_end, plans(tipo)")
-        .in("status", ["ACTIVE", "TRIALING"]),
-
-      // 2 - Lifecycle emails enviados últimos 30 días
-      supabaseAdmin
-        .from("lifecycle_emails")
-        .select("email_type, status, sent_at")
-        .gte("sent_at", thirtyDaysAgo.toISOString()),
-
-      // 3 - Orgs que cancelaron (churn)
-      supabaseAdmin
-        .from("subscriptions")
-        .select("organization_id, canceled_at, organizations(nombre, slug)")
-        .eq("status", "CANCELED")
-        .not("canceled_at", "is", null)
-        .gte("canceled_at", thirtyDaysAgo.toISOString()),
-
-      // 4 - Órdenes últimos 30 días (actividad real)
-      // Limit alto para evitar truncamiento silencioso por PostgREST (default 1000)
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id, estado, created_at, updated_at")
-        .eq("es_practica", false)
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .limit(10000),
-
-      // 5 - Ventas últimos 30 días
-      supabaseAdmin
-        .from("ventas")
-        .select("organization_id, created_at")
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .limit(10000),
-
-      // 6 - Clientes nuevos últimos 30 días
-      supabaseAdmin
-        .from("clientes")
-        .select("organization_id, created_at")
-        .eq("es_practica", false)
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .limit(10000),
-
-      // 7 - Engagement pre-calculado (si existe, como complemento)
-      supabaseAdmin
-        .from("organization_engagement")
-        .select("organization_id, engagement_score, fecha, ordenes_creadas, ventas_realizadas, usuarios_activos")
-        .gte("fecha", thirtyDaysAgo.toISOString().split("T")[0])
-        .order("fecha", { ascending: false })
-        .limit(10000),
-
-      // 8 - Trials vencidos sin conversión (últimos 30 días)
-      supabaseAdmin
-        .from("subscriptions")
-        .select("organization_id, trial_end, organizations(nombre, slug)")
+        .select("id", { count: "exact", head: true })
         .eq("status", "TRIALING")
         .lt("trial_end", now.toISOString()),
     ])
 
-    const safeData = <T,>(result: PromiseSettledResult<{ data: T[] | null }>): T[] => {
-      if (result.status === "fulfilled" && result.value.data) {
-        return result.value.data
-      }
-      return []
-    }
+    if (metricasRes.error) throw metricasRes.error
+    if (expiredTrialsRes.error) throw expiredTrialsRes.error
 
-    const orgs = safeData<{ id: string; nombre: string; slug: string; activo: boolean; created_at: string }>(results[0] as never)
-    const subs = safeData<{ organization_id: string; status: string; trial_end: string | null; plans: { tipo: string } | { tipo: string }[] }>(results[1] as never)
-    const lifecycleData = safeData<{ email_type: string; status: string; sent_at: string }>(results[2] as never)
-    const churned = safeData<{ organization_id: string; canceled_at: string; organizations: { nombre: string; slug: string } }>(results[3] as never)
-    const ordenes = safeData<{ organization_id: string; estado: string; created_at: string; updated_at: string }>(results[4] as never)
-    const ventas = safeData<{ organization_id: string; created_at: string }>(results[5] as never)
-    const clientesNuevos = safeData<{ organization_id: string; created_at: string }>(results[6] as never)
-    const engagementData = safeData<{ organization_id: string; engagement_score: number; fecha: string; ordenes_creadas: number; ventas_realizadas: number; usuarios_activos: number }>(results[7] as never)
-    const expiredTrials = safeData<{ organization_id: string; trial_end: string; organizations: { nombre: string; slug: string } }>(results[8] as never)
+    const metricas = (metricasRes.data ?? {}) as MetricasEngagement
+    const orgs = metricas.orgs ?? []
 
-    const subMap = new Map(subs.map(s => [s.organization_id, s]))
-
-    // Calcular métricas REALES por org (últimos 7 días)
     const orgMetrics: Record<string, {
       ordenes7d: number
       ordenesCompletadas7d: number
@@ -119,52 +86,13 @@ export async function GET() {
 
     for (const org of orgs) {
       orgMetrics[org.id] = {
-        ordenes7d: 0,
-        ordenesCompletadas7d: 0,
-        ventas7d: 0,
-        clientesNuevos7d: 0,
-        ordenes30d: 0,
-        ventas30d: 0,
-        ultimaActividad: null,
-      }
-    }
-
-    // Contar órdenes
-    for (const o of ordenes) {
-      const m = orgMetrics[o.organization_id]
-      if (!m) continue
-      m.ordenes30d++
-      const actDate = o.updated_at || o.created_at
-      if (!m.ultimaActividad || actDate > m.ultimaActividad) {
-        m.ultimaActividad = actDate
-      }
-      if (new Date(o.created_at) >= sevenDaysAgo) {
-        m.ordenes7d++
-        if (o.estado === "ENTREGADO") {
-          m.ordenesCompletadas7d++
-        }
-      }
-    }
-
-    // Contar ventas
-    for (const v of ventas) {
-      const m = orgMetrics[v.organization_id]
-      if (!m) continue
-      m.ventas30d++
-      if (new Date(v.created_at) >= sevenDaysAgo) {
-        m.ventas7d++
-      }
-      if (!m.ultimaActividad || v.created_at > m.ultimaActividad) {
-        m.ultimaActividad = v.created_at
-      }
-    }
-
-    // Contar clientes nuevos
-    for (const c of clientesNuevos) {
-      const m = orgMetrics[c.organization_id]
-      if (!m) continue
-      if (new Date(c.created_at) >= sevenDaysAgo) {
-        m.clientesNuevos7d++
+        ordenes7d: Number(org.ordenes7d) || 0,
+        ordenesCompletadas7d: Number(org.ordenes_completadas7d) || 0,
+        ventas7d: Number(org.ventas7d) || 0,
+        clientesNuevos7d: Number(org.clientes_nuevos7d) || 0,
+        ordenes30d: Number(org.ordenes30d) || 0,
+        ventas30d: Number(org.ventas30d) || 0,
+        ultimaActividad: org.ultima_actividad ?? null,
       }
     }
 
@@ -187,8 +115,7 @@ export async function GET() {
     // Construir lista de orgs con engagement real
     const orgList = orgs.map(org => {
       const metrics = orgMetrics[org.id]
-      const sub = subMap.get(org.id)
-      const planType = sub ? (Array.isArray(sub.plans) ? sub.plans[0]?.tipo : (sub.plans as { tipo: string })?.tipo) : "FREE"
+      const planType = org.sub_status ? org.plan_tipo : "FREE"
       const score = metrics ? calculateScore(metrics) : 0
 
       let riesgo: "alto" | "medio" | "bajo" = "bajo"
@@ -204,8 +131,8 @@ export async function GET() {
         nombre: org.nombre,
         slug: org.slug,
         plan: planType || "FREE",
-        subscriptionStatus: sub?.status || "NONE",
-        trialEnd: sub?.trial_end || null,
+        subscriptionStatus: org.sub_status || "NONE",
+        trialEnd: org.trial_end || null,
         avgEngagement7d: score,
         ordenes7d: metrics?.ordenes7d || 0,
         ventas7d: metrics?.ventas7d || 0,
@@ -218,70 +145,31 @@ export async function GET() {
       }
     })
 
-    // Engagement trend
-    let trend: Array<{ fecha: string; avgScore: number; totalOrdenes: number; orgsActivas: number }> = []
-
-    if (engagementData.length > 0) {
-      const engagementTrend: Record<string, { totalScore: number; count: number; ordenes: number }> = {}
-      for (const e of engagementData) {
-        if (!engagementTrend[e.fecha]) {
-          engagementTrend[e.fecha] = { totalScore: 0, count: 0, ordenes: 0 }
-        }
-        engagementTrend[e.fecha].totalScore += e.engagement_score
-        engagementTrend[e.fecha].count++
-        engagementTrend[e.fecha].ordenes += e.ordenes_creadas
-      }
-
-      trend = Object.entries(engagementTrend)
-        .map(([fecha, d]) => ({
-          fecha,
-          avgScore: Math.round(d.totalScore / d.count),
-          totalOrdenes: d.ordenes,
-          orgsActivas: d.count,
-        }))
-        .sort((a, b) => a.fecha.localeCompare(b.fecha))
-    } else {
-      const dailyOrdenes: Record<string, { count: number; orgIds: Set<string> }> = {}
-      for (const o of ordenes) {
-        const fecha = o.created_at.split("T")[0]
-        if (!dailyOrdenes[fecha]) {
-          dailyOrdenes[fecha] = { count: 0, orgIds: new Set() }
-        }
-        dailyOrdenes[fecha].count++
-        dailyOrdenes[fecha].orgIds.add(o.organization_id)
-      }
-      for (const v of ventas) {
-        const fecha = v.created_at.split("T")[0]
-        if (!dailyOrdenes[fecha]) {
-          dailyOrdenes[fecha] = { count: 0, orgIds: new Set() }
-        }
-        dailyOrdenes[fecha].count++
-        dailyOrdenes[fecha].orgIds.add(v.organization_id)
-      }
-
-      trend = Object.entries(dailyOrdenes)
-        .map(([fecha, d]) => ({
-          fecha,
-          avgScore: Math.min(100, Math.round((d.count / Math.max(orgs.length, 1)) * 50)),
-          totalOrdenes: d.count,
-          orgsActivas: d.orgIds.size,
-        }))
-        .sort((a, b) => a.fecha.localeCompare(b.fecha))
-    }
+    // Engagement trend: el pre-calculado por el cron si existe; si no, la
+    // actividad diaria (órdenes + ventas).
+    const tendenciaEngagement = metricas.tendencia_engagement ?? []
+    const trend: Array<{ fecha: string; avgScore: number; totalOrdenes: number; orgsActivas: number }> =
+      tendenciaEngagement.length > 0
+        ? tendenciaEngagement.map((t) => ({
+            fecha: t.fecha,
+            avgScore: Math.round(Number(t.suma_score) / Math.max(Number(t.cantidad), 1)),
+            totalOrdenes: Number(t.ordenes) || 0,
+            orgsActivas: Number(t.cantidad) || 0,
+          }))
+        : (metricas.tendencia_actividad ?? []).map((t) => ({
+            fecha: t.fecha,
+            avgScore: Math.min(100, Math.round((Number(t.total) / Math.max(orgs.length, 1)) * 50)),
+            totalOrdenes: Number(t.total) || 0,
+            orgsActivas: Number(t.orgs) || 0,
+          }))
 
     // Último cálculo de engagement
-    const lastCalculatedAt = engagementData.length > 0
-      ? engagementData[0].fecha
-      : null
+    const lastCalculatedAt = metricas.ultimo_calculo ?? null
 
     // Lifecycle emails stats
     const emailStats: Record<string, { sent: number; failed: number }> = {}
-    for (const e of lifecycleData) {
-      if (!emailStats[e.email_type]) {
-        emailStats[e.email_type] = { sent: 0, failed: 0 }
-      }
-      if (e.status === "SENT") emailStats[e.email_type].sent++
-      else emailStats[e.email_type].failed++
+    for (const [tipo, e] of Object.entries(metricas.emails ?? {})) {
+      emailStats[tipo] = { sent: Number(e.sent) || 0, failed: Number(e.failed) || 0 }
     }
 
     // Resumen
@@ -313,7 +201,7 @@ export async function GET() {
         nombre: (c.organizations as { nombre: string })?.nombre || "Unknown",
         canceledAt: c.canceled_at,
       })),
-      trialsExpiredWithoutConversion: expiredTrials.length,
+      trialsExpiredWithoutConversion: expiredTrialsRes.count ?? 0,
     })
   } catch (error) {
     console.error("Error fetching engagement stats:", error)

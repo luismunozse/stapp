@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getSuperadminOrgId } from "@/lib/superadmin-org"
+import { montosDesdeRpc } from "@/lib/superadmin-montos"
 import type { SuperadminStats } from "@/types/superadmin"
 
 export async function GET() {
@@ -62,12 +63,12 @@ export async function GET() {
         .eq("plans.tipo", "PREMIUM")
         .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`),
 
-      // Ingresos del mes actual
-      supabaseAdmin
-        .from("subscription_payments")
-        .select("amount")
-        .eq("status", "SUCCEEDED")
-        .gte("paid_at", primerDiaMes.toISOString()),
+      // Ingresos del mes actual, sumados en SQL y por moneda (una lectura de
+      // filas se corta en 1000 y mezclaba ARS con USD).
+      supabaseAdmin.rpc("superadmin_pagos_por_moneda", {
+        p_status: "SUCCEEDED",
+        p_desde: primerDiaMes.toISOString(),
+      }),
 
       // Nuevas organizaciones este mes
       supabaseAdmin
@@ -121,16 +122,14 @@ export async function GET() {
       organization: orgsMap[p.organization_id] || null,
     }))
 
-    const monthlyRevenue =
-      monthlyRevenueResult.data?.reduce((sum, p) => sum + (p.amount || 0), 0) ||
-      0
+    if (monthlyRevenueResult.error) throw monthlyRevenueResult.error
 
     const stats: SuperadminStats = {
       totalOrganizations: totalOrgsResult.count || 0,
       activeOrganizations: activeOrgsResult.count || 0,
       totalUsers: totalUsersResult.count || 0,
       activeSubscriptions: activeSubscriptionsResult.count || 0,
-      monthlyRevenue,
+      monthlyRevenueByCurrency: montosDesdeRpc(monthlyRevenueResult.data),
       newOrgsThisMonth: newOrgsThisMonthResult.count || 0,
       recentPayments: paymentsWithOrg as any,
     }
