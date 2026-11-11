@@ -98,7 +98,8 @@ export default function SuscripcionesPage() {
   // Modales
   const [cancelModal, setCancelModal] = useState<{ open: boolean; orgId: string; orgName: string }>({ open: false, orgId: "", orgName: "" })
   const [extendModal, setExtendModal] = useState<{ open: boolean; orgId: string; orgName: string }>({ open: false, orgId: "", orgName: "" })
-  const [renewModal, setRenewModal] = useState<{ open: boolean; orgId: string; orgName: string }>({ open: false, orgId: "", orgName: "" })
+  // idempotencyKey: una por apertura del diálogo; el doble clic o el reintento no renuevan dos veces.
+  const [renewModal, setRenewModal] = useState<{ open: boolean; orgId: string; orgName: string; idempotencyKey: string }>({ open: false, orgId: "", orgName: "", idempotencyKey: "" })
   const [historyModal, setHistoryModal] = useState<{ open: boolean; orgId: string; orgName: string }>({ open: false, orgId: "", orgName: "" })
   const [limitsModal, setLimitsModal] = useState<{ open: boolean; orgId: string; orgName: string }>({ open: false, orgId: "", orgName: "" })
   const [bulkModal, setBulkModal] = useState<{ open: boolean; action: string }>({ open: false, action: "" })
@@ -216,13 +217,14 @@ export default function SuscripcionesPage() {
       method: "POST",
       body: {
         organizationId: renewModal.orgId,
+        idempotencyKey: renewModal.idempotencyKey,
         billingPeriod: renewPeriod,
         ...(renewDays && !renewCustomDate && { days: parseInt(renewDays) }),
         ...(renewCustomDate && { customEndDate: new Date(renewCustomDate).toISOString() }),
       },
       successMessage: "Suscripción activada",
       onSuccess: () => {
-        setRenewModal({ open: false, orgId: "", orgName: "" })
+        setRenewModal({ open: false, orgId: "", orgName: "", idempotencyKey: "" })
         setRenewCustomDate("")
         setRenewDays("")
         fetchSubscriptions()
@@ -448,7 +450,7 @@ export default function SuscripcionesPage() {
                 <Clock className="h-4 w-4 mr-2" /> Extender trial
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => setRenewModal({ open: true, orgId: sub.organization?.id, orgName: sub.organization?.nombre })}>
+            <DropdownMenuItem onClick={() => setRenewModal({ open: true, orgId: sub.organization?.id, orgName: sub.organization?.nombre, idempotencyKey: crypto.randomUUID() })}>
               <RefreshCw className="h-4 w-4 mr-2" /> {sub.status === "ACTIVE" ? "Extender suscripción" : "Activar Premium"}
             </DropdownMenuItem>
             {sub.status !== "CANCELED" && (
@@ -585,7 +587,10 @@ export default function SuscripcionesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Cancelar suscripción</DialogTitle>
-            <DialogDescription>Cancelar la suscripción de {cancelModal.orgName}</DialogDescription>
+            <DialogDescription>
+              Cancelar la suscripción de {cancelModal.orgName}. También se cancela el débito
+              automático en MercadoPago, si tiene uno.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
@@ -677,7 +682,7 @@ export default function SuscripcionesPage() {
               Se activará sin proceso de pago. El admin de la org será notificado.
             </div>
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => { setRenewModal({ open: false, orgId: "", orgName: "" }); setRenewCustomDate(""); setRenewDays("") }} disabled={mutating}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setRenewModal({ open: false, orgId: "", orgName: "", idempotencyKey: "" }); setRenewCustomDate(""); setRenewDays("") }} disabled={mutating}>Cancelar</Button>
               <Button onClick={handleRenew} disabled={mutating}>
                 {mutating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                 Activar

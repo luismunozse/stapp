@@ -5,10 +5,21 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
+// Archivado masivo (soft delete). El borrado definitivo NO se hace en masa:
+// es de a una organización desde DELETE /organizations/[id]?hard=true, que pide
+// el slug exacto y pasa por purgeOrganization (cancela el cobro en el
+// proveedor y vacía el storage). Antes este endpoint aceptaba `hard + confirm`
+// y hacía un DELETE crudo: sin cancelar la suscripción (el taller se seguía
+// cobrando) y dejando el storage huérfano. La UI nunca lo usó.
+const MAX_ORGS_POR_LOTE = 100
+
 const bulkDeleteSchema = z.object({
-  ids: z.array(z.string().min(1)).min(1, "Debe seleccionar al menos una organización"),
+  ids: z
+    // Los ids de organizations son cuid (TEXT), no UUID.
+    .array(z.string().trim().min(1, "ID de organización inválido").max(64, "ID de organización inválido"))
+    .min(1, "Debe seleccionar al menos una organización")
+    .max(MAX_ORGS_POR_LOTE, `Máximo ${MAX_ORGS_POR_LOTE} organizaciones por vez`),
   hard: z.boolean().optional(),
-  confirm: z.boolean().optional(),
 })
 
 export async function POST(request: Request) {
@@ -19,7 +30,17 @@ export async function POST(request: Request) {
     const parsed = await safeParseBody(request, bulkDeleteSchema)
     if ("error" in parsed) return parsed.error
 
-    const { ids, hard, confirm } = parsed.data
+    const { ids, hard } = parsed.data
+
+    if (hard === true) {
+      return NextResponse.json(
+        {
+          error:
+            "El borrado definitivo es de a una organización, desde su detalle (pide el slug y cancela el cobro). Acá solo se archiva.",
+        },
+        { status: 400 }
+      )
+    }
 
     // Obtener nombres + slug para guard + log
     const { data: orgs } = await supabaseAdmin
@@ -45,43 +66,7 @@ export async function POST(request: Request) {
       .map((o) => ({ id: o.id, nombre: o.nombre }))
     const audit = createSuperadminAuditLogger(email, request)
 
-    // Permanent purge — only when BOTH hard AND confirm are explicitly true
-    if (hard === true && confirm === true) {
-      // Auditoría fail-closed ANTES de borrar. organization_id va en null: el
-      // borrado cascadea audit_logs de esas orgs y se llevaría la fila.
-      const intento = await audit.exigir({
-        action: "BULK_DELETE",
-        entity: "organizations",
-        description: `Eliminación permanente masiva de ${targetIds.length} organización(es)`,
-        metadata: { ids: targetIds, orgs: targetOrgs },
-      })
-      if (!intento.ok) return intento.respuesta
-
-      const { error: deleteError, count } = await supabaseAdmin
-        .from("organizations")
-        .delete({ count: "exact" })
-        .in("id", targetIds)
-        .neq("slug", "superadmin")
-
-      if (deleteError) {
-        await intento.completar({ error: deleteError.message }, "fallido")
-        console.error("Bulk delete error:", deleteError)
-        return NextResponse.json(
-          { error: "Error al eliminar organizaciones" },
-          { status: 500 }
-        )
-      }
-
-      await intento.completar({ deleted_count: count })
-
-      return NextResponse.json({
-        success: true,
-        deleted: count,
-        message: `${count} organización(es) eliminada(s) permanentemente`,
-      })
-    }
-
-    // Default path — archive (soft delete). Auditoría fail-closed ANTES de archivar.
+    // Archivado (soft delete). Auditoría fail-closed ANTES de archivar.
     const intento = await audit.exigir({
       action: "ARCHIVE",
       entity: "organizations",

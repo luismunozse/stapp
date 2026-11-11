@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks/dispatcher"
+import { validarDestinoWebhook } from "@/lib/webhooks/destino-seguro"
 import { z } from "zod"
 
 const updateSchema = z.object({
@@ -71,6 +72,10 @@ export async function PATCH(
 
     const body = await request.json()
     const data = updateSchema.parse(body)
+    if (data.url !== undefined) {
+      const destino = await validarDestinoWebhook(data.url)
+      if (!destino.ok) return NextResponse.json({ error: destino.error }, { status: 400 })
+    }
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("webhooks")

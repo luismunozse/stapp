@@ -106,3 +106,41 @@ export async function cancelOrganizationSubscriptions(organizationId: string): P
 
   return failed.length > 0 ? { ok: false, failed, canceled } : { ok: true, canceled, skipped: false }
 }
+
+export type MercadoPagoCancelResult =
+  | { ok: true; canceled: boolean }
+  | { ok: false }
+
+/**
+ * Cancela solo la preapproval de MercadoPago de la organización, el único
+ * proveedor de cobro recurrente en uso. Para las acciones del panel
+ * superadmin (cancelar, renovar a mano, activar en masa): sin esto MP sigue
+ * debitando y su webhook revive o extiende la suscripción.
+ *
+ * Mismo criterio que `cancelOrganizationSubscriptions`: idempotente ("ya
+ * cancelada" cuenta como éxito, confirmándolo con MP si el mensaje no se
+ * reconoce) y nunca asume éxito ante un fallo. `canceled` es false cuando la
+ * org no tiene preapproval.
+ */
+export async function cancelMercadoPagoPreapproval(organizationId: string): Promise<MercadoPagoCancelResult> {
+  const { data: sub, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("mercadopago_preapproval_id")
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  if (error) return { ok: false }
+  const preapprovalId = sub?.mercadopago_preapproval_id
+  if (!preapprovalId) return { ok: true, canceled: false }
+
+  try {
+    await cancelPreApproval(preapprovalId)
+    return { ok: true, canceled: true }
+  } catch (err) {
+    if (isAlreadyCanceledError(err) || (await providerStatusIsCanceled("MERCADOPAGO", () => getPreApproval(preapprovalId)))) {
+      return { ok: true, canceled: true }
+    }
+    console.error(`[superadmin] error cancelando la preapproval ${preapprovalId} de MercadoPago:`, err)
+    return { ok: false }
+  }
+}

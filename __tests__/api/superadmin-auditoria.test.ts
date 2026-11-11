@@ -63,21 +63,6 @@ const params = <T extends Record<string, string>>(p: T) => ({ params: Promise.re
 describe("fail-closed: si la auditoría no se puede escribir, la acción no ocurre", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("bulk-delete (borrado permanente) → 500 y no borra", async () => {
-    const orgs = {
-      ...createChainMock([{ id: "o1", nombre: "A", slug: "a" }]),
-      delete: vi.fn().mockReturnValue(createChainMock(null, null, 1)),
-      update: vi.fn().mockReturnValue(createChainMock(null, null, 1)),
-    }
-    mockSupabaseFrom({ organizations: orgs as any, audit_logs: AUDITORIA_CAIDA() })
-
-    const res = await bulkDelete(json("POST", { ids: ["o1"], hard: true, confirm: true }))
-
-    await esElDeAuditoria(res)
-    expect(orgs.delete).not.toHaveBeenCalled()
-    expect(orgs.update).not.toHaveBeenCalled()
-  })
-
   it("bulk-delete (archivado) → 500 y no archiva", async () => {
     const orgs = {
       ...createChainMock([{ id: "o1", nombre: "A", slug: "a" }]),

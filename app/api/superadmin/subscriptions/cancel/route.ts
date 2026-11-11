@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
 
 const cancelSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -48,6 +49,22 @@ export async function POST(request: Request) {
     })
     if (!intento.ok) return intento.respuesta
 
+    // Primero el débito automático de MercadoPago (preapproval).
+    // Si solo se marcaba la fila, MP seguía cobrando y el webhook del
+    // cobro siguiente volvía a poner la suscripción en ACTIVE. Se hace igual al
+    // cancelar "al final del período": el acceso sigue hasta current_period_end
+    // pero no hay más débitos. Si MP falla no se toca la fila, para que el
+    // reintento vuelva a pasar por acá (es idempotente).
+    const mpCancel = await cancelMercadoPagoPreapproval(organizationId)
+    if (!mpCancel.ok) {
+      await intento.completar({ error: "mercadopago" }, "fallido")
+      return NextResponse.json(
+        { error: "No se pudo cancelar el débito automático en MercadoPago. La suscripción no se modificó; reintentá." },
+        { status: 502 }
+      )
+    }
+    const mercadopagoCanceled = mpCancel.canceled
+
     const now = new Date().toISOString()
 
     const { error: cancelError } = immediate
@@ -84,11 +101,16 @@ export async function POST(request: Request) {
       action: "CANCELED",
       previous_status: sub.status,
       new_status: immediate ? "CANCELED" : sub.status,
-      details: { immediate, cancel_at_period_end: !immediate, current_period_end: sub.current_period_end },
+      details: {
+        immediate,
+        cancel_at_period_end: !immediate,
+        current_period_end: sub.current_period_end,
+        mercadopago_preapproval_canceled: mercadopagoCanceled,
+      },
       performed_by: email,
     })
 
-    await intento.completar()
+    await intento.completar({ mercadopagoCanceled })
 
     return NextResponse.json({
       success: true,

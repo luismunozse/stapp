@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
+import { validarDestinoWebhook } from "@/lib/webhooks/destino-seguro"
 
 // ============================================
 // EVENT TYPES
@@ -283,20 +284,33 @@ export async function dispatch(
   let ok = false
 
   try {
-    const res = await fetch(wh.url, {
-      method: "POST",
-      headers,
-      body,
-      // 5s timeout: balance entre tolerancia a endpoints lentos vs no colgar
-      // el dispatcher. AbortSignal.timeout es builtin Node 18+.
-      signal: AbortSignal.timeout(5000),
-    })
-    httpStatus = res.status
-    // 2xx = éxito; cualquier otro = fallo.
-    ok = res.status >= 200 && res.status < 300
-    // Truncar body a 2KB — protege contra responses gigantes.
-    const text = await res.text().catch(() => "")
-    respBody = text.length > 2048 ? text.slice(0, 2048) + "…" : text
+    // El destino se valida en cada envío (el DNS puede cambiar después del
+    // alta): solo IPs públicas. Ver lib/webhooks/destino-seguro.ts.
+    const destino = await validarDestinoWebhook(wh.url)
+    if (!destino.ok) {
+      respBody = destino.error
+    } else {
+      const res = await fetch(wh.url, {
+        method: "POST",
+        headers,
+        body,
+        // Un redirect podría llevar a una IP interna sin pasar por la validación.
+        redirect: "manual",
+        // 5s timeout: balance entre tolerancia a endpoints lentos vs no colgar
+        // el dispatcher. AbortSignal.timeout es builtin Node 18+.
+        signal: AbortSignal.timeout(5000),
+      })
+      httpStatus = res.status
+      // 2xx = éxito; cualquier otro (3xx incluido) = fallo.
+      ok = res.status >= 200 && res.status < 300
+      if (res.status >= 300 && res.status < 400) {
+        respBody = "El endpoint respondió con un redirect; los webhooks no siguen redirects. Configurá la URL final."
+      } else {
+        // Truncar body a 2KB — protege contra responses gigantes.
+        const text = await res.text().catch(() => "")
+        respBody = text.length > 2048 ? text.slice(0, 2048) + "…" : text
+      }
+    }
   } catch (err) {
     // Timeout, DNS, TLS, etc. httpStatus queda null para distinguir de 5xx.
     respBody = err instanceof Error ? err.message.slice(0, 2048) : String(err).slice(0, 2048)

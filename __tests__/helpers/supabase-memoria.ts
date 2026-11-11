@@ -39,6 +39,12 @@ interface Opciones {
   resultadoRpc?: (nombre: string, args: unknown) => unknown
   /** Makes an rpc fail: when it returns an error the rpc answers `{ data: null, error }` (the call is recorded either way). */
   errorRpc?: (nombre: string, args: unknown) => { code?: string; message: string } | null
+  /**
+   * UNIQUE constraints per table, each a list of columns. An insert whose row matches an existing
+   * row on all of them (none null, like a partial `WHERE ... IS NOT NULL` index) is refused with
+   * `23505` and inserts nothing: for the routes that rely on the database to win a race.
+   */
+  unicos?: Record<string, string[][]>
 }
 
 const copia = <T>(valor: T): T => JSON.parse(JSON.stringify(valor))
@@ -97,11 +103,27 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
     tabla(nombre)
     let seleccionada = false
     let ejecutada: Fila[] | null = null
+    let fallo: { code: string; message: string } | null = null
+
+    const violaUnico = (nueva: Fila, filas: Fila[]) =>
+      (opciones.unicos?.[nombre] ?? []).find((cols) =>
+        cols.every((c) => nueva[c] != null) && filas.some((f) => cols.every((c) => f[c] === nueva[c]))
+      )
 
     const ejecutar = (): Fila[] => {
       if (ejecutada) return ejecutada
       const filas = filasDe.get(nombre)!
-      if (operacion === "insert" || operacion === "upsert") {
+      if (operacion === "insert") {
+        const nuevas = (Array.isArray(carga) ? carga : [carga]).map((f) => copia(f as Fila))
+        const violado = nuevas.map((f, i) => violaUnico(f, [...filas, ...nuevas.slice(0, i)])).find(Boolean)
+        if (violado) {
+          fallo = { code: "23505", message: `duplicate key value violates unique constraint on ${nombre} (${violado.join(", ")})` }
+          ejecutada = []
+          return ejecutada
+        }
+        filas.push(...nuevas)
+        ejecutada = nuevas
+      } else if (operacion === "upsert") {
         const nuevas = (Array.isArray(carga) ? carga : [carga]).map((f) => copia(f as Fila))
         filas.push(...nuevas)
         ejecutada = nuevas
@@ -114,7 +136,10 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
       return ejecutada
     }
 
-    const respuestaDeLista = () => ({ data: seleccionada ? copia(ejecutar()) : (ejecutar(), null), error: null })
+    const respuestaDeLista = () => {
+      const filas = ejecutar()
+      return fallo ? { data: null, error: fallo } : { data: seleccionada ? copia(filas) : null, error: null }
+    }
     const cadena: any = {}
     for (const metodo of [...FILTROS_DE_ESCRITURA, ...SIN_EFECTO_EN_ESCRITURA, "select", "not", "or", "ilike", "gt", "gte", "lt", "lte"]) {
       cadena[metodo] = (...args: unknown[]) => {
@@ -132,11 +157,13 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
     cadena.single = async () => {
       seleccionada = true
       const filas = ejecutar()
+      if (fallo) return { data: null, error: fallo }
       return filas.length === 1 ? { data: copia(filas[0]), error: null } : { data: null, error: SIN_FILA }
     }
     cadena.maybeSingle = async () => {
       seleccionada = true
       const filas = ejecutar()
+      if (fallo) return { data: null, error: fallo }
       if (filas.length > 1) return { data: null, error: { code: "PGRST116", message: `${filas.length} rows, expected at most 1` } }
       return { data: filas.length === 1 ? copia(filas[0]) : null, error: null }
     }

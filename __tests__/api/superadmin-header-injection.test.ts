@@ -17,7 +17,8 @@ vi.mock("@/lib/rate-limit", () => ({
 vi.mock("@/lib/tenant-status-edge", () => ({
   getTenantStatusBySlug: vi.fn().mockResolvedValue(null),
 }))
-vi.mock("@/lib/impersonation", () => ({
+vi.mock("@/lib/impersonation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/impersonation")>()),
   isImpersonationWriteBlocked: vi.fn().mockReturnValue(false),
 }))
 

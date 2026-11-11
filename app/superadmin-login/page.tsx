@@ -18,6 +18,7 @@ import { Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
+import { safeSuperadminCallbackPath } from "@/lib/safe-callback-path"
 
 function LoginForm() {
   const router = useRouter()
@@ -31,7 +32,7 @@ function LoginForm() {
   const [pending2FAUserId, setPending2FAUserId] = useState<string | null>(null)
   const [twoFAError, setTwoFAError] = useState("")
 
-  const callbackUrl = searchParams.get("callbackUrl") || "/superadmin/dashboard"
+  const callbackUrl = safeSuperadminCallbackPath(searchParams.get("callbackUrl"))
 
   const completeLogin = () => {
     window.location.href = callbackUrl

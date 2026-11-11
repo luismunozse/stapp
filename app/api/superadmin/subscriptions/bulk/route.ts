@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { exceedsTrialCap, trialAdjustmentStatus } from "@/lib/trial"
+import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
 
 const bulkActionSchema = z.object({
   action: z.enum(["extend_trial", "activate", "cancel"]),
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
     const { action, organizationIds, dias, motivo, billingPeriod, immediate } = parsed.data
     let successCount = 0
     let errorCount = 0
+    // Orgs que no se tocaron a propósito (no son errores): en "activate", las
+    // que ya tienen un período pago vigente.
+    let skippedCount = 0
 
     if (action === "extend_trial" && !dias) {
       return NextResponse.json({ error: "dias es requerido para extend_trial" }, { status: 400 })
@@ -132,11 +136,28 @@ export async function POST(request: Request) {
       for (const orgId of organizationIds) {
         const { data: sub } = await supabaseAdmin
           .from("subscriptions")
-          .select("id, status")
+          .select("id, status, current_period_end")
           .eq("organization_id", orgId)
           .single()
 
         if (!sub) { errorCount++; continue }
+
+        // Una suscripción ACTIVE con período vigente ya está paga: pisarla con
+        // "ahora + 1 período" podía acortar un anual y además cortaba su débito
+        // automático. Se omite; para extenderla está la renovación individual.
+        if (
+          sub.status === "ACTIVE" &&
+          sub.current_period_end &&
+          new Date(sub.current_period_end) > now
+        ) {
+          skippedCount++
+          continue
+        }
+
+        // Pasa a MANUAL: cancelar antes la preapproval de MercadoPago, que si
+        // no seguiría debitando y su webhook volvería a MERCADOPAGO.
+        const mpCancel = await cancelMercadoPagoPreapproval(orgId)
+        if (!mpCancel.ok) { errorCount++; continue }
 
         const { error: updateError } = await supabaseAdmin
           .from("subscriptions")
@@ -181,17 +202,22 @@ export async function POST(request: Request) {
 
         if (!sub || sub.status === "CANCELED") { errorCount++; continue }
 
-        if (immediate) {
-          await supabaseAdmin
-            .from("subscriptions")
-            .update({ status: "CANCELED", canceled_at: now, cancel_at_period_end: false })
-            .eq("id", sub.id)
-        } else {
-          await supabaseAdmin
-            .from("subscriptions")
-            .update({ cancel_at_period_end: true, canceled_at: now })
-            .eq("id", sub.id)
-        }
+        // Igual que la cancelación individual: primero la preapproval de
+        // MercadoPago; si falla, la org queda como estaba y cuenta como error.
+        const mpCancel = await cancelMercadoPagoPreapproval(orgId)
+        if (!mpCancel.ok) { errorCount++; continue }
+
+        const { error: updateError } = immediate
+          ? await supabaseAdmin
+              .from("subscriptions")
+              .update({ status: "CANCELED", canceled_at: now, cancel_at_period_end: false, trial_end: null })
+              .eq("id", sub.id)
+          : await supabaseAdmin
+              .from("subscriptions")
+              .update({ cancel_at_period_end: true, canceled_at: now })
+              .eq("id", sub.id)
+
+        if (updateError) { errorCount++; continue }
 
         await supabaseAdmin.from("subscription_history").insert({
           subscription_id: sub.id,
@@ -199,7 +225,7 @@ export async function POST(request: Request) {
           action: "CANCELED",
           previous_status: sub.status,
           new_status: immediate ? "CANCELED" : sub.status,
-          details: { immediate, bulk: true },
+          details: { immediate, bulk: true, mercadopago_preapproval_canceled: mpCancel.canceled },
           performed_by: email,
         })
 
@@ -207,13 +233,14 @@ export async function POST(request: Request) {
       }
     }
 
-    await intento.completar({ successCount, errorCount })
+    await intento.completar({ successCount, errorCount, skippedCount })
 
     return NextResponse.json({
       success: true,
-      message: `${successCount} operaciones exitosas${errorCount > 0 ? `, ${errorCount} errores` : ""}`,
+      message: `${successCount} operaciones exitosas${errorCount > 0 ? `, ${errorCount} errores` : ""}${skippedCount > 0 ? `, ${skippedCount} omitidas por tener un período pago vigente` : ""}`,
       successCount,
       errorCount,
+      skippedCount,
     })
   } catch (err) {
     console.error("Error in bulk subscription action:", err)

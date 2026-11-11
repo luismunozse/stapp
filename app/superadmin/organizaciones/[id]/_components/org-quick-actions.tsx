@@ -98,9 +98,12 @@ export function OrgQuickActions({
   const [planOpen, setPlanOpen] = useState(false)
   const [planSlug, setPlanSlug] = useState("")
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
+  // Una clave por apertura del diálogo: el doble clic o el reintento no renuevan dos veces.
+  const [planRenewKey, setPlanRenewKey] = useState("")
   const plansFetch = useSuperadminFetch<{ plans: PlanWithUsage[] }>()
 
   const openPlanDialog = () => {
+    setPlanRenewKey(crypto.randomUUID())
     setPlanOpen(true)
     plansFetch.fetchData("/api/superadmin/plans")
   }
@@ -112,7 +115,7 @@ export function OrgQuickActions({
   const handleCambiarPlan = async () => {
     await mutate("/api/superadmin/subscriptions/renew", {
       method: "POST",
-      body: { organizationId: organization.id, planSlug, billingPeriod },
+      body: { organizationId: organization.id, planSlug, billingPeriod, idempotencyKey: planRenewKey },
       successMessage: "Plan actualizado",
       onSuccess: () => {
         setPlanOpen(false)
@@ -474,6 +477,8 @@ export function OrgQuickActions({
                 <DialogDescription className="mt-1">
                   ¿Cancelar la suscripción de{" "}
                   <span className="font-medium">{organization.nombre}</span>?
+                  También se cancela el débito automático en MercadoPago, si
+                  tiene uno.
                 </DialogDescription>
               </div>
             </div>
