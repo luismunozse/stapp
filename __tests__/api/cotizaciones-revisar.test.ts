@@ -148,6 +148,43 @@ describe("POST /api/cotizaciones/[id]/revisar", () => {
     expect(body.error).toMatch(/reemplazada/i)
   })
 
+  it("no revisa una cotizacion que ya se convirtio en venta", async () => {
+    // La revision nace sin venta_id: se podria convertir de nuevo y vender
+    // dos veces lo mismo.
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ACEPTADA",
+      organization_id: "org-1",
+      venta_id: "venta-1",
+      total: 100,
+    })
+    mockSupabaseFrom({ cotizaciones: cotChain })
+
+    const { status, body } = await parseResponse(await call())
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/venta/i)
+    expect(cotChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("no revisa un presupuesto que ya se convirtio en orden", async () => {
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ACEPTADA",
+      tipo: "PRESUPUESTO",
+      organization_id: "org-1",
+      convertida_a_orden_id: "orden-9",
+      total: 100,
+    })
+    mockSupabaseFrom({ cotizaciones: cotChain })
+
+    const { status, body } = await parseResponse(await call())
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/orden/i)
+    expect(cotChain.insert).not.toHaveBeenCalled()
+  })
+
   it("excluye de la busqueda las cotizaciones borradas", async () => {
     const cotChain = createChainMock({
       id: "cot-1",
