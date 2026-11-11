@@ -28,7 +28,7 @@ describe("lib/auth.ts rechaza cuentas dadas de baja", () => {
   })
 })
 
-describe("lib/auth.ts decide el superadmin con la marca de la fila (394)", () => {
+describe("lib/auth.ts decide el superadmin con la marca de la fila (395)", () => {
   it("todas las puertas de entrada usan esSuperadmin, ninguna solo el email", () => {
     expect(count(/const isSuper = esSuperadmin\(/g)).toBe(2)
     expect(count(/const isGoogleSuper = esSuperadmin\(/g)).toBe(1)

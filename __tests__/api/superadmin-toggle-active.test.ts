@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * 394: "Desactivar usuario" bloquea el acceso de verdad (acceso_bloqueado_at +
+ * 395: "Desactivar usuario" bloquea el acceso de verdad (acceso_bloqueado_at +
  * revocar refresh tokens) en vez de tocar email_verified, y no se puede usar
  * contra un superadmin.
  */

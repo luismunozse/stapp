@@ -10,7 +10,7 @@ const toggleActiveSchema = z.object({
 })
 
 /**
- * Bloquea o habilita el acceso de un usuario (users.acceso_bloqueado_at, 394).
+ * Bloquea o habilita el acceso de un usuario (users.acceso_bloqueado_at, 395).
  *
  * Antes "desactivar" ponía email_verified = false: el login con Google lo
  * volvía a true, reenviar la verificación lo reactivaba y las sesiones

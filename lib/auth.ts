@@ -308,7 +308,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new AuthSigninError("EMAIL_NOT_VERIFIED")
         }
 
-        // Verificar si es superadmin (email en la lista + fila marcada, 394)
+        // Verificar si es superadmin (email en la lista + fila marcada, 395)
         const isSuper = esSuperadmin(user)
 
         // Verificar que la organización esté activa (no requerido para superadmin)

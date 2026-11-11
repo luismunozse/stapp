@@ -5,7 +5,7 @@
 // así que esto es lo que corta la sesión viva.
 
 // Además de la baja trae el bloqueo de acceso del panel y la marca de
-// superadmin (394): las dos tienen que cortar o negar el acceso enseguida, no
+// superadmin (395): las dos tienen que cortar o negar el acceso enseguida, no
 // en la próxima revalidación del JWT (hasta 1 h).
 export type UserStatus = { deleted: boolean; bloqueado: boolean; esSuperadmin: boolean }
 export type UserStatusLookup = ({ kind: "ok" } & UserStatus) | { kind: "error" }

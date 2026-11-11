@@ -3,13 +3,13 @@ import { describe, it, expect } from "vitest"
 import { collapse, readByMarker, readBySuffix, stripComments } from "./helpers/sql-text"
 
 // Migrations are applied by hand and CI has no Postgres: this pins by text what vitest cannot
-// execute (verify/394_probes.sql covers the runtime against the real schema).
+// execute (verify/395_probes.sql covers the runtime against the real schema).
 
 const mig = () => readBySuffix("_superadmin_identidad_y_bloqueo.sql")
 const rollback = () => readByMarker("rollback", "Rollback de superadmin_identidad_y_bloqueo")
 const probes = () => readByMarker("verify", "Verificación de superadmin_identidad_y_bloqueo")
 
-describe("superadmin_identidad_y_bloqueo (394)", () => {
+describe("superadmin_identidad_y_bloqueo (395)", () => {
   it("arranca con lock_timeout y no abre transacción propia", () => {
     expect(collapse(mig()).startsWith("SET LOCAL lock_timeout = '3s';")).toBe(true)
     expect(stripComments(mig())).not.toMatch(/^\s*(BEGIN|COMMIT)\s*;/im)
