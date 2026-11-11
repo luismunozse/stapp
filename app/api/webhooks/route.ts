@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks/dispatcher"
+import { validarDestinoWebhook } from "@/lib/webhooks/destino-seguro"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -59,6 +60,8 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = createSchema.parse(body)
+    const destino = await validarDestinoWebhook(data.url)
+    if (!destino.ok) return NextResponse.json({ error: destino.error }, { status: 400 })
 
     const secret = generateWebhookSecret()
 
