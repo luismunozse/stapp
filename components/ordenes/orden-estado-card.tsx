@@ -4,11 +4,13 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, AlertTriangle, Timer, Pencil } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { Clock, AlertTriangle, Timer, Pencil, ArrowRight, ChevronDown } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { todayInTimeZone } from "@/lib/timezone"
 import { getTransicionesPosibles, ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { siguienteEstado } from "@/lib/ordenes/siguiente-estado"
 import type { EstadoOrden } from "@/types"
 
 interface OrdenEstadoCardProps {
@@ -55,9 +57,12 @@ export function OrdenEstadoCard({
   const [editingFecha, setEditingFecha] = useState(false)
   const [fechaDraft, setFechaDraft] = useState("")
   const [savingFecha, setSavingFecha] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
 
   const transicionesPosibles = getTransicionesPosibles(estado)
   const esTerminal = transicionesPosibles.length === 0
+  const accionPrincipal = siguienteEstado(estado)
+  const otrasTransiciones = transicionesPosibles.filter((t) => t !== accionPrincipal?.estado)
 
   const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
 
@@ -95,25 +100,44 @@ export function OrdenEstadoCard({
             {esRetiro ? "Retirado sin reparacion" : ESTADO_LABELS[estado]}
           </div>
         ) : (
-          <Select
-            value={estado}
-            onValueChange={(value) => onUpdateEstado(value as EstadoOrden)}
-            disabled={updating}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem key={estado} value={estado}>
-                {ESTADO_LABELS[estado]} (actual)
-              </SelectItem>
-              {transicionesPosibles.map((key) => (
-                <SelectItem key={key} value={key}>
-                  {ESTADO_LABELS[key]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            {accionPrincipal && (
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={() => onUpdateEstado(accionPrincipal.estado)}
+                disabled={updating}
+              >
+                {accionPrincipal.label}
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
+            {otrasTransiciones.length > 0 && (
+              <Popover open={menuAbierto} onOpenChange={setMenuAbierto}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full" disabled={updating}>
+                    {accionPrincipal ? "Más estados…" : "Cambiar estado…"}
+                    <ChevronDown className="h-4 w-4 ml-2" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" collisionPadding={16} className="w-[var(--radix-popover-trigger-width)] p-1">
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Actual: {ESTADO_LABELS[estado]}</div>
+                  <DropdownMenuSeparator />
+                  {otrasTransiciones.map((key) => (
+                    <DropdownMenuItem
+                      key={key}
+                      onClick={() => {
+                        setMenuAbierto(false)
+                        onUpdateEstado(key)
+                      }}
+                    >
+                      {ESTADO_LABELS[key]}
+                    </DropdownMenuItem>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
         )}
 
         {fechaPrometidaVencida && (
