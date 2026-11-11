@@ -66,8 +66,8 @@ function nota(over: Item = {}): Item {
 /** La factura `c1` ya anulada. */
 const anulada = (over: Item = {}) => item({ estado: "anulado", anuladoAt: "2026-10-20T15:00:00Z", ...over })
 
-function listado(items: Item[], puedeEmitir = true) {
-  return { items, total: items.length, page: 1, limit: 20, totalPages: 1, puedeEmitir }
+function listado(items: Item[], puedeEmitir = true, tipoEmision: string | null = null) {
+  return { items, total: items.length, page: 1, limit: 20, totalPages: 1, puedeEmitir, tipoEmision }
 }
 
 interface Respuesta {
@@ -210,6 +210,22 @@ describe("ComprobanteFiscalCard", () => {
       ).toBeInTheDocument()
       expect(within(dialogo).getByRole("button", { name: "Cancelar" })).toBeInTheDocument()
       expect(llamadasA("/emitir")).toHaveLength(0)
+    })
+
+    it.each([["C"], ["B"]])("si el servidor informa la letra, muestra 'Factura %s' y no la regla", async (letra) => {
+      montarFetch([listado([], true, letra)])
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      const dialogo = await screen.findByRole("dialog")
+      expect(within(dialogo).getByText(`Factura ${letra}`)).toBeInTheDocument()
+      expect(within(dialogo).queryByText(/Factura B o C/)).not.toBeInTheDocument()
+    })
+
+    it("sin letra del servidor (null) explica la regla", async () => {
+      montarFetch([listado([], true, null)])
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      expect(within(await screen.findByRole("dialog")).getByText(/Factura B o C: la elige el sistema/)).toBeInTheDocument()
     })
 
     it("sin nombre de cliente, el receptor es 'Consumidor final'", async () => {

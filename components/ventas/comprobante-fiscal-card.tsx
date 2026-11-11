@@ -34,6 +34,7 @@ import {
   type ComprobanteFiscalDTO,
   type ListadoComprobantesResponse,
 } from "@/lib/facturacion/comprobante-ui"
+import type { TipoComprobante } from "@/lib/facturacion/types"
 
 interface ComprobanteFiscalCardProps {
   ventaId: string
@@ -106,6 +107,7 @@ export function ComprobanteFiscalCard({
 }: ComprobanteFiscalCardProps) {
   const [items, setItems] = useState<ComprobanteFiscalDTO[]>([])
   const [puedeEmitir, setPuedeEmitir] = useState(false)
+  const [tipoEmision, setTipoEmision] = useState<TipoComprobante | null>(null)
   const [cargado, setCargado] = useState(false)
   const [emitiendo, setEmitiendo] = useState(false)
   // Emitir saca un CAE: no se deshace (solo con nota de crédito), así que se confirma antes.
@@ -127,6 +129,7 @@ export function ComprobanteFiscalCard({
       const data = (await res.json()) as Partial<ListadoComprobantesResponse>
       setItems(Array.isArray(data.items) ? data.items : [])
       setPuedeEmitir(data.puedeEmitir === true)
+      setTipoEmision(data.tipoEmision === "B" || data.tipoEmision === "C" ? data.tipoEmision : null)
     } catch {
       // Sin datos fiscales el bloque simplemente no aparece.
     } finally {
@@ -279,7 +282,7 @@ export function ComprobanteFiscalCard({
         variant="warning"
         onConfirm={handleConfirmarEmision}
       >
-        <ResumenEmision clienteNombre={clienteNombre} total={total} />
+        <ResumenEmision tipo={tipoEmision} clienteNombre={clienteNombre} total={total} />
       </ConfirmDialog>
 
       {dialogo && (
@@ -297,15 +300,27 @@ export function ComprobanteFiscalCard({
 /**
  * Lo que se va a facturar, tal como lo arma el servidor: el receptor siempre es
  * consumidor final (sin CUIT ni DNI) y la letra sale de la condición fiscal del
- * emisor (Monotributo emite C; Responsable Inscripto, B). Esa condición vive en
- * las credenciales del servidor, por eso acá se explica en vez de adivinarla.
+ * emisor (Monotributo emite C; Responsable Inscripto, B). El listado trae esa
+ * letra (`tipoEmision`); si no vino, se explica la regla en vez de adivinarla.
  */
-function ResumenEmision({ clienteNombre, total }: { clienteNombre: string | null; total: number }) {
+function ResumenEmision({
+  tipo,
+  clienteNombre,
+  total,
+}: {
+  tipo: TipoComprobante | null
+  clienteNombre: string | null
+  total: number
+}) {
   const nombre = clienteNombre?.trim()
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-md border bg-muted/30 p-3 text-sm">
       <dt className="text-muted-foreground">Comprobante</dt>
-      <dd>Factura B o C: la elige el sistema según tu condición frente al IVA (Monotributo emite C).</dd>
+      <dd>
+        {tipo
+          ? `Factura ${tipo}`
+          : "Factura B o C: la elige el sistema según tu condición frente al IVA (Monotributo emite C)."}
+      </dd>
       <dt className="text-muted-foreground">Receptor</dt>
       <dd>{nombre ? `${nombre} (consumidor final, sin CUIT ni DNI)` : "Consumidor final"}</dd>
       <dt className="text-muted-foreground">Total</dt>

@@ -51,10 +51,21 @@ const FILA = {
   provider_response: { secreto: true },
 }
 
-/** Responde segun el SELECT recibido: `respuesta(select)` -> {data, error, count}. */
-function mockDb(respuesta: (select: string) => { data: any; error: any; count?: number }) {
+/**
+ * Responde segun el SELECT recibido: `respuesta(select)` -> {data, error, count}.
+ * `credenciales` es lo que devuelve `facturacion_credenciales` (sin dato: error).
+ */
+function mockDb(
+  respuesta: (select: string) => { data: any; error: any; count?: number },
+  credenciales?: { data: any; error: any }
+) {
   const chains: any[] = []
   vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) => {
+    if (table === "facturacion_credenciales" && credenciales) {
+      const chain = createChainMock(credenciales.data, credenciales.error) as any
+      credencialesChains.push(chain)
+      return chain
+    }
     if (table !== "comprobantes_fiscales") {
       return createChainMock(null, { message: `No mock for table: ${table}` }) as any
     }
@@ -89,11 +100,14 @@ const ANULADA = { ...FILA, estado: "anulado", anulado_at: "2026-10-20T13:00:00Z"
 
 const selectDe = (chain: any): string => String(chain.select.mock.calls[0][0])
 
+let credencialesChains: any[] = []
+
 describe("GET /api/facturacion-electronica/comprobantes", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN" })
     vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    credencialesChains = []
   })
 
   it("401 sin sesion", async () => {
@@ -306,6 +320,53 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     const body = await (await get()).json()
     expect(body.items).toHaveLength(1)
     expect(body.puedeEmitir).toBe(false)
+  })
+
+  describe("tipoEmision (letra con la que saldria la factura)", () => {
+    const vacio = () => ({ data: [], error: null, count: 0 })
+
+    it("Monotributo -> C", async () => {
+      mockDb(vacio, { data: { condicion_fiscal: "MONOTRIBUTO" }, error: null })
+      expect((await (await get()).json()).tipoEmision).toBe("C")
+    })
+
+    it("Responsable Inscripto -> B", async () => {
+      mockDb(vacio, { data: { condicion_fiscal: "RESPONSABLE_INSCRIPTO" }, error: null })
+      expect((await (await get()).json()).tipoEmision).toBe("B")
+    })
+
+    it("sin condicion guardada -> C, como emite la ruta de emision", async () => {
+      mockDb(vacio, { data: { condicion_fiscal: null }, error: null })
+      expect((await (await get()).json()).tipoEmision).toBe("C")
+    })
+
+    it("sin credenciales -> null", async () => {
+      mockDb(vacio, { data: null, error: null })
+      expect((await (await get()).json()).tipoEmision).toBeNull()
+    })
+
+    it("si la lectura falla -> null y el listado sigue", async () => {
+      mockDb(vacio, { data: null, error: { message: "boom" } })
+      const res = await get()
+      expect(res.status).toBe(200)
+      expect((await res.json()).tipoEmision).toBeNull()
+    })
+
+    it("solo pide condicion_fiscal de la org: nada de secretos ni otra configuracion", async () => {
+      mockDb(vacio, { data: { condicion_fiscal: "MONOTRIBUTO", cuit: "30000000007", apitoken_enc: "x" }, error: null })
+      const body = await (await get()).json()
+      expect(credencialesChains).toHaveLength(1)
+      expect(credencialesChains[0].select).toHaveBeenCalledWith("condicion_fiscal")
+      expect(credencialesChains[0].eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(JSON.stringify(body)).not.toMatch(/30000000007|apitoken|condicion_fiscal/)
+    })
+
+    it("si no se puede emitir no consulta credenciales y es null", async () => {
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(false)
+      mockDb(vacio, { data: { condicion_fiscal: "MONOTRIBUTO" }, error: null })
+      expect((await (await get()).json()).tipoEmision).toBeNull()
+      expect(credencialesChains).toHaveLength(0)
+    })
   })
 
   it("fail-closed: si canEmitir tira, puedeEmitir=false y el listado sigue", async () => {
