@@ -10,6 +10,7 @@ import {
   rotarRefreshToken,
   revalidarTokenSesion,
   REVALIDAR_CADA_SEG,
+  esSuperadmin,
 } from "@/lib/auth-tokens"
 
 /**
@@ -70,6 +71,8 @@ const usuario = (extra: Fila = {}): Fila => ({
   organization_id: "org-1",
   sucursal_id: "suc-1",
   deleted_at: null,
+  acceso_bloqueado_at: null,
+  es_superadmin: false,
   refresh_token: null,
   refresh_token_expires: null,
   organizations: ORG,
@@ -216,5 +219,46 @@ describe("revalidarTokenSesion", () => {
     expect(await revalidarTokenSesion(imp, AHORA)).toBe(imp)
     expect(await revalidarTokenSesion(vencido, AHORA)).toBe(vencido)
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+})
+
+describe("acceso bloqueado y marca de superadmin (397)", () => {
+  const AHORA = 1_800_000_000
+  const SUPER = "root@stapp.test"
+
+  beforeEach(() => vi.stubEnv("SUPERADMIN_EMAILS", SUPER))
+
+  it("esSuperadmin exige el email en la lista y la fila marcada", () => {
+    expect(esSuperadmin({ email: SUPER, es_superadmin: true })).toBe(true)
+    expect(esSuperadmin({ email: SUPER.toUpperCase(), es_superadmin: true })).toBe(true)
+    // El caso de la escalada: email de la lista en una fila que nadie marcó.
+    expect(esSuperadmin({ email: SUPER, es_superadmin: false })).toBe(false)
+    expect(esSuperadmin({ email: SUPER })).toBe(false)
+    expect(esSuperadmin({ email: "otro@x.test", es_superadmin: true })).toBe(false)
+    expect(esSuperadmin(null)).toBe(false)
+  })
+
+  it("un refresh token de un usuario con acceso bloqueado no valida", async () => {
+    const t = await saveRefreshToken("u-1", true)
+    db.users[0].acceso_bloqueado_at = new Date().toISOString()
+    expect(await validateRefreshToken(t)).toBeNull()
+  })
+
+  it("la revalidación corta la sesión de un usuario bloqueado", async () => {
+    const t = await saveRefreshToken("u-1", true)
+    db.users[0].acceso_bloqueado_at = new Date().toISOString()
+    const out = await revalidarTokenSesion({ id: "u-1", refreshToken: t, revalidarEn: AHORA - 1 } as Record<string, unknown>, AHORA)
+    expect(out.error).toBe("RefreshTokenExpired")
+  })
+
+  it("la revalidación resincroniza isSuperadmin con la marca de la fila", async () => {
+    db.users[0].email = SUPER
+    const t = await saveRefreshToken("u-1", true)
+    // Token emitido con isSuperadmin=true solo por el email (como antes de la 397).
+    const sinMarca = await revalidarTokenSesion({ id: "u-1", refreshToken: t, isSuperadmin: true, revalidarEn: AHORA - 1 }, AHORA)
+    expect(sinMarca.isSuperadmin).toBe(false)
+    db.users[0].es_superadmin = true
+    const conMarca = await revalidarTokenSesion({ id: "u-1", refreshToken: t, isSuperadmin: false, revalidarEn: AHORA - 1 }, AHORA)
+    expect(conMarca.isSuperadmin).toBe(true)
   })
 })

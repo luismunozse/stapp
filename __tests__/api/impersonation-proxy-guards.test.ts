@@ -12,7 +12,8 @@ const { getToken } = vi.hoisted(() => ({ getToken: vi.fn() }))
 
 vi.mock("next-auth/jwt", () => ({ getToken }))
 vi.mock("@/lib/user-status-edge", () => ({
-  getUserDeletedStatus: vi.fn().mockResolvedValue({ kind: "ok", deleted: false }),
+  // 397: el superadmin real tiene la fila marcada (es_superadmin).
+  getUserDeletedStatus: vi.fn().mockResolvedValue({ kind: "ok", deleted: false, bloqueado: false, esSuperadmin: true }),
 }))
 vi.mock("@/lib/rate-limit", () => ({
   rateLimit: vi.fn().mockResolvedValue({ success: true, remaining: 99, reset: 0 }),

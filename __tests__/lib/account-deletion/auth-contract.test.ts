@@ -27,3 +27,18 @@ describe("lib/auth.ts rechaza cuentas dadas de baja", () => {
     expect(count(/id,\s*activo,\s*deleted_at/g)).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe("lib/auth.ts decide el superadmin con la marca de la fila (397)", () => {
+  it("todas las puertas de entrada usan esSuperadmin, ninguna solo el email", () => {
+    expect(count(/const isSuper = esSuperadmin\(/g)).toBe(2)
+    expect(count(/const isGoogleSuper = esSuperadmin\(/g)).toBe(1)
+    expect(count(/isSuper: esSuperadmin\(/g)).toBe(1)
+    expect(count(/const isSuper(?:Google)? = isSuperadminEmail\(/g)).toBe(0)
+  })
+
+  it("los SELECT que no usan * piden es_superadmin y acceso_bloqueado_at", () => {
+    expect(count(/acceso_bloqueado_at,\s*es_superadmin/g)).toBeGreaterThanOrEqual(1)
+    expect(count(/avatar_url,\s*es_superadmin/g)).toBe(1)
+  })
+})
+

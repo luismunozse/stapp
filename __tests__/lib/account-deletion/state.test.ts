@@ -63,3 +63,16 @@ describe("isLoginBlocked", () => {
     expect(isLoginBlocked(live, { activo: false, deleted_at: "x" }, { isSuper: true })).toBe(false)
   })
 })
+
+describe("isLoginBlocked: acceso bloqueado desde el panel (397)", () => {
+  const ORG_OK = { activo: true, deleted_at: null }
+  it("bloquea aunque el taller esté activo, también a un superadmin", () => {
+    const u = { deleted_at: null, acceso_bloqueado_at: "2026-11-10T00:00:00Z" }
+    expect(isLoginBlocked(u, ORG_OK, { isSuper: false })).toBe(true)
+    expect(isLoginBlocked(u, null, { isSuper: true })).toBe(true)
+  })
+  it("sin bloqueo no cambia nada", () => {
+    expect(isLoginBlocked({ deleted_at: null, acceso_bloqueado_at: null }, ORG_OK, { isSuper: false })).toBe(false)
+  })
+})
+

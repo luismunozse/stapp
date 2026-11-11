@@ -25,6 +25,7 @@ import { isUserDeleted, isLoginBlocked } from "@/lib/account-deletion/state"
 import { sessionCookieDomain, sessionCookieName } from "@/lib/session-cookie"
 import {
   isSuperadminEmail,
+  esSuperadmin,
   saveRefreshToken,
   validateRefreshToken,
   invalidateRefreshToken,
@@ -99,6 +100,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               organization_id,
               sucursal_id,
               avatar_url,
+              es_superadmin,
               organizations (
                 id,
                 activo,
@@ -113,7 +115,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           // Verificar si es superadmin
-          const isSuper = isSuperadminEmail(fullUser.email)
+          const isSuper = esSuperadmin(fullUser)
 
           // Verificar organización activa (no requerido para superadmin)
           const orgs = fullUser.organizations as unknown
@@ -188,7 +190,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           // Verificar si es superadmin
-          const isGoogleSuper = isSuperadminEmail(gUser.email)
+          const isGoogleSuper = esSuperadmin(gUser)
 
           // Verificar que la organización esté activa
           const gOrg = gUser.organizations as { id: string; activo: boolean; deleted_at?: string | null } | null
@@ -307,8 +309,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new AuthSigninError("EMAIL_NOT_VERIFIED")
         }
 
-        // Verificar si es superadmin
-        const isSuper = isSuperadminEmail(user.email)
+        // Verificar si es superadmin (email en la lista + fila marcada, 397)
+        const isSuper = esSuperadmin(user)
 
         // Verificar que la organización esté activa (no requerido para superadmin)
         const organization = user.organizations as { id: string; activo: boolean; deleted_at?: string | null } | null

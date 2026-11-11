@@ -60,6 +60,8 @@ export interface OrganizationUser {
   email: string
   rol: UserRole
   email_verified: boolean
+  /** Acceso bloqueado desde el panel (397). Null = puede entrar. */
+  acceso_bloqueado_at: string | null
   created_at: string
 }
 
