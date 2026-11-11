@@ -357,8 +357,9 @@ const CASOS: Caso[] = [
     llamar: (id) => reingreso.POST(con("POST", id, { problemaReportado: "Volvió a fallar" }), ctx(id)),
     noEncontrada: "Orden original no encontrada",
     sinTecnico: true,
-    usaPractica: true,
-    control: { orden: "o-a-reparada", status: 201, body: expect.objectContaining({ numeroOrden: 1, codigoOrden: "CEL-001" }) },
+    // Fase 2 de garantías: el atajo del menú acepta un reclamo, y aceptar es solo del ADMIN.
+    // El VENDEDOR de la sucursal llega a la orden (alcance) y recibe el 403 del rol, sin escribir.
+    control: { orden: "o-a-reparada", status: 403, body: expect.objectContaining({ code: "SOLO_ADMIN" }) },
   },
   {
     nombre: "repuestos POST",

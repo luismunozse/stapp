@@ -234,6 +234,7 @@ export default async function DashboardPage() {
     itemsBajoStockResult,
     ingresosMensualesResult,
     garantiasPorVencer,
+    reclamosAbiertos,
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
@@ -537,6 +538,7 @@ export default async function DashboardPage() {
         deudaTotal: totalDeudaPendiente,
         slaVencidasCount: ordenesFechaVencida.length,
         garantiasCount: garantiasPorVencer.total,
+        reclamosAbiertosCount: reclamosAbiertos ?? 0,
         stockBajoCount: itemsBajoStock,
       })
     : []

@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
+import { esBloqueoPorReclamos, MENSAJE_VENTA_CON_RECLAMOS } from "@/lib/garantias/errores"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getIvaGeneral } from "@/lib/countries"
 import { z } from "zod"
@@ -372,6 +373,9 @@ export async function PUT(
       })
 
       if (rpcError) {
+        if (esBloqueoPorReclamos(rpcError)) {
+          return NextResponse.json({ error: `No se puede editar: ${MENSAJE_VENTA_CON_RECLAMOS}` }, { status: 409 })
+        }
         if (rpcError.code === "P0021") {
           return NextResponse.json(
             { error: `No se puede editar: ${mensajeBloqueoSql(rpcError.message)}` },
@@ -566,6 +570,9 @@ export async function DELETE(
       .eq("id", id)
 
     if (deleteError) {
+      if (esBloqueoPorReclamos(deleteError)) {
+        return NextResponse.json({ error: `No se puede eliminar: ${MENSAJE_VENTA_CON_RECLAMOS}` }, { status: 409 })
+      }
       if (deleteError.code === "23503") {
         return NextResponse.json(
           { error: "No se puede eliminar: la venta tiene comprobantes asociados." },

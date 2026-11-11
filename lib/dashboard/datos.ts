@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { aplicarAlcanceOrdenes, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
-import { resumenGarantiasPorVencer } from "@/lib/garantias/listado"
+import { contarReclamosAbiertos, resumenGarantiasPorVencer } from "@/lib/garantias/listado"
 
 /**
  * Dashboard queries, uncached (the page wraps this in unstable_cache; the
@@ -42,6 +42,13 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
   const primerDiaMesAnterior = new Date(primerDiaMes)
   primerDiaMesAnterior.setMonth(primerDiaMesAnterior.getMonth() - 1)
   const ultimoDiaMesAnterior = new Date(primerDiaMes.getTime() - 1)
+
+  // "Reclamos abiertos" del strip del ADMIN: el total de la pestaña Reclamos
+  // abiertos de /garantias (misma consulta). Arranca ya y se espera al final.
+  const reclamosAbiertosQ = contarReclamosAbiertos(organizationId, alcance).catch((err) => {
+    console.error("Dashboard: no se pudieron contar los reclamos abiertos:", err)
+    return 0
+  })
 
   const [
     totalOrdenesResult,
@@ -198,6 +205,7 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
       .eq("organization_id", organizationId)
       .lte("created_at", ultimoDiaMesAnterior.toISOString()),
   ])
+  const reclamosAbiertos = await reclamosAbiertosQ
 
   return {
     totalOrdenesResult,
@@ -206,6 +214,7 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     itemsBajoStockResult,
     ingresosMensualesResult,
     garantiasPorVencer,
+    reclamosAbiertos,
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,

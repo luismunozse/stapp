@@ -13,7 +13,7 @@ export async function queueNotification(params: {
   ordenId?: string
   garantiaId?: string
   clienteId: string
-  tipo: "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO"
+  tipo: "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO" | "REINGRESO_GARANTIA"
   context: {
     organizationName: string
     organizationSlug?: string

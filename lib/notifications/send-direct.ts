@@ -4,7 +4,12 @@ import { formatDateValue } from "@/lib/timezone"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 import { escapeHtml } from "@/lib/escape-html"
 
-type NotificationType = "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO"
+type NotificationType =
+  | "CAMBIO_ESTADO"
+  | "PRESUPUESTO_DEFINIDO"
+  | "GARANTIA_CREADA"
+  | "RECORDATORIO_RETIRO"
+  | "REINGRESO_GARANTIA"
 
 interface NotificationParams {
   organizationId: string
@@ -309,6 +314,12 @@ function generateInAppContent(
         body: `${context.cliente.nombre} - ${context.garantia?.diasValidez} dias`,
         icon: "shield",
       }
+    case "REINGRESO_GARANTIA":
+      return {
+        title: `Re-ingreso por garantía - Orden #${context.orden?.numeroOrden}`,
+        body: `${context.cliente.nombre} - ${context.orden?.dispositivo}`,
+        icon: "shield",
+      }
     case "RECORDATORIO_RETIRO":
       return {
         title: `Recordatorio de retiro - Orden #${context.orden?.numeroOrden}`,
@@ -388,6 +399,22 @@ export function generateEmailContent(
               <strong>Vencimiento:</strong> ${fechaVencimiento}
             </p>
             <p>Guarda este correo como comprobante de tu garantía.</p>
+            <p>Gracias por confiar en ${orgName}.</p>
+          </div>
+        `,
+      }
+    case "REINGRESO_GARANTIA":
+      return {
+        subject: `Orden #${context.orden?.numeroOrden} - Re-ingreso por garantía`,
+        html: `
+          <div style="${baseStyle}">
+            <h2>Hola ${nombre}</h2>
+            <p>Recibimos tu reclamo de garantía y lo vamos a revisar sin costo.</p>
+            <p>
+              <strong>Orden:</strong> #${context.orden?.numeroOrden}<br>
+              <strong>Equipo:</strong> ${dispositivo}
+            </p>
+            <p>Te avisamos cuando esté listo.</p>
             <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,

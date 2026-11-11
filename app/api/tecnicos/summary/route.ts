@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reingresosPorTecnicoOriginal } from "@/lib/tecnicos/reingresos"
 
 export async function GET(request: Request) {
   try {
@@ -16,13 +17,20 @@ export async function GET(request: Request) {
     const { data: ordenes, error: dbError } = await supabaseAdmin
       .from("ordenes_servicio")
       .select(
-        "id, tecnico_id, estado, fecha_ingreso, fecha_completado, fecha_prometida, costo_final, es_reingreso"
+        "id, tecnico_id, estado, fecha_ingreso, fecha_completado, fecha_prometida, costo_final"
       )
       .eq("organization_id", organizationId!)
       .not("tecnico_id", "is", null)
       .gte("fecha_ingreso", desdeISO)
 
     if (dbError) throw dbError
+
+    // Los re-ingresos cuentan contra el técnico de la orden ORIGINAL, no contra
+    // quien atiende el re-ingreso (misma definición que comisiones, ver lib).
+    const reingresosPorTecnico = await reingresosPorTecnicoOriginal({
+      organizationId: organizationId!,
+      desdeISO,
+    })
 
     type Acc = {
       ordenesPeriodo: number
@@ -35,21 +43,21 @@ export async function GET(request: Request) {
     }
     const map = new Map<string, Acc>()
     const now = Date.now()
+    const nuevo = (): Acc => ({
+      ordenesPeriodo: 0,
+      completadas: 0,
+      reingresos: 0,
+      vencidas: 0,
+      conFechaPrometida: 0,
+      ingresos: 0,
+      tats: [],
+    })
 
     for (const o of ordenes || []) {
       const id = (o as any).tecnico_id as string | null
       if (!id) continue
-      const acc = map.get(id) || {
-        ordenesPeriodo: 0,
-        completadas: 0,
-        reingresos: 0,
-        vencidas: 0,
-        conFechaPrometida: 0,
-        ingresos: 0,
-        tats: [],
-      }
+      const acc = map.get(id) || nuevo()
       acc.ordenesPeriodo++
-      if ((o as any).es_reingreso) acc.reingresos++
       const esCompletada = ["REPARADO", "ENTREGADO"].includes((o as any).estado)
       if (esCompletada) {
         acc.completadas++
@@ -72,6 +80,12 @@ export async function GET(request: Request) {
           : now > due && !["CANCELADO", "SIN_REPARACION"].includes(estado)
         if (vencida) acc.vencidas++
       }
+      map.set(id, acc)
+    }
+
+    for (const [id, n] of reingresosPorTecnico) {
+      const acc = map.get(id) || nuevo()
+      acc.reingresos = n
       map.set(id, acc)
     }
 
