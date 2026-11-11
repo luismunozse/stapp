@@ -2,6 +2,8 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue } from "@/lib/timezone"
 import { EstadoOrden, NotificationContext, NotificationType } from "./types"
 import { resolveTerminologia, t } from "@/lib/terminologia"
+import { escapeHtml } from "@/lib/escape-html"
+import { detalleGarantiaCliente, venceTextoCliente } from "@/lib/garantias/aviso-texto"
 
 const baseStyles = `
   font-family: Arial, sans-serif;
@@ -580,11 +582,23 @@ export function generateReingresoGarantiaEmail(ctx: NotificationContext) {
     `Re-ingreso por garantia - Orden #${ctx.orden!.numeroOrden}`,
     `Lamentamos que tenga inconvenientes con su ${ctx.orden!.dispositivo}.`,
     `<div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
-      <p style="margin: 0;"><strong>Orden original:</strong> #${ctx.orden!.numeroOrden}</p>
+      <p style="margin: 0;"><strong>Orden:</strong> #${ctx.orden!.numeroOrden}</p>
       <p style="margin: 8px 0 0 0;"><strong>Garantia valida hasta:</strong> ${formatDate(ctx.garantia!.fechaVencimiento)}</p>
     </div>
     <p>Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.</p>`,
     { text: "Su reparacion esta cubierta por garantia", color: "#166534", bgColor: "#dcfce7" }
+  )
+}
+
+export function generateGarantiaPorVencerEmail(ctx: NotificationContext) {
+  const fecha = ctx.garantia ? formatDateValue(ctx.garantia.fechaVencimiento, ctx.zonaHoraria) : ""
+  const detalle = escapeHtml(detalleGarantiaCliente(ctx.garantia, ctx.orden))
+  return generateGenericEmail(
+    ctx,
+    `Tu garantía vence el ${fecha}`,
+    `Te escribimos para avisarte que la garantía de ${detalle} ${escapeHtml(venceTextoCliente(ctx.garantia?.diasRestantes))}.`,
+    `<p>Si notás alguna falla, acercate antes de esa fecha con el equipo y tu comprobante para que lo revisemos sin cargo.</p>`,
+    { text: `Vigente hasta el ${escapeHtml(fecha)}`, color: "#92400e", bgColor: "#fef3c7" }
   )
 }
 
@@ -655,6 +669,8 @@ export function generateEmailByType(
       return generateAvisoDemoraEmail(ctx)
     case "REINGRESO_GARANTIA":
       return generateReingresoGarantiaEmail(ctx)
+    case "GARANTIA_POR_VENCER":
+      return generateGarantiaPorVencerEmail(ctx)
     case "CLIENTE_INACTIVO":
       return generateClienteInactivoEmail(ctx)
     case "SEGUIMIENTO_PRESUPUESTO_RECHAZADO":

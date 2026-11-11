@@ -4,6 +4,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
+import { leerConfigGarantias } from "@/lib/garantias/config-org"
 
 export async function GET(
   request: Request,
@@ -42,14 +43,29 @@ export async function GET(
       return NextResponse.json({ error: "La orden no tiene datos de entrega" }, { status: 400 })
     }
 
-    // Obtener datos de la organizacion
-    const { data: org } = await supabaseAdmin
-      .from("organizations")
-      .select("nombre, telefono, direccion, ciudad, provincia, codigo_postal, logo_url, moneda, zona_horaria")
-      .eq("id", organizationId!)
-      .single()
-
     const esRetiroSinReparacion = orden.estado === "ENTREGADO_SIN_REPARACION"
+
+    // Datos de la organización, su configuración de garantías (términos, 402)
+    // y la garantía de la orden. Un retiro sin reparación no lleva garantía.
+    const [{ data: org }, configGarantias, { data: garantia }] = await Promise.all([
+      supabaseAdmin
+        .from("organizations")
+        .select("nombre, telefono, direccion, ciudad, provincia, codigo_postal, logo_url, moneda, zona_horaria")
+        .eq("id", organizationId!)
+        .single(),
+      leerConfigGarantias(organizationId!),
+      esRetiroSinReparacion
+        ? Promise.resolve({ data: null })
+        : supabaseAdmin
+            .from("garantias")
+            .select("dias_validez, fecha_vencimiento, notas, estado")
+            .eq("orden_id", orden.id)
+            .eq("organization_id", organizationId!)
+            .neq("estado", "ANULADA")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+    ])
 
     const cliente = orden.clientes as any
     const entregadoPor = orden.users as any
@@ -86,6 +102,14 @@ export async function GET(
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
       esRetiroSinReparacion,
+      garantia: garantia
+        ? {
+            dias: garantia.dias_validez,
+            fechaVencimiento: new Date(garantia.fecha_vencimiento),
+            notas: garantia.notas,
+          }
+        : null,
+      terminosGarantia: esRetiroSinReparacion ? null : configGarantias.terminos,
     })
 
     const codigoDisplay = orden.codigo_orden || `${orden.numero_orden}`

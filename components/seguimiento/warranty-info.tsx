@@ -1,22 +1,19 @@
 "use client"
 
-import { Shield, Calendar, Clock, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Shield, Calendar, Clock, CheckCircle2, AlertTriangle, MessageSquareWarning, XCircle, Ban, type LucideIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { EstadoGarantiaPill } from "@/components/garantias/estado-garantia-pill"
 import { cn } from "@/lib/utils"
+import type { EstadoGarantia } from "@/lib/garantias/estado"
+import type { GarantiaPublica, FaseReclamoPublica } from "@/lib/garantias/seguimiento-publico"
 
 interface WarrantyInfoProps {
-  garantia: {
-    diasValidez: number
-    fechaInicio: string
-    fechaVencimiento: string
-    estado: string
-    diasRestantes: number
-    notas: string | null
-  }
+  garantia: GarantiaPublica
   timezone?: string
 }
 
-function formatDate(dateStr: string, timezone?: string) {
+function formatDate(dateStr: string | null, timezone?: string) {
+  if (!dateStr) return "—"
   try {
     return new Intl.DateTimeFormat("es-AR", {
       day: "2-digit",
@@ -29,83 +26,81 @@ function formatDate(dateStr: string, timezone?: string) {
   }
 }
 
+/** Tono del recuadro según el estado: tokens semánticos, con modo oscuro. */
+const TONO: Record<EstadoGarantia, { caja: string; icono: string; icon: LucideIcon; texto: string }> = {
+  VIGENTE: { caja: "border-success/30 bg-success-50 dark:bg-success/10", icono: "text-success-700 dark:text-success-400", icon: CheckCircle2, texto: "Tu garantía está vigente" },
+  POR_VENCER: { caja: "border-warning/30 bg-warning-50 dark:bg-warning/10", icono: "text-warning-700 dark:text-warning-500", icon: AlertTriangle, texto: "Tu garantía está por vencer" },
+  RECLAMADA: { caja: "border-info/30 bg-info-50 dark:bg-info/10", icono: "text-info-700 dark:text-info-400", icon: MessageSquareWarning, texto: "Tenés un reclamo de garantía en curso" },
+  VENCIDA: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive", icon: XCircle, texto: "Tu garantía venció" },
+  ANULADA: { caja: "border-border bg-muted", icono: "text-muted-foreground", icon: Ban, texto: "Esta garantía fue anulada" },
+}
+
+const TONO_RECLAMO: Record<FaseReclamoPublica, { caja: string; icono: string; icon: LucideIcon }> = {
+  EN_REVISION: { caja: "border-info/30 bg-info-50 dark:bg-info/10", icono: "text-info-700 dark:text-info-400", icon: Clock },
+  ACEPTADO: { caja: "border-success/30 bg-success-50 dark:bg-success/10", icono: "text-success-700 dark:text-success-400", icon: CheckCircle2 },
+  RESUELTO: { caja: "border-border bg-muted", icono: "text-muted-foreground", icon: CheckCircle2 },
+  RECHAZADO: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive", icon: XCircle },
+}
+
 export function WarrantyInfo({ garantia, timezone }: WarrantyInfoProps) {
-  const isActive = garantia.estado === "ACTIVA"
-  const isExpiringSoon = isActive && garantia.diasRestantes <= 7
-  const isExpired = garantia.estado === "VENCIDA" || garantia.diasRestantes <= 0
+  const tono = TONO[garantia.estado] ?? TONO.VIGENTE
+  const IconoEstado = tono.icon
+  const corriendo = garantia.estado === "VIGENTE" || garantia.estado === "POR_VENCER" || garantia.estado === "RECLAMADA"
+  const reclamo = garantia.reclamo
+  const tonoReclamo = reclamo ? TONO_RECLAMO[reclamo.fase] : null
+  const IconoReclamo = tonoReclamo?.icon
 
   return (
-    <Card
-      className={cn(
-        "border",
-        isActive && !isExpiringSoon && "border-green-200 dark:border-green-800",
-        isExpiringSoon && "border-amber-200 dark:border-amber-800",
-        isExpired && "border-red-200 dark:border-red-800"
-      )}
-    >
+    <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Shield
-            className={cn(
-              "h-5 w-5",
-              isActive && !isExpiringSoon && "text-green-600",
-              isExpiringSoon && "text-amber-600",
-              isExpired && "text-red-600"
-            )}
-          />
-          Garantía de reparación
+        <CardTitle className="flex items-center justify-between gap-2 text-lg">
+          <span className="flex items-center gap-2">
+            <Shield className={cn("h-5 w-5", tono.icono)} aria-hidden />
+            Garantía de reparación
+          </span>
+          <EstadoGarantiaPill estado={garantia.estado} />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div
-          className={cn(
-            "rounded-lg p-4",
-            isActive && !isExpiringSoon && "bg-green-50 dark:bg-green-950/50",
-            isExpiringSoon && "bg-amber-50 dark:bg-amber-950/50",
-            isExpired && "bg-red-50 dark:bg-red-950/50"
-          )}
-        >
-          {isActive && !isExpiringSoon && (
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="font-medium text-green-700 dark:text-green-300">
-                Garantía vigente
-              </span>
+        {reclamo && tonoReclamo && IconoReclamo && (
+          <div className={cn("rounded-lg border p-4", tonoReclamo.caja)} role="status">
+            <div className="flex items-start gap-2">
+              <IconoReclamo className={cn("h-5 w-5 mt-0.5 shrink-0", tonoReclamo.icono)} aria-hidden />
+              <div className="space-y-1 min-w-0">
+                <p className="font-medium text-foreground break-words">{reclamo.titulo}</p>
+                {reclamo.detalle && <p className="text-sm text-muted-foreground">{reclamo.detalle}</p>}
+                {reclamo.fecha && (
+                  <p className="text-xs text-muted-foreground">Reclamo del {formatDate(reclamo.fecha, timezone)}</p>
+                )}
+              </div>
             </div>
-          )}
-          {isExpiringSoon && (
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-              <span className="font-medium text-amber-700 dark:text-amber-300">
-                Garantía por vencer
-              </span>
-            </div>
-          )}
-          {isExpired && (
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              <span className="font-medium text-red-700 dark:text-red-300">
-                Garantía vencida
-              </span>
-            </div>
-          )}
+          </div>
+        )}
+
+        <div className={cn("rounded-lg border p-4", tono.caja)}>
+          <div className="flex items-center gap-2 mb-2">
+            <IconoEstado className={cn("h-5 w-5", tono.icono)} aria-hidden />
+            <span className="font-medium text-foreground">{tono.texto}</span>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <Clock className="h-4 w-4 text-muted-foreground" aria-hidden />
               <div>
                 <p className="text-muted-foreground">Duración</p>
                 <p className="font-medium">{garantia.diasValidez} días</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-4 w-4 text-muted-foreground" aria-hidden />
               <div>
-                <p className="text-muted-foreground">
-                  {isActive ? "Días restantes" : "Venció"}
-                </p>
+                <p className="text-muted-foreground">{corriendo ? "Días restantes" : "Venció"}</p>
                 <p className="font-medium">
-                  {isActive ? `${garantia.diasRestantes} días` : formatDate(garantia.fechaVencimiento, timezone)}
+                  {corriendo
+                    ? garantia.diasRestantes === 0
+                      ? "Vence hoy"
+                      : `${garantia.diasRestantes} ${garantia.diasRestantes === 1 ? "día" : "días"}`
+                    : formatDate(garantia.fechaVencimiento, timezone)}
                 </p>
               </div>
             </div>
@@ -117,8 +112,13 @@ export function WarrantyInfo({ garantia, timezone }: WarrantyInfoProps) {
           </div>
         </div>
 
-        {garantia.notas && (
-          <p className="text-sm text-muted-foreground">{garantia.notas}</p>
+        {garantia.notas && <p className="text-sm text-muted-foreground whitespace-pre-line">{garantia.notas}</p>}
+
+        {garantia.terminos && (
+          <details className="rounded-lg border p-3 text-sm">
+            <summary className="cursor-pointer font-medium text-foreground">Términos de garantía</summary>
+            <p className="mt-2 text-muted-foreground whitespace-pre-line">{garantia.terminos}</p>
+          </details>
         )}
       </CardContent>
     </Card>

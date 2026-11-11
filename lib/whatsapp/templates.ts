@@ -301,8 +301,25 @@ export const NOTIFICATION_TEMPLATES: Record<string, WaTemplateConfig> = {
         ],
       },
     ],
+    // numeroOrden es la orden NUEVA (la del re-ingreso): el aviso sale al aceptar el reclamo.
     getFallbackText: (ctx) =>
-      `Hola ${ctx.clienteNombre}! Su ${ctx.dispositivo} esta cubierto por garantia. Puede traerlo para revision sin costo adicional (Orden #${ctx.numeroOrden}).\n\n${ctx.organizationName}`,
+      `Hola ${ctx.clienteNombre}! Aceptamos tu reclamo de garantía: tu ${ctx.dispositivo} reingresó y lo revisamos sin costo (orden de re-ingreso #${ctx.numeroOrden}).\n\n${ctx.organizationName}`,
+  },
+
+  GARANTIA_POR_VENCER: {
+    templateName: "garantia_por_vencer",
+    getComponents: (ctx) => [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: String(ctx.clienteNombre || "") },
+          { type: "text", text: String(ctx.garantiaDetalle || "") },
+          { type: "text", text: String(ctx.fechaVencimiento || "") },
+        ],
+      },
+    ],
+    getFallbackText: (ctx) =>
+      `Hola ${ctx.clienteNombre}! La garantía de ${ctx.garantiaDetalle} vence el ${ctx.fechaVencimiento}. Si notás alguna falla, acercate antes de esa fecha para que lo revisemos sin cargo.\n\n${ctx.organizationName}`,
   },
 
   // --- Recuperación ---

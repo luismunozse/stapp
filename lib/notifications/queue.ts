@@ -13,7 +13,13 @@ export async function queueNotification(params: {
   ordenId?: string
   garantiaId?: string
   clienteId: string
-  tipo: "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO" | "REINGRESO_GARANTIA"
+  tipo:
+    | "CAMBIO_ESTADO"
+    | "PRESUPUESTO_DEFINIDO"
+    | "GARANTIA_CREADA"
+    | "RECORDATORIO_RETIRO"
+    | "REINGRESO_GARANTIA"
+    | "GARANTIA_POR_VENCER"
   context: {
     organizationName: string
     organizationSlug?: string
@@ -41,6 +47,11 @@ export async function queueNotification(params: {
       id: string
       diasValidez: number
       fechaVencimiento: string
+      /** Para GARANTIA_POR_VENCER: de qué es la garantía y cuánto le queda. */
+      origen?: "REPARACION" | "VENTA"
+      descripcion?: string | null
+      numeroGarantia?: string | null
+      diasRestantes?: number
     }
     pago?: {
       monto: number

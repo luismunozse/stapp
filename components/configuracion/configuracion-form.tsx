@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
 import { ComisionesConfig } from "@/components/configuracion/comisiones-config"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
+import { GarantiasConfig, type GarantiasConfigValor } from "@/components/configuracion/garantias-config"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
@@ -93,6 +94,15 @@ export function ConfiguracionForm({
   const [ordenFormatoPapel, setOrdenFormatoPapel] = useState<OrdenPapel>("A4")
   const [comprobanteTerminos, setComprobanteTerminos] = useState("")
   const [garantiaDiasDefault, setGarantiaDiasDefault] = useState("30")
+  // Términos, ventana "por vencer" y aviso (402): van a /api/configuracion/garantias.
+  const [garantiasConfig, setGarantiasConfig] = useState<GarantiasConfigValor>({
+    terminos: "",
+    ventanaPorVencer: "7",
+    avisoVencimiento: false,
+  })
+  // Lo último que confirmó el servidor (JSON). null = no se pudo leer: no se
+  // guarda (pisaría lo guardado con los valores de arriba). Igual = sin cambios.
+  const garantiasConfigGuardada = useRef<string | null>(null)
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
@@ -170,12 +180,55 @@ export function ConfiguracionForm({
 
   const showSaveBar = !loading && FORM_TABS.includes(tab)
 
+  const fetchGarantiasConfig = async () => {
+    try {
+      const res = await fetch("/api/configuracion/garantias")
+      if (!res.ok) return
+      const data = await res.json()
+      const valor: GarantiasConfigValor = {
+        terminos: data.terminos ?? "",
+        ventanaPorVencer: String(data.ventanaPorVencer ?? 7),
+        avisoVencimiento: data.avisoVencimiento === true,
+      }
+      setGarantiasConfig(valor)
+      garantiasConfigGuardada.current = JSON.stringify(valor)
+    } catch (error) {
+      console.error("Error fetching garantías config:", error)
+    }
+  }
+
+  /** Guarda la configuración de garantías. Devuelve el error para mostrar, o null. */
+  const saveGarantiasConfig = async (): Promise<string | null> => {
+    if (garantiasConfigGuardada.current === null) return null
+    if (garantiasConfigGuardada.current === JSON.stringify(garantiasConfig)) return null
+    try {
+      const res = await fetch("/api/configuracion/garantias", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          terminos: garantiasConfig.terminos,
+          ventanaPorVencer: Number(garantiasConfig.ventanaPorVencer.trim() || "7"),
+          avisoVencimiento: garantiasConfig.avisoVencimiento,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        return data?.error || "No se pudo guardar la configuración de garantías"
+      }
+      return null
+    } catch {
+      return "No se pudo guardar la configuración de garantías"
+    }
+  }
+
   useEffect(() => {
     fetchConfig()
   }, [])
 
   const fetchConfig = async () => {
     const epochAlIniciar = facturacionEpoch.current
+    // Términos, ventana y aviso de garantías: endpoint propio, en paralelo.
+    void fetchGarantiasConfig()
     try {
       const res = await fetch("/api/configuracion")
       if (res.ok) {
@@ -377,7 +430,12 @@ export function ConfiguracionForm({
       })
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Configuración guardada exitosamente" })
+        const errorGarantias = await saveGarantiasConfig()
+        if (errorGarantias) {
+          setMessage({ type: "error", text: errorGarantias })
+        } else {
+          setMessage({ type: "success", text: "Configuración guardada exitosamente" })
+        }
         fetchConfig()
         refreshConfig()
         // Notificar al sidebar que las features de la org cambiaron
@@ -1189,6 +1247,8 @@ export function ConfiguracionForm({
               </div>
             </CardContent>
           </Card>
+
+          <GarantiasConfig valor={garantiasConfig} onChange={setGarantiasConfig} allowEdit={allowEdit} />
 
           <Card>
             <CardHeader className="p-4 sm:p-6">

@@ -880,7 +880,7 @@ Su reparacion esta cubierta por garantia (valida hasta ${formatDateValue(ctx.gar
 
 Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.
 
-Orden original #${ctx.orden!.numeroOrden}${appendOrdenLinks(links)}
+Orden #${ctx.orden!.numeroOrden}${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }

@@ -12,6 +12,7 @@ import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, 
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
+import { bloquesTerminosGarantia } from "@/lib/garantias/config"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -2868,6 +2869,80 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
 // CERTIFICADO DE GARANTIA DE VENTA
 // ========================================
 
+
+// ========================================
+// TÉRMINOS DE GARANTÍA (comprobante de entrega y certificado de venta)
+// ========================================
+
+/**
+ * Corta un texto en líneas que entran en `maxW`. Respeta los saltos de línea
+ * del texto (los términos se escriben en renglones) y parte palabras que solas
+ * no entran.
+ */
+export function wrapPdfTexto(texto: string, font: PDFFont, size: number, maxW: number): string[] {
+  const salida: string[] = []
+  for (const parrafo of texto.replace(/\r\n?/g, "\n").split("\n")) {
+    const limpio = parrafo.replace(/\s+/g, " ").trim()
+    if (!limpio) continue
+    let linea = ""
+    for (let palabra of limpio.split(" ")) {
+      while (font.widthOfTextAtSize(palabra, size) > maxW && palabra.length > 1) {
+        if (linea) {
+          salida.push(linea)
+          linea = ""
+        }
+        let corte = palabra.length - 1
+        while (corte > 1 && font.widthOfTextAtSize(palabra.slice(0, corte), size) > maxW) corte--
+        salida.push(palabra.slice(0, corte))
+        palabra = palabra.slice(corte)
+      }
+      const tentativa = linea ? `${linea} ${palabra}` : palabra
+      if (linea && font.widthOfTextAtSize(tentativa, size) > maxW) {
+        salida.push(linea)
+        linea = palabra
+      } else {
+        linea = tentativa
+      }
+    }
+    if (linea) salida.push(linea)
+  }
+  return salida
+}
+
+export interface LineaTerminosPdf {
+  texto: string
+  titulo: boolean
+}
+
+/**
+ * Las condiciones de la entrega y los términos de la org en líneas para el
+ * PDF, con un tope de líneas (el comprobante es de una sola hoja). Si no entra
+ * todo, la última línea termina en "..." y remite al taller.
+ */
+export function lineasTerminosGarantia(
+  condicionesEntrega: string | null | undefined,
+  terminosOrg: string | null | undefined,
+  font: PDFFont,
+  size: number,
+  maxW: number,
+  maxLineas: number
+): LineaTerminosPdf[] {
+  const lineas: LineaTerminosPdf[] = []
+  for (const b of bloquesTerminosGarantia(condicionesEntrega, terminosOrg)) {
+    lineas.push({ texto: b.titulo.toUpperCase(), titulo: true })
+    for (const l of wrapPdfTexto(b.texto, font, size, maxW)) lineas.push({ texto: l, titulo: false })
+  }
+  if (maxLineas <= 0) return []
+  if (lineas.length <= maxLineas) return lineas
+  const recortadas = lineas.slice(0, maxLineas)
+  const ultima = recortadas[recortadas.length - 1]
+  const aviso = "... (texto completo en el taller)"
+  let texto = ultima.titulo ? aviso.slice(4) : ultima.texto
+  while (texto && font.widthOfTextAtSize(`${texto} ${aviso}`, size) > maxW) texto = texto.slice(0, -1)
+  recortadas[recortadas.length - 1] = { texto: ultima.titulo ? aviso.slice(4) : `${texto.trimEnd()} ${aviso}`, titulo: false }
+  return recortadas
+}
+
 interface GarantiaVentaPDFData {
   numeroGarantia: string
   venta: {
@@ -2895,6 +2970,8 @@ interface GarantiaVentaPDFData {
   firmaEncargado?: string | null
   firmaEncargadoMime?: string | null
   nombreEncargado?: string | null
+  /** Términos de garantía de la org (402). Si hay, reemplazan las condiciones genéricas. */
+  terminosGarantia?: string | null
 }
 
 export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Promise<Buffer> {
@@ -3097,19 +3174,45 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   y -= 22
 
   // === CONDICIONES DE LA GARANTÍA (sin caja, viñetas de texto) ===
-  drawSectionLabel(page, helveticaBold, "CONDICIONES DE LA GARANTÍA", margin + 10, y)
+  // Con términos propios de la org (402) se imprimen esos; si no, las
+  // condiciones genéricas de siempre.
+  const terminosOrgLineas = lineasTerminosGarantia(
+    null,
+    data.terminosGarantia,
+    helvetica,
+    TYPE.small,
+    contentWidth - 20,
+    // Lo que entra entre acá y la firma (75) + el pie (60).
+    Math.floor((y - 18 - 75 - 8 - 60) / 11)
+  ).filter((l) => !l.titulo)
+
+  drawSectionLabel(
+    page,
+    helveticaBold,
+    terminosOrgLineas.length > 0 ? "TÉRMINOS DE GARANTÍA" : "CONDICIONES DE LA GARANTÍA",
+    margin + 10,
+    y
+  )
   y -= 18
 
-  const condiciones = [
-    "Esta garantia cubre defectos de fabricacion del producto.",
-    "No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
-    "Para hacer efectiva la garantia, presente este certificado y el producto.",
-    "La garantia no es transferible. El producto sera reparado o reemplazado segun disponibilidad.",
-  ]
+  if (terminosOrgLineas.length > 0) {
+    for (const linea of terminosOrgLineas) {
+      page.drawText(linea.texto, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.label })
+      y -= 11
+    }
+    y -= 2
+  } else {
+    const condiciones = [
+      "Esta garantia cubre defectos de fabricacion del producto.",
+      "No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
+      "Para hacer efectiva la garantia, presente este certificado y el producto.",
+      "La garantia no es transferible. El producto sera reparado o reemplazado segun disponibilidad.",
+    ]
 
-  for (const condicion of condiciones) {
-    page.drawText(`• ${condicion}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 13
+    for (const condicion of condiciones) {
+      page.drawText(`• ${condicion}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.label })
+      y -= 13
+    }
   }
 
   // === FIRMA DEL ENCARGADO (caja con contorno, mismo tratamiento que las firmas de entrega) ===
@@ -3200,6 +3303,10 @@ interface ComprobanteEntregaPDFData {
   moneda?: string
   zonaHoraria?: string
   esRetiroSinReparacion?: boolean
+  /** Garantía de la orden; sin ella no se imprime el bloque de días y vencimiento. */
+  garantia?: { dias: number; fechaVencimiento: Date; notas?: string | null } | null
+  /** Términos de garantía de la org (402). Se imprimen después de las condiciones de la entrega. */
+  terminosGarantia?: string | null
 }
 
 export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFData): Promise<Buffer> {
@@ -3397,6 +3504,48 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     y -= 12
   }
 
+  // === GARANTÍA (días, vencimiento, condiciones de la entrega y términos de la org) ===
+  // Un retiro sin reparación no tiene garantía. Lo que no entra en la hoja se
+  // corta con "..." (las firmas, los términos de entrega y el pie van fijos
+  // debajo: ~200 pt).
+  const garantiaEntrega = esRetiro ? null : data.garantia ?? null
+  const terminosEntrega = esRetiro
+    ? []
+    : lineasTerminosGarantia(
+        garantiaEntrega?.notas,
+        data.terminosGarantia,
+        helvetica,
+        TYPE.small,
+        contentWidth,
+        Math.floor((y - 14 - (garantiaEntrega ? 13 : 0) - 240) / 10)
+      )
+  if (garantiaEntrega || terminosEntrega.length > 0) {
+    y -= 4
+    drawSectionLabel(page, helveticaBold, "GARANTÍA", margin, y)
+    y -= 14
+    if (garantiaEntrega) {
+      const diasTxt = `${garantiaEntrega.dias} ${garantiaEntrega.dias === 1 ? "día" : "días"}`
+      page.drawText(`${diasTxt} · vigente hasta el ${formatDatePDF(garantiaEntrega.fechaVencimiento)}`, {
+        x: margin,
+        y,
+        size: TYPE.body,
+        font: helveticaBold,
+        color: MONO.ink,
+      })
+      y -= 13
+    }
+    for (const linea of terminosEntrega) {
+      page.drawText(linea.texto, {
+        x: margin,
+        y,
+        size: linea.titulo ? TYPE.fine : TYPE.small,
+        font: linea.titulo ? helveticaBold : helvetica,
+        color: linea.titulo ? MONO.ink : MONO.label,
+      })
+      y -= 10
+    }
+  }
+
   // === SECCION DE FIRMAS (misma caja con contorno que la página de entrega de generateOrdenPDF) ===
   y -= 8
   drawRule(page, margin, width - margin, y)
@@ -3463,7 +3612,9 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
       ]
     : [
         "• Al firmar este documento, el cliente confirma haber recibido el equipo en condiciones satisfactorias.",
-        "• La garantía del servicio aplica según lo acordado. Consulte las condiciones específicas.",
+        data.garantia || data.terminosGarantia
+          ? "• La garantía del servicio rige según lo indicado en este comprobante."
+          : "• La garantía del servicio aplica según lo acordado. Consulte las condiciones específicas.",
         "• Conserve este comprobante como prueba de entrega del equipo.",
       ]
   let termY = y - 16

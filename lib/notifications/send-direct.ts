@@ -3,6 +3,7 @@ import { sendCustomer, proveedorCliente } from "@/lib/email/index"
 import { formatDateValue } from "@/lib/timezone"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 import { escapeHtml } from "@/lib/escape-html"
+import { detalleGarantiaCliente, venceTextoCliente } from "@/lib/garantias/aviso-texto"
 
 type NotificationType =
   | "CAMBIO_ESTADO"
@@ -10,6 +11,14 @@ type NotificationType =
   | "GARANTIA_CREADA"
   | "RECORDATORIO_RETIRO"
   | "REINGRESO_GARANTIA"
+  | "GARANTIA_POR_VENCER"
+
+/**
+ * Tipos que NO generan aviso in-app para el equipo: el aviso de garantía por
+ * vencer sale en lote desde un cron (uno por garantía) y llenaría la campanita;
+ * el equipo ya las ve en la pestaña Por vencer de /garantias.
+ */
+const SIN_AVISO_IN_APP: ReadonlySet<NotificationType> = new Set(["GARANTIA_POR_VENCER"])
 
 interface NotificationParams {
   organizationId: string
@@ -44,6 +53,10 @@ interface NotificationParams {
       id: string
       diasValidez: number
       fechaVencimiento: string
+      origen?: "REPARACION" | "VENTA"
+      descripcion?: string | null
+      numeroGarantia?: string | null
+      diasRestantes?: number
     }
     pago?: {
       monto: number
@@ -249,6 +262,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
   }
 
   // Crear notificaciones in-app
+  if (SIN_AVISO_IN_APP.has(tipo)) return
   try {
     const { data: users } = await supabaseAdmin
       .from("users")
@@ -318,6 +332,12 @@ function generateInAppContent(
       return {
         title: `Re-ingreso por garantía - Orden #${context.orden?.numeroOrden}`,
         body: `${context.cliente.nombre} - ${context.orden?.dispositivo}`,
+        icon: "shield",
+      }
+    case "GARANTIA_POR_VENCER":
+      return {
+        title: "Aviso de garantía por vencer enviado",
+        body: `${context.cliente.nombre} - ${detalleGarantiaCliente(context.garantia, context.orden)}`,
         icon: "shield",
       }
     case "RECORDATORIO_RETIRO":
@@ -404,14 +424,15 @@ export function generateEmailContent(
         `,
       }
     case "REINGRESO_GARANTIA":
+      // context.orden es la orden NUEVA (la del re-ingreso), no la original.
       return {
         subject: `Orden #${context.orden?.numeroOrden} - Re-ingreso por garantía`,
         html: `
           <div style="${baseStyle}">
             <h2>Hola ${nombre}</h2>
-            <p>Recibimos tu reclamo de garantía y lo vamos a revisar sin costo.</p>
+            <p>Aceptamos tu reclamo de garantía: tu equipo reingresó y lo vamos a revisar sin costo.</p>
             <p>
-              <strong>Orden:</strong> #${context.orden?.numeroOrden}<br>
+              <strong>Orden de re-ingreso:</strong> #${context.orden?.numeroOrden}<br>
               <strong>Equipo:</strong> ${dispositivo}
             </p>
             <p>Te avisamos cuando esté listo.</p>
@@ -419,6 +440,24 @@ export function generateEmailContent(
           </div>
         `,
       }
+    case "GARANTIA_POR_VENCER": {
+      const detalle = escapeHtml(detalleGarantiaCliente(context.garantia, context.orden))
+      const vence = escapeHtml(venceTextoCliente(context.garantia?.diasRestantes))
+      return {
+        subject: `Tu garantía vence el ${formatDateValue(context.garantia?.fechaVencimiento ?? "", context.zonaHoraria)}`,
+        html: `
+          <div style="${baseStyle}">
+            <h2>Hola ${nombre}</h2>
+            <p>Te escribimos de ${orgName} para avisarte que la garantía de ${detalle} ${vence}.</p>
+            <p>
+              <strong>Vigente hasta:</strong> ${fechaVencimiento}
+            </p>
+            <p>Si notás alguna falla, acercate antes de esa fecha con el equipo y tu comprobante para que lo revisemos sin cargo.</p>
+            <p>Gracias por confiar en ${orgName}.</p>
+          </div>
+        `,
+      }
+    }
     case "RECORDATORIO_RETIRO":
       return {
         subject: `Recordatorio: Tu dispositivo está listo para retirar`,

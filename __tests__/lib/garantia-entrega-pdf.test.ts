@@ -131,3 +131,47 @@ describe("generateComprobanteEntregaPDF", () => {
     expect(buffer.length).toBeGreaterThan(1000)
   })
 })
+
+describe("términos de garantía de la org (402)", () => {
+  const terminosOrg =
+    "La garantía cubre la falla reparada y el repuesto colocado.\nNo cubre golpes, humedad ni equipos abiertos por terceros."
+
+  it("el comprobante de entrega lleva días, vencimiento, las condiciones de la entrega Y los términos de la org", async () => {
+    const buffer = await generateComprobanteEntregaPDF(
+      buildEntregaFixture({
+        garantia: { dias: 90, fechaVencimiento: new Date("2026-04-20T12:00:00Z"), notas: "Alcance: Solo repuesto." },
+        terminosGarantia: terminosOrg,
+      })
+    )
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("90 días")
+    expect(text).toContain("CONDICIONES DE ESTA GARANTÍA")
+    expect(text).toContain("Alcance: Solo repuesto.")
+    expect(text).toContain("TÉRMINOS DE GARANTÍA")
+    expect(text).toContain("No cubre golpes, humedad")
+  })
+
+  it("términos larguísimos no rompen la hoja: se cortan con aviso", async () => {
+    const buffer = await generateComprobanteEntregaPDF(
+      buildEntregaFixture({ terminosGarantia: Array.from({ length: 120 }, (_, i) => `Cláusula ${i + 1}.`).join("\n") })
+    )
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("texto completo en el taller")
+    expect(text).toContain("FIRMAS DE CONFORMIDAD")
+  })
+
+  it("un retiro sin reparación no imprime garantía", async () => {
+    const buffer = await generateComprobanteEntregaPDF(
+      buildEntregaFixture({ esRetiroSinReparacion: true, terminosGarantia: terminosOrg })
+    )
+    expect(await extractPdfText(buffer)).not.toContain("No cubre golpes")
+  })
+
+  it("el certificado de venta usa los términos de la org en vez de las condiciones genéricas", async () => {
+    const buffer = await generateGarantiaVentaPDF({ ...buildGarantiaFixture(), terminosGarantia: terminosOrg })
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("TÉRMINOS DE GARANTÍA")
+    expect(text).toContain("No cubre golpes, humedad")
+    expect(text).not.toContain("defectos de fabricacion")
+  })
+})

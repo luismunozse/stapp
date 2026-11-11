@@ -49,6 +49,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     description: "Recuerda a clientes retirar equipos",
   },
   {
+    id: "garantias-por-vencer",
+    name: "Garantías por vencer",
+    path: "/api/cron/garantias-por-vencer",
+    schedule: "10:00 AM (hora local de cada taller)",
+    description: "Avisa al cliente antes de que venza su garantía (solo talleres con el aviso prendido)",
+  },
+  {
     id: "lifecycle-emails",
     name: "Lifecycle Emails",
     path: "/api/cron/lifecycle-emails",

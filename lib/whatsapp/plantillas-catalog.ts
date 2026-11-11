@@ -45,6 +45,8 @@ const VAR_ESTADO: PlantillaVariable = { key: "estado", label: "Estado de la orde
 const VAR_PRESUPUESTO: PlantillaVariable = { key: "presupuesto", label: "Presupuesto", example: "$45.000" }
 const VAR_GARANTIA_DIAS: PlantillaVariable = { key: "garantia_dias", label: "Días de garantía", example: "90" }
 const VAR_GARANTIA_FECHA: PlantillaVariable = { key: "garantia_fecha", label: "Fecha de vencimiento", example: "31/12/2026" }
+const VAR_GARANTIA_DETALLE: PlantillaVariable = { key: "garantia_detalle", label: "Qué cubre la garantía", example: "la reparación de tu iPhone 12 (orden #1234)" }
+const VAR_GARANTIA_VENCE: PlantillaVariable = { key: "garantia_vence", label: "Cuándo vence", example: "vence en 7 días" }
 const VAR_LINK_SEGUIMIENTO: PlantillaVariable = { key: "link_seguimiento", label: "Link de seguimiento", example: "https://..." }
 const VAR_LINK_PDF: PlantillaVariable = { key: "link_pdf", label: "Link al PDF", example: "https://..." }
 const VAR_MONTO_PAGO: PlantillaVariable = { key: "monto_pago", label: "Monto del pago", example: "$10.000" }
@@ -491,15 +493,32 @@ Conserve este mensaje como comprobante.
     key: "garantia_reingreso",
     label: "Reingreso por garantía",
     category: "ordenes",
-    description: "Aviso para reingresos por garantía vigente.",
-    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_GARANTIA_FECHA, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, lamentamos que tenga inconvenientes con su {dispositivo}.
+    // Se manda al aceptar el reclamo: {numero_orden} es la orden NUEVA, la del
+    // re-ingreso (la que el cliente sigue con el link), no la original.
+    description: "Aviso al cliente cuando se acepta su reclamo y el equipo reingresa por garantía.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_GARANTIA_FECHA, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, aceptamos tu reclamo de garantía: tu {dispositivo} reingresó y lo vamos a revisar sin costo.
 
-Su reparación está cubierta por garantía (válida hasta {garantia_fecha}).
+Orden de re-ingreso #{numero_orden}
+Garantía válida hasta {garantia_fecha}.
 
-Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, sólo acérquese en horario de atención.
+{link_seguimiento}
 
-Orden original #{numero_orden}
+Te avisamos cuando esté listo.
+
+{empresa}`,
+  },
+  {
+    key: "garantia_por_vencer",
+    label: "Garantía por vencer",
+    category: "ordenes",
+    description: "Aviso opcional al cliente cuando su garantía entra en la ventana \"por vencer\" (se activa en Configuración).",
+    variables: [VAR_CLIENTE, VAR_GARANTIA_DETALLE, VAR_GARANTIA_VENCE, VAR_GARANTIA_FECHA, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, te escribimos de {empresa} para avisarte que la garantía de {garantia_detalle} {garantia_vence} (el {garantia_fecha}).
+
+Si notás alguna falla, acercate antes de esa fecha con el equipo y tu comprobante para que lo revisemos sin cargo.
+
+{link_seguimiento}
 
 {empresa}`,
   },
