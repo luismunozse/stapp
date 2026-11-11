@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
 
 const toggleSchema = z.object({
@@ -82,6 +82,7 @@ export async function POST(
       .from("plans")
       .update({ activo })
       .eq("id", id)
+      .setHeader(HEADER_AUTOR_PLANES, email ?? "")
       .select()
       .single()
 

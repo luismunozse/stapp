@@ -213,6 +213,17 @@ export function extractRequestInfo(request?: Request | null) {
 /**
  * Crear un logger pre-configurado para acciones de superadmin
  */
+/**
+ * Header con el que una escritura sobre `plans` le dice al trigger de
+ * plans_audit qué superadmin la hizo (migración 403). PostgREST lo expone en
+ * `request.headers` dentro de la misma transacción; un `set_config` en otra
+ * llamada no llegaría. El trigger solo lo cree si la escritura viene como
+ * service_role, así que va en la consulta y nunca desde el navegador:
+ *
+ *   supabaseAdmin.from("plans").update(x).eq("id", id).setHeader(HEADER_AUTOR_PLANES, email)
+ */
+export const HEADER_AUTOR_PLANES = "x-stapp-superadmin"
+
 export function createSuperadminAuditLogger(email: string | null, request?: Request | null) {
   const { ipAddress, userAgent } = extractRequestInfo(request)
 
