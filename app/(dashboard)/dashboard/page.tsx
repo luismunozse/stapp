@@ -20,6 +20,7 @@ import { WhatsNewModal } from "@/components/whats-new-modal"
 import { NpsSurvey } from "@/components/nps-survey"
 import { unstable_cache } from "next/cache"
 import { consultarDatosDashboard } from "@/lib/dashboard/datos"
+import { textoVencimiento } from "@/lib/garantias/estado"
 import { resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 import { countRealOrders } from "@/lib/onboarding/practica"
 import { HeroMetric } from "@/components/dashboard/hero-metric"
@@ -232,7 +233,7 @@ export default async function DashboardPage() {
     totalClientesResult,
     itemsBajoStockResult,
     ingresosMensualesResult,
-    garantiasPorVencerResult,
+    garantiasPorVencer,
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
@@ -241,7 +242,6 @@ export default async function DashboardPage() {
     cobrosOrdenHoyResult,
     ventasMesResult,
     ventasUltimos7DiasResult,
-    garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
     ordenesPendienteCobroResult,
     ordenesFechaVencidaResult,
@@ -272,7 +272,6 @@ export default async function DashboardPage() {
   const ingresosVentasMes = (ventasMesResult.data as { total: number }[] | null)?.reduce((sum, v) => sum + Number(v.total || 0), 0) || 0
   const ingresosCobrosOrdenMes = cobrosOrdenMesData.reduce((sum, c) => sum + Number(c.monto || 0), 0)
   const ingresos = ingresosFacturas + ingresosVentasMes + ingresosCobrosOrdenMes
-  const garantiasPorVencer = garantiasPorVencerResult.data || []
 
   // --- Comparativa mes anterior ---
   const ordenesMesAnterior = ordenesMesAnteriorResult.count || 0
@@ -432,7 +431,6 @@ export default async function DashboardPage() {
   const ventasMesData = ventasMesResult.data as { total: number }[] | null
   const ventasMesTotal = ventasMesData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
   const ventasMesCount = ventasMesData?.length || 0
-  const garantiasVentaPorVencer = garantiasVentaPorVencerResult.data || []
 
   // Stats filtrados por rol. `tone` usa el sistema semántico (info/success/
   // warning/danger) en vez del arcoíris de colores hardcodeados anterior.
@@ -538,7 +536,7 @@ export default async function DashboardPage() {
         cobrosCount: ordenesPendienteCobro.length,
         deudaTotal: totalDeudaPendiente,
         slaVencidasCount: ordenesFechaVencida.length,
-        garantiasCount: garantiasPorVencer.length + garantiasVentaPorVencer.length,
+        garantiasCount: garantiasPorVencer.total,
         stockBajoCount: itemsBajoStock,
       })
     : []
@@ -623,59 +621,22 @@ export default async function DashboardPage() {
               <CardDescription>Notificaciones importantes</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isAdmin && garantiasPorVencer.length > 0 && (
+              {!isTecnico && garantiasPorVencer.total > 0 && (
                 <AlertItem
                   tone="warning"
                   icon={Shield}
-                  title={`${garantiasPorVencer.length} garantía${garantiasPorVencer.length > 1 ? "s" : ""} por vencer`}
+                  href="/garantias?tab=por-vencer"
+                  title={`${garantiasPorVencer.total} garantía${garantiasPorVencer.total > 1 ? "s" : ""} por vencer`}
                 >
-                  {garantiasPorVencer.slice(0, 3).map((g: any) => {
-                    const diasRestantes = Math.ceil(
-                      (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
-                        (1000 * 60 * 60 * 24)
-                    )
-                    return (
-                      <Link
-                        key={g.id}
-                        href={`/ordenes/${g.orden_id}`}
-                        className="block hover:underline"
-                      >
-                        Orden #{g.ordenes_servicio.numero_orden} - {g.ordenes_servicio.clientes?.nombre}
-                        <span className="ml-1 opacity-80">
-                          ({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})
-                        </span>
-                      </Link>
-                    )
-                  })}
-                  {garantiasPorVencer.length > 3 && (
+                  {garantiasPorVencer.primeras.map((g) => (
+                    <div key={g.id}>
+                      {g.referencia.numero} - {g.cliente.nombre} - {g.descripcion}
+                      <span className="ml-1 opacity-80">({textoVencimiento(g.diasRestantes).toLowerCase()})</span>
+                    </div>
+                  ))}
+                  {garantiasPorVencer.total > garantiasPorVencer.primeras.length && (
                     <p className="text-xs opacity-80">
-                      y {garantiasPorVencer.length - 3} más...
-                    </p>
-                  )}
-                </AlertItem>
-              )}
-              {(isAdmin || isVendedor) && garantiasVentaPorVencer.length > 0 && (
-                <AlertItem
-                  tone="warning"
-                  icon={ShoppingCart}
-                  href="/ventas"
-                  title={`${garantiasVentaPorVencer.length} garantía${garantiasVentaPorVencer.length > 1 ? "s" : ""} de venta por vencer`}
-                >
-                  {garantiasVentaPorVencer.slice(0, 3).map((g: any) => {
-                    const diasRestantes = Math.ceil(
-                      (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
-                        (1000 * 60 * 60 * 24)
-                    )
-                    return (
-                      <div key={g.id}>
-                        V{String((g.ventas as any)?.numero_venta).padStart(4, "0")} - {(g.ventas as any)?.cliente_nombre} - {(g.items_venta as any)?.descripcion}
-                        <span className="ml-1 opacity-80">({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})</span>
-                      </div>
-                    )
-                  })}
-                  {garantiasVentaPorVencer.length > 3 && (
-                    <p className="text-xs opacity-80">
-                      y {garantiasVentaPorVencer.length - 3} más...
+                      y {garantiasPorVencer.total - garantiasPorVencer.primeras.length} más...
                     </p>
                   )}
                 </AlertItem>
@@ -767,7 +728,7 @@ export default async function DashboardPage() {
               {isTecnico && misVencidas.length === 0 && misEsperandoRepuesto === 0 && misSinDiagnostico === 0 && (
                 <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
               )}
-              {!isTecnico && ordenesPendientes === 0 && itemsBajoStock === 0 && garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (
+              {!isTecnico && ordenesPendientes === 0 && itemsBajoStock === 0 && garantiasPorVencer.total === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (
                 <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
               )}
             </CardContent>

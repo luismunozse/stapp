@@ -64,7 +64,8 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: ShieldCheck,
       label: "Garantías por vencer",
       value: `${input.garantiasCount}`,
-      href: "/ordenes",
+      // El conteo del dashboard del ADMIN es de toda la org: la lista también.
+      href: "/garantias?tab=por-vencer&sucursal=todas",
     })
   }
 

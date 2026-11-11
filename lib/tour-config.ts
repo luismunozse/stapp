@@ -34,6 +34,16 @@ export const tourSteps: DriveStep[] = [
     },
   },
   {
+    element: "#nav-garantias",
+    popover: {
+      title: "Garantías",
+      description:
+        "Todas las garantías de reparaciones y ventas en un lugar: las que están por vencer, los reclamos abiertos y las vencidas.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
     element: "#nav-tecnicos",
     popover: {
       title: "Técnicos",
