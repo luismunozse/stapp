@@ -32,6 +32,25 @@ export function inferirTipoAcceso(value: string): TipoCodigoAcceso {
   return "codigo"
 }
 
+/**
+ * Resumen enmascarado que muestra el chip de codigo de acceso cuando ya
+ * tiene un valor cargado. Reusa inferirTipoAcceso (mismo componente que
+ * decide la pestana inicial del modal) para que el chip y el modal nunca se
+ * contradigan sobre que tipo de dato es un valor dado.
+ *
+ * El codigo y la contrasena se enmascaran con una cantidad fija de puntos
+ * (no la longitud real): mostrar el largo exacto de un PIN o contrasena no
+ * aporta nada util aca y es informacion de mas. El patron no se enmascara
+ * -- en esta app nunca fue secreto, orden-form.tsx ya lo muestra en texto
+ * plano.
+ */
+export function resumenCodigoAcceso(value: string): string {
+  const tipo = inferirTipoAcceso(value)
+  if (tipo === "patron") return value
+  if (tipo === "contrasena") return "Contraseña ••••••"
+  return "PIN ••••"
+}
+
 interface CodigoAccesoModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void

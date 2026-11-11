@@ -55,3 +55,17 @@ export function safeCallbackPath(raw: string | null | undefined, fallback = "/da
   // Se devuelve la forma normalizada, no la cruda: es la que se valido.
   return url.pathname + url.search + url.hash
 }
+
+const SUPERADMIN_HOME = "/superadmin/dashboard"
+
+/**
+ * Destino post-login del panel superadmin: lo mismo que `safeCallbackPath`
+ * pero además solo dentro de `/superadmin/`. El proxy manda acá con
+ * `callbackUrl` = la ruta pedida; cualquier otra cosa (incluido
+ * `javascript:`, que en `admin.*` correría con la sesión de superadmin) cae
+ * al dashboard.
+ */
+export function safeSuperadminCallbackPath(raw: string | null | undefined): string {
+  const path = safeCallbackPath(raw, SUPERADMIN_HOME)
+  return path.startsWith("/superadmin/") ? path : SUPERADMIN_HOME
+}

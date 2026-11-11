@@ -12,6 +12,8 @@ import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequerid
 import type { EstadoOrden } from "@/types"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
+import { isValidImei } from "@/lib/imei"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
@@ -50,6 +52,15 @@ const updateOrdenSchema = z.object({
   diagnostico: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
   telefonoContacto: z.string().optional().nullable(),
+  // Datos del equipo (diálogo "Editar equipo"). El tipo no se edita: define el
+  // prefijo del código de la orden y qué campos extra existen.
+  dispositivo: z.string().trim().min(1, "El modelo / dispositivo no puede estar vacío").optional(),
+  marca: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  imei: z.string().optional().nullable(),
+  codigoAccesoDispositivo: z.string().optional().nullable(),
+  accesorios: z.string().optional().nullable(),
+  metadata: z.record(z.string(), z.any()).optional().nullable(),
   porcentajeComision: z.number().min(0).max(100).optional().nullable(),
   horasTrabajadas: z.number().min(0).optional().nullable(),
 })
@@ -261,6 +272,14 @@ export async function PUT(
       )
     }
 
+    // Same rule as the create: only types whose serial field is an IMEI validate it.
+    const imeiNuevo = data.imei?.trim()
+    if (imeiNuevo && imeiNuevo !== (orden.imei ?? "") && (await tipoValidaImei(organizationId!, orden.tipo_dispositivo))) {
+      if (!isValidImei(imeiNuevo)) {
+        return NextResponse.json({ error: "El IMEI debe tener exactamente 15 dígitos" }, { status: 400 })
+      }
+    }
+
     // Validar transición de estado (state machine)
     if (data.estado && data.estado !== orden.estado) {
       if (!esTransicionValida(orden.estado, data.estado)) {
@@ -417,7 +436,15 @@ export async function PUT(
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
-    if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto
+    if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto?.trim() || null
+    // Datos del equipo: un texto vacío se guarda como null, igual que en el alta.
+    if (data.dispositivo !== undefined) updateData.dispositivo = data.dispositivo
+    if (data.marca !== undefined) updateData.marca = data.marca?.trim() || null
+    if (data.color !== undefined) updateData.color = data.color?.trim() || null
+    if (data.imei !== undefined) updateData.imei = imeiNuevo || null
+    if (data.codigoAccesoDispositivo !== undefined) updateData.password_dispositivo = data.codigoAccesoDispositivo || null
+    if (data.accesorios !== undefined) updateData.accesorios = data.accesorios?.trim() || null
+    if (data.metadata !== undefined) updateData.metadata = data.metadata ?? {}
     if (data.horasTrabajadas !== undefined) {
       const h = Number(data.horasTrabajadas)
       updateData.horas_trabajadas = Number.isFinite(h) && h >= 0 ? h : 0
