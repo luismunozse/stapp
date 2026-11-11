@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
+import { puedeEditar, puedeRevisar } from "@/lib/cotizacion-puede-revisar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -52,6 +53,9 @@ interface Cotizacion {
   clienteTelefono?: string | null
   /** No nulo: esta fila fue reemplazada por la revision con este id. */
   reemplazadaPor?: string | null
+  ventaId?: string | null
+  convertidaAOrdenId?: string | null
+  origen?: string | null
   /** No nulo: esta fila es una revision de la cotizacion con este id. */
   revisionDe?: string | null
   items: {
@@ -471,6 +475,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
             notas: editingCotizacion.notas,
             fechaVencimiento: editingCotizacion.fechaVencimiento,
           }}
+          aceptada={editingCotizacion.estado === "ACEPTADA"}
           onClose={() => setEditingCotizacion(null)}
           onSuccess={() => {
             setEditingCotizacion(null)
@@ -496,11 +501,11 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
             // contra esos items, asi que editarla no es un permiso de UI.
             // Al guardar, el PUT recalcula presupuesto y costo_final de la
             // orden vinculada, asi que una ENVIADA editada no la deja stale.
-            const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
+            const canEdit = puedeEditar(cotizacion)
             // Una aceptada no se edita: se revisa. La revision es una cotizacion nueva y
             // la firmada queda congelada — ver el diseño en docs/superpowers/specs/
             // 2026-08-25-revision-cotizacion-aceptada-design.md
-            const canRevisar = cotizacion.estado === "ACEPTADA" && !cotizacion.reemplazadaPor
+            const canRevisar = puedeRevisar(cotizacion)
             const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
             const canDelete = cotizacion.estado !== "ACEPTADA"
             const isSuperseded = !!cotizacion.reemplazadaPor

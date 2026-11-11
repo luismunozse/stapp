@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import useSWR from "swr"
-import { puedeRevisar } from "@/lib/cotizacion-puede-revisar"
+import { puedeEditar } from "@/lib/cotizacion-puede-revisar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,7 +35,6 @@ import {
   FileText,
   Wrench,
   Paperclip,
-  History,
 } from "lucide-react"
 
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
@@ -150,7 +149,6 @@ export default function CotizacionesPage() {
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
-  const [revisingId, setRevisingId] = useState<string | null>(null)
   const [convertingOrdenId, setConvertingOrdenId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [convertingCotizacion, setConvertingCotizacion] = useState<Cotizacion | null>(null)
@@ -446,45 +444,6 @@ export default function CotizacionesPage() {
     }
   }
 
-  // Una aceptada no se edita: se revisa. La revision es una cotizacion nueva en
-  // BORRADOR con los mismos items; la firmada queda intacta hasta que el
-  // cliente firme la nueva (docs/superpowers/specs/2026-08-25-revision-cotizacion-aceptada-design.md).
-  const handleRevisar = async (cotizacion: Cotizacion) => {
-    const confirmed = await confirm({
-      title: "Modificar cotización aceptada",
-      description:
-        "Se va a crear una nueva versión de esta cotización con los mismos items para que la modifiques. " +
-        "La versión aceptada queda como está, con la firma del cliente; la nueva " +
-        "versión va a necesitar que el cliente la firme de nuevo antes de valer.",
-      confirmText: "Crear nueva versión",
-      cancelText: "Cancelar",
-      variant: "info",
-    })
-    if (!confirmed) return
-
-    setRevisingId(cotizacion.id)
-    try {
-      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/revisar`, { method: "POST" })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        await showError(error.error || "Error al crear la nueva versión")
-        return
-      }
-      const { id: revisionId } = await res.json()
-      const actualizadas = await mutate()
-      const revision = actualizadas?.data.find((c) => c.id === revisionId)
-      if (revision) {
-        openEditForm(revision)
-      } else {
-        await showSuccess("Nueva versión creada como borrador. Editala desde la lista.")
-      }
-    } catch {
-      await showError("Error al crear la nueva versión")
-    } finally {
-      setRevisingId(null)
-    }
-  }
-
   const handleDuplicate = async (cotizacion: Cotizacion) => {
     setDuplicatingId(cotizacion.id)
     try {
@@ -746,6 +705,7 @@ export default function CotizacionesPage() {
               equipo: editingCotizacion.equipo || undefined,
               checklist: editingCotizacion.checklist || undefined,
             }}
+            aceptada={editingCotizacion.estado === "ACEPTADA"}
             onClose={() => setEditingCotizacion(null)}
             onSuccess={() => {
               setEditingCotizacion(null)
@@ -808,10 +768,9 @@ export default function CotizacionesPage() {
                     {cotizaciones.map((cotizacion) => {
                       const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
                       const Icon = config.icon
-                      const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
+                      const canEdit = puedeEditar(cotizacion)
                       const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
                       const canDelete = cotizacion.estado !== "ACEPTADA"
-                      const canRevisar = puedeRevisar(cotizacion)
                       return (
                         <tr key={cotizacion.id} className="border-b hover:bg-muted/30 transition-colors">
                           <td className="p-3 font-medium">
@@ -858,17 +817,6 @@ export default function CotizacionesPage() {
                                   title="Editar"
                                 >
                                   <Edit className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {canRevisar && canCrear && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRevisar(cotizacion)}
-                                  disabled={revisingId === cotizacion.id}
-                                  title="Modificar (crea una nueva versión que el cliente vuelve a firmar)"
-                                >
-                                  <History className="h-4 w-4" />
                                 </Button>
                               )}
                               {canSend && canCrear && (
@@ -1003,10 +951,9 @@ export default function CotizacionesPage() {
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
               const Icon = config.icon
-              const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
+              const canEdit = puedeEditar(cotizacion)
               const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
               const canDelete = cotizacion.estado !== "ACEPTADA"
-              const canRevisar = puedeRevisar(cotizacion)
 
               return (
                 <Card key={cotizacion.id}>
@@ -1141,18 +1088,6 @@ export default function CotizacionesPage() {
                         >
                           <Edit className="mr-2 h-3 w-3" />
                           Editar
-                        </Button>
-                      )}
-                      {canRevisar && canCrear && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRevisar(cotizacion)}
-                          disabled={revisingId === cotizacion.id}
-                          title="Crea una nueva versión que el cliente tiene que volver a firmar"
-                        >
-                          <History className="mr-2 h-3 w-3" />
-                          {revisingId === cotizacion.id ? "Creando versión..." : "Modificar"}
                         </Button>
                       )}
                       {cotizacion.estado === "ENVIADA" && (

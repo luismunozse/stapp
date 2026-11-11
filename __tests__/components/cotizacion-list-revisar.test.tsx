@@ -58,11 +58,17 @@ describe("CotizacionList — revisar una aceptada", () => {
     vi.clearAllMocks()
   })
 
-  it("ofrece Revisar en una ACEPTADA, y no Editar", () => {
+  it("ofrece Revisar y Editar en una ACEPTADA", () => {
     renderConCotizaciones([cotizacionBase({})])
 
     expect(screen.getByRole("button", { name: /Revisar/ })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Editar/ })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Editar/ })).toBeInTheDocument()
+  })
+
+  it("no ofrece Revisar sobre una cotizacion ya convertida en venta", () => {
+    renderConCotizaciones([cotizacionBase({ ventaId: "venta-1" })])
+
+    expect(screen.queryByRole("button", { name: /Revisar/ })).not.toBeInTheDocument()
   })
 
   it("no ofrece Revisar sobre una cotizacion ya reemplazada", () => {
