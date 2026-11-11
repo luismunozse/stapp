@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { isSuperadminEmail } from "@/lib/auth-tokens"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
@@ -196,6 +197,17 @@ export async function POST(request: Request) {
     const especialidadesArr = Array.isArray(especialidades)
       ? especialidades.filter((e) => typeof e === "string" && e.length > 0)
       : []
+
+    // Los emails de SUPERADMIN_EMAILS quedan reservados: el acceso al panel se
+    // decide por email, así que un usuario de tenant con uno de ellos (y su
+    // propia contraseña + 2FA) entraría a admin.*. Misma respuesta que un
+    // duplicado, para no revelar cuáles son.
+    if (isSuperadminEmail(email)) {
+      return NextResponse.json(
+        { error: "Ya existe un usuario con este email" },
+        { status: 400 }
+      )
+    }
 
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin

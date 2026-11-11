@@ -238,8 +238,8 @@ export default function OrganizacionesPage() {
     setDeletingId(confirmDeleteOrg.id)
     await bulkMutate(`/api/superadmin/organizations/${confirmDeleteOrg.id}`, {
       method: "DELETE",
-      successMessage: `"${confirmDeleteOrg.nombre}" eliminada permanentemente`,
-      errorMessage: "Error al eliminar organización",
+      successMessage: `"${confirmDeleteOrg.nombre}" archivada`,
+      errorMessage: "Error al archivar la organización",
       onSuccess: () => {
         setConfirmDeleteOrg(null)
         setDeletingId(null)
@@ -253,8 +253,8 @@ export default function OrganizacionesPage() {
     await bulkMutate("/api/superadmin/organizations/bulk-delete", {
       method: "POST",
       body: { ids: selectedIds },
-      successMessage: `${selectedIds.length} organizaciones eliminadas`,
-      errorMessage: "Error al eliminar organizaciones",
+      successMessage: `${selectedIds.length} organizaciones archivadas`,
+      errorMessage: "Error al archivar organizaciones",
       onSuccess: () => {
         setSelectedIds([])
         setConfirmBulkDelete(false)
@@ -478,7 +478,7 @@ export default function OrganizacionesPage() {
                 className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950 focus:bg-red-50 dark:focus:bg-red-950"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar permanentemente
+                Archivar
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -732,7 +732,7 @@ export default function OrganizacionesPage() {
                   disabled={bulkLoading}
                 >
                   <Trash2 className="h-4 w-4 mr-1.5" />
-                  Eliminar seleccionados
+                  Archivar seleccionados
                 </Button>
                 <Button
                   size="sm"
@@ -876,19 +876,18 @@ export default function OrganizacionesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Confirmar eliminación individual */}
+      {/* Dialog: Confirmar archivado individual (soft delete; el borrado definitivo es desde el detalle) */}
       <Dialog open={!!confirmDeleteOrg} onOpenChange={(open) => !open && setConfirmDeleteOrg(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
-              Eliminar organización
+              Archivar organización
             </DialogTitle>
             <DialogDescription>
-              Estás por eliminar permanentemente <strong>&quot;{confirmDeleteOrg?.nombre}&quot;</strong> y todos sus datos
-              (usuarios, órdenes, clientes, inventario, suscripciones, pagos).
-              <br /><br />
-              <strong className="text-red-600">Esta acción NO se puede revertir.</strong>
+              Estás por archivar <strong>&quot;{confirmDeleteOrg?.nombre}&quot;</strong>: sus usuarios pierden
+              el acceso y deja de aparecer en los listados. Los datos se conservan y se puede restaurar
+              desde el detalle de la organización, donde también está el borrado definitivo.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 justify-end pt-2">
@@ -899,12 +898,12 @@ export default function OrganizacionesPage() {
               {deletingId ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Eliminando...
+                  Archivando...
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Eliminar permanentemente
+                  Archivar
                 </>
               )}
             </Button>
@@ -912,18 +911,18 @@ export default function OrganizacionesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Confirmar eliminación masiva */}
+      {/* Dialog: Confirmar archivado masivo */}
       <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
-              Eliminar {selectedIds.length} organizaciones
+              Archivar {selectedIds.length} organizaciones
             </DialogTitle>
             <DialogDescription>
-              Estás por eliminar permanentemente {selectedIds.length} organización{selectedIds.length > 1 ? "es" : ""} y todos sus datos.
-              <br /><br />
-              <strong className="text-red-600">Esta acción NO se puede revertir.</strong>
+              Estás por archivar {selectedIds.length} organización{selectedIds.length > 1 ? "es" : ""}: sus
+              usuarios pierden el acceso y dejan de aparecer en los listados. Los datos se conservan y cada
+              una se puede restaurar desde su detalle.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 justify-end pt-2">
@@ -934,12 +933,12 @@ export default function OrganizacionesPage() {
               {bulkLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Eliminando...
+                  Archivando...
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Eliminar {selectedIds.length} permanentemente
+                  Archivar {selectedIds.length}
                 </>
               )}
             </Button>
