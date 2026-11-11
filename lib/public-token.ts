@@ -88,7 +88,7 @@ export async function getOrderByPublicToken(
 
   // Verificar expiración del token público.
   const expiresAt = ordenRecord.public_token_expires_at as string | null
-  if (expiresAt && new Date(expiresAt) < new Date()) {
+  if (expiresAt && new Date(expiresAt) < new Date() && !(await garantiaVigente(ordenRecord.id as string))) {
     return {
       orden: null,
       error: NextResponse.json({ error: "El enlace de seguimiento ha expirado" }, { status: 410 }),
@@ -96,4 +96,31 @@ export async function getOrderByPublicToken(
   }
 
   return { orden, error: null }
+}
+
+/**
+ * El link de seguimiento no vence antes que la garantía de la orden: el
+ * cliente necesita el certificado mientras la garantía está vigente. La
+ * migración 399 ya estira public_token_expires_at hasta el fin de la garantía;
+ * esto cubre los tokens que quedaron vencidos antes. Solo se consulta con el
+ * token vencido. Vigente = vence hoy o después (se cuenta el día completo).
+ */
+async function garantiaVigente(ordenId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("garantias")
+      .select("fecha_vencimiento")
+      .eq("orden_id", ordenId)
+      .order("fecha_vencimiento", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const vencimiento = (data as { fecha_vencimiento?: string } | null)?.fecha_vencimiento
+    if (!vencimiento) return false
+    const finDelDia = new Date(vencimiento).getTime() + 24 * 60 * 60 * 1000
+    return finDelDia > Date.now()
+  } catch (err) {
+    // Ante la duda, el token vencido sigue vencido.
+    console.error("[public-token] no se pudo leer la garantía de la orden:", err)
+    return false
+  }
 }

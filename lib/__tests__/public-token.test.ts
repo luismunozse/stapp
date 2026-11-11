@@ -147,6 +147,57 @@ describe('getOrderByPublicToken', () => {
     expect(body.error).toContain('expirado')
   })
 
+  describe('token vencido con garantía', () => {
+    function mockOrdenYGarantia(fechaVencimiento: string | null) {
+      const expirado = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+      const ordenChain = makeMockChain({
+        data: { id: 'orden-1', organization_id: 'org-1', public_token: VALID_TOKEN, public_token_expires_at: expirado },
+        error: null,
+      })
+      const garantiaChain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: fechaVencimiento ? { fecha_vencimiento: fechaVencimiento } : null,
+          error: null,
+        }),
+      }
+      vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) =>
+        table === 'garantias' ? garantiaChain : ordenChain) as any)
+      return garantiaChain
+    }
+
+    it('no vence mientras la garantía está vigente', async () => {
+      const garantia = mockOrdenYGarantia(new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString())
+      const result = await getOrderByPublicToken(VALID_TOKEN)
+      expect(result.error).toBeNull()
+      expect(result.orden).not.toBeNull()
+      expect(garantia.eq).toHaveBeenCalledWith('orden_id', 'orden-1')
+    })
+
+    it('el último día de la garantía cuenta completo', async () => {
+      // fecha_vencimiento se guarda al mediodía UTC del último día
+      mockOrdenYGarantia(new Date(Date.now() - 60 * 60 * 1000).toISOString())
+      const result = await getOrderByPublicToken(VALID_TOKEN)
+      expect(result.error).toBeNull()
+    })
+
+    it('vence si la garantía también venció', async () => {
+      mockOrdenYGarantia(new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString())
+      const result = await getOrderByPublicToken(VALID_TOKEN)
+      expect(result.orden).toBeNull()
+      expect((await result.error!.json()).error).toContain('expirado')
+    })
+
+    it('vence si la orden no tiene garantía', async () => {
+      mockOrdenYGarantia(null)
+      const result = await getOrderByPublicToken(VALID_TOKEN)
+      expect(result.orden).toBeNull()
+    })
+  })
+
   it('permite token público no expirado', async () => {
     const futureDate = new Date()
     futureDate.setDate(futureDate.getDate() + 10)

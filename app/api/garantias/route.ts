@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { queueNotification } from "@/lib/notifications/queue"
+import { notificarGarantiaCreada } from "@/lib/garantias/notificar"
+import { formatReclamos } from "@/lib/garantias/formato"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
@@ -21,6 +22,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get("estado")
     const porVencer = searchParams.get("porVencer") === "true"
+    // La card de la orden pide solo su garantía. Sin este filtro traía las de
+    // toda la org (con sus reclamos) y además escribía VENCIDA en lote.
+    const ordenId = searchParams.get("ordenId")
 
     // A warranty is visible when the order it belongs to is.
     const alcance = await resolverAlcanceOrdenesDeSesion({
@@ -45,6 +49,10 @@ export async function GET(request: Request) {
       .eq("ordenes_servicio.organization_id", organizationId!)
       .order("fecha_vencimiento", { ascending: true })
     query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
+
+    if (ordenId) {
+      query = query.eq("orden_id", ordenId)
+    }
 
     if (estado) {
       query = query.eq("estado", estado)
@@ -95,9 +103,7 @@ export async function GET(request: Request) {
         dispositivo: g.ordenes_servicio.dispositivo,
         cliente: g.ordenes_servicio.clientes,
       },
-      reclamos: g.reclamos_garantia?.sort((a: any, b: any) =>
-        new Date(b.fecha_reclamo).getTime() - new Date(a.fecha_reclamo).getTime()
-      ),
+      reclamos: formatReclamos(g.reclamos_garantia),
     }))
 
     return NextResponse.json(garantiasFormatted)
@@ -192,38 +198,14 @@ export async function POST(request: Request) {
     const cliente = orden.clientes as any
     const org = orden.organizations as any
 
-    queueNotification({
+    notificarGarantiaCreada({
       organizationId: organizationId!,
       sucursalId: (orden as any).sucursal_id ?? null,
-      ordenId: data.ordenId,
-      garantiaId: garantia.id,
-      clienteId: cliente.id,
-      tipo: "GARANTIA_CREADA",
-      context: {
-        organizationName: org.nombre_mostrar || org.nombre,
-        organizationSlug: org.slug,
-        moneda: org.moneda || "ARS",
-        zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
-        cliente: {
-          id: cliente.id,
-          nombre: cliente.nombre,
-          email: cliente.email,
-          telefono: cliente.telefono,
-        },
-        orden: {
-          id: orden.id,
-          numeroOrden: orden.numero_orden,
-          dispositivo: orden.dispositivo,
-          estado: orden.estado,
-          publicToken: (orden as any).public_token,
-        },
-        garantia: {
-          id: garantia.id,
-          diasValidez: garantia.dias_validez,
-          fechaVencimiento: garantia.fecha_vencimiento,
-        },
-      },
-    }).catch(err => console.error("Error queueing notification:", err))
+      org,
+      cliente,
+      orden: orden as any,
+      garantia,
+    })
 
     return NextResponse.json({
       id: garantia.id,
