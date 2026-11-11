@@ -15,9 +15,15 @@ export async function GET(request: NextRequest) {
     .select("nombre, nombre_mostrar, logo_url, activo")
     .eq("slug", slug)
     .eq("activo", true)
-    .single()
+    .maybeSingle()
 
-  if (error || !tenant) {
+  // Un error de base no es "no existe": el login redirige a "Negocio no
+  // encontrado" solo con tenant: null, y un taller real quedaba afuera.
+  if (error) {
+    console.error("[public/tenant] lookup failed:", error)
+    return NextResponse.json({ error: "No se pudo consultar el negocio" }, { status: 500 })
+  }
+  if (!tenant) {
     return NextResponse.json({ tenant: null })
   }
 
