@@ -68,6 +68,7 @@ import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
+import { OrdenAvances } from "@/components/ordenes/orden-avances"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
@@ -1151,6 +1152,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   textareaClassName="bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
                   valueClassName="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2"
                 />
+              </div>
+
+              {/* Avances: bitácora por etapas; los visibles salen en el PDF de entrega */}
+              <div className="mt-4 pt-4 border-t">
+                <OrdenAvances ordenId={ordenId} userId={session?.user?.id} isAdmin={isAdmin} />
               </div>
             </CardContent>
           </Card>

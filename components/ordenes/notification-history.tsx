@@ -75,6 +75,7 @@ const eventoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   REPUESTO_AGREGADO: { label: "Repuesto agregado", icon: Package, color: "text-orange-600" },
   FOTO_AGREGADA: { label: "Foto agregada", icon: Camera, color: "text-indigo-600" },
   REPARACION: { label: "Reparación", icon: Wrench, color: "text-amber-600" },
+  AVANCE: { label: "Avance", icon: Wrench, color: "text-teal-600" },
 }
 
 export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
