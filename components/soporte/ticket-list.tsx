@@ -16,8 +16,6 @@ import {
 } from "@/components/ui/select"
 import {
   Plus,
-  Bug,
-  Lightbulb,
   HelpCircle,
   MessageSquare,
   Paperclip,
@@ -27,6 +25,7 @@ import {
 } from "lucide-react"
 import { TicketCreateDialog } from "./ticket-create-dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import { TICKET_ESTADO, TICKET_PRIORIDAD, TICKET_TIPO } from "@/components/soporte/ticket-config"
 
 interface TicketListItem {
   id: string
@@ -41,24 +40,9 @@ interface TicketListItem {
   tieneAdjuntos: boolean
 }
 
-const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
-  BUG: { label: "Bug / Error", icon: Bug, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  SUGERENCIA: { label: "Sugerencia", icon: Lightbulb, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  PREGUNTA: { label: "Pregunta", icon: HelpCircle, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-}
-
-const estadoConfig: Record<string, { label: string; variant: string }> = {
-  ABIERTO: { label: "Abierto", variant: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  EN_PROCESO: { label: "En proceso", variant: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  RESUELTO: { label: "Resuelto", variant: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  CERRADO: { label: "Cerrado", variant: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400" },
-}
-
-const prioridadConfig: Record<string, { label: string; color: string }> = {
-  BAJA: { label: "Baja", color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
-  MEDIA: { label: "Media", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
-  ALTA: { label: "Alta", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-}
+const tipoConfig = TICKET_TIPO
+const estadoConfig = TICKET_ESTADO
+const prioridadConfig = TICKET_PRIORIDAD
 
 export function TicketList() {
   const router = useRouter()
@@ -182,7 +166,7 @@ export function TicketList() {
                       <span className={`text-xs px-2 py-0.5 rounded-full ${prioridad?.color || ""}`}>
                         {prioridad?.label}
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${estado?.variant || ""}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${estado?.color || ""}`}>
                         {estado?.label}
                       </span>
                     </div>

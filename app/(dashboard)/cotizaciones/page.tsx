@@ -8,6 +8,8 @@ import { puedeEditar } from "@/lib/cotizacion-puede-revisar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { estadoConfig } from "@/components/cotizaciones/estado-config"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
@@ -128,12 +130,6 @@ interface PaginatedResponse {
   totalPages: number
 }
 
-const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
-  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
-  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
-}
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -767,7 +763,6 @@ export default function CotizacionesPage() {
                   <tbody>
                     {cotizaciones.map((cotizacion) => {
                       const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
-                      const Icon = config.icon
                       const canEdit = puedeEditar(cotizacion)
                       const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
                       const canDelete = cotizacion.estado !== "ACEPTADA"
@@ -794,10 +789,9 @@ export default function CotizacionesPage() {
                             </div>
                           </td>
                           <td className="p-3">
-                            <Badge className={config.color}>
-                              <Icon className="mr-1 h-3 w-3" />
+                            <StatusPill tone={config.tone} icon={config.icon}>
                               {config.label}
-                            </Badge>
+                            </StatusPill>
                           </td>
                           <td className="p-3 hidden sm:table-cell">{cotizacion.clienteNombre || "-"}</td>
                           <td className="p-3 hidden md:table-cell text-muted-foreground">
@@ -950,7 +944,6 @@ export default function CotizacionesPage() {
           <div className="space-y-3">
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
-              const Icon = config.icon
               const canEdit = puedeEditar(cotizacion)
               const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
               const canDelete = cotizacion.estado !== "ACEPTADA"
@@ -963,10 +956,9 @@ export default function CotizacionesPage() {
                         <CardTitle className="text-base">
                           {cotizacion.numeroCotizacion}
                         </CardTitle>
-                        <Badge className={config.color}>
-                          <Icon className="mr-1 h-3 w-3" />
+                        <StatusPill tone={config.tone} icon={config.icon}>
                           {config.label}
-                        </Badge>
+                        </StatusPill>
                         {cotizacion.tipo === "PRESUPUESTO" && (
                           <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                             <FileText className="mr-1 h-3 w-3" />

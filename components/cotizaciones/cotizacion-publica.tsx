@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { estadoConfig } from "@/components/cotizaciones/estado-config"
 import { Button } from "@/components/ui/button"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Textarea } from "@/components/ui/textarea"
@@ -104,11 +105,12 @@ interface CotizacionData {
   }[]
 }
 
-const estadoConfig: Record<string, { label: string; color: string }> = {
-  BORRADOR: { label: "Borrador", color: "bg-muted text-muted-foreground" },
-  ENVIADA: { label: "Pendiente de aprobacion", color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
-  ACEPTADA: { label: "Aprobada", color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", color: "bg-destructive/10 text-destructive" },
+// Tono e ícono compartidos con el panel; la etiqueta está pensada para el cliente.
+const etiquetaCliente: Record<string, string> = {
+  BORRADOR: "Borrador",
+  ENVIADA: "Pendiente de aprobación",
+  ACEPTADA: "Aprobada",
+  RECHAZADA: "Rechazada",
 }
 
 export function CotizacionPublica({ token }: { token: string }) {
@@ -235,6 +237,7 @@ export function CotizacionPublica({ token }: { token: string }) {
   }
 
   const config = estadoConfig[data.estado] || estadoConfig.BORRADOR
+  const estadoLabel = etiquetaCliente[data.estado] || config.label
   // Vencida sólo cuando HOY (en la tz de la org) es posterior al día de
   // vencimiento — válida durante todo el día de vencimiento, sin cortar la
   // tarde anterior por el desfase UTC.
@@ -300,7 +303,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               <FileText className="h-5 w-5" />
               {data.numeroCotizacion}
             </CardTitle>
-            <Badge className={config.color}>{config.label}</Badge>
+            <StatusPill tone={config.tone} icon={config.icon}>{estadoLabel}</StatusPill>
           </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">

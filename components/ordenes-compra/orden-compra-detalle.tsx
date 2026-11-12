@@ -2,6 +2,7 @@
 
 import useSWR from "swr"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { AlertTriangle, Package } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
@@ -84,7 +85,7 @@ export function OrdenCompraDetalle({ ordenCompraId }: OrdenCompraDetalleProps) {
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-mono text-lg font-semibold">{data.numeroOC}</span>
-            <Badge variant={badge.variant}>{badge.label}</Badge>
+            <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
           </div>
         </CardHeader>
         <CardContent>

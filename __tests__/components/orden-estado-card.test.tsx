@@ -138,9 +138,9 @@ describe("OrdenEstadoCard — acción principal y más estados", () => {
     const onUpdateEstado = vi.fn()
     renderCard({ estado: "EN_REPARACION" as EstadoOrden, onUpdateEstado })
     fireEvent.click(screen.getByRole("button", { name: /Más estados/ }))
-    expect(screen.getByRole("button", { name: "Esperando Repuesto" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Esperando repuesto" })).toBeInTheDocument()
     expect(screen.queryAllByRole("button", { name: /^Reparado$/ })).toHaveLength(0)
-    fireEvent.click(screen.getByRole("button", { name: "Esperando Repuesto" }))
+    fireEvent.click(screen.getByRole("button", { name: "Esperando repuesto" }))
     expect(onUpdateEstado).toHaveBeenCalledWith("ESPERANDO_REPUESTO")
   })
 

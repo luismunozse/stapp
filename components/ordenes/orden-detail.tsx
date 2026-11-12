@@ -694,14 +694,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <h1 className="text-2xl font-bold">
                 Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
               </h1>
-              {isRetiro ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  <Package className="h-3 w-3" />
-                  Retirado sin reparacion
-                </span>
-              ) : (
-                <OrderStatusBadge status={orden.estado} showIcon />
-              )}
+              <OrderStatusBadge status={orden.estado} showIcon />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               {orden.cliente?.nombre && <span className="font-medium">{orden.cliente.nombre}</span>}
