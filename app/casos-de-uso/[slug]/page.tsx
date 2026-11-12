@@ -61,7 +61,7 @@ export default async function UseCasePage({ params }: PageProps) {
       <BreadcrumbJsonLd
         items={[
           { name: "Inicio", url: "https://stapp.com.ar" },
-          { name: "Casos de Uso", url: "https://stapp.com.ar/casos-de-uso" },
+          { name: "Casos de uso", url: "https://stapp.com.ar/casos-de-uso" },
           {
             name: useCase.title,
             url: `https://stapp.com.ar/casos-de-uso/${useCase.slug}`,
@@ -303,7 +303,7 @@ export default async function UseCasePage({ params }: PageProps) {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg">
                 <Link href="/registro">
-                  Comenzar Gratis
+                  Comenzar gratis
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Link>
               </Button>

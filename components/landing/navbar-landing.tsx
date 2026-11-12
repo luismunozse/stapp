@@ -79,13 +79,13 @@ export function NavbarLanding() {
               <Button asChild className="whitespace-nowrap">
                 <Link href="/dashboard">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Ir al Dashboard
+                  Ir al panel
                 </Link>
               </Button>
             ) : (
               <>
                 <Button asChild variant="ghost" className="whitespace-nowrap">
-                  <Link href="/login">Iniciar Sesión</Link>
+                  <Link href="/login">Iniciar sesión</Link>
                 </Button>
                 <Button asChild className="whitespace-nowrap rounded-full">
                   <Link href="/registro?plan=profesional">Probar gratis</Link>
@@ -145,14 +145,14 @@ export function NavbarLanding() {
                   <Button asChild className="w-full">
                     <Link href="/dashboard">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Ir al Dashboard
+                      Ir al panel
                     </Link>
                   </Button>
                 ) : (
                   <>
                     <Button asChild variant="outline" className="w-full">
                       <Link href="/login">
-                        Iniciar Sesión
+                        Iniciar sesión
                       </Link>
                     </Button>
                     <Button asChild className="w-full rounded-full">

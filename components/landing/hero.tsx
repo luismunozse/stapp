@@ -17,7 +17,7 @@ function formatThousands(price: number): string {
 
 const WHATSAPP_DEMO_URL =
   "https://wa.me/5491169625733?text=" +
-  encodeURIComponent("Hola! Quiero agendar una demo de STApp para mi taller.")
+  encodeURIComponent("¡Hola! Quiero agendar una demo de STApp para mi taller.")
 
 // ========================================
 // FLOATING UI CARDS (mini-componentes reales del producto, no mockups)
@@ -46,7 +46,7 @@ function FloatingWhatsAppCard({ reduceMotion }: { reduceMotion: boolean | null }
         <div className="min-w-0">
           <p className="text-xs font-semibold text-foreground">Aviso enviado a Juan</p>
           <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-            {"“Tu equipo está listo para retirar. Te esperamos!”"}
+            {"“Tu equipo está listo para retirar. ¡Te esperamos!”"}
           </p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
               <div className="overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-primary/10">
                 <Image
                   src="/screenshots/desktop/dashboard.png"
-                  alt="Dashboard de STApp mostrando los ingresos del mes de un taller y sus órdenes pendientes"
+                  alt="Panel de STApp mostrando los ingresos del mes de un taller y sus órdenes pendientes"
                   width={1409}
                   height={912}
                   className="block h-auto w-full"

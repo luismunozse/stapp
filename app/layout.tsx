@@ -92,7 +92,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     siteName: "STApp",
     title: "STApp - Gestión de Servicio Técnico",
-    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación.",
+    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administrá órdenes de trabajo, clientes, inventario y facturación.",
     images: [
       {
         url: "/api/og?v=4",
@@ -106,7 +106,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "STApp - Gestión de Servicio Técnico",
-    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes, clientes e inventario.",
+    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administrá órdenes, clientes e inventario.",
     images: ["/api/og?v=4"],
   },
   // Robots

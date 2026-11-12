@@ -30,7 +30,7 @@ export default function CasosDeUsoPage() {
       <BreadcrumbJsonLd
         items={[
           { name: "Inicio", url: "https://stapp.com.ar" },
-          { name: "Casos de Uso", url: "https://stapp.com.ar/casos-de-uso" },
+          { name: "Casos de uso", url: "https://stapp.com.ar/casos-de-uso" },
         ]}
       />
       <NavbarLanding />
