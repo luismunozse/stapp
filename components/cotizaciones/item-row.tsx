@@ -146,8 +146,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     if (disponible <= 0) {
       const ok = await confirm({
         title: "Producto sin stock",
-        description: `"${inv.nombre}" no tiene stock disponible. La cotización no reserva stock hasta que se aprueba. ¿Querés cotizarlo igual?`,
-        confirmText: "Cotizar igual",
+        description: `"${inv.nombre}" no tiene stock disponible. El presupuesto no reserva stock hasta que se aprueba. ¿Querés presupuestarlo igual?`,
+        confirmText: "Presupuestar igual",
         cancelText: "Cancelar",
         variant: "warning",
       })

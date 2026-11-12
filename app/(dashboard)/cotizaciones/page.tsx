@@ -319,8 +319,8 @@ export default function CotizacionesPage() {
     }
 
     const confirmed = await confirm({
-      title: "Enviar Cotizacion",
-      description: "Enviar cotizacion al cliente por email?",
+      title: "Enviar presupuesto",
+      description: "¿Enviar el presupuesto al cliente por email?",
       confirmText: "Enviar",
       cancelText: "Cancelar",
       variant: "info",
@@ -332,13 +332,13 @@ export default function CotizacionesPage() {
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/enviar`, { method: "POST" })
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al enviar cotizacion")
+        await showError(error.error || "No se pudo enviar el presupuesto")
         return
       }
-      await showSuccess("Cotizacion enviada exitosamente")
+      await showSuccess("Presupuesto enviado")
       mutate()
     } catch {
-      await showError("Error al enviar cotizacion")
+      await showError("No se pudo enviar el presupuesto")
     } finally {
       setSendingId(null)
     }
@@ -346,8 +346,8 @@ export default function CotizacionesPage() {
 
   const handleDelete = async (cotizacionId: string) => {
     const confirmed = await confirm({
-      title: "Eliminar Cotizacion",
-      description: "Esta accion no se puede deshacer.",
+      title: "Eliminar presupuesto",
+      description: "Esta acción no se puede deshacer.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -363,7 +363,7 @@ export default function CotizacionesPage() {
       }
       mutate()
     } catch {
-      await showError("Error al eliminar cotizacion")
+      await showError("No se pudo eliminar el presupuesto")
     }
   }
 
@@ -403,9 +403,9 @@ export default function CotizacionesPage() {
     const nombre = cotizacion.clienteNombre || "cliente"
     const total = formatPrice(Number(cotizacion.total || 0))
     const mensaje =
-      `Hola ${nombre}, te comparto la cotización ${cotizacion.numeroCotizacion}. ` +
+      `Hola ${nombre}, te comparto el presupuesto ${cotizacion.numeroCotizacion}. ` +
       `Total: ${total}. ` +
-      `Podés verla acá: ${url}`
+      `Podés verlo acá: ${url}`
 
     if (cotizacion.estado === "BORRADOR") {
       try {
@@ -451,14 +451,14 @@ export default function CotizacionesPage() {
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/duplicar`, { method: "POST" })
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al duplicar cotizacion")
+        await showError(error.error || "No se pudo duplicar el presupuesto")
         return
       }
       const data = await res.json()
-      await showSuccess(`Cotizacion ${data.numeroCotizacion} creada como borrador`)
+      await showSuccess(`Presupuesto ${data.numeroCotizacion} creado como borrador`)
       mutate()
     } catch {
-      await showError("Error al duplicar cotizacion")
+      await showError("No se pudo duplicar el presupuesto")
     } finally {
       setDuplicatingId(null)
     }
@@ -508,7 +508,7 @@ export default function CotizacionesPage() {
         await showError(err.error || "Error al vincular orden")
         return
       }
-      await showSuccess("Cotización vinculada a la orden")
+      await showSuccess("Presupuesto vinculado a la orden")
       setLinkingCotizacion(null)
       setLinkOrdenId(null)
       mutate()
@@ -562,13 +562,13 @@ export default function CotizacionesPage() {
   return (
     <div className="container py-6">
       <PageShell
-        title="Cotizaciones"
+        title="Presupuestos"
         icon={Receipt}
         className="space-y-4"
         actions={!showForm && !editingCotizacion && canCrear ? (
           <Button onClick={() => setShowTipoSelector(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Nueva Cotización
+            Nuevo presupuesto
           </Button>
         ) : undefined}
       >
@@ -576,9 +576,9 @@ export default function CotizacionesPage() {
       {!cotizacionesLoading && !hasCotizaciones && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Las cotizaciones son parte del plan Profesional</p>
+            <p className="text-sm font-medium">Los presupuestos online son parte del plan Profesional</p>
             <p className="text-xs text-muted-foreground">
-              Podés seguir viendo y cerrando las que ya tenés. Para crear nuevas, pasate a Profesional.
+              Podés seguir viendo y cerrando los que ya tenés. Para crear nuevos, pasate a Profesional.
             </p>
           </div>
           <Link href="/precios">
@@ -605,9 +605,9 @@ export default function CotizacionesPage() {
           <SelectContent>
             <SelectItem value="TODOS">Todos</SelectItem>
             <SelectItem value="BORRADOR">Borrador</SelectItem>
-            <SelectItem value="ENVIADA">Enviada</SelectItem>
-            <SelectItem value="ACEPTADA">Aceptada</SelectItem>
-            <SelectItem value="RECHAZADA">Rechazada</SelectItem>
+            <SelectItem value="ENVIADA">Enviado</SelectItem>
+            <SelectItem value="ACEPTADA">Aceptado</SelectItem>
+            <SelectItem value="RECHAZADA">Rechazado</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex border rounded-lg overflow-hidden">
@@ -636,9 +636,9 @@ export default function CotizacionesPage() {
       <Dialog open={showTipoSelector} onOpenChange={setShowTipoSelector}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>¿Qué tipo de cotización querés crear?</DialogTitle>
+            <DialogTitle>¿Qué tipo de presupuesto querés crear?</DialogTitle>
             <DialogDescription>
-              Elegí el tipo según el escenario. Podés convertir un presupuesto en orden más tarde.
+              Elegí el tipo según el caso. Un presupuesto independiente se puede convertir en orden más tarde.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2 pt-2">
@@ -649,7 +649,7 @@ export default function CotizacionesPage() {
             >
               <div className="flex items-center gap-2 font-medium mb-1">
                 <Wrench className="h-4 w-4 text-primary" />
-                Cotización de orden
+                Presupuesto de orden
               </div>
               <p className="text-xs text-muted-foreground">
                 Para piezas/servicios sobre un equipo ya ingresado al taller. Requiere
@@ -662,8 +662,8 @@ export default function CotizacionesPage() {
               onClick={() => openCreateForm("PRESUPUESTO")}
             >
               <div className="flex items-center gap-2 font-medium mb-1">
-                <FileText className="h-4 w-4 text-primary" />
-                Presupuesto
+<FileText className="h-4 w-4 text-primary" />
+                Presupuesto independiente
               </div>
               <p className="text-xs text-muted-foreground">
                 Documento plano para presentar (seguro, empresa). Incluye datos del
@@ -741,11 +741,11 @@ export default function CotizacionesPage() {
         <EmptyState
           icon={Receipt}
           variant={!debouncedSearch && estadoFilter === "TODOS" ? "default" : "search"}
-          title={!debouncedSearch && estadoFilter === "TODOS" ? "Todavía no hay cotizaciones" : "Sin resultados"}
+          title={!debouncedSearch && estadoFilter === "TODOS" ? "Todavía no hay presupuestos" : "Sin resultados"}
           description={!debouncedSearch && estadoFilter === "TODOS"
-            ? "Creá tu primera cotización para enviar presupuestos a tus clientes."
-            : "No se encontraron cotizaciones con los filtros aplicados."}
-          action={!debouncedSearch && estadoFilter === "TODOS" && canCrear ? { label: "Nueva Cotización", onClick: () => setShowForm(true) } : undefined}
+            ? "Creá tu primer presupuesto para enviárselo a tus clientes."
+            : "No se encontraron presupuestos con los filtros aplicados."}
+          action={!debouncedSearch && estadoFilter === "TODOS" && canCrear ? { label: "Nuevo presupuesto", onClick: () => setShowForm(true) } : undefined}
         />
       ) : (
         <>
@@ -761,7 +761,7 @@ export default function CotizacionesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium">Numero</th>
+                      <th className="text-left p-3 font-medium">Número</th>
                       <th className="text-left p-3 font-medium">Estado</th>
                       <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
                       <th className="text-left p-3 font-medium hidden md:table-cell">Orden</th>
@@ -783,7 +783,7 @@ export default function CotizacionesPage() {
                               {cotizacion.numeroCotizacion}
                               {cotizacion.tipo === "PRESUPUESTO" && (
                                 <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
-                                  Presupuesto
+                                  Independiente
                                 </Badge>
                               )}
                               {cotizacion.origen === "CATALOGO_PUBLICO" && (
@@ -972,7 +972,7 @@ export default function CotizacionesPage() {
                         {cotizacion.tipo === "PRESUPUESTO" && (
                           <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                             <FileText className="mr-1 h-3 w-3" />
-                            Presupuesto
+                            Independiente
                           </Badge>
                         )}
                         {cotizacion.origen === "CATALOGO_PUBLICO" && (
@@ -992,12 +992,12 @@ export default function CotizacionesPage() {
                         )}
                         {cotizacion.convertidaAOrdenId && (
                           <Badge variant="outline" className="text-xs border-green-300 text-green-700">
-                            Convertida a orden
+                            Convertido a orden
                           </Badge>
                         )}
                         {cotizacion.ventaId && (
                           <Badge variant="outline" className="text-xs border-green-300 text-green-700">
-                            Convertida en venta
+                            Convertido en venta
                           </Badge>
                         )}
                         {cotizacion.vistoAt && (
@@ -1017,17 +1017,17 @@ export default function CotizacionesPage() {
                       {cotizacion.clienteNombre && (
                         <span>Cliente: {cotizacion.clienteNombre}</span>
                       )}
-                      <span>Creada: {formatDate(cotizacion.createdAt)}</span>
+                      <span>Creado: {formatDate(cotizacion.createdAt)}</span>
                       {cotizacion.fechaVencimiento && (
                         <span>
-                          Valida hasta: {formatDate(cotizacion.fechaVencimiento)}
+                          Válido hasta: {formatDate(cotizacion.fechaVencimiento)}
                         </span>
                       )}
                     </div>
 
                     {/* Items preview */}
                     <div className="text-sm">
-                      <div className="font-medium mb-1">Items:</div>
+                      <div className="font-medium mb-1">Ítems:</div>
                       <ul className="list-disc list-inside text-muted-foreground">
                         {cotizacion.items.slice(0, 3).map((item) => (
                           <li key={item.id}>
@@ -1062,7 +1062,7 @@ export default function CotizacionesPage() {
                         <SignatureDisplay
                           signature={cotizacion.firmaAprobacion}
                           mime={cotizacion.firmaMime}
-                          label="Firma de Aprobacion"
+                          label="Firma de aprobación"
                           date={cotizacion.fechaAprobacion}
                         />
                       </div>
@@ -1265,7 +1265,7 @@ export default function CotizacionesPage() {
           onClose={() => setConvertingCotizacion(null)}
           onSuccess={async (ventaId, numeroVenta) => {
             setConvertingCotizacion(null)
-            await showSuccess(`Venta #${numeroVenta} creada exitosamente`)
+            await showSuccess(`Venta #${numeroVenta} creada`)
             mutate()
           }}
           cotizacionId={convertingCotizacion.id}
@@ -1287,7 +1287,7 @@ export default function CotizacionesPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Vincular cotización a orden</DialogTitle>
+            <DialogTitle>Vincular presupuesto a orden</DialogTitle>
             <DialogDescription>
               Asociá {linkingCotizacion?.numeroCotizacion} a una orden de servicio existente.
               El presupuesto de la orden se recalcula al confirmar.

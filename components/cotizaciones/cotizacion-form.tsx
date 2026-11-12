@@ -393,12 +393,12 @@ export function CotizacionForm({
       (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
     )
     if (validItems.length === 0) {
-      await showWarning("Debe agregar al menos un item válido")
+      await showWarning("Agregá al menos un ítem válido")
       return
     }
 
     if (isStandalone && !clienteId) {
-      await showWarning("Debe seleccionar un cliente")
+      await showWarning("Seleccioná un cliente")
       return
     }
 
@@ -418,7 +418,7 @@ export function CotizacionForm({
     }
 
     if (editaAceptada && !modoAceptada) {
-      await showWarning("Elegí si la cotización sigue aceptada o si el cliente tiene que firmarla de nuevo")
+      await showWarning("Elegí si el presupuesto sigue aceptado o si el cliente tiene que firmarlo de nuevo")
       return
     }
 
@@ -492,14 +492,14 @@ export function CotizacionForm({
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al guardar cotización")
+        await showError(error.error || "No se pudo guardar el presupuesto")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al guardar cotización")
+      await showError("No se pudo guardar el presupuesto")
     } finally {
       setLoading(false)
     }
@@ -512,8 +512,8 @@ export function CotizacionForm({
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             {isEditing
-              ? isPresupuesto ? "Editar Presupuesto" : "Editar Cotización"
-              : isPresupuesto ? "Nuevo Presupuesto" : "Nueva Cotización"}
+              ? isPresupuesto ? "Editar presupuesto independiente" : "Editar presupuesto"
+              : isPresupuesto ? "Nuevo presupuesto independiente" : "Nuevo presupuesto de orden"}
           </CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -828,7 +828,7 @@ export function CotizacionForm({
               <div>Descripción</div>
               <div>Unidad</div>
               <div className="text-center">Cantidad</div>
-              <div className="text-center">Precio Unit.</div>
+              <div className="text-center">Precio unit.</div>
               <div className="text-center">Descuento</div>
               <div className="text-right">Subtotal</div>
               <div></div>
@@ -902,7 +902,7 @@ export function CotizacionForm({
             {/* Descuento Global + IVA */}
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
               <div className="flex-1">
-                <Label className="text-sm">Descuento Global</Label>
+                <Label className="text-sm">Descuento global</Label>
                 <div className="flex items-center gap-2 mt-1">
                   <Input
                     type="text"
@@ -1020,7 +1020,7 @@ export function CotizacionForm({
               <div>
                 <DatePicker
                   id="fechaVencimiento"
-                  label="Válida hasta"
+                  label="Válido hasta"
                   value={fechaVencimiento}
                   onChange={setFechaVencimiento}
                   min={new Date().toISOString().split("T")[0]}
@@ -1042,12 +1042,12 @@ export function CotizacionForm({
             </div>
 
             <div>
-              <Label htmlFor="terminos">Términos y Condiciones</Label>
+              <Label htmlFor="terminos">Términos y condiciones</Label>
               <Textarea
                 id="terminos"
                 value={terminos}
                 onChange={(e) => setTerminos(e.target.value)}
-                placeholder="Términos y condiciones de la cotización..."
+                placeholder="Términos y condiciones del presupuesto..."
                 rows={4}
                 disabled={loading}
               />
@@ -1057,19 +1057,19 @@ export function CotizacionForm({
           {editaAceptada && (
             <fieldset className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
               <legend className="px-1 text-sm font-medium">
-                Esta cotización ya fue aceptada por el cliente. ¿Cómo guardamos los cambios?
+                Este presupuesto ya fue aceptado por el cliente. ¿Cómo guardamos los cambios?
               </legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {([
                   {
                     value: "MANTENER" as const,
-                    titulo: "Sigue aceptada",
+                    titulo: "Sigue aceptado",
                     detalle: "Para cambios ya acordados con el cliente. Se mantiene su firma y se ajusta el stock reservado.",
                   },
                   {
                     value: "PEDIR_FIRMA" as const,
                     titulo: "Pedir la firma de nuevo",
-                    detalle: "Se borra la firma, se libera el stock reservado y vuelve a Enviada para que el cliente la apruebe.",
+                    detalle: "Se borra la firma, se libera el stock reservado y vuelve a Enviado para que el cliente lo apruebe.",
                   },
                 ]).map((opcion) => (
                   <label
@@ -1106,8 +1106,8 @@ export function CotizacionForm({
               {loading
                 ? "Guardando..."
                 : isEditing
-                ? "Actualizar Cotización"
-                : "Crear Cotización"}
+                ? "Actualizar presupuesto"
+                : "Crear presupuesto"}
             </Button>
           </FormActionBar>
         </form>

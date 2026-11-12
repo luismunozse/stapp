@@ -145,8 +145,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     }
 
     const confirmed = await confirm({
-      title: "Enviar Cotización",
-      description: "¿Enviar cotización al cliente por email?",
+      title: "Enviar presupuesto",
+      description: "¿Enviar el presupuesto al cliente por email?",
       confirmText: "Enviar",
       cancelText: "Cancelar",
       variant: "info",
@@ -162,17 +162,17 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al enviar cotización")
+        await showError(error.error || "No se pudo enviar el presupuesto")
         return
       }
 
-      await showSuccess("Cotización enviada exitosamente")
+      await showSuccess("Presupuesto enviado")
       mutate()
       // El servidor puede transicionar la orden vinculada a PRESUPUESTADO.
       onOrdenChanged?.()
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al enviar cotización")
+      await showError("No se pudo enviar el presupuesto")
     } finally {
       setSendingId(null)
     }
@@ -180,8 +180,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
   const handleDelete = async (cotizacionId: string) => {
     const confirmed = await confirm({
-      title: "Eliminar Cotización",
-      description: "¿Estás seguro de eliminar esta cotización? Esta acción no se puede deshacer.",
+      title: "Eliminar presupuesto",
+      description: "¿Eliminar este presupuesto? Esta acción no se puede deshacer.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -196,7 +196,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al eliminar cotización")
+        await showError(error.error || "No se pudo eliminar el presupuesto")
         return
       }
 
@@ -205,7 +205,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       onOrdenChanged?.()
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al eliminar cotización")
+      await showError("No se pudo eliminar el presupuesto")
     }
   }
 
@@ -258,7 +258,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     try {
       await navigator.clipboard.writeText(url)
       await showSuccess(wasBorador
-        ? "Cotizacion enviada como presupuesto. Link copiado al portapapeles."
+        ? "Presupuesto enviado. Link copiado al portapapeles."
         : "Link copiado al portapapeles")
     } catch {
       // Sin permiso de portapapeles: mostramos el link para copiarlo a mano.
@@ -272,7 +272,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     const nombre = cotizacion.clienteNombre || "cliente"
     const total = formatPrice(Number(cotizacion.total || 0))
     const mensaje =
-      `Hola ${nombre}, te comparto la cotización ${cotizacion.numeroCotizacion}. ` +
+      `Hola ${nombre}, te comparto el presupuesto ${cotizacion.numeroCotizacion}. ` +
       `Total: ${total}. ` +
       `Podés verla acá: ${url}`
 
@@ -325,14 +325,14 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/duplicar`, { method: "POST" })
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al duplicar cotizacion")
+        await showError(error.error || "No se pudo duplicar el presupuesto")
         return
       }
       const data = await res.json()
-      await showSuccess(`Cotizacion ${data.numeroCotizacion} creada como borrador`)
+      await showSuccess(`Presupuesto ${data.numeroCotizacion} creado como borrador`)
       mutate()
     } catch {
-      await showError("Error al duplicar cotizacion")
+      await showError("No se pudo duplicar el presupuesto")
     } finally {
       setDuplicatingId(null)
     }
@@ -344,9 +344,9 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   // le esta cobrando. Por eso el aviso va antes de crearla, no despues.
   const handleRevisar = async (cotizacion: Cotizacion) => {
     const confirmed = await confirm({
-      title: "Revisar Cotización",
+      title: "Revisar presupuesto",
       description:
-        "Se va a crear una nueva versión de esta cotización con los mismos items. " +
+        "Se va a crear una nueva versión de este presupuesto con los mismos ítems. " +
         "La versión aceptada queda como está, con la firma del cliente; la nueva " +
         "versión va a necesitar que el cliente la firme de nuevo antes de valer.",
       confirmText: "Revisar",
@@ -412,19 +412,19 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-2">
           <FileText className="h-4 w-4" />
-          Cotizaciones ({cotizaciones.length})
+          Presupuestos ({cotizaciones.length})
         </h3>
         {!readOnly && !showForm && !editingCotizacion && canCrear && (
           <div className="flex gap-2">
             {itemsPrefill.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => { setPrefillFromRepuestos(true); setShowForm(true) }}>
                 <Plus className="mr-2 h-4 w-4" />
-                Desde Repuestos
+                Desde repuestos
               </Button>
             )}
             <Button size="sm" onClick={() => { setPrefillFromRepuestos(false); setShowForm(true) }}>
               <Plus className="mr-2 h-4 w-4" />
-              Nueva Cotización
+              Nuevo presupuesto
             </Button>
           </div>
         )}
@@ -445,8 +445,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       {!readOnly && !showForm && !editingCotizacion && canCrear && repuestosSinPrecio > 0 && (
         <p className="text-xs text-muted-foreground">
           {repuestosSinPrecio === 1
-            ? "Hay 1 repuesto sin precio de venta cargado: no se incluye al crear la cotización desde repuestos. Agregalo como item manual."
-            : `Hay ${repuestosSinPrecio} repuestos sin precio de venta cargado: no se incluyen al crear la cotización desde repuestos. Agregalos como items manuales.`}
+            ? "Hay 1 repuesto sin precio de venta cargado: no se incluye al crear el presupuesto desde repuestos. Agregalo como item manual."
+            : `Hay ${repuestosSinPrecio} repuestos sin precio de venta cargado: no se incluyen al crear el presupuesto desde repuestos. Agregalos como items manuales.`}
         </p>
       )}
 
@@ -488,7 +488,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       {cotizaciones.length === 0 && !showForm ? (
         <EmptyState
           icon={FileText}
-          title="No hay cotizaciones para esta orden"
+          title="No hay presupuestos para esta orden"
           variant="search"
         />
       ) : (
@@ -536,7 +536,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       <SignatureDisplay
                         signature={cotizacion.firmaAprobacion}
                         mime={cotizacion.firmaMime}
-                        label="Firma de Aprobacion"
+                        label="Firma de aprobación"
                         date={cotizacion.fechaAprobacion}
                       />
                     </CardContent>
@@ -564,10 +564,10 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                 </CardHeader>
                 <CardContent className="py-3 space-y-3">
                   <div className="text-sm text-muted-foreground flex flex-col sm:flex-row sm:gap-4">
-                    <span>Creada: {formatDate(cotizacion.createdAt)}</span>
+                    <span>Creado: {formatDate(cotizacion.createdAt)}</span>
                     {cotizacion.fechaVencimiento && (
                       <span>
-                        Válida hasta: {formatDate(cotizacion.fechaVencimiento)}
+                        Válido hasta: {formatDate(cotizacion.fechaVencimiento)}
                       </span>
                     )}
                   </div>
@@ -593,7 +593,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       <SignatureDisplay
                         signature={cotizacion.firmaAprobacion}
                         mime={cotizacion.firmaMime}
-                        label="Firma de Aprobacion"
+                        label="Firma de aprobación"
                         date={cotizacion.fechaAprobacion}
                       />
                     </div>
@@ -640,7 +640,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         variant="outline"
                         onClick={() => handleRevisar(cotizacion)}
                         disabled={revisingId === cotizacion.id}
-                        title="Crea una nueva versión que el cliente tiene que volver a firmar"
+                        title="Crea una versión nueva que el cliente tiene que volver a firmar"
                       >
                         <History className="mr-2 h-3 w-3" />
                         {revisingId === cotizacion.id ? "Creando revisión..." : "Revisar"}
@@ -655,7 +655,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                           onClick={() => setApprovingCotizacion(cotizacion)}
                         >
                           <PenTool className="mr-2 h-3 w-3" />
-                          Aprobar con Firma
+                          Aprobar con firma
                         </Button>
                         <Button
                           size="sm"
@@ -704,7 +704,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         size="sm"
                         variant={cotizacion.estado === "BORRADOR" ? "default" : "ghost"}
                         onClick={() => handleShare(cotizacion)}
-                        title={cotizacion.estado === "BORRADOR" ? "Enviar como presupuesto y copiar link" : "Copiar link publico"}
+                        title={cotizacion.estado === "BORRADOR" ? "Enviar y copiar link" : "Copiar link público"}
                       >
                         {cotizacion.estado === "BORRADOR" ? (
                           <><Send className="mr-2 h-3 w-3" />Enviar y compartir</>
@@ -734,7 +734,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           {cotizaciones.length > 1 && (
             <div className="flex items-center justify-between border-t pt-3 px-1 mt-1">
               <span className="text-sm font-medium text-muted-foreground">
-                Total ({cotizaciones.length} cotizaciones)
+                Total ({cotizaciones.length} presupuestos)
               </span>
               <span className="text-lg font-bold">
                 {formatPrice(cotizaciones.reduce((sum, c) => sum + c.total, 0))}
