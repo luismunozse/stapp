@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Trash2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 
 const METODOS_PAGO = [
   { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
@@ -66,11 +66,12 @@ export function MultiPagoInput({
 }: MultiPagoInputProps) {
   const { formatPrice } = useCurrency()
 
-  // Raw display buffers per numeric field so the user can clear/retype freely
-  // (e.g. empty intermediate state, leading ".") without the value snapping to
-  // the parsed fallback. Keyed by `${pago.id}:${field}`. The numeric state in
-  // `pagos` keeps driving every total/calc exactly as before.
+  // Raw display buffer for cuotas so the user can clear/retype freely without
+  // the value snapping to the parsed fallback. Keyed by `${pago.id}:cuotas`.
+  // Los montos usan <MoneyInput>, que maneja su propio texto.
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({})
+  // Texto tipeado en cada monto, solo para avisar cómo se interpretó.
+  const [textoMonto, setTextoMonto] = useState<Record<string, string>>({})
 
   const setRaw = (key: string, value: string) => {
     setRawInputs((prev) => ({ ...prev, [key]: value }))
@@ -166,8 +167,6 @@ export function MultiPagoInput({
                     setRawInputs((prev) => {
                       const next = { ...prev }
                       delete next[`${pago.id}:cuotas`]
-                      delete next[`${pago.id}:recargo`]
-                      delete next[`${pago.id}:costoFinanciero`]
                       return next
                     })
                     updatePago(index, { metodo: value })
@@ -200,23 +199,19 @@ export function MultiPagoInput({
 
             {/* Monto */}
             <div>
-              <Label className="text-xs">Monto *</Label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={displayValue(`${pago.id}:monto`, pago.monto)}
-                onChange={(e) => {
-                  setRaw(`${pago.id}:monto`, e.target.value)
-                  updatePago(index, { monto: parseMoneyInput(e.target.value) || 0 })
+              <Label htmlFor={`${pago.id}-monto`} className="text-xs">Monto *</Label>
+              <MoneyInput
+                id={`${pago.id}-monto`}
+                value={pago.monto || null}
+                onValueChange={(v, { texto }) => {
+                  setTextoMonto((prev) => ({ ...prev, [pago.id]: texto }))
+                  updatePago(index, { monto: v ?? 0 })
                 }}
-                placeholder="0.00"
               />
               {/* Con punto o coma el monto se interpreta (1.500 = mil
                   quinientos, 1500,50 = con centavos): se muestra cómo quedó
                   antes de cobrar. */}
-              {/[.,]/.test(rawInputs[`${pago.id}:monto`] ?? "") && pago.monto > 0 && (
+              {/[.,]/.test(textoMonto[pago.id] ?? "") && pago.monto > 0 && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   Se registra {formatPrice(pago.monto)}
                 </p>
@@ -245,18 +240,11 @@ export function MultiPagoInput({
             {/* Costo financiero (lo que cobra la terminal al comercio) */}
             {showRecargo && (
               <div>
-                <Label className="text-xs">Costo terminal % (lo que absorbe el comercio)</Label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  step="0.01"
-                  min={0}
-                  max={100}
-                  value={displayValue(`${pago.id}:costoFinanciero`, pago.costoFinanciero)}
-                  onChange={(e) => {
-                    setRaw(`${pago.id}:costoFinanciero`, e.target.value)
-                    updatePago(index, { costoFinanciero: parseMoneyInput(e.target.value) || null })
-                  }}
+                <Label htmlFor={`${pago.id}-costo`} className="text-xs">Costo terminal % (lo que absorbe el comercio)</Label>
+                <MoneyInput
+                  id={`${pago.id}-costo`}
+                  value={pago.costoFinanciero}
+                  onValueChange={(v) => updatePago(index, { costoFinanciero: v || null })}
                   placeholder="Ej: 12"
                 />
               </div>

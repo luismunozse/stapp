@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Badge } from "@/components/ui/badge"
 import {
   Trash2,
@@ -110,7 +111,6 @@ export function PosCart({
   const [editingQtyValue, setEditingQtyValue] = useState("")
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
-  const [precioDraft, setPrecioDraft] = useState<string>("")
   const [seriesDisp, setSeriesDisp] = useState<Record<string, SerieDisponible[]>>({})
   const [seriesLoading, setSeriesLoading] = useState<string | null>(null)
   // Per-item discount drafts (tipo toggle + value input)
@@ -119,7 +119,7 @@ export function PosCart({
 
   // Global discount local draft state
   const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
-  const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+  const [globalDescValor, setGlobalDescValor] = useState<number | null>(descuentoGlobal ? descuentoGlobal.valor : null)
 
   // Último valor que ESTE componente subió al padre (null incluido). Se usa
   // para distinguir un cambio externo real de `descuentoGlobal` (venta
@@ -162,7 +162,7 @@ export function PosCart({
     if (isEcho) return
     lastEmittedDescuentoRef.current = descuentoGlobal
     setGlobalDescTipo(descuentoGlobal?.tipo ?? "PORCENTAJE")
-    setGlobalDescValor(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+    setGlobalDescValor(descuentoGlobal ? descuentoGlobal.valor : null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [descuentoGlobal?.tipo, descuentoGlobal?.valor])
 
@@ -385,7 +385,6 @@ export function PosCart({
                         } else {
                           setExpandedItem(item.lineId)
                           setGarantiaDraft(String(item.diasGarantia))
-                          setPrecioDraft(String(item.precioUnitario))
                         }
                       }}
                     >
@@ -499,7 +498,6 @@ export function PosCart({
                         } else {
                           setExpandedItem(item.lineId)
                           setGarantiaDraft(String(item.diasGarantia))
-                          setPrecioDraft(String(item.precioUnitario))
                         }
                       }}
                     >
@@ -539,15 +537,10 @@ export function PosCart({
                       {/* Per-line unit price override */}
                       <label className="flex items-center gap-1.5">
                         <span className="text-muted-foreground">Precio unit.:</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={precioDraft}
-                          onChange={(e) => {
-                            setPrecioDraft(e.target.value)
-                            const parsed = parseFloat(e.target.value)
-                            if (parsed > 0) onSetPrecio(item.lineId, parsed)
+                        <MoneyInput
+                          value={item.precioUnitario}
+                          onValueChange={(v) => {
+                            if (v !== null && v > 0) onSetPrecio(item.lineId, v)
                           }}
                           className="h-7 w-24 text-xs text-center"
                         />
@@ -580,18 +573,15 @@ export function PosCart({
                             )
                           })}
                         </div>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
+                        <MoneyInput
+                          aria-label="Descuento del producto"
                           value={(() => {
                             const tipo = itemDescTipo[item.lineId] ?? (item.tipoDescuento ?? "PORCENTAJE")
-                            return tipo === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : (item.descuento ?? 0)
+                            return (tipo === "PORCENTAJE" ? item.porcentajeDescuento : item.descuento) || null
                           })()}
-                          onChange={(e) => {
+                          onValueChange={(v) => {
                             const tipo = itemDescTipo[item.lineId] ?? (item.tipoDescuento ?? "PORCENTAJE")
-                            const val = parseFloat(e.target.value) || 0
-                            onSetItemDescuento(item.lineId, { tipo, valor: val })
+                            onSetItemDescuento(item.lineId, { tipo, valor: v ?? 0 })
                           }}
                           className="h-7 w-20 text-xs text-center"
                           placeholder="0"
@@ -667,7 +657,7 @@ export function PosCart({
                     type="button"
                     onClick={() => {
                       setGlobalDescTipo(t)
-                      const val = parseFloat(globalDescValor) || 0
+                      const val = globalDescValor ?? 0
                       if (val > 0) emitDescuentoGlobal({ tipo: t, valor: val })
                     }}
                     className={cn(
@@ -681,15 +671,12 @@ export function PosCart({
                   </button>
                 ))}
               </div>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
+              <MoneyInput
+                aria-label="Descuento global"
                 value={globalDescValor}
-                onChange={(e) => {
-                  const raw = e.target.value
-                  setGlobalDescValor(raw)
-                  const val = parseFloat(raw) || 0
+                onValueChange={(v) => {
+                  setGlobalDescValor(v)
+                  const val = v ?? 0
                   if (val > 0) {
                     emitDescuentoGlobal({ tipo: globalDescTipo, valor: val })
                   } else {

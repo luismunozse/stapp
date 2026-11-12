@@ -32,6 +32,7 @@ function stubFetch() {
     vi.fn(async (url: string) => {
       if (url.includes("/check-stock")) return { ok: true, json: async () => ({ stock: { inv1: 10 } }) }
       if (url === "/api/ventas") return { ok: true, json: async () => VENTA }
+      if (url.includes("/recargos-metodo")) return { ok: true, json: async () => ({ recargos: [] }) }
       return { ok: false, json: async () => ({}) }
     })
   )

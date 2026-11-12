@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ParsedRow } from './csv-parser'
-import { parseLocalizedNumber } from './number-parse'
+import { parseMonto } from './parse-money'
 
 // Cells reach the validators as STRINGS (CSV) or native numbers (Excel). Text
 // fields accept both: a numeric Excel cell for telefono/dni/codigo is a valid
@@ -52,7 +52,7 @@ const clienteRowSchema = z.object({
 
 /**
  * Number column. `emptyValue` is what a blank cell becomes. Parsing goes through
- * the shared `parseLocalizedNumber` so "1.500", "1.500,50" and "1,234.56" mean
+ * the shared `parseMonto` so "1.500", "1.500,50" and "1,234.56" mean
  * the same thing here as in "Actualizar precios"; garbage is an explicit error
  * naming the column and the value, never a silent guess.
  */
@@ -64,7 +64,7 @@ const numberColumn = (
     if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
       return opts.emptyValue
     }
-    const num = parseLocalizedNumber(val as string | number)
+    const num = parseMonto(val as string | number)
     if (num === null || (opts.integer && !Number.isInteger(num))) {
       ctx.addIssue({
         code: 'custom',

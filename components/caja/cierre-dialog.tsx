@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 import { round2 } from "@/lib/ventas/totales"
 
 interface CierreDialogProps {
@@ -38,7 +38,8 @@ export function CierreDialog({
   onSuccess,
 }: CierreDialogProps) {
   const { formatPrice } = useCurrency()
-  const [conteoFisico, setConteoFisico] = useState("")
+  const [conteoFisico, setConteoFisico] = useState<number | null>(null)
+  const [conteoInvalido, setConteoInvalido] = useState(false)
   const [observaciones, setObservaciones] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -46,13 +47,14 @@ export function CierreDialog({
   // Redondeo a centavos: el ruido de float (0.1 + 0.2) no puede pintar
   // "Faltante $ 0,00" con la caja cuadrada. Mismo cálculo que el endpoint de cierre.
   const esperado = round2(saldoInicial + totalIngresosEfectivo - totalEgresosEfectivo)
-  const conteo = parseMoneyInput(conteoFisico || "0")
+  const conteo = conteoFisico ?? 0
   const diferencia = round2(conteo - esperado)
   const cuadrada = Math.abs(diferencia) < 0.005
 
   useEffect(() => {
     if (open) {
-      setConteoFisico("")
+      setConteoFisico(null)
+      setConteoInvalido(false)
       setObservaciones("")
       setError("")
     }
@@ -60,8 +62,8 @@ export function CierreDialog({
 
   const handleSubmit = async () => {
     setError("")
-    if (!conteoFisico || isNaN(conteo) || conteo < 0) {
-      setError("Ingrese el conteo físico de efectivo")
+    if (conteoFisico === null || conteoInvalido || conteo < 0) {
+      setError("Ingresá el conteo físico de efectivo")
       return
     }
 
@@ -128,22 +130,21 @@ export function CierreDialog({
 
           {/* Conteo físico */}
           <div>
-            <label className="text-sm font-medium">Conteo físico de efectivo</label>
-            <Input
-              type="text"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+            <label htmlFor="conteo-fisico" className="text-sm font-medium">Conteo físico de efectivo</label>
+            <MoneyInput
+              id="conteo-fisico"
               value={conteoFisico}
-              onChange={(e) => setConteoFisico(e.target.value)}
+              onValueChange={(v, { invalido }) => {
+                setConteoFisico(v)
+                setConteoInvalido(invalido)
+              }}
               className="mt-1"
               autoFocus
             />
           </div>
 
           {/* Diferencia */}
-          {conteoFisico && (
+          {conteoFisico !== null && (
             <div
               className={`flex items-center justify-between p-3 rounded-lg border-2 ${
                 cuadrada

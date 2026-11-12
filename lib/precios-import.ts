@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs"
-import { parseLocalizedNumber } from "./number-parse"
+import { parseMonto } from "./parse-money"
 
 export type Cell = string | number | null
 
@@ -61,13 +61,13 @@ export async function getSheetPreviews(base64: string, perSheetLimit = 30): Prom
 
 /**
  * Parse a price-like cell value into a non-negative number rounded to cents.
- * Delegates to the shared `parseLocalizedNumber` (same rules as the CSV/Excel
+ * Delegates to the shared `parseMonto` (same rules as the CSV/Excel
  * import: "1.500" = 1500, "1.500,50" = 1500.5, "1,234.56" = 1234.56, "$ 1234").
  * Returns null if the value is empty, negative or unparseable.
  */
 export function parsePrice(raw: Cell): number | null {
   if (raw === null || raw === undefined) return null
-  const n = parseLocalizedNumber(raw)
+  const n = parseMonto(raw)
   if (n === null || n < 0) return null
   return Math.round(n * 100) / 100
 }

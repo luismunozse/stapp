@@ -11,7 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { parseMonto } from "@/lib/parse-money"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -83,8 +83,8 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
           setError("Usá la coma para los decimales (por ejemplo 2,5)")
           return
         }
-        const n = /^\d+([.,]\d+)?$/.test(texto) ? parseMoneyInput(texto) : NaN
-        if (!Number.isFinite(n)) {
+        const n = /^\d+([.,]\d+)?$/.test(texto) ? parseMonto(texto) : null
+        if (n === null) {
           setError("Ingresá un número válido para el costo de terminal (por ejemplo 2,5)")
           return
         }

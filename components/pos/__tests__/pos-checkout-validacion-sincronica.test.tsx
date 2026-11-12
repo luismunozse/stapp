@@ -42,7 +42,11 @@ function buildItemSinSeries(): PosCartItem {
 function stubFetch() {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    vi.fn(async (url: string) =>
+      url.includes("/recargos-metodo")
+        ? { ok: true, json: async () => ({ recargos: [] }) }
+        : { ok: true, json: async () => ({}) }
+    )
   )
 }
 

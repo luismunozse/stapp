@@ -2,8 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 import {
   Dialog,
   DialogContent,
@@ -19,15 +18,16 @@ interface AperturaDialogProps {
 }
 
 export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialogProps) {
-  const [saldoInicial, setSaldoInicial] = useState("")
+  const [saldoInicial, setSaldoInicial] = useState<number | null>(null)
+  const [saldoInvalido, setSaldoInvalido] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   const handleSubmit = async () => {
     setError("")
-    const monto = parseMoneyInput(saldoInicial || "0")
-    if (isNaN(monto) || monto < 0) {
-      setError("Ingrese un monto válido")
+    const monto = saldoInicial ?? 0
+    if (saldoInvalido || monto < 0) {
+      setError("Ingresá un monto válido")
       return
     }
 
@@ -44,7 +44,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
         throw new Error(data.error || "Error al abrir caja")
       }
 
-      setSaldoInicial("")
+      setSaldoInicial(null)
       onOpenChange(false)
       onSuccess()
     } catch (err) {
@@ -62,15 +62,14 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium">Saldo inicial en efectivo</label>
-            <Input
-              type="text"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+            <label htmlFor="saldo-inicial" className="text-sm font-medium">Saldo inicial en efectivo</label>
+            <MoneyInput
+              id="saldo-inicial"
               value={saldoInicial}
-              onChange={(e) => setSaldoInicial(e.target.value)}
+              onValueChange={(v, { invalido }) => {
+                setSaldoInicial(v)
+                setSaldoInvalido(invalido)
+              }}
               className="mt-1"
               autoFocus
             />

@@ -65,7 +65,7 @@ describe("PosCart — el descuento global no arrastra el valor del cliente anter
 
     rerender(<PosCart {...(baseProps({ tipo: "MONTO", valor: 2500 }) as any)} />)
 
-    expect(descuentoInput().value).toBe("2500")
+    expect(descuentoInput().value).toBe("2.500")
     expect(screen.getByRole("button", { name: "$" })).toHaveClass("bg-primary")
   })
 

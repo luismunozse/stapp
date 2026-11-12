@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { PosTerminal } from "@/components/pos/pos-terminal"
 
 vi.mock("next/navigation", () => ({
@@ -14,7 +14,8 @@ vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, pais: "AR", timezone: "America/Argentina/Buenos_Aires" }),
 }))
 vi.mock("@/contexts/modal-context", () => ({
-  useModal: () => ({ confirm: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
+  // F2 con carrito pide confirmación: acá se acepta, para probar el bloqueo por el scanner
+  useModal: () => ({ confirm: vi.fn().mockResolvedValue(true), showSuccess: vi.fn(), showError: vi.fn() }),
 }))
 vi.mock("@/contexts/offline-context", () => ({
   useOffline: () => ({ isOnline: true }),
@@ -27,7 +28,7 @@ vi.mock("@/components/pos/pos-product-search", async () => {
   const { forwardRef, useImperativeHandle } = await import("react")
   return {
     PosProductSearch: forwardRef((props: any, ref: any) => {
-      useImperativeHandle(ref, () => ({ focusSearch: () => {} }))
+      useImperativeHandle(ref, () => ({ focusSearch: () => {}, openManual: () => {} }))
       return (
         <div>
           <button
@@ -90,17 +91,17 @@ describe("PosTerminal — atajos bloqueados con el scanner de código de barras 
     stubFetch()
   })
 
-  it("F2 sí limpia el carrito cuando el scanner está cerrado (control)", () => {
+  it("F2 sí limpia el carrito cuando el scanner está cerrado (control)", async () => {
     render(<PosTerminal />)
     fireEvent.click(screen.getAllByRole("button", { name: "mock-add-product" })[0])
     expect(screen.getAllByTestId("mock-cart")[0]).toHaveTextContent("items:1")
 
     fireEvent.keyDown(document.body, { key: "F2" })
 
-    expect(screen.getAllByTestId("mock-cart")[0]).toHaveTextContent("items:0")
+    await waitFor(() => expect(screen.getAllByTestId("mock-cart")[0]).toHaveTextContent("items:0"))
   })
 
-  it("F2 NO limpia el carrito mientras el scanner de código de barras está abierto", () => {
+  it("F2 NO limpia el carrito mientras el scanner de código de barras está abierto", async () => {
     render(<PosTerminal />)
     fireEvent.click(screen.getAllByRole("button", { name: "mock-add-product" })[0])
     expect(screen.getAllByTestId("mock-cart")[0]).toHaveTextContent("items:1")
@@ -108,6 +109,7 @@ describe("PosTerminal — atajos bloqueados con el scanner de código de barras 
     fireEvent.click(screen.getAllByRole("button", { name: "mock-open-scanner" })[0])
     fireEvent.keyDown(document.body, { key: "F2" })
 
+    await new Promise((r) => setTimeout(r, 0))
     expect(screen.getAllByTestId("mock-cart")[0]).toHaveTextContent("items:1")
   })
 })

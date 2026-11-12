@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useModal } from "@/contexts/modal-context"
+import { toast } from "sonner"
 import {
   ArrowLeft,
   Keyboard,
@@ -84,7 +85,20 @@ export function PosTerminal() {
   // Las devoluciones son solo de ADMIN en la API: a otros roles el botón les
   // terminaba en un 403.
   const isAdmin = session?.user?.role === "ADMIN"
-  const searchRef = useRef<PosProductSearchRef>(null)
+  // El buscador está montado dos veces (escritorio y mobile); con un solo ref
+  // ganaba el de mobile y en escritorio F4 o "volver a buscar" enfocaban un
+  // input oculto.
+  const searchDesktopRef = useRef<PosProductSearchRef>(null)
+  const searchMobileRef = useRef<PosProductSearchRef>(null)
+  const buscador = useCallback((): PosProductSearchRef | null => {
+    const esEscritorio =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(min-width: 1024px)").matches
+    return esEscritorio
+      ? searchDesktopRef.current ?? searchMobileRef.current
+      : searchMobileRef.current ?? searchDesktopRef.current
+  }, [])
 
   // Cart state
   const [cartItems, setCartItems] = useState<PosCartItem[]>([])
@@ -393,23 +407,52 @@ export function PosTerminal() {
     )
   }, [])
 
+  const resetVenta = useCallback(() => {
+    setCartItems([])
+    setCliente({ ...EMPTY_CLIENT })
+    setShowClienteSearch(false)
+    setDescuentoGlobal(null)
+    setDescuentoMotivo("")
+  }, [])
+
   const clearCart = useCallback(async () => {
     if (cartItems.length === 0) return
     const confirmed = await confirm({
       title: "Vaciar carrito",
-      description: "¿Desea eliminar todos los productos del carrito?",
+      description: "¿Querés quitar todos los productos del carrito?",
       confirmText: "Vaciar",
       cancelText: "Cancelar",
       variant: "danger",
     })
-    if (confirmed) {
-      setCartItems([])
-      setCliente({ ...EMPTY_CLIENT })
-      setShowClienteSearch(false)
-      setDescuentoGlobal(null)
-      setDescuentoMotivo("")
+    if (confirmed) resetVenta()
+  }, [cartItems.length, confirm, resetVenta])
+
+  // F2: antes vaciaba el carrito sin preguntar (el botón "Vaciar" sí
+  // preguntaba). Con carrito vacío arranca directo. El ref evita apilar
+  // confirmaciones si se aprieta F2 varias veces.
+  const confirmandoNuevaVenta = useRef(false)
+  const nuevaVenta = useCallback(async () => {
+    if (confirmandoNuevaVenta.current) return
+    if (cartItemsRef.current.length > 0) {
+      confirmandoNuevaVenta.current = true
+      const cantidad = cartItemsRef.current.reduce((s, i) => s + i.cantidad, 0)
+      try {
+        const ok = await confirm({
+          title: "Empezar una venta nueva",
+          description: `Se van a quitar ${cantidad === 1 ? "el producto" : `los ${cantidad} productos`} del carrito. Si la querés retomar después, apartala con F5.`,
+          confirmText: "Vaciar y empezar",
+          cancelText: "Seguir con esta",
+          variant: "danger",
+        })
+        if (!ok) return
+      } finally {
+        confirmandoNuevaVenta.current = false
+      }
     }
-  }, [cartItems.length, confirm])
+    resetVenta()
+    setMobileTab("products")
+    buscador()?.focusSearch()
+  }, [confirm, resetVenta, buscador])
 
   // --- Hold/Recall ---
   // Item 1: holdSale shows a note dialog before parking
@@ -624,8 +667,8 @@ export function PosTerminal() {
     setEmitiendoFE(false)
     setComprobanteFE(null)
     setErrorFE(null)
-    searchRef.current?.focusSearch()
-  }, [])
+    buscador()?.focusSearch()
+  }, [buscador])
 
   // Facturación electrónica: emitir comprobante para la venta del overlay actual
   const handleEmitirFactura = useCallback(async () => {
@@ -653,17 +696,49 @@ export function PosTerminal() {
   // producto (antes un serializado escaneado entraba como si no lo fuera) y
   // avisando cuando ya no hay más stock (antes se ignoraba la unidad y se
   // mostraba "agregado" igual).
+  // Los errores de escaneo son toasts, no modales: el cajero sigue escaneando
+  // sin tener que cerrar nada y el foco queda donde estaba (el lector escribe
+  // sobre la página, no sobre un diálogo). Antes cada código desconocido
+  // abría un modal y un error de red no mostraba nada.
+  const avisarEscaneo = useCallback(
+    (mensaje: string, opciones?: { descripcion?: string; ventaManual?: boolean }) => {
+      try {
+        navigator.vibrate?.(200)
+      } catch {
+        // vibrate no existe o está bloqueado: el toast alcanza
+      }
+      toast.error(mensaje, {
+        id: "pos-escaneo",
+        description: opciones?.descripcion,
+        ...(opciones?.ventaManual && {
+          action: {
+            label: "Venta manual",
+            onClick: () => {
+              setMobileTab("products")
+              buscador()?.openManual()
+            },
+          },
+        }),
+      })
+    },
+    [buscador]
+  )
+
   const agregarEscaneado = useCallback(
-    async (item: any) => {
+    (item: any) => {
       if ((item.stock ?? 0) <= 0) {
-        await showError(`"${item.nombre}" sin stock disponible`)
+        avisarEscaneo(`"${item.nombre}" no tiene stock`, {
+          descripcion: "Revisá el stock en Inventario antes de venderlo.",
+        })
         return
       }
       const enCarrito = cartItemsRef.current
         .filter((i) => i.inventarioId === item.id)
         .reduce((s, i) => s + i.cantidad, 0)
       if (enCarrito >= item.stock) {
-        await showError(`No hay más stock de "${item.nombre}": ya hay ${enCarrito} en el carrito`)
+        avisarEscaneo(`No hay más stock de "${item.nombre}"`, {
+          descripcion: `Ya hay ${enCarrito} en el carrito.`,
+        })
         return
       }
       addProduct({
@@ -680,7 +755,16 @@ export function PosTerminal() {
       setScanSuccess({ nombre: item.nombre })
       scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
     },
-    [addProduct, showError]
+    [addProduct, avisarEscaneo]
+  )
+
+  const avisarCodigoDesconocido = useCallback(
+    (code: string) =>
+      avisarEscaneo(`El código ${code} no está en el inventario`, {
+        descripcion: "Podés venderlo igual como producto manual.",
+        ventaManual: true,
+      }),
+    [avisarEscaneo]
   )
 
   const handleBarcodeScan = useCallback(
@@ -689,18 +773,25 @@ export function PosTerminal() {
       if (!code) return
       try {
         const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}&scope=venta`)
-        if (!res.ok) return
+        if (!res.ok) {
+          avisarEscaneo(`No se pudo buscar el código ${code}`, {
+            descripcion: "Volvé a escanearlo. Si sigue fallando, buscalo a mano.",
+          })
+          return
+        }
         const data = await res.json()
         if (data.found && data.item) {
-          await agregarEscaneado(data.item)
+          agregarEscaneado(data.item)
         } else {
-          await showError(`Código "${code}" no encontrado en inventario`)
+          avisarCodigoDesconocido(code)
         }
       } catch {
-        await showError("Error al buscar el código de barras")
+        avisarEscaneo(`No se pudo buscar el código ${code}`, {
+          descripcion: "Revisá la conexión y volvé a escanearlo.",
+        })
       }
     },
-    [agregarEscaneado, showError]
+    [agregarEscaneado, avisarEscaneo, avisarCodigoDesconocido]
   )
 
   useBarcodeScanner({
@@ -710,18 +801,10 @@ export function PosTerminal() {
 
   // --- Keyboard shortcuts ---
   usePosShortcuts({
-    onNewSale: () => {
-      setCartItems([])
-      setCliente({ ...EMPTY_CLIENT })
-      setShowClienteSearch(false)
-      setDescuentoGlobal(null)
-      setDescuentoMotivo("")
-      setMobileTab("products")
-      searchRef.current?.focusSearch()
-    },
+    onNewSale: () => void nuevaVenta(),
     onSearchFocus: () => {
       setMobileTab("products")
-      searchRef.current?.focusSearch()
+      buscador()?.focusSearch()
     },
     onHoldSale: holdSale,
     onRecallSale: () => setHeldSalesOpen(true),
@@ -899,7 +982,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
+          <PosProductSearch ref={searchDesktopRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -940,7 +1023,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
+            <PosProductSearch ref={searchMobileRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
@@ -1083,12 +1166,12 @@ export function PosTerminal() {
         open={scannerOpen}
         onOpenChange={setScannerOpen}
         scopeVenta
-        onResult={async (result) => {
+        onResult={(result) => {
           // Scanner ya consultó la API; reusar resultado en vez de re-fetchear.
           if (result.found && result.item) {
-            await agregarEscaneado(result.item)
+            agregarEscaneado(result.item)
           } else {
-            await showError(`Código "${result.code}" no encontrado en inventario`)
+            avisarCodigoDesconocido(result.code)
           }
         }}
       />
