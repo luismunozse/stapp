@@ -10,10 +10,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, mockAuthError, createChainMock, createPostRequest, parseResponse } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
-const { canUseAsistenteMock, checkAsistenteRateLimitMock, createMessageMock } = vi.hoisted(() => ({
+const { canUseAsistenteMock, checkAsistenteRateLimitMock, createMessageMock, streamMessageMock } = vi.hoisted(() => ({
   canUseAsistenteMock: vi.fn(),
   checkAsistenteRateLimitMock: vi.fn(),
   createMessageMock: vi.fn(),
+  streamMessageMock: vi.fn(),
 }))
 
 vi.mock("@/lib/asistente/access", () => ({
@@ -30,11 +31,11 @@ vi.mock("@/lib/asistente/system-prompt", () => ({
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class {
-    messages = { create: createMessageMock }
+    messages = { create: createMessageMock, stream: streamMessageMock }
   },
 }))
 
-import { POST } from "@/app/api/asistente/route"
+import { GET, POST } from "@/app/api/asistente/route"
 
 // ---------------------------------------------------------------------------
 // Helpers locales
@@ -68,7 +69,9 @@ function createSmartChain(resolve: (calls: { method: string; args: any[] }[]) =>
 type SetupOpts = {
   zonaHoraria?: string
   usedToday?: number
-  historial?: Array<{ tipo: string; contenido: string }>
+  historial?: Array<{ tipo: string; contenido: string; id?: string }>
+  /** La conversación pedida existe y es del usuario. */
+  convExistente?: string
 }
 
 function setupSupabase(opts: SetupOpts = {}) {
@@ -101,7 +104,7 @@ function setupSupabase(opts: SetupOpts = {}) {
           inserts.push({ table, payload: first.args[0] })
           return { data: { id: "conv-new" }, error: null }
         }
-        return { data: null, error: null }
+        return { data: opts.convExistente ? { id: opts.convExistente } : null, error: null }
       }) as any
     }
 
@@ -272,5 +275,124 @@ describe("POST /api/asistente", () => {
     expect(status).toBe(502)
     expect(body.code).toBe("UPSTREAM_ERROR")
     expect(inserts.filter((i) => i.table === "asistente_mensajes")).toHaveLength(0)
+  })
+})
+
+describe("POST /api/asistente en streaming (NDJSON)", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function streamDe(respuesta: any) {
+    const eventos = respuesta.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => ({ type: "content_block_delta", delta: { type: "text_delta", text: b.text } }))
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield* eventos
+      },
+      finalMessage: async () => respuesta,
+    }
+  }
+  const reqStream = (body: unknown) =>
+    new Request("http://localhost/api/asistente", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/x-ndjson" },
+      body: JSON.stringify(body),
+    })
+  const eventosDe = async (res: Response) =>
+    (await res.text()).trim().split("\n").map((l) => JSON.parse(l))
+
+  it("manda conversación, el texto y al final `fin` con lo guardado y las consultas restantes", async () => {
+    mockAuthSuccess({ organizationId: "org-1", userId: "user-1" })
+    canUseAsistenteMock.mockResolvedValue(true)
+    checkAsistenteRateLimitMock.mockReturnValue(true)
+    const { inserts } = setupSupabase({ usedToday: 45 })
+    streamMessageMock.mockReturnValueOnce(streamDe(claudeSuccess()))
+
+    const res = await POST(reqStream({ message: "¿Cómo agrego un cliente?" }))
+    expect(res.headers.get("content-type")).toContain("application/x-ndjson")
+    const eventos = await eventosDe(res)
+
+    expect(eventos[0]).toEqual({ tipo: "conversacion", conversacionId: "conv-new" })
+    expect(eventos.some((e) => e.tipo === "texto")).toBe(true)
+    expect(eventos.at(-1)).toEqual({
+      tipo: "fin",
+      texto: "Para agregar un cliente andá a Clientes → Nuevo.",
+      conversacionId: "conv-new",
+      restantes: 4,
+    })
+    expect(createMessageMock).not.toHaveBeenCalled()
+    expect(inserts.filter((i) => i.table === "asistente_mensajes")).toHaveLength(2)
+  })
+
+  it("si Claude falla, termina con un evento `error` y no se quema el tope", async () => {
+    mockAuthSuccess()
+    canUseAsistenteMock.mockResolvedValue(true)
+    checkAsistenteRateLimitMock.mockReturnValue(true)
+    const { inserts } = setupSupabase({ usedToday: 0 })
+    streamMessageMock.mockImplementationOnce(() => {
+      throw new Error("caído")
+    })
+
+    const eventos = await eventosDe(await POST(reqStream({ message: "hola" })))
+    expect(eventos.at(-1)).toMatchObject({ tipo: "error", code: "UPSTREAM_ERROR" })
+    expect(inserts.filter((i) => i.table === "asistente_mensajes")).toHaveLength(0)
+  })
+
+  it("los errores previos al modelo siguen siendo JSON con status (tope diario)", async () => {
+    mockAuthSuccess()
+    canUseAsistenteMock.mockResolvedValue(true)
+    checkAsistenteRateLimitMock.mockReturnValue(true)
+    setupSupabase({ usedToday: 50 })
+    const res = await POST(reqStream({ message: "hola" }))
+    expect(res.status).toBe(429)
+    expect((await res.json()).restantes).toBe(0)
+  })
+})
+
+describe("GET /api/asistente", () => {
+  beforeEach(() => vi.clearAllMocks())
+  const get = (qs = "") => GET(new Request(`http://localhost/api/asistente${qs}`))
+
+  it("sugerencias según permisos y consultas restantes de hoy", async () => {
+    mockAuthSuccess({ organizationId: "org-1", userId: "user-1" })
+    canUseAsistenteMock.mockResolvedValue(true)
+    setupSupabase({ usedToday: 47 })
+    const { status, body } = await parseResponse(await get())
+    expect(status).toBe(200)
+    expect(body.restantes).toBe(3)
+    expect(body.limiteDiario).toBe(50)
+    expect(body.sugerencias).toContain("¿Qué órdenes están atrasadas?")
+    expect(body.conversacion).toBeNull()
+  })
+
+  it("devuelve los mensajes de una conversación propia, en orden cronológico", async () => {
+    mockAuthSuccess({ organizationId: "org-1", userId: "user-1" })
+    canUseAsistenteMock.mockResolvedValue(true)
+    setupSupabase({
+      convExistente: "conv-1",
+      // La consulta trae los más nuevos primero.
+      historial: [
+        { id: "m2", tipo: "ASSISTANT", contenido: "Hola, ¿qué necesitás?" },
+        { id: "m1", tipo: "USER", contenido: "hola" },
+      ],
+    })
+    const { body } = await parseResponse(await get("?conversacionId=conv-1"))
+    expect(body.conversacion.id).toBe("conv-1")
+    expect(body.conversacion.mensajes.map((m: any) => m.id)).toEqual(["m1", "m2"])
+  })
+
+  it("una conversación ajena o inexistente no se devuelve", async () => {
+    mockAuthSuccess()
+    canUseAsistenteMock.mockResolvedValue(true)
+    setupSupabase({ historial: [{ id: "x", tipo: "USER", contenido: "secreto" }] })
+    const { body } = await parseResponse(await get("?conversacionId=de-otro"))
+    expect(body.conversacion).toBeNull()
+  })
+
+  it("403 si el plan no incluye el asistente", async () => {
+    mockAuthSuccess()
+    canUseAsistenteMock.mockResolvedValue(false)
+    const { status } = await parseResponse(await get())
+    expect(status).toBe(403)
   })
 })
