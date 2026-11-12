@@ -26,6 +26,9 @@ import {
   Pie,
   Cell,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface ResumenData {
   resumen: {
@@ -61,8 +64,6 @@ interface ResumenData {
   }
 }
 
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
-
 const METODO_PAGO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
@@ -85,7 +86,7 @@ interface ResumenIngresosProps {
 }
 
 export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, currency } = useCurrency()
   const [data, setData] = useState<ResumenData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -209,11 +210,10 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                 <XAxis dataKey="mes" fontSize={12} />
                 <YAxis
                   fontSize={12}
-                  tickFormatter={(value) =>
-                    value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`
-                  }
+                  tickFormatter={(value: number) => formatCompactCurrency(value, currency)}
                 />
                 <Tooltip
+                  content={<ChartTooltipContent />}
                   formatter={(value: number, name: string) => [
                     formatPrice(value),
                     name === "servicios" ? "Reparaciones" : "Ventas",
@@ -227,8 +227,8 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                   formatter={(value) => (value === "servicios" ? "Reparaciones" : "Ventas")}
                   wrapperStyle={{ fontSize: 12 }}
                 />
-                <Bar dataKey="servicios" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="ventas" stackId="a" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="servicios" stackId="a" fill={chartSeriesColor(0)} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="ventas" stackId="a" fill={chartSeriesColor(1)} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -290,7 +290,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                               <span className="inline-flex items-center gap-2">
                                 <span
                                   className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                  style={{ backgroundColor: chartSeriesColor(i) }}
                                 />
                                 {metodoLabel(m.metodo)}
                               </span>
@@ -335,10 +335,11 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                             fontSize={11}
                           >
                             {metodosPie.map((m, i) => (
-                              <Cell key={m.metodo} fill={COLORS[i % COLORS.length]} />
+                              <Cell key={m.metodo} fill={chartSeriesColor(i)} />
                             ))}
                           </Pie>
                           <Tooltip
+                            content={<ChartTooltipContent />}
                             formatter={(value: number, name: string) => [
                               formatPrice(value),
                               metodoLabel(name),
@@ -379,17 +380,16 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                       cy="50%"
                       labelLine={false}
                       outerRadius={80}
-                      fill="#8884d8"
                       dataKey="value"
                       label={({ name, percent }) =>
                         `${name} ${(percent * 100).toFixed(0)}%`
                       }
                       fontSize={11}
                     >
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#22c55e" />
+                      <Cell fill={chartSeriesColor(0)} />
+                      <Cell fill={chartSeriesColor(1)} />
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatPrice(value)} />
+                    <Tooltip content={<ChartTooltipContent />} formatter={(value: number) => formatPrice(value)} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -414,18 +414,17 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
                     <XAxis
                       type="number"
                       fontSize={12}
-                      tickFormatter={(value) =>
-                        value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`
-                      }
+                      tickFormatter={(value: number) => formatCompactCurrency(value, currency)}
                     />
                     <YAxis dataKey="tipo" type="category" width={90} fontSize={11} />
                     <Tooltip
+                      content={<ChartTooltipContent />}
                       formatter={(value: number) => formatPrice(value)}
                       labelFormatter={(label) => `${label}`}
                     />
                     <Bar dataKey="total" radius={[0, 4, 4, 0]}>
                       {data.porDispositivo.map((entry, index) => (
-                        <Cell key={`cell-${entry.tipo}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${entry.tipo}`} fill={chartSeriesColor(index)} />
                       ))}
                     </Bar>
                   </BarChart>

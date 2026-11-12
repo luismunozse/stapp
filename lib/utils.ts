@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
+import { formatCompactCurrencyValue, formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue } from "@/lib/timezone"
 
 export function cn(...inputs: ClassValue[]) {
@@ -9,6 +9,11 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(amount: number, currency?: CurrencyCode): string {
   return formatCurrencyValue(amount, currency)
+}
+
+/** Monto abreviado para ejes de gráficos ("$1,5 M"). Ver formatCompactCurrencyValue. */
+export function formatCompactCurrency(amount: number, currency?: CurrencyCode): string {
+  return formatCompactCurrencyValue(amount, currency)
 }
 
 export function formatDate(date: Date | string, timezone?: string): string {

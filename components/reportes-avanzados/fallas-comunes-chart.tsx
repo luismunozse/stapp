@@ -14,6 +14,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
 
 interface FallaData {
   falla: string
@@ -62,12 +64,13 @@ export function FallasComunesChart() {
             <XAxis type="number" fontSize={12} />
             <YAxis dataKey="falla" type="category" fontSize={11} width={110} />
             <Tooltip
+              content={<ChartTooltipContent />}
               formatter={(value: number, name: string) => {
                 if (name === "cantidad") return [value, "Casos"]
                 return [value, name]
               }}
             />
-            <Bar dataKey="cantidad" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="cantidad" fill={chartSeriesColor(4)} radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

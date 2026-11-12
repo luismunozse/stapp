@@ -17,6 +17,9 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface ComparativaData {
   mesActual: {
@@ -39,7 +42,7 @@ interface ComparativaData {
 }
 
 export function ComparativaIngresos() {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, currency } = useCurrency()
   const [data, setData] = useState<ComparativaData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -96,8 +99,8 @@ export function ComparativaIngresos() {
   }
 
   const chartData = [
-    { name: data.mesAnterior.nombre.split(" ")[0], total: data.mesAnterior.total, fill: "#94a3b8" },
-    { name: data.mesActual.nombre.split(" ")[0], total: data.mesActual.total, fill: "#3b82f6" },
+    { name: data.mesAnterior.nombre.split(" ")[0], total: data.mesAnterior.total, fill: CHART_CONCEPT_COLORS.neutral },
+    { name: data.mesActual.nombre.split(" ")[0], total: data.mesActual.total, fill: CHART_CONCEPT_COLORS.ingresos },
   ]
 
   const TrendIcon = data.cambio.direccion === "up"
@@ -159,9 +162,10 @@ export function ComparativaIngresos() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} fontSize={12} />
+                <XAxis type="number" tickFormatter={(value: number) => formatCompactCurrency(value, currency)} fontSize={12} />
                 <YAxis dataKey="name" type="category" width={60} fontSize={12} />
                 <Tooltip
+                  content={<ChartTooltipContent />}
                   formatter={(value: number) => formatPrice(value)}
                   labelFormatter={(label) => `Mes: ${label}`}
                 />

@@ -54,18 +54,9 @@ describe("RentabilidadTecnicos — costo de repuestos nulo", () => {
     vi.unstubAllGlobals()
   })
 
-  // El componente formatea con su propio Intl, no con el currency-context
-  // mockeado, así que las aserciones usan el mismo formateador. Intl separa
-  // con U+00A0 y testing-library normaliza a espacio común: hay que normalizar
-  // el esperado o nunca matchea.
-  const ars = (n: number) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      minimumFractionDigits: 0,
-    })
-      .format(n)
-      .replace(/\u00a0/g, " ")
+  // El componente formatea con formatPrice del currency-context (la moneda de
+  // la org), que acá está mockeado.
+  const ars = (n: number) => `$${n}`
 
   function payload(oculto: boolean) {
     return {

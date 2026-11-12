@@ -18,6 +18,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_STATUS_COLORS } from "@/lib/chart-colors"
 
 interface TecnicoData {
   tecnicoId: string
@@ -160,10 +162,10 @@ export function PerformanceTecnicos() {
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" fontSize={12} />
                   <YAxis dataKey="nombre" type="category" width={60} fontSize={12} />
-                  <Tooltip />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="completadas" name="Completadas" fill="#22c55e" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="enProceso" name="En Proceso" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="completadas" name="Completadas" fill={CHART_STATUS_COLORS.success} radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="enProceso" name="En proceso" fill={CHART_STATUS_COLORS.warning} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

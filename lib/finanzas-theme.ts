@@ -4,10 +4,12 @@
  * para que "Ingresos" (etc.) se vea igual en todas las vistas.
  */
 
+import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
+
 export type FinanzasConceptKey = "ingresos" | "costos" | "gastos" | "ganancia"
 
 export interface FinanzasConcept {
-  /** Color hex para recharts (barras, líneas, celdas). */
+  /** Color para recharts (token `--chart-*`, cambia con el tema). */
   color: string
   /** Tono semántico para <StatCard tone>. */
   tone: "success" | "warning" | "danger" | "info"
@@ -15,11 +17,11 @@ export interface FinanzasConcept {
 
 export const FINANZAS_CONCEPTS: Record<FinanzasConceptKey, FinanzasConcept> = {
   // Dinero que entra → verde
-  ingresos: { color: "#22c55e", tone: "success" },
+  ingresos: { color: CHART_CONCEPT_COLORS.ingresos, tone: "success" },
   // Costo de lo vendido → naranja
-  costos: { color: "#f97316", tone: "warning" },
+  costos: { color: CHART_CONCEPT_COLORS.costos, tone: "warning" },
   // Gasto operativo → rojo
-  gastos: { color: "#ef4444", tone: "danger" },
+  gastos: { color: CHART_CONCEPT_COLORS.gastos, tone: "danger" },
   // Resultado → azul (la ganancia neta puede virar a rojo si es negativa)
-  ganancia: { color: "#3b82f6", tone: "info" },
+  ganancia: { color: CHART_CONCEPT_COLORS.ganancia, tone: "info" },
 }
