@@ -20,7 +20,7 @@ if (!process.env.STAPP_CHATBOT_API_KEY) {
 }
 const anthropic = new Anthropic({ apiKey: process.env.STAPP_CHATBOT_API_KEY })
 
-const CHATBOT_MODEL = "claude-haiku-4-5"
+const CHATBOT_MODEL = "claude-haiku-5-5"
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 
@@ -157,7 +157,9 @@ Instrucciones:
     const [mainResult, extractResult] = await Promise.allSettled([
       anthropic.messages.create({
         model: CHATBOT_MODEL,
-        max_tokens: 1024,
+        // Haiku 5.5 piensa por defecto y el pensamiento cuenta en max_tokens: margen + effort bajo.
+        max_tokens: 2048,
+        output_config: { effort: "low" },
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
