@@ -57,8 +57,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className={cn(buttonVariants({ variant, size, className }))}
           ref={ref}
           data-touch-icon={size === "icon" ? "" : undefined}
-          disabled={disabled}
-          {...props}
+          // Slot tipa sus props como HTMLAttributes<HTMLElement> (sin `disabled`);
+          // se pasa por spread para reenviarlo al hijo como antes.
+          {...{ ...props, disabled }}
         >
           {children}
         </Slot>
