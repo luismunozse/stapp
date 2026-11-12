@@ -25,7 +25,7 @@ import {
 } from "@/lib/ventas/totales"
 import { CURRENCIES, type CurrencyCode } from "@/lib/currency"
 
-export type MonedaExtranjera = "USD"
+export type MonedaExtranjera = "USD" | "EUR"
 
 /** Rates are stored with up to this many decimals (the column is NUMERIC(14,6)). */
 export const MAX_DECIMALES_TIPO_CAMBIO = 6

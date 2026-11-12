@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolverConfigMoneda } from "@/lib/currency/config-moneda"
+import { resolverConfigMoneda, fuentesPara } from "@/lib/currency/config-moneda"
 
 describe("resolverConfigMoneda", () => {
   it("AR with no row: BLUE suggested, rounding 10, feature off, all sources offered", () => {
@@ -32,15 +32,54 @@ describe("resolverConfigMoneda", () => {
     expect(c.habilitada).toBe(true)
   })
 
-  it("S1.e: a USD-local org has the feature off whatever the row says", () => {
+  it("AR with no row: foreign currency is USD", () => {
+    expect(resolverConfigMoneda(null, "AR").monedaExtranjera).toBe("USD")
+  })
+
+  it("AR with EUR: only MANUAL and OFICIAL; a stored BLUE falls back to OFICIAL", () => {
+    const c = resolverConfigMoneda({ moneda_extranjera: "EUR", tipo_cambio_fuente: "BLUE" }, "AR")
+    expect(c.monedaExtranjera).toBe("EUR")
+    expect(c.fuentesDisponibles).toEqual(["MANUAL", "OFICIAL"])
+    expect(c.fuente).toBe("OFICIAL")
+  })
+
+  it("AR with EUR and no stored source defaults to OFICIAL", () => {
+    expect(resolverConfigMoneda({ moneda_extranjera: "EUR" }, "AR").fuente).toBe("OFICIAL")
+  })
+
+  it("a USD-local org defaults its foreign currency to EUR", () => {
+    const c = resolverConfigMoneda(null, "EC", "USD")
+    expect(c.monedaExtranjera).toBe("EUR")
+    expect(c.habilitada).toBe(false)
+  })
+
+  it("a USD-local org can enable EUR", () => {
+    const c = resolverConfigMoneda({ multimoneda_habilitada: true, moneda_extranjera: "EUR" }, "EC", "USD")
+    expect(c.habilitada).toBe(true)
+    expect(c.monedaExtranjera).toBe("EUR")
+  })
+
+  it("local === foreign (USD/USD) keeps the feature off whatever the row says", () => {
     const c = resolverConfigMoneda(
-      { multimoneda_habilitada: true, acepta_usd_efectivo: true, vuelto_moneda_default: "USD" },
+      { multimoneda_habilitada: true, moneda_extranjera: "USD", acepta_usd_efectivo: true, vuelto_moneda_default: "USD" },
       "EC",
       "USD"
     )
     expect(c.habilitada).toBe(false)
     expect(c.aceptaUsdEfectivo).toBe(false)
     expect(c.vueltoMonedaDefault).toBe("LOCAL")
+  })
+
+  it("a garbage moneda_extranjera is ignored and the default is used", () => {
+    expect(resolverConfigMoneda({ moneda_extranjera: "BRL" }, "AR").monedaExtranjera).toBe("USD")
+    expect(resolverConfigMoneda({ moneda_extranjera: "BRL" }, "EC", "USD").monedaExtranjera).toBe("EUR")
+  })
+
+  it("fuentesPara: AR+USD, AR+EUR, other country", () => {
+    expect(fuentesPara("AR", "USD")).toEqual(["MANUAL", "OFICIAL", "BLUE", "MEP"])
+    expect(fuentesPara("AR", "EUR")).toEqual(["MANUAL", "OFICIAL"])
+    expect(fuentesPara("CL", "EUR")).toEqual(["MANUAL"])
+    expect(fuentesPara(undefined, "USD")).toEqual(["MANUAL"])
   })
 
   it("USD cash and USD change only count while the feature is on", () => {
