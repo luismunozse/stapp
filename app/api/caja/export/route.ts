@@ -22,6 +22,8 @@ const TIPO_LABELS: Record<string, string> = {
   DEPOSITO_CUENTA: "Depósito a Cuenta",
   INGRESO_MANUAL: "Ingreso Manual",
   EGRESO_MANUAL: "Egreso Manual",
+  ANULACION_VENTA: "Venta anulada",
+  ANULACION_COBRO: "Cobro anulado",
 }
 
 function escapeCsv(value: string | null | undefined): string {

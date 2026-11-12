@@ -134,7 +134,7 @@ describe("fetchMovimientosDia — sucursal filtering", () => {
     expect(sucursalFilter![1]).toBe("suc-B")
   })
 
-  it("excluye del arqueo los pagos de ventas ANULADAS y facturas ANULADAS", async () => {
+  it("excluye del arqueo los pagos de facturas ANULADAS (las ventas anuladas se revierten aparte)", async () => {
     const cobrosChain = makeQueryChain([])
     const facturaChain = makeQueryChain([])
     const ventaChain = makeQueryChain([])
@@ -152,10 +152,13 @@ describe("fetchMovimientosDia — sucursal filtering", () => {
 
     await fetchMovimientosDia(ORG_ID, FECHA_DESDE, FECHA_HASTA)
 
-    // pagos de ventas anuladas no cuentan en el arqueo (como los cobros anulados)
+    // Los pagos de ventas anuladas cuentan el día de la venta; la anulación es
+    // un egreso el día en que se anuló (consulta con ventas.estado = ANULADA).
     const ventaNeq = (ventaChain._neqCalls as [string, string][]).find(([col]) => col === "ventas.estado")
-    expect(ventaNeq).toBeDefined()
-    expect(ventaNeq![1]).toBe("ANULADA")
+    expect(ventaNeq).toBeUndefined()
+    const ventaEqAnulada = (ventaChain._eqCalls as [string, string][]).find(
+      ([col, val]) => col === "ventas.estado" && val === "ANULADA")
+    expect(ventaEqAnulada).toBeDefined()
 
     // pagos de facturas anuladas tampoco
     const facturaNeq = (facturaChain._neqCalls as [string, string][]).find(([col]) => col === "facturas.estado_pago")

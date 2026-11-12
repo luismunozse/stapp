@@ -2,7 +2,7 @@
  * Tests: integrity fixes for caja routes
  *
  * F1 — POST /api/caja/sesiones: open-session check must be scoped per sucursal
- * F2 — fetchMovimientosDia: cobros_orden must filter anulado=false
+ * F2 — fetchMovimientosDia: cobros anulados se revierten el día de la anulación
  * F3 — POST /api/caja/sesiones/[id]/cerrar: UPDATE must be optimistic-locked on estado='ABIERTA'
  * F4 — GET /api/caja/sesiones/[id]: must scope sesion fetch to user's sucursal and pass sesion.sucursal_id to fetchMovimientosDia
  * F5 — DELETE /api/caja/movimientos/[id]: must guard against closed-session delete and sucursal scope
@@ -124,13 +124,13 @@ describe("F1 — POST /api/caja/sesiones: open-session check scoped per sucursal
 })
 
 // =============================================================================
-// F2 — fetchMovimientosDia: cobros_orden must filter anulado=false
+// F2 — fetchMovimientosDia: cobros anulados se revierten el día de la anulación
 // =============================================================================
 
-describe("F2 — fetchMovimientosDia: cobros_orden filters anulado=false", () => {
+describe("F2 — fetchMovimientosDia: cobros anulados como egreso del día de anulación", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("cobros_orden query chain receives .eq('anulado', false)", async () => {
+  it("consulta los anulados aparte (anulado=true) y no los excluye de los ingresos", async () => {
     // We test the real fetchMovimientosDia (not the spy), so we import separately
     const { fetchMovimientosDia: realFetch } = await vi.importActual<typeof cajaUtils>(
       "@/lib/caja-utils"
@@ -147,8 +147,12 @@ describe("F2 — fetchMovimientosDia: cobros_orden filters anulado=false", () =>
 
     await realFetch("org-1", "2024-01-01T00:00:00Z", "2024-01-01T23:59:59Z")
 
+    // Los cobros anulados se cuentan el día en que entraron y salen como
+    // egreso el día de la anulación (consulta aparte con anulado=true): la
+    // consulta de ingresos ya no filtra anulado=false.
     const eqCalls = vi.mocked(cobrosChain.eq).mock.calls as any[][]
-    expect(eqCalls.find((c) => c[0] === "anulado" && c[1] === false)).toBeTruthy()
+    expect(eqCalls.find((c) => c[0] === "anulado" && c[1] === false)).toBeFalsy()
+    expect(eqCalls.find((c) => c[0] === "anulado" && c[1] === true)).toBeTruthy()
   })
 })
 

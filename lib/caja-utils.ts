@@ -152,6 +152,11 @@ export interface MovimientoUnificado {
   referenciaNumero?: string | null
   observaciones: string | null
   esEgreso?: boolean
+  /**
+   * Reversa de una venta o un cobro anulado, asentada el día de la anulación.
+   * No es un registro propio: `id` lleva el sufijo ":anulacion" y no se corrige.
+   */
+  esAnulacion?: boolean
   costoFinancieroMonto?: number | null
   costoFinancieroPorcentaje?: number | null
 }
@@ -234,12 +239,14 @@ export async function fetchMovimientosDia(
   filters?: FetchMovimientosOptions,
   sucursalId?: string | null,
 ) {
-  // 1. Cobros de órdenes (excluir anulados — no representan ingreso real)
+  // 1. Cobros de órdenes. Los anulados se cuentan igual el día en que entraron:
+  //    la plata entró. La anulación sale como egreso el día en que se anuló
+  //    (ver 1b). Excluirlos reescribía el arqueo de un día ya cerrado y dejaba
+  //    sin registrar la devolución en la caja del día de la anulación.
   let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
     .select("id, monto, metodo_pago, created_at, orden_id, observaciones, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
-    .eq("anulado", false)
     .gte("created_at", fechaDesde)
     .lte("created_at", fechaHasta)
     .order("created_at", { ascending: false })
@@ -247,6 +254,19 @@ export async function fetchMovimientosDia(
     cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", sucursalId)
   }
   const { data: cobrosOrdenes } = await cobrosQuery
+
+  // 1b. Cobros anulados DENTRO del rango (por fecha de anulación): egreso.
+  let cobrosAnuladosQuery = supabaseAdmin
+    .from("cobros_orden")
+    .select("id, monto, metodo_pago, anulado_at, orden_id, anulado_motivo, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
+    .eq("organization_id", organizationId)
+    .eq("anulado", true)
+    .gte("anulado_at", fechaDesde)
+    .lte("anulado_at", fechaHasta)
+  if (sucursalId) {
+    cobrosAnuladosQuery = cobrosAnuladosQuery.eq("ordenes_servicio.sucursal_id", sucursalId)
+  }
+  const { data: cobrosAnulados } = await cobrosAnuladosQuery
 
   // 2. Pagos de facturas (excluir facturas ANULADAS — su pago no es ingreso real
   //    de caja, igual que los cobros anulados de source 1).
@@ -271,9 +291,10 @@ export async function fetchMovimientosDia(
   const { data: pagosFacturasRaw } = await pagosFacturasQuery
   const pagosFacturas = await sinEspejoDeSena(pagosFacturasRaw || [])
 
-  // 3. Pagos de ventas (excluir ventas ANULADAS — la anulación revierte stock/CC
-  //    pero deja las filas de pagos_venta; contarlas inflaba el esperado del
-  //    arqueo y generaba un faltante fantasma si el efectivo se devolvió).
+  // 3. Pagos de ventas, anuladas incluidas: el día de la venta la plata entró.
+  //    La devolución sale como egreso el día de la anulación (3b). Antes se
+  //    excluían y el arqueo de días pasados cambiaba al anular; la caja del día
+  //    de la anulación no mostraba la salida del efectivo devuelto.
   let pagosVentasQuery = supabaseAdmin
     .from("pagos_venta")
     .select(`
@@ -282,7 +303,6 @@ export async function fetchMovimientosDia(
       ventas!inner(organization_id, numero_venta, estado, sucursal_id)
     `)
     .eq("ventas.organization_id", organizationId)
-    .neq("ventas.estado", "ANULADA")
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
@@ -290,6 +310,22 @@ export async function fetchMovimientosDia(
     pagosVentasQuery = pagosVentasQuery.eq("ventas.sucursal_id", sucursalId)
   }
   const { data: pagosVentas } = await pagosVentasQuery
+
+  // 3b. Pagos de ventas anuladas DENTRO del rango (por fecha_anulacion): egreso.
+  let anulacionesVentaQuery = supabaseAdmin
+    .from("pagos_venta")
+    .select(`
+      id, monto, metodo_pago, venta_id,
+      ventas!inner(organization_id, numero_venta, estado, sucursal_id, fecha_anulacion)
+    `)
+    .eq("ventas.organization_id", organizationId)
+    .eq("ventas.estado", "ANULADA")
+    .gte("ventas.fecha_anulacion", fechaDesde)
+    .lte("ventas.fecha_anulacion", fechaHasta)
+  if (sucursalId) {
+    anulacionesVentaQuery = anulacionesVentaQuery.eq("ventas.sucursal_id", sucursalId)
+  }
+  const { data: anulacionesVenta } = await anulacionesVentaQuery
 
   // 4. Depósitos cuenta corriente
   // cuenta_corriente.sucursal_id (mig 238) permite el arqueo por sucursal: cada
@@ -342,6 +378,24 @@ export async function fetchMovimientosDia(
     })
   }
 
+  for (const c of cobrosAnulados || []) {
+    const ordenNum = (c as any).ordenes_servicio?.numero_orden
+    movimientos.push({
+      id: `${c.id}:anulacion`,
+      fuente: "cobros_orden",
+      tipo: "ANULACION_COBRO",
+      monto: parseFloat(c.monto),
+      metodoPago: c.metodo_pago,
+      fecha: c.anulado_at,
+      referencia: "Orden",
+      referenciaId: c.orden_id,
+      referenciaNumero: ordenNum ? `ORD-${String(ordenNum).padStart(4, "0")}` : null,
+      observaciones: c.anulado_motivo ?? null,
+      esEgreso: true,
+      esAnulacion: true,
+    })
+  }
+
   for (const p of pagosFacturas || []) {
     const factura = (p as any).facturas
     const numFactura = factura?.numero_factura
@@ -377,6 +431,25 @@ export async function fetchMovimientosDia(
       observaciones: p.observaciones,
       costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
       costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
+    })
+  }
+
+  for (const p of anulacionesVenta || []) {
+    const venta = (p as any).ventas
+    const numVenta = venta?.numero_venta
+    movimientos.push({
+      id: `${p.id}:anulacion`,
+      fuente: "pagos_venta",
+      tipo: "ANULACION_VENTA",
+      monto: parseFloat(p.monto),
+      metodoPago: p.metodo_pago,
+      fecha: venta?.fecha_anulacion,
+      referencia: "Venta",
+      referenciaId: p.venta_id,
+      referenciaNumero: numVenta ? `V-${String(numVenta).padStart(4, "0")}` : null,
+      observaciones: null,
+      esEgreso: true,
+      esAnulacion: true,
     })
   }
 
