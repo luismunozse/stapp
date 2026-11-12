@@ -52,11 +52,11 @@ describe("TemplateEditor — borrar template", () => {
 
     // Espera a que cargue el template
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /eliminar template/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /eliminar plantilla/i })).toBeInTheDocument()
     )
 
     // Dispara el borrado y confirma en el ConfirmDialog
-    fireEvent.click(screen.getByRole("button", { name: /eliminar template/i }))
+    fireEvent.click(screen.getByRole("button", { name: /eliminar plantilla/i }))
     fireEvent.click(await screen.findByRole("button", { name: "Eliminar" }))
 
     // El error del backend debe ser visible para el usuario (no tragado en silencio)

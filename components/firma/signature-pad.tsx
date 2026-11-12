@@ -15,7 +15,7 @@ interface SignaturePadProps {
 }
 
 export function SignaturePad({
-  label = "Firma del Cliente",
+  label = "Firma del cliente",
   onSignatureChange,
   initialSignature,
   initialMime,
@@ -80,7 +80,7 @@ export function SignaturePad({
         {isEmpty && !hasInitial && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="text-muted-foreground text-sm">
-              Firme aqui con el dedo o mouse
+              Firmá acá con el dedo o el mouse
             </span>
           </div>
         )}

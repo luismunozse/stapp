@@ -79,7 +79,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
 
     // Validar tipo de archivo
     if (!file.type.startsWith("image/")) {
-      await showError("Por favor selecciona una imagen válida")
+      await showError("Seleccioná una imagen válida")
       return
     }
 
@@ -103,7 +103,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
 
   const handleUpload = async () => {
     if (!preview) {
-      await showError("Selecciona una imagen primero")
+      await showError("Primero seleccioná una imagen")
       return
     }
 
@@ -157,7 +157,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />
-            Subir Foto
+            Subir foto
           </CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
           <div className="relative">
             <img
               src={preview}
-              alt="Preview"
+              alt="Vista previa"
               className="w-full max-h-64 object-contain rounded-lg border"
             />
             <IconButton
@@ -282,7 +282,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
             ) : (
               <>
                 <Upload className="mr-2 h-4 w-4" />
-                Subir Foto
+                Subir foto
               </>
             )}
           </Button>
