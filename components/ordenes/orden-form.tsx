@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
+import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -265,6 +266,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
    *  de "el template de este tipo todavia no llego", que es la diferencia entre
    *  descartar respuestas huerfanas y descartar respuestas validas. */
   const [checklistTemplateTipo, setChecklistTemplateTipo] = useState<string | null>(null)
+  /** El ultimo pedido del template fallo. No bloquea el alta (ver
+   *  `checklistCargando`): se avisa y se ofrece reintentar. */
+  const [checklistError, setChecklistError] = useState(false)
+  /** Se incrementa con "Reintentar" para volver a pedir el template. */
+  const [checklistReintento, setChecklistReintento] = useState(0)
   const [checklistValores, setChecklistValores] = useState<Record<string, boolean | string | null>>({})
   const [checklistNotas, setChecklistNotas] = useState("")
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
@@ -823,6 +829,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         // (ver el comentario ahi). Este efecto tambien corre al montar.
         setChecklistTemplate(data.template)
         setChecklistTemplateTipo(codigoTipo)
+        setChecklistError(false)
       } catch (error) {
         console.error("Error fetching checklist template:", error)
         if (cancelled) return
@@ -832,6 +839,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         // respuestas restauradas no queden esperando un template que no vino.
         setChecklistTemplate(null)
         setChecklistTemplateTipo(codigoTipo)
+        setChecklistError(true)
       }
     }
 
@@ -839,7 +847,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     return () => {
       cancelled = true
     }
-  }, [tipoSeleccionado?.id, tipoSeleccionado?.codigo])
+  }, [tipoSeleccionado?.id, tipoSeleccionado?.codigo, checklistReintento])
+
+  /** El template del tipo de equipo elegido todavia no resolvio (o la lista de
+   *  tipos misma). Mientras tanto "Crear orden" queda deshabilitado: como se
+   *  puede crear desde el paso 1, sin este freno un alta rapida salteaba los
+   *  items obligatorios de un checklist que aun no habia llegado. Un fetch
+   *  fallido cuenta como resuelto (ver el catch de arriba), asi que una caida
+   *  del endpoint no deja el mostrador sin poder tomar ordenes. */
+  const checklistCargando =
+    tiposLoading || checklistTemplateTipo !== (tipoSeleccionado?.codigo ?? "")
 
   /**
    * Las respuestas del checklist se indexan por id de item del template, pero
@@ -1109,6 +1126,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }
 
   const onSubmit = async (data: OrdenFormData) => {
+    // El boton ya esta deshabilitado en este caso; esto cubre cualquier otro
+    // camino que llegue al submit.
+    if (checklistCargando) {
+      toast.info("Esperá a que cargue el checklist de ingreso")
+      return
+    }
     // Red de seguridad: el paso 1 ya valida el IMEI al tocar "Siguiente", pero
     // si llega invalido hasta aca (p. ej. la config del tipo de equipo resolvio
     // despues de pasar el paso 1) el error quedaba en un campo que no esta en
@@ -2197,6 +2220,25 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             </p>
           )}
 
+          {checklistCargando && (
+            <p
+              id="orden-checklist-cargando"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+              role="status"
+            >
+              <Spinner size="sm" />
+              Cargando checklist…
+            </p>
+          )}
+          {!checklistCargando && checklistError && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-warning-text" role="alert">
+              <span>No se pudo cargar el checklist de ingreso. Podés crear la {term("orden")} igual y completarlo desde la ficha.</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setChecklistReintento((n) => n + 1)}>
+                Reintentar
+              </Button>
+            </div>
+          )}
+
           <FormActionBar className="flex-wrap justify-between" inDialog={inSheet} alwaysSticky={inSheet}>
             <div className="flex gap-2">
               {currentStep > 1 ? (
@@ -2217,7 +2259,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   {currentStep === 1 ? "Agregar detalles" : "Siguiente"}
                 </Button>
               )}
-              <Button type="button" loading={loading} onClick={handleSubmit(onSubmit, onInvalid)}>
+              <Button
+                type="button"
+                loading={loading}
+                disabled={checklistCargando}
+                aria-describedby={checklistCargando ? "orden-checklist-cargando" : undefined}
+                onClick={handleSubmit(onSubmit, onInvalid)}
+              >
                 Crear orden
               </Button>
             </div>
