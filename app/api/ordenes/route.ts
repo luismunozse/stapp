@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
@@ -133,7 +134,8 @@ export async function GET(request: Request) {
         users:tecnico_id (
           id,
           nombre
-        )
+        ),
+        ${NOTAS_CREDITO_APLICADO_EMBED}
       `, { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })

@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
+import { CobroOrdenBadge } from "@/components/ordenes/cobro-orden-badge"
 import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
@@ -35,7 +36,17 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
             </span>
             {orden.esPractica && <PracticaBadge conAviso />}
           </div>
-          <OrderStatusBadge status={orden.estado} showIcon />
+          <div className="flex flex-col items-end gap-1">
+            <OrderStatusBadge status={orden.estado} showIcon />
+            <CobroOrdenBadge
+              estado={orden.estado}
+              costoFinal={orden.costoFinal}
+              sena={orden.sena}
+              totalCobrado={orden.totalCobrado}
+              descuentoCobro={orden.descuentoCobro}
+              aplicadoNotasCredito={orden.aplicadoNotasCredito}
+            />
+          </div>
         </div>
 
         {/* Info */}
