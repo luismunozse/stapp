@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Undo2 } from "lucide-react"
+import { Undo2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { toast } from "sonner"
 
@@ -97,12 +97,8 @@ export function RevertirCargoDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button variant="destructive" onClick={handleRevertir} disabled={loading}>
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Undo2 className="h-4 w-4 mr-2" />
-            )}
+          <Button variant="destructive" onClick={handleRevertir} loading={loading}>
+            <Undo2 className="h-4 w-4 mr-2" />
             Revertir
           </Button>
         </DialogFooter>

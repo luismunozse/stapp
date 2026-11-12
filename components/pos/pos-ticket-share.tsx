@@ -5,7 +5,7 @@ import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Loader2, Share2, Download, Phone } from "lucide-react"
+import { Share2, Download, Phone } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   buildVentaContext,
@@ -306,12 +306,8 @@ export function PosTicketShare({
       {/* Enviar: WhatsApp (imagen del ticket) + descarga, agrupados en un menú */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className={cn("h-11", className)} disabled={generating}>
-            {generating ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Share2 className="mr-2 h-4 w-4" />
-            )}
+          <Button variant="outline" className={cn("h-11", className)} loading={generating}>
+            <Share2 className="mr-2 h-4 w-4" />
             Enviar
           </Button>
         </PopoverTrigger>

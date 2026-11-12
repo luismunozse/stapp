@@ -160,7 +160,7 @@ export function FacturacionList() {
           Generar remito
         </Button>
         <div className="flex border rounded-lg overflow-hidden ml-auto">
-          <Button
+          <Button aria-label="Vista detallada"
             variant={viewMode === "detail" ? "default" : "ghost"}
             size="sm"
             className="rounded-none"
@@ -168,7 +168,7 @@ export function FacturacionList() {
           >
             <LayoutGrid className="h-4 w-4" />
           </Button>
-          <Button
+          <Button aria-label="Vista de lista"
             variant={viewMode === "list" ? "default" : "ghost"}
             size="sm"
             className="rounded-none"

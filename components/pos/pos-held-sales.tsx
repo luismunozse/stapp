@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { RotateCcw, Trash2, Clock, ShoppingCart, User } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
@@ -104,14 +105,14 @@ export function PosHeldSales({
                     <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                     Recuperar
                   </Button>
-                  <Button
+                  <IconButton
+                    label="Descartar venta en espera"
                     variant="ghost"
-                    size="icon"
                     className="h-8 w-8 text-destructive-text"
                     onClick={() => onDelete(sale.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
             ))}

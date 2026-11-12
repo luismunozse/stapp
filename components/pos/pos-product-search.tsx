@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { Input } from "@/components/ui/input"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import {
   Popover,
   PopoverContent,
@@ -484,14 +485,14 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             <div className="max-w-lg mx-auto space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Producto manual (sin inventario)</p>
-                <Button
+                <IconButton
+                  label="Cerrar producto manual"
                   variant="ghost"
-                  size="icon"
                   className="h-7 w-7"
                   onClick={() => setShowManualForm(false)}
                 >
                   <X className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">

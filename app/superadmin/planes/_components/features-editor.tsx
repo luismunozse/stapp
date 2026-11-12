@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { X, Plus } from "lucide-react"
@@ -46,16 +46,16 @@ export function FeaturesEditor({ features, onChange, disabled }: FeaturesEditorP
             className="flex items-center gap-2 p-2 bg-muted rounded-lg"
           >
             <span className="flex-1 text-sm">{feature}</span>
-            <Button
+            <IconButton
+              label="Quitar característica"
               type="button"
               variant="ghost"
-              size="icon"
               className="h-7 w-7"
               onClick={() => handleRemove(index)}
               disabled={disabled}
             >
               <X className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
         ))}
         {features.length === 0 && (
@@ -74,15 +74,15 @@ export function FeaturesEditor({ features, onChange, disabled }: FeaturesEditorP
           onKeyDown={handleKeyDown}
           disabled={disabled}
         />
-        <Button
+        <IconButton
+          label="Agregar característica"
           type="button"
           variant="outline"
-          size="icon"
           onClick={handleAdd}
           disabled={disabled || !newFeature.trim()}
         >
           <Plus className="h-4 w-4" />
-        </Button>
+        </IconButton>
       </div>
     </div>
   )

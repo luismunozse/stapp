@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
-import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
+import { PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
 import { toast } from "sonner"
 import { ALCANCE_GARANTIA_LABELS, esAlcanceGarantia } from "@/lib/garantias/condiciones"
 import { useCurrency } from "@/contexts/currency-context"
@@ -552,19 +552,10 @@ export function EntregaDialog({
             </Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registrando...
-                </>
-              ) : (
-                <>
-                  {sinCobro ? <HandCoins className="mr-2 h-4 w-4" /> : esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                  {sinCobro ? "Confirmar Entrega sin Cobro" : esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
-                </>
-              )}
+              {sinCobro ? <HandCoins className="mr-2 h-4 w-4" /> : esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+              {sinCobro ? "Confirmar Entrega sin Cobro" : esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
             </Button>
           </div>
         </div>

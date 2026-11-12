@@ -548,7 +548,7 @@ export default function LogsPage() {
             {ACTION_LABELS[log.action] || log.action}) —{" "}
             {formatDateTime(log.created_at)}
           </span>
-          <Button
+          <Button aria-label="Contraer detalle"
             size="sm"
             variant="ghost"
             onClick={() => toggleRow(log.id)}
@@ -728,7 +728,7 @@ export default function LogsPage() {
       header: "",
       render: (log) =>
         log.changes ? (
-          <Button
+          <Button aria-label={expandedRows.has(log.id) ? "Contraer detalle" : "Ver detalle"}
             size="sm"
             variant="ghost"
             onClick={(e) => {

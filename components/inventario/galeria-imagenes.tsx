@@ -167,13 +167,10 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
           <Button
             size="sm"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || imagenes.length >= MAX_IMAGES}
+            disabled={imagenes.length >= MAX_IMAGES}
+            loading={uploading}
           >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-            ) : (
-              <ImagePlus className="h-3.5 w-3.5 mr-1" />
-            )}
+            <ImagePlus className="h-3.5 w-3.5 mr-1" />
             Subir imagen
           </Button>
           <input

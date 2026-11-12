@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X, Send, Loader2, Bot, CheckCircle2 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "./chat-message"
@@ -206,14 +206,14 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
             </p>
           </div>
         </div>
-        <Button
+        <IconButton
+          label="Cerrar asistente"
           variant="ghost"
-          size="icon"
           onClick={onClose}
           className="text-white hover:bg-white/20 transition-all duration-200"
         >
           <X className="w-5 h-5" />
-        </Button>
+        </IconButton>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -256,9 +256,15 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
             disabled={isLoading}
             className="flex-1"
           />
-          <Button onClick={handleSendMessage} disabled={isLoading || !input.trim()} size="icon">
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
+          <IconButton
+            label="Enviar mensaje"
+            variant="default"
+            onClick={handleSendMessage}
+            loading={isLoading}
+            disabled={!input.trim()}
+          >
+            <Send className="w-4 h-4" />
+          </IconButton>
         </div>
         <div className="flex items-center justify-between mt-2">
           {!leadCaptured ? (

@@ -112,7 +112,7 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
             )
           ) : (
             <>
-              <Button
+              <Button aria-label="Imprimir orden"
                 variant="ghost"
                 size="sm"
                 className="h-10 w-10 text-muted-foreground hover:text-primary"
@@ -121,7 +121,7 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
                 <Printer className="h-4 w-4" />
               </Button>
               {!hideDelete && (
-                <Button
+                <Button aria-label="Eliminar orden"
                   variant="ghost"
                   size="sm"
                   className="h-10 w-10 text-muted-foreground hover:text-destructive-text"

@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { round2 } from "@/lib/ventas/totales"
@@ -201,8 +201,7 @@ export function CierreDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button onClick={handleSubmit} loading={loading}>
             Cerrar Caja
           </Button>
         </DialogFooter>

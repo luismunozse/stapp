@@ -521,7 +521,7 @@ export function Navbar() {
         <ThemeToggle variant="icon" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="hover:opacity-80 transition-opacity rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+            <button aria-label="Menú de tu cuenta" className="hover:opacity-80 transition-opacity rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
               <UserAvatar
                 src={displayAvatar}
                 nombre={displayName}

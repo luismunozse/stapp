@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -138,9 +139,9 @@ export default function CategoriasGastoPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Link href="/configuracion">
-            <Button variant="ghost" size="icon">
+            <IconButton label="Volver a configuración" variant="ghost">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Categorías de Gasto</h1>
@@ -313,17 +314,17 @@ function CategoriaList({
                     onCheckedChange={() => onToggle(c)}
                     className="mr-1"
                   />
-                  <Button variant="ghost" size="icon" onClick={() => onEdit(c)}>
+                  <IconButton label="Editar categoría" variant="ghost" onClick={() => onEdit(c)}>
                     <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
+                  </IconButton>
+                  <IconButton
+                    label="Eliminar categoría"
                     variant="ghost"
-                    size="icon"
                     onClick={() => onDelete(c.id)}
                     className="text-destructive-text hover:text-destructive-text"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
             ))}

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { DollarSign, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { DollarSign, ChevronDown, ChevronUp } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
@@ -358,16 +358,10 @@ export function CobrarOrdenDialog({
             <Button
               className="w-full"
               onClick={handleCobrar}
-              disabled={loading || pendiente <= 0}
+              disabled={pendiente <= 0}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registrando...
-                </>
-              ) : (
-                `Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`
-              )}
+              {`Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`}
             </Button>
           </div>
         )}

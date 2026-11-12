@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -295,14 +296,14 @@ export function PosCart({
             )}
           </Button>
           {cliente.id && (
-            <Button
+            <IconButton
+              label="Quitar cliente"
               variant="ghost"
-              size="icon"
               className="h-8 w-8 shrink-0"
               onClick={() => onSetCliente({ id: null, nombre: "", telefono: "" })}
             >
               <X className="h-3.5 w-3.5" />
-            </Button>
+            </IconButton>
           )}
         </div>
 
@@ -410,14 +411,14 @@ export function PosCart({
 
                     {/* Quantity controls - tap span to edit, +/- for increments */}
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button
+                      <IconButton
+                        label="Restar uno"
                         variant="outline"
-                        size="icon"
                         className="h-8 w-8 sm:h-7 sm:w-7 active:scale-90 active:bg-accent/60 transition-transform"
                         onClick={() => onUpdateQuantity(item.lineId, -1)}
                       >
                         <Minus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                      </Button>
+                      </IconButton>
                       {editingQtyId === item.lineId ? (
                         <input
                           type="number"
@@ -456,15 +457,15 @@ export function PosCart({
                           {item.cantidad}
                         </button>
                       )}
-                      <Button
+                      <IconButton
+                        label="Sumar uno"
                         variant="outline"
-                        size="icon"
                         className="h-8 w-8 sm:h-7 sm:w-7 active:scale-90 active:bg-accent/60 transition-transform"
                         onClick={() => onUpdateQuantity(item.lineId, 1)}
                         disabled={item.inventarioId !== null && item.cantidad >= item.stockDisponible}
                       >
                         <Plus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                      </Button>
+                      </IconButton>
                     </div>
 
                     {/* Line total */}
@@ -507,14 +508,14 @@ export function PosCart({
                     </Button>
 
                     {/* Remove */}
-                    <Button
+                    <IconButton
+                      label="Quitar del carrito"
                       variant="ghost"
-                      size="icon"
                       className="h-8 w-8 sm:h-7 sm:w-7 text-destructive-text shrink-0"
                       onClick={() => onRemoveItem(item.lineId)}
                     >
                       <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                    </Button>
+                    </IconButton>
                   </div>
 
                   {/* Expanded options */}

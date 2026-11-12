@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Trash2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, PiggyBank } from "lucide-react"
@@ -141,15 +142,15 @@ export function MultiPagoInput({
                 Pago {index + 1}{pagos.length > 1 ? ` de ${pagos.length}` : ""}
               </span>
               {pagos.length > 1 && (
-                <Button
+                <IconButton
+                  label="Quitar pago"
                   type="button"
                   variant="ghost"
-                  size="icon"
                   className="h-6 w-6 text-destructive-text"
                   onClick={() => removePago(index)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </IconButton>
               )}
             </div>
 

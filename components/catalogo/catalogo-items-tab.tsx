@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -515,14 +516,14 @@ export function CatalogoItemsTab() {
                     </td>
                     <td className="px-2 py-1.5">
                       <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing(item)}>
+                        <IconButton label="Editar ítem" variant="ghost" className="h-7 w-7" onClick={() => setEditing(item)}>
                           <Pencil className="h-3 w-3" />
-                        </Button>
+                        </IconButton>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <IconButton label="Más acciones" variant="ghost" className="h-7 w-7">
                               <MoreVertical className="h-3 w-3" />
-                            </Button>
+                            </IconButton>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleDuplicate(item.id)}>

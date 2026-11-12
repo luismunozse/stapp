@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -495,17 +496,17 @@ export function TecnicosList() {
                       </div>
                       {isAdmin && (
                         <div className="flex gap-1 shrink-0">
-                          <Button
+                          <IconButton
+                            label="Editar técnico"
                             variant="ghost"
-                            size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8"
                             onClick={(e) => handleEdit(tecnico, e)}
                           >
                             <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
-                          <Button
+                          </IconButton>
+                          <IconButton
+                            label="Eliminar técnico"
                             variant="ghost"
-                            size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8 text-destructive-text hover:text-destructive-text"
                             onClick={(e) =>
                               handleDelete(tecnico.id, tecnico.ordenesActivas, e)
@@ -513,7 +514,7 @@ export function TecnicosList() {
                             disabled={deletingId === tecnico.id}
                           >
                             <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
+                          </IconButton>
                         </div>
                       )}
                     </div>

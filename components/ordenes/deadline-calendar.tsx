@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import useSWR from "swr"
 import { CalendarClock, ChevronRight, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import {
   Dialog,
   DialogContent,
@@ -164,25 +165,25 @@ export function DeadlineCalendar() {
             <div className="px-5 pb-3">
               {/* Month navigation */}
               <div className="flex items-center justify-between mb-3">
-                <Button
+                <IconButton
+                  label="Mes anterior"
                   variant="ghost"
-                  size="icon"
                   className="h-8 w-8"
                   onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
                 >
                   <ChevronLeft className="h-4 w-4" />
-                </Button>
+                </IconButton>
                 <h3 className="text-sm font-semibold capitalize">
                   {format(currentMonth, "MMMM yyyy", { locale: es })}
                 </h3>
-                <Button
+                <IconButton
+                  label="Mes siguiente"
                   variant="ghost"
-                  size="icon"
                   className="h-8 w-8"
                   onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
                 >
                   <ChevronRight className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
 
               {/* Weekday headers */}

@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Wrench, Loader2 } from "lucide-react"
+import { Wrench } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { printDeviceLabel } from "@/components/ordenes/print-label"
 import { toast } from "sonner"
@@ -204,8 +204,7 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button className="flex-1" onClick={handleConfirmar} disabled={loading || costoNum <= 0}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button className="flex-1" onClick={handleConfirmar} disabled={costoNum <= 0} loading={loading}>
             Marcar como Reparado
           </Button>
         </div>

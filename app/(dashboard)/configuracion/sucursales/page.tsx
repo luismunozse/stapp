@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
@@ -151,9 +152,9 @@ export default function SucursalesPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Link href="/configuracion">
-            <Button variant="ghost" size="icon">
+            <IconButton label="Volver a configuración" variant="ghost">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
@@ -343,18 +344,18 @@ function SucursalList({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Button variant="ghost" size="icon" onClick={() => onEdit(s)}>
+              <IconButton label="Editar sucursal" variant="ghost" onClick={() => onEdit(s)}>
                 <Pencil className="h-3.5 w-3.5" />
-              </Button>
+              </IconButton>
               {!s.principal && s.activo && (
-                <Button
+                <IconButton
+                  label="Archivar sucursal"
                   variant="ghost"
-                  size="icon"
                   onClick={() => onArchive(s.id)}
                   className="text-destructive-text hover:text-destructive-text"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </IconButton>
               )}
             </div>
           </div>

@@ -11,7 +11,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Loader2 } from "lucide-react"
 
 interface AperturaDialogProps {
   open: boolean
@@ -85,8 +84,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button onClick={handleSubmit} loading={loading}>
             Abrir Caja
           </Button>
         </DialogFooter>

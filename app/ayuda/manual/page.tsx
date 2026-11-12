@@ -186,7 +186,7 @@ export default function ManualPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <button
+              <button aria-label={sidebarOpen ? "Cerrar índice" : "Abrir índice"}
                 type="button"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden p-2 hover:bg-muted rounded-md"

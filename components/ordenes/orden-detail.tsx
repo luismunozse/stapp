@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -686,9 +687,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <Link href={listaHref} aria-label="Volver a órdenes">
-            <Button variant="outline" size="icon">
+            <IconButton label="Volver a órdenes" variant="outline">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <div className="flex items-center gap-3">
@@ -891,7 +892,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           {isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button aria-label="Más acciones" variant="outline" size="sm">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>

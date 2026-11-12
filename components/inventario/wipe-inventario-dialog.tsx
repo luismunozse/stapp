@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertTriangle, Loader2 } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 
 interface WipeInventarioDialogProps {
@@ -124,9 +124,9 @@ export function WipeInventarioDialog({ open, onOpenChange, onSuccess }: WipeInve
           <Button
             variant="destructive"
             onClick={handleWipe}
-            disabled={!matches || pending}
+            disabled={!matches}
+            loading={pending}
           >
-            {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Eliminar todo
           </Button>
         </DialogFooter>

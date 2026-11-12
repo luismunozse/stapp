@@ -27,7 +27,7 @@ describe("BarcodeScanner — scopeVenta", () => {
     render(<BarcodeScanner open onOpenChange={() => {}} onResult={() => {}} scopeVenta />)
 
     fireEvent.change(screen.getByPlaceholderText("Código de barras..."), { target: { value: "ABC123" } })
-    fireEvent.click(screen.getByRole("button", { name: "" }))
+    fireEvent.click(screen.getByRole("button", { name: "Buscar código" }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     const url = fetchMock.mock.calls[0][0] as string
@@ -41,7 +41,7 @@ describe("BarcodeScanner — scopeVenta", () => {
     render(<BarcodeScanner open onOpenChange={() => {}} onResult={() => {}} />)
 
     fireEvent.change(screen.getByPlaceholderText("Código de barras..."), { target: { value: "ABC123" } })
-    fireEvent.click(screen.getByRole("button", { name: "" }))
+    fireEvent.click(screen.getByRole("button", { name: "Buscar código" }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     const url = fetchMock.mock.calls[0][0] as string

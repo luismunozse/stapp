@@ -3,6 +3,7 @@ import { useTerminologia } from "@/contexts/currency-context"
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -158,9 +159,9 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
             <Camera className="h-5 w-5" />
             Subir Foto
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -223,14 +224,14 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
               alt="Preview"
               className="w-full max-h-64 object-contain rounded-lg border"
             />
-            <Button
+            <IconButton
+              label="Quitar foto"
               variant="destructive"
-              size="icon"
               className="absolute top-2 right-2"
               onClick={clearPreview}
             >
               <X className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
         )}
 

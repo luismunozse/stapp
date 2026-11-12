@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -208,9 +209,9 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/soporte")}>
+        <IconButton label="Volver a soporte" variant="ghost" onClick={() => router.push("/soporte")}>
           <ArrowLeft className="h-4 w-4" />
-        </Button>
+        </IconButton>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold truncate">{ticket.asunto}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -345,7 +346,7 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                       alt={`Adjunto ${i + 1}`}
                       className="h-16 w-16 object-cover rounded-lg border"
                     />
-                    <button
+                    <button aria-label="Quitar imagen"
                       onClick={() => removeImage(i)}
                       className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -383,18 +384,16 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                 rows={2}
                 className="resize-none"
               />
-              <Button
+              <IconButton
+                label="Enviar mensaje"
+                variant="default"
                 onClick={handleSend}
-                disabled={sending || (!newMessage.trim() && selectedImages.length === 0)}
-                size="icon"
+                loading={sending}
+                disabled={(!newMessage.trim() && selectedImages.length === 0)}
                 className="shrink-0 self-end"
               >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
+                <Send className="h-4 w-4" />
+              </IconButton>
             </div>
             {ticket.estado === "RESUELTO" && (
               <p className="text-xs text-amber-600 mt-1">

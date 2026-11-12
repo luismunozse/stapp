@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -211,9 +212,9 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Link href="/inventario/conteos">
-          <Button variant="ghost" size="icon">
+          <IconButton label="Volver a conteos" variant="ghost">
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

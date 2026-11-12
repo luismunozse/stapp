@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { ArrowLeft, Package } from "lucide-react"
 import { PlanForm } from "../_components/plan-form"
 
@@ -11,9 +11,9 @@ export default function NuevoPlanPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/superadmin/planes">
-          <Button variant="ghost" size="icon">
+          <IconButton label="Volver a planes" variant="ghost">
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </IconButton>
         </Link>
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">

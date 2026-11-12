@@ -343,7 +343,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
           <p className="text-sm text-gray-400">
             Actualizado: {lastUpdate.toLocaleTimeString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
           </p>
-          <button
+          <button aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
             onClick={toggleFullscreen}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
@@ -439,7 +439,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
             {/* Pagination indicators */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-4 mt-6">
-                <button
+                <button aria-label="Página anterior"
                   onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
                   disabled={currentPage === 0}
@@ -462,7 +462,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
                   ))}
                 </div>
 
-                <button
+                <button aria-label="Página siguiente"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
                   disabled={currentPage === totalPages - 1}

@@ -13,7 +13,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 // Mismo set que acepta PATCH /api/caja/movimientos/metodo-pago: sin cuenta
@@ -188,8 +187,7 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading || sinCambios || !metodo}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button onClick={handleSubmit} disabled={sinCambios || !metodo} loading={loading}>
             Guardar
           </Button>
         </DialogFooter>

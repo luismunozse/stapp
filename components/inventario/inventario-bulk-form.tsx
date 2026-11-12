@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -18,7 +19,6 @@ import {
   Plus,
   Trash2,
   Copy,
-  Loader2,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
@@ -598,9 +598,9 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               el mismo precio y distinto modelo.
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} disabled={submitting}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose} disabled={submitting}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </CardHeader>
 
         {/*
@@ -972,8 +972,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
                 >
                   Revisar
                 </Button>
-                <Button type="button" onClick={doSubmit} disabled={submitting}>
-                  {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                <Button type="button" onClick={doSubmit} loading={submitting}>
                   Crear igual
                 </Button>
               </div>
@@ -988,9 +987,9 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
           <Button
             type="button"
             onClick={handleSubmitClick}
-            disabled={submitting || totalConNombre === 0}
+            disabled={totalConNombre === 0}
+            loading={submitting}
           >
-            {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
             Crear {totalConNombre > 0 ? totalConNombre : ""} producto
             {totalConNombre === 1 ? "" : "s"}
           </Button>
