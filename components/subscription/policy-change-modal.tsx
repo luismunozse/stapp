@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Sparkles, Clock, Check, Gift } from "lucide-react"
+import { useCapaPrioritaria } from "@/hooks/use-capa-prioritaria"
 
 const STORAGE_KEY = "stapp_policy_change_seen_v1"
 
@@ -20,19 +21,37 @@ interface PolicyChangeModalProps {
 
 export function PolicyChangeModal({ daysRemaining }: PolicyChangeModalProps) {
   const [open, setOpen] = useState(false)
+  // Se decide en el efecto: localStorage no existe en el servidor.
+  const [pendiente, setPendiente] = useState(false)
+  // Una sola capa de primer ingreso por sesión (auditoría UX §5.1).
+  const permitido = useCapaPrioritaria("politicas", pendiente)
 
   useEffect(() => {
     // Verificar si ya vio el modal
-    const hasSeen = localStorage.getItem(STORAGE_KEY)
-    if (!hasSeen) {
-      // Pequeño delay para mejor UX
-      const timer = setTimeout(() => setOpen(true), 500)
-      return () => clearTimeout(timer)
+    let hasSeen: string | null = null
+    try {
+      hasSeen = localStorage.getItem(STORAGE_KEY)
+    } catch {
+      // sin storage: se trata como no visto
     }
+    if (hasSeen) return
+    const timer = setTimeout(() => setPendiente(true), 0)
+    return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    if (!permitido) return
+    // Pequeño delay para mejor UX
+    const timer = setTimeout(() => setOpen(true), 500)
+    return () => clearTimeout(timer)
+  }, [permitido])
+
   const handleClose = () => {
-    localStorage.setItem(STORAGE_KEY, "true")
+    try {
+      localStorage.setItem(STORAGE_KEY, "true")
+    } catch {
+      // sin storage: se cierra igual en esta sesión
+    }
     setOpen(false)
   }
 

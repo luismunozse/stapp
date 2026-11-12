@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Download, Share, X, Plus } from "lucide-react"
 import { isNativePlatform } from "@/lib/capacitor"
+import { useCapaPrioritaria } from "@/hooks/use-capa-prioritaria"
 
 type InstallState = "hidden" | "android" | "ios"
 
@@ -91,7 +92,12 @@ export function PWAInstaller() {
     localStorage.setItem("pwa-install-dismissed", Date.now().toString())
   }
 
-  if (installState === "hidden" || dismissed) return null
+  // Una sola capa de primer ingreso por sesión (auditoría UX §5.1): si ya se
+  // mostró el tour, las novedades u otro aviso, la sugerencia espera.
+  const quiere = installState !== "hidden" && !dismissed
+  const permitido = useCapaPrioritaria("pwa-instalar", quiere)
+
+  if (!quiere || !permitido) return null
 
   // iOS Install Banner
   if (installState === "ios") {
