@@ -161,7 +161,7 @@ export function CurrentPlan({
             <div>
               <p className="font-medium text-sm">Suscripción cancelada</p>
               <p className="text-xs sm:text-sm">
-                Acceso Premium hasta {periodEnd}.
+                Acceso al plan Profesional hasta {periodEnd}.
               </p>
             </div>
           </div>

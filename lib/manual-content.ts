@@ -1040,7 +1040,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Datos de la empresa",
-        body: "Configuración está organizada en pestañas: Secciones (accesos a Checklist, Roles y permisos, WhatsApp, Sucursales, Depósitos, Gastos, etc.), Empresa, Facturación, Comprobantes, Comisiones, Avisos y Seguridad. En la pestaña Empresa editás el logo, los datos de la empresa, el país, la moneda, la zona horaria y los módulos opcionales. Estos datos aparecen en todos los documentos (órdenes, remitos, cotizaciones). En Empresa, Facturación y Comprobantes los cambios se guardan con el botón \"Guardar Cambios\" de la barra fija de abajo.",
+        body: "Configuración está organizada en pestañas: Secciones (accesos a Checklist, Roles y permisos, WhatsApp, Sucursales, Depósitos, Gastos, etc.), Empresa, Facturación, Comprobantes, Comisiones, Avisos y Seguridad. En la pestaña Empresa editás el logo, los datos de la empresa, el país, la moneda, la zona horaria y los módulos opcionales. Estos datos aparecen en todos los documentos (órdenes, remitos, presupuestos). En Empresa, Facturación y Comprobantes los cambios se guardan con el botón \"Guardar Cambios\" de la barra fija de abajo.",
       },
       {
         subtitle: "Checklist de recepción",
