@@ -194,6 +194,39 @@ describe("PUT /api/inventario/[id] con moneda", () => {
 
     expect(status).toBe(400)
   })
+
+  // Migration 408 copies a variant's currency to its siblings without converting their prices:
+  // a single variant must not change it, the group endpoint does.
+  it("cambiar la moneda de una variante es 400 y no actualiza", async () => {
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(true) as any)
+    const cadena = dosLecturas(fila({ grupo_id: "g1" }), fila({ grupo_id: "g1" }))
+
+    const { status, body } = await parseResponse(await PUT(putRequest({ moneda: "USD" }), params))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Cambiá la moneda desde el grupo de variantes")
+    expect(cadena.update).not.toHaveBeenCalled()
+  })
+
+  it("volver a local una variante en USD también es 400", async () => {
+    const cadena = dosLecturas(fila({ grupo_id: "g1", moneda: "USD" }), fila({ grupo_id: "g1" }))
+
+    const { status, body } = await parseResponse(await PUT(putRequest({ moneda: null }), params))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Cambiá la moneda desde el grupo de variantes")
+    expect(cadena.update).not.toHaveBeenCalled()
+  })
+
+  it("una variante que reenvía su misma moneda se guarda", async () => {
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(true) as any)
+    const cadena = dosLecturas(fila({ grupo_id: "g1", moneda: "USD" }), fila({ grupo_id: "g1", moneda: "USD", precio_venta: 50 }))
+
+    const { status } = await parseResponse(await PUT(putRequest({ moneda: "USD", precioVenta: 50 }), params))
+
+    expect(status).toBe(200)
+    expect(cadena.update).toHaveBeenCalled()
+  })
 })
 
 describe("GET /api/inventario con moneda", () => {
