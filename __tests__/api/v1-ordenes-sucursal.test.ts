@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { mockSupabaseFrom, createChainMock, parseResponse } from "./helpers"
 import { GET } from "@/app/api/v1/ordenes/route"
 
+vi.mock("@/lib/subscriptions", () => ({
+  hasValidAccess: vi.fn().mockResolvedValue({ hasAccess: true }),
+}))
+
+const ORG_ACTIVA = createChainMock({ id: "org-1", activo: true, deleted_at: null })
+
 function reqWith(auth?: string, qs = ""): Request {
   const headers: Record<string, string> = {}
   if (auth) headers["Authorization"] = auth
@@ -23,6 +29,7 @@ describe("GET /api/v1/ordenes — sucursal scoping", () => {
     const ordenesChain = createChainMock([{ id: "o1" }], null, 1)
     mockSupabaseFrom({
       api_keys: createChainMock(validKey),
+      organizations: ORG_ACTIVA,
       ordenes_servicio: ordenesChain,
     })
     const res = await GET(reqWith("Bearer stapp_live_valid"))
@@ -38,6 +45,7 @@ describe("GET /api/v1/ordenes — sucursal scoping", () => {
     const ordenesChain = createChainMock([{ id: "o1" }], null, 1)
     mockSupabaseFrom({
       api_keys: createChainMock(validKey),
+      organizations: ORG_ACTIVA,
       // assertSucursalEnOrg uses .single() → returns a row = belongs
       sucursales: createChainMock({ id: "suc-1" }),
       ordenes_servicio: ordenesChain,
@@ -53,6 +61,7 @@ describe("GET /api/v1/ordenes — sucursal scoping", () => {
     const ordenesChain = createChainMock([{ id: "o1" }], null, 1)
     mockSupabaseFrom({
       api_keys: createChainMock(validKey),
+      organizations: ORG_ACTIVA,
       // assertSucursalEnOrg .single() → null = does not belong
       sucursales: createChainMock(null),
       ordenes_servicio: ordenesChain,

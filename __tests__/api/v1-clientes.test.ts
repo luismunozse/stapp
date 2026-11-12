@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { mockSupabaseFrom, createChainMock, parseResponse } from "./helpers"
 import { GET } from "@/app/api/v1/clientes/route"
 
+vi.mock("@/lib/subscriptions", () => ({
+  hasValidAccess: vi.fn().mockResolvedValue({ hasAccess: true }),
+}))
+
+const ORG_ACTIVA = createChainMock({ id: "org-1", activo: true, deleted_at: null })
+
 function reqWith(auth?: string, qs = ""): Request {
   const headers: Record<string, string> = {}
   if (auth) headers["Authorization"] = auth
@@ -20,6 +26,7 @@ describe("GET /api/v1/clientes", () => {
   it("200 + org-scoped data with a valid key", async () => {
     mockSupabaseFrom({
       api_keys: createChainMock({ id: "k1", organization_id: "org-1", activo: true, revoked_at: null }),
+      organizations: ORG_ACTIVA,
       clientes: createChainMock([{ id: "c1", nombre: "Ana", telefono: "123" }], null, 1),
     })
     const res = await GET(reqWith("Bearer stapp_live_valid"))
@@ -38,6 +45,7 @@ describe("GET /api/v1/clientes", () => {
     )
     mockSupabaseFrom({
       api_keys: createChainMock({ id: "k1", organization_id: "org-1", activo: true, revoked_at: null }),
+      organizations: ORG_ACTIVA,
       clientes: chain,
     })
     const res = await GET(reqWith("Bearer stapp_live_valid"))

@@ -161,11 +161,14 @@ export async function PUT(
       // Reordenar items
       const data = reorderSchema.parse(body)
 
+      // Cada ítem se filtra por la plantilla ya validada: un id de otra
+      // plantilla (u otra organización) no matchea y no se toca.
       for (const { id, orden } of data.items) {
         await supabaseAdmin
           .from("checklist_template_items")
           .update({ orden })
           .eq("id", id)
+          .eq("template_id", templateId)
       }
 
       const { data: items } = await supabaseAdmin
@@ -184,10 +187,14 @@ export async function PUT(
         .from("checklist_template_items")
         .update(data)
         .eq("id", itemId)
+        .eq("template_id", templateId)
         .select()
-        .single()
+        .maybeSingle()
 
       if (updateError) throw updateError
+      if (!item) {
+        return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+      }
 
       return NextResponse.json(item)
     }

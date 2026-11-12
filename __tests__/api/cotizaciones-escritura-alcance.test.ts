@@ -44,6 +44,7 @@ import { PUT as putCotizacion } from "@/app/api/cotizaciones/[id]/route"
 import { POST as duplicarCotizacion } from "@/app/api/cotizaciones/[id]/duplicar/route"
 import { GET as historialCotizacion } from "@/app/api/cotizaciones/[id]/historial/route"
 import { POST as convertirVenta } from "@/app/api/cotizaciones/[id]/convertir-venta/route"
+import { POST as crearCotizacion } from "@/app/api/cotizaciones/route"
 
 const S1 = "sucursal-1"
 const S2 = "sucursal-2"
@@ -346,5 +347,52 @@ describe("the select the scope check depends on", () => {
     expect(status).toBe(404)
     expect(body.error).toMatch(NO_ENCONTRADA)
     expect(getAuditLogs).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/cotizaciones (create on an order)", () => {
+  const crear = () =>
+    crearCotizacion(
+      createPostRequest(
+        { ordenId: "orden-1", items: [{ descripcion: "Pantalla", cantidad: 1, precioUnitario: 100, subtotal: 100 }] },
+        "http://localhost:3000/api/cotizaciones",
+      ),
+    )
+  const ordenOrg = (sucursal: string, tecnico: string | null = null) =>
+    createChainMock({ id: "orden-1", organization_id: "org-1", cliente_id: "cli-1", sucursal_id: sucursal, tecnico_id: tecnico })
+
+  it("VENDEDOR of another branch: 404 and neither the quote nor the order is written", async () => {
+    const cotizaciones = createChainMock({ id: "cot-1" })
+    const ordenes = ordenOrg(S2)
+    mockSupabaseFrom({ cotizaciones, ordenes_servicio: ordenes })
+    mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
+    const { status, body } = await parseResponse(await crear())
+    expect(status).toBe(404)
+    expect(body.error).toBe("Orden no encontrada")
+    sinEscrituras(cotizaciones, ordenes)
+  })
+
+  it("TECNICO not assigned, other branch: 404", async () => {
+    const cotizaciones = createChainMock({ id: "cot-1" })
+    const ordenes = ordenOrg(S2, "otro")
+    mockSupabaseFrom({ cotizaciones, ordenes_servicio: ordenes })
+    mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: S1 })
+    const { status } = await parseResponse(await crear())
+    expect(status).toBe(404)
+    sinEscrituras(cotizaciones, ordenes)
+  })
+
+  it("TECNICO assigned to the order in another branch: gets past the scope check", async () => {
+    mockSupabaseFrom({ cotizaciones: createChainMock({ id: "cot-1" }), ordenes_servicio: ordenOrg(S2, U1) })
+    mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: S1 })
+    const { body } = await parseResponse(await crear())
+    expect(body.error).not.toBe("Orden no encontrada")
+  })
+
+  it("ADMIN with another branch selected: gets past the scope check", async () => {
+    mockSupabaseFrom({ cotizaciones: createChainMock({ id: "cot-1" }), ordenes_servicio: ordenOrg(S2) })
+    mockAuthSuccess({ role: "ADMIN", userId: U1, sucursalId: S1 })
+    const { body } = await parseResponse(await crear())
+    expect(body.error).not.toBe("Orden no encontrada")
   })
 })
