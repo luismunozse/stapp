@@ -7,12 +7,15 @@
  *  - AR: every rate source is offered; with no row the suggestion is BLUE and the conversion
  *    rounding is 10. Any other country: only MANUAL, rounding 0.
  *  - A stored value is a choice and is kept as is (a stored rounding of 0 stays 0).
- *  - If the local currency is USD there is nothing to convert: the feature is off.
+ *  - Each org has ONE foreign currency (USD or EUR; default EUR if the local currency is USD, else USD).
+ *    AR+USD offers MANUAL/OFICIAL/BLUE/MEP, AR+EUR offers MANUAL/OFICIAL, other countries MANUAL.
+ *  - If the local currency equals the foreign one there is nothing to convert: the feature is off.
  *  - USD cash and USD change need the feature on.
  */
 
 import { getCountryConfig } from "@/lib/countries"
 import { CURRENCIES, DEFAULT_CURRENCY, type CurrencyCode } from "@/lib/currency"
+import type { MonedaExtranjera } from "@/lib/currency/convert"
 
 export type FuenteTipoCambio = "MANUAL" | "OFICIAL" | "BLUE" | "MEP"
 export type VueltoMoneda = "LOCAL" | "USD"
@@ -20,6 +23,7 @@ export type VueltoMoneda = "LOCAL" | "USD"
 /** Columns of organizacion_moneda, all optional: the row may be missing or partial. */
 export interface FilaOrganizacionMoneda {
   multimoneda_habilitada?: boolean | null
+  moneda_extranjera?: string | null
   tipo_cambio_fuente?: string | null
   tipo_cambio_manual?: number | null
   tipo_cambio_referencia?: number | null
@@ -31,7 +35,8 @@ export interface FilaOrganizacionMoneda {
 
 export interface ConfigMoneda {
   monedaLocal: CurrencyCode
-  /** Effective flag: false when the local currency is USD, whatever the row says. */
+  monedaExtranjera: MonedaExtranjera
+  /** Effective flag: false when local and foreign currency are the same, whatever the row says. */
   habilitada: boolean
   fuentesDisponibles: FuenteTipoCambio[]
   fuente: FuenteTipoCambio
@@ -46,6 +51,12 @@ export interface ConfigMoneda {
 const TODAS: FuenteTipoCambio[] = ["MANUAL", "OFICIAL", "BLUE", "MEP"]
 const FUENTES = new Set<string>(TODAS)
 
+/** Rate sources offered for a country and foreign currency. */
+export function fuentesPara(pais: string | null | undefined, moneda: MonedaExtranjera): FuenteTipoCambio[] {
+  if (pais !== "AR") return ["MANUAL"]
+  return moneda === "EUR" ? ["MANUAL", "OFICIAL"] : [...TODAS]
+}
+
 function monedaLocalDe(pais: string | null | undefined, monedaLocal?: string | null): CurrencyCode {
   if (monedaLocal && Object.hasOwn(CURRENCIES, monedaLocal)) return monedaLocal as CurrencyCode
   return pais ? getCountryConfig(pais).defaultCurrency : DEFAULT_CURRENCY
@@ -58,14 +69,23 @@ export function resolverConfigMoneda(
 ): ConfigMoneda {
   const local = monedaLocalDe(pais, monedaLocal)
   const esAR = pais === "AR"
-  const fuentesDisponibles: FuenteTipoCambio[] = esAR ? [...TODAS] : ["MANUAL"]
+  const guardadaExtranjera = fila?.moneda_extranjera
+  const monedaExtranjera: MonedaExtranjera =
+    guardadaExtranjera === "USD" || guardadaExtranjera === "EUR"
+      ? guardadaExtranjera
+      : local === "USD"
+        ? "EUR"
+        : "USD"
+  const fuentesDisponibles = fuentesPara(pais, monedaExtranjera)
 
   const guardada = fila?.tipo_cambio_fuente
   const fuente: FuenteTipoCambio =
     guardada && FUENTES.has(guardada) && fuentesDisponibles.includes(guardada as FuenteTipoCambio)
       ? (guardada as FuenteTipoCambio)
       : esAR
-        ? "BLUE"
+        ? monedaExtranjera === "EUR"
+          ? "OFICIAL"
+          : "BLUE"
         : "MANUAL"
 
   const redondeoGuardado = fila?.redondeo_conversion
@@ -78,10 +98,11 @@ export function resolverConfigMoneda(
           ? 1
           : 0
 
-  const habilitada = local !== "USD" && fila?.multimoneda_habilitada === true
+  const habilitada = local !== monedaExtranjera && fila?.multimoneda_habilitada === true
 
   return {
     monedaLocal: local,
+    monedaExtranjera,
     habilitada,
     fuentesDisponibles,
     fuente,

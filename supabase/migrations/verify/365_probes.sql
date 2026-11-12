@@ -69,14 +69,16 @@ INSERT INTO _r SELECT 14, 'real inventory exists (so probe 15 is not vacuous)', 
 INSERT INTO _r SELECT 15, 'no existing inventario row got a moneda', '0',
   (SELECT count(*) FROM inventario WHERE moneda IS NOT NULL)::TEXT;
 
--- 16-17: the CHECKs reject anything but NULL or USD. They run on scratch rows of the scratch
+-- 16-18: the CHECKs reject anything but NULL, USD or EUR. They run on scratch rows of the scratch
 -- organization (never "the first row of the table": that is empty on a fresh database).
 INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
   SELECT id, 'PRB-MM-INV', 'PROBE', 0, 'Probe MM producto', 0, 0, 0 FROM organizations WHERE slug = 'probe-mm-org';
 INSERT INTO servicios (organization_id, codigo, nombre, precio)
   SELECT id, 'PRB-MM-SRV', 'Probe MM servicio', 0 FROM organizations WHERE slug = 'probe-mm-org';
 DO $$ BEGIN
-  PERFORM pg_temp.probe(16, 'inventario.moneda rejects EUR', '23514',
+  PERFORM pg_temp.probe(16, 'inventario.moneda rejects BRL', '23514',
+    'UPDATE inventario SET moneda = ''BRL'' WHERE codigo = ''PRB-MM-INV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+  PERFORM pg_temp.probe(18, 'inventario.moneda accepts EUR', 'ok',
     'UPDATE inventario SET moneda = ''EUR'' WHERE codigo = ''PRB-MM-INV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
   PERFORM pg_temp.probe(17, 'servicios.moneda rejects ARS (local is NULL, never a code)', '23514',
     'UPDATE servicios SET moneda = ''ARS'' WHERE codigo = ''PRB-MM-SRV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
@@ -100,14 +102,25 @@ DO $$ BEGIN
   PERFORM pg_temp.probe(23, 'change currency other than LOCAL/USD is refused', '23514',
     'UPDATE organizacion_moneda SET vuelto_moneda_default = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
 END $$;
+DO $$ BEGIN
+  PERFORM pg_temp.probe(51, 'moneda_extranjera outside USD/EUR is refused', '23514',
+    'UPDATE organizacion_moneda SET moneda_extranjera = ''BRL'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+  PERFORM pg_temp.probe(50, 'moneda_extranjera accepts EUR', 'ok',
+    'UPDATE organizacion_moneda SET moneda_extranjera = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+END $$;
 INSERT INTO _r SELECT 24, 'organizations did not gain any multi-currency column', '0',
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'organizations'
       AND column_name LIKE ANY (ARRAY['%multimoneda%', 'tipo_cambio%', 'acepta_usd%']))::TEXT;
 
 -- 25-27: sesion_caja_saldos: one row per (session, currency), USD only.
-INSERT INTO sesiones_caja (organization_id, usuario_apertura_id)
-  SELECT o.id, u.id FROM organizations o, users u WHERE o.slug = 'probe-mm-org' LIMIT 1;
+-- sesiones_caja.sucursal_id is NOT NULL, so the scratch org gets its own branch.
+INSERT INTO sucursales (organization_id, nombre)
+  SELECT o.id, 'Probe MM Sucursal' FROM organizations o WHERE o.slug = 'probe-mm-org';
+INSERT INTO sesiones_caja (organization_id, sucursal_id, usuario_apertura_id)
+  SELECT o.id, su.id, u.id
+    FROM organizations o JOIN sucursales su ON su.organization_id = o.id, users u
+   WHERE o.slug = 'probe-mm-org' LIMIT 1;
 INSERT INTO sesion_caja_saldos (sesion_id, organization_id, moneda, saldo_inicial)
   SELECT s.id, s.organization_id, 'USD', 100
     FROM sesiones_caja s JOIN organizations o ON o.id = s.organization_id WHERE o.slug = 'probe-mm-org';
@@ -148,7 +161,7 @@ INSERT INTO _r SELECT 32, 'anon holds no privilege; authenticated holds SELECT o
 -- 33-: named CHECKs exist, rate columns are NUMERIC(14,6), a zero rate / foreign code is refused
 -- on every table that carries one (exercised on empty shadow copies: same CHECKs, no data needed).
 INSERT INTO _r SELECT 33, 'all 16 named *_chk constraints exist', '16',
-  (SELECT count(*) FROM pg_constraint WHERE conname IN ('inventario_moneda_chk', 'servicios_moneda_chk', 'movimientos_caja_moneda_chk', 'items_venta_moneda_origen_chk', 'items_venta_tipo_cambio_chk', 'servicios_orden_moneda_origen_chk', 'servicios_orden_tipo_cambio_chk', 'repuestos_orden_moneda_origen_chk', 'repuestos_orden_tipo_cambio_chk', 'items_cotizacion_moneda_origen_chk', 'items_cotizacion_tipo_cambio_chk', 'ventas_tipo_cambio_chk', 'ordenes_servicio_tipo_cambio_chk', 'pagos_venta_moneda_chk', 'pagos_venta_tipo_cambio_chk', 'pagos_venta_vuelto_moneda_chk'))::TEXT;
+  (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conname IN ('inventario_moneda_chk', 'servicios_moneda_chk', 'movimientos_caja_moneda_chk', 'items_venta_moneda_origen_chk', 'items_venta_tipo_cambio_chk', 'servicios_orden_moneda_origen_chk', 'servicios_orden_tipo_cambio_chk', 'repuestos_orden_moneda_origen_chk', 'repuestos_orden_tipo_cambio_chk', 'items_cotizacion_moneda_origen_chk', 'items_cotizacion_tipo_cambio_chk', 'ventas_tipo_cambio_chk', 'ordenes_servicio_tipo_cambio_chk', 'pagos_venta_moneda_chk', 'pagos_venta_tipo_cambio_chk', 'pagos_venta_vuelto_moneda_chk'))::TEXT;
 INSERT INTO _r SELECT 34, 'rate columns are NUMERIC(14,6) (4 line tables + ventas + ordenes_servicio + pagos_venta + 2 settings)', '9',
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND data_type = 'numeric' AND numeric_precision = 14 AND numeric_scale = 6
@@ -169,7 +182,10 @@ DO $$ BEGIN
   PERFORM pg_temp.probe(41, 'items_cotizacion.tipo_cambio = 0 is refused', '23514', 'INSERT INTO _sh_items_cotizacion (tipo_cambio) VALUES (0)');
   PERFORM pg_temp.probe(42, 'pagos_venta.moneda rejects EUR', '23514', 'INSERT INTO _sh_pagos_venta (moneda) VALUES (''EUR'')');
   PERFORM pg_temp.probe(43, 'pagos_venta.vuelto_moneda rejects EUR', '23514', 'INSERT INTO _sh_pagos_venta (vuelto_moneda) VALUES (''EUR'')');
-  PERFORM pg_temp.probe(44, 'items_venta.moneda_origen rejects EUR', '23514', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(44, 'items_venta.moneda_origen rejects BRL', '23514', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''BRL'')');
+  PERFORM pg_temp.probe(47, 'items_venta.moneda_origen accepts EUR', 'ok', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(48, 'items_cotizacion.moneda_origen accepts EUR', 'ok', 'INSERT INTO _sh_items_cotizacion (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(49, 'servicios_orden.moneda_origen rejects BRL', '23514', 'INSERT INTO _sh_servicios_orden (moneda_origen) VALUES (''BRL'')');
   PERFORM pg_temp.probe(45, 'movimientos_caja.moneda rejects EUR', '23514', 'INSERT INTO _sh_movimientos_caja (moneda) VALUES (''EUR'')');
   PERFORM pg_temp.probe(46, 'a valid USD rate is accepted', 'ok', 'INSERT INTO _sh_ventas (tipo_cambio) VALUES (1250.123456)');
 END $$;
@@ -237,6 +253,8 @@ ALTER TABLE movimientos_caja DROP COLUMN IF EXISTS moneda;
 ALTER TABLE servicios DROP COLUMN IF EXISTS moneda;
 ALTER TABLE inventario DROP COLUMN IF EXISTS moneda;
 -- ROLLBACK:END
+-- Probes 33 and 82 count public only: the _sh_* shadow tables are temp copies
+-- that carry the same constraint names.
 INSERT INTO _r SELECT 80, 'rehearsal: the new tables and columns are gone', '0',
   ((SELECT count(*) FROM information_schema.tables
      WHERE table_schema = 'public' AND table_name IN ('organizacion_moneda', 'sesion_caja_saldos')) +
@@ -244,7 +262,7 @@ INSERT INTO _r SELECT 80, 'rehearsal: the new tables and columns are gone', '0',
      WHERE table_schema = 'public' AND column_name IN ('moneda', 'moneda_origen', 'precio_origen', 'monto_moneda', 'vuelto_monto', 'vuelto_moneda', 'tipo_cambio_fuente')
        AND table_name IN ('inventario', 'servicios', 'movimientos_caja', 'items_venta', 'servicios_orden', 'repuestos_orden', 'items_cotizacion', 'ventas', 'ordenes_servicio', 'pagos_venta')))::TEXT;
 INSERT INTO _r SELECT 82, 'rehearsal: no named *_chk constraint is left', '0',
-  (SELECT count(*) FROM pg_constraint WHERE conname IN ('inventario_moneda_chk', 'servicios_moneda_chk', 'movimientos_caja_moneda_chk', 'items_venta_moneda_origen_chk', 'items_venta_tipo_cambio_chk', 'servicios_orden_moneda_origen_chk', 'servicios_orden_tipo_cambio_chk', 'repuestos_orden_moneda_origen_chk', 'repuestos_orden_tipo_cambio_chk', 'items_cotizacion_moneda_origen_chk', 'items_cotizacion_tipo_cambio_chk', 'ventas_tipo_cambio_chk', 'ordenes_servicio_tipo_cambio_chk', 'pagos_venta_moneda_chk', 'pagos_venta_tipo_cambio_chk', 'pagos_venta_vuelto_moneda_chk'))::TEXT;
+  (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conname IN ('inventario_moneda_chk', 'servicios_moneda_chk', 'movimientos_caja_moneda_chk', 'items_venta_moneda_origen_chk', 'items_venta_tipo_cambio_chk', 'servicios_orden_moneda_origen_chk', 'servicios_orden_tipo_cambio_chk', 'repuestos_orden_moneda_origen_chk', 'repuestos_orden_tipo_cambio_chk', 'items_cotizacion_moneda_origen_chk', 'items_cotizacion_tipo_cambio_chk', 'ventas_tipo_cambio_chk', 'ordenes_servicio_tipo_cambio_chk', 'pagos_venta_moneda_chk', 'pagos_venta_tipo_cambio_chk', 'pagos_venta_vuelto_moneda_chk'))::TEXT;
 INSERT INTO _r SELECT 81, 'rehearsal: no inventory, sale or payment row was lost', a.inv::TEXT || '|' || a.ventas::TEXT || '|' || a.pagos::TEXT,
   (SELECT count(*) FROM inventario)::TEXT || '|' || (SELECT count(*) FROM ventas)::TEXT || '|' || (SELECT count(*) FROM pagos_venta)::TEXT
   FROM _antes a;

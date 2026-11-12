@@ -52,7 +52,7 @@ const configResponse = {
   plazoPagoDias: null,
 }
 
-const LABELS = ["Secciones", "Empresa", "IVA y ARCA", "Comprobantes", "Comisiones", "Avisos", "Seguridad"]
+const LABELS = ["Secciones", "Empresa", "IVA y ARCA", "Comprobantes", "Moneda extranjera", "Comisiones", "Avisos", "Seguridad"]
 
 // Slot with its own local state: only forceMount keeps it alive across tab switches.
 function StatefulSlot() {
@@ -113,7 +113,7 @@ describe("ConfiguracionForm — tabs", () => {
     replaceStateSpy.mockRestore()
   })
 
-  it("renders the seven tab triggers and defaults to Secciones", async () => {
+  it("renders the eight tab triggers and defaults to Secciones", async () => {
     await renderForm()
 
     const tabs = screen.getAllByRole("tab")
