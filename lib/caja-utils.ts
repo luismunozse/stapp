@@ -186,6 +186,43 @@ export function esMovimientoCogsAutomatico(row: {
   )
 }
 
+/** Texto con que la generación del remito copia la seña a pagos_parciales (mig 249/250). */
+export const OBS_ESPEJO_SENA = "Seña abonada al momento del ingreso"
+/** Texto del cobro_orden de la seña al crear la orden (y el backfill de la mig 067). */
+export const OBS_COBRO_SENA = "Seña al ingreso del equipo"
+
+/**
+ * Saca de los pagos de remitos la copia de la seña cuando la orden ya tiene la
+ * seña como cobro_orden: es la misma plata, y el arqueo la contaba dos veces
+ * (al ingreso como cobro y el día del remito como pago). Si la orden no tiene
+ * ese cobro (p. ej. la seña vino de una cotización convertida), la copia es el
+ * único registro y se mantiene.
+ */
+async function sinEspejoDeSena<T extends { observaciones?: string | null; facturas?: unknown }>(
+  pagos: T[],
+): Promise<T[]> {
+  const ordenDe = (p: T): string | null => {
+    const f = p.facturas as { orden_id?: string | null } | { orden_id?: string | null }[] | null | undefined
+    const factura = Array.isArray(f) ? f[0] : f
+    return factura?.orden_id ?? null
+  }
+  const espejos = pagos.filter((p) => p.observaciones === OBS_ESPEJO_SENA && ordenDe(p))
+  if (espejos.length === 0) return pagos
+
+  const ordenIds = Array.from(new Set(espejos.map((p) => ordenDe(p)!)))
+  const { data: cobrosSena, error } = await supabaseAdmin
+    .from("cobros_orden")
+    .select("orden_id")
+    .in("orden_id", ordenIds)
+    .eq("observaciones", OBS_COBRO_SENA)
+  // Sin poder confirmar el cobro no se descarta nada: mejor un duplicado
+  // visible que esconder plata que sí entró.
+  if (error || !cobrosSena) return pagos
+
+  const conCobro = new Set(cobrosSena.map((c: { orden_id: string }) => c.orden_id))
+  return pagos.filter((p) => !(p.observaciones === OBS_ESPEJO_SENA && conCobro.has(ordenDe(p) ?? "")))
+}
+
 /**
  * Obtiene todos los movimientos de caja de un día, unificando las 5 fuentes:
  * cobros_orden, pagos_parciales, pagos_venta, cuenta_corriente, movimientos_caja
@@ -219,7 +256,7 @@ export async function fetchMovimientosDia(
       id, monto, metodo_pago, fecha, factura_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
-        id, numero_factura, estado_pago,
+        id, orden_id, numero_factura, estado_pago,
         ordenes_servicio!inner(organization_id, numero_orden, sucursal_id)
       )
     `)
@@ -231,7 +268,8 @@ export async function fetchMovimientosDia(
   if (sucursalId) {
     pagosFacturasQuery = pagosFacturasQuery.eq("facturas.ordenes_servicio.sucursal_id", sucursalId)
   }
-  const { data: pagosFacturas } = await pagosFacturasQuery
+  const { data: pagosFacturasRaw } = await pagosFacturasQuery
+  const pagosFacturas = await sinEspejoDeSena(pagosFacturasRaw || [])
 
   // 3. Pagos de ventas (excluir ventas ANULADAS — la anulación revierte stock/CC
   //    pero deja las filas de pagos_venta; contarlas inflaba el esperado del
