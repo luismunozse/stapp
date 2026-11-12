@@ -15,6 +15,10 @@ import {
   Pie,
   Cell,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_CONCEPT_COLORS, chartSeriesColor } from "@/lib/chart-colors"
+import type { CurrencyCode } from "@/lib/currency"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface MonthlyRevenue {
   month: string
@@ -41,7 +45,8 @@ interface DashboardChartsProps {
   planDistribution: PlanDistribution
 }
 
-const PLAN_COLORS = ["#8b5cf6", "#06b6d4"] // purple for premium, cyan for free
+// Premium violeta, Free celeste.
+const PLAN_COLORS = [chartSeriesColor(4), chartSeriesColor(3)]
 
 export function DashboardCharts({
   monthlyRevenue6m,
@@ -89,19 +94,13 @@ export function DashboardCharts({
                   className="fill-muted-foreground"
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={(v: number) => formatCompactCurrency(v, revenueCurrency as CurrencyCode)}
                 />
                 <Tooltip
                   formatter={(value: number) => [formatMonto(value, revenueCurrency), "Ingresos"]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    color: "hsl(var(--popover-foreground))",
-                  }}
+                  content={<ChartTooltipContent />}
                 />
-                <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill={CHART_CONCEPT_COLORS.ingresos} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -153,15 +152,9 @@ export function DashboardCharts({
                 />
                 <Tooltip
                   formatter={(value: number) => [value, "Organizaciones"]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    color: "hsl(var(--popover-foreground))",
-                  }}
+                  content={<ChartTooltipContent />}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill={chartSeriesColor(0)} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -203,13 +196,7 @@ export function DashboardCharts({
                       </Pie>
                       <Tooltip
                         formatter={(value: number, name: string) => [value, name]}
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--popover))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                          color: "hsl(var(--popover-foreground))",
-                        }}
+                        content={<ChartTooltipContent />}
                       />
                     </PieChart>
                   </ResponsiveContainer>

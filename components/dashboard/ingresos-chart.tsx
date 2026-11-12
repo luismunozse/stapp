@@ -12,6 +12,9 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface IngresosDia {
   fecha: string
@@ -24,7 +27,7 @@ interface IngresosChartProps {
 }
 
 export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
-  const { formatPrice, timezone } = useCurrency()
+  const { formatPrice, currency, timezone } = useCurrency()
   const formatFecha = useCallback((fecha: string) => {
     const date = new Date(fecha)
     return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", timeZone: timezone })
@@ -64,8 +67,8 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
           <AreaChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
             <defs>
               <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                <stop offset="5%" stopColor={CHART_CONCEPT_COLORS.ingresos} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={CHART_CONCEPT_COLORS.ingresos} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -79,23 +82,16 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
               tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+              tickFormatter={(value: number) => formatCompactCurrency(value, currency)}
             />
             <Tooltip
+              content={<ChartTooltipContent />}
               formatter={(value: number) => [formatPrice(value), "Ingresos"]}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-                color: "hsl(var(--card-foreground))",
-              }}
-              labelStyle={{ color: "hsl(var(--card-foreground))" }}
-              itemStyle={{ color: "hsl(var(--card-foreground))" }}
             />
             <Area
               type="monotone"
               dataKey="total"
-              stroke="#10b981"
+              stroke={CHART_CONCEPT_COLORS.ingresos}
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorIngresos)"

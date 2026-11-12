@@ -3,7 +3,8 @@
 import { memo, useMemo } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ESTADO_ORDEN_UI, ESTADOS_ORDEN } from "@/lib/estado-orden-ui"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { ordenesPorEstadoChartData } from "@/lib/estado-orden-ui"
 import type { EstadoOrden } from "@/types"
 
 type OrdenesData = Partial<Record<EstadoOrden, number>>
@@ -15,11 +16,7 @@ interface OrdenesPorEstadoChartProps {
 export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
   const { chartData, total } = useMemo(() => {
     // Mismo orden, etiqueta y color que la píldora (lib/estado-orden-ui.ts).
-    const chartData = ESTADOS_ORDEN.filter((estado) => (data[estado] ?? 0) > 0).map((estado) => ({
-      name: ESTADO_ORDEN_UI[estado].label,
-      value: data[estado] ?? 0,
-      color: ESTADO_ORDEN_UI[estado].chartColor,
-    }))
+    const chartData = ordenesPorEstadoChartData(data)
     const total = chartData.reduce((sum, item) => sum + item.value, 0)
     return { chartData, total }
   }, [data])
@@ -61,21 +58,14 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number) => [`${value} orden${value !== 1 ? "es" : ""}`, ""]}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-                color: "hsl(var(--card-foreground))",
-              }}
-              labelStyle={{ color: "hsl(var(--card-foreground))" }}
-              itemStyle={{ color: "hsl(var(--card-foreground))" }}
+              content={<ChartTooltipContent hideLabel />}
+              formatter={(value: number) => `${value} orden${value !== 1 ? "es" : ""}`}
             />
             <Legend
               layout="horizontal"
               verticalAlign="bottom"
               align="center"
-              wrapperStyle={{ fontSize: "10px", color: "hsl(var(--foreground))", lineHeight: "18px" }}
+              wrapperStyle={{ fontSize: "12px", color: "hsl(var(--foreground))", lineHeight: "18px" }}
             />
           </PieChart>
         </ResponsiveContainer>

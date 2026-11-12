@@ -12,6 +12,8 @@ import {
   Cell,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
 
 interface TecnicoData {
   nombre: string
@@ -22,8 +24,6 @@ interface TecnicoData {
 interface OrdenesPorTecnicoChartProps {
   data: TecnicoData[]
 }
-
-const COLORS = ["#3b82f6", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"]
 
 export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
   const sortedData = useMemo(() =>
@@ -78,18 +78,11 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
                 const label = name === "ordenes" ? "En proceso" : "Completadas"
                 return [value, label]
               }}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-                color: "hsl(var(--card-foreground))",
-              }}
-              labelStyle={{ color: "hsl(var(--card-foreground))", fontWeight: "bold" }}
-              itemStyle={{ color: "hsl(var(--card-foreground))" }}
+              content={<ChartTooltipContent />}
             />
             <Bar dataKey="ordenes" name="ordenes" radius={[0, 4, 4, 0]}>
               {sortedData.map((entry, index) => (
-                <Cell key={`cell-${entry.nombre}`} fill={COLORS[index % COLORS.length]} />
+                <Cell key={`cell-${entry.nombre}`} fill={chartSeriesColor(index)} />
               ))}
             </Bar>
           </BarChart>

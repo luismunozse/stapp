@@ -21,6 +21,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { formatCompactCurrency } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -54,7 +56,7 @@ interface TendenciaData {
 }
 
 export function TendenciaFinanciera() {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, currency } = useCurrency()
   const [meses, setMeses] = useState(6)
 
   const { data, isLoading, error } = useSWR<TendenciaData>(
@@ -125,9 +127,10 @@ export function TendenciaFinanciera() {
               <XAxis dataKey="mes" fontSize={12} />
               <YAxis
                 fontSize={12}
-                tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                tickFormatter={(v: number) => formatCompactCurrency(v, currency)}
               />
               <Tooltip
+                content={<ChartTooltipContent />}
                 formatter={(value: number, name: string) => {
                   const labels: Record<string, string> = {
                     ingresos: "Ingresos",
@@ -170,9 +173,10 @@ export function TendenciaFinanciera() {
                 <XAxis dataKey="mes" fontSize={12} />
                 <YAxis
                   fontSize={12}
-                  tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                  tickFormatter={(v: number) => formatCompactCurrency(v, currency)}
                 />
                 <Tooltip
+                  content={<ChartTooltipContent />}
                   formatter={(value: number) => [formatPrice(value), "Ganancia neta"]}
                   labelFormatter={(label: any, payload: any) =>
                     payload?.[0]?.payload?.mesCompleto || label

@@ -15,6 +15,8 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_STATUS_COLORS } from "@/lib/chart-colors"
 
 interface TiempoData {
   tipoDispositivo: string
@@ -56,9 +58,9 @@ export function TiempoReparacionChart() {
   }))
 
   const getColor = (horas: number) => {
-    if (horas < 24) return "#22c55e"
-    if (horas < 72) return "#eab308"
-    return "#ef4444"
+    if (horas < 24) return CHART_STATUS_COLORS.success
+    if (horas < 72) return CHART_STATUS_COLORS.warning
+    return CHART_STATUS_COLORS.danger
   }
 
   return (
@@ -79,6 +81,7 @@ export function TiempoReparacionChart() {
               fontSize={12}
             />
             <Tooltip
+              content={<ChartTooltipContent />}
               formatter={(value: number, name: string) => {
                 if (name === "horas") {
                   const dias = Math.floor(value / 24)
@@ -98,13 +101,13 @@ export function TiempoReparacionChart() {
 
         <div className="mt-4 flex gap-4 text-xs text-muted-foreground justify-center">
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-green-500" /> &lt;24h
+            <span className="w-3 h-3 rounded-sm bg-success-500" /> &lt;24h
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-yellow-500" /> 24-72h
+            <span className="w-3 h-3 rounded-sm bg-warning-500" /> 24-72h
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm bg-red-500" /> &gt;72h
+            <span className="w-3 h-3 rounded-sm bg-destructive" /> &gt;72h
           </span>
         </div>
       </CardContent>

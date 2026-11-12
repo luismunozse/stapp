@@ -13,6 +13,8 @@ import {
   Tooltip,
   Legend,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_CONCEPT_COLORS, chartSeriesColor } from "@/lib/chart-colors"
 
 interface RetornoData {
   tasaRetorno: number
@@ -57,7 +59,7 @@ export function TasaRetornoChart() {
     { name: "Unicos", value: data.totalClientes - data.clientesRecurrentes },
   ]
 
-  const COLORS = ["#3b82f6", "#e5e7eb"]
+  const COLORS = [chartSeriesColor(0), CHART_CONCEPT_COLORS.neutral]
 
   return (
     <div className="space-y-6">
@@ -85,7 +87,7 @@ export function TasaRetornoChart() {
                     <Cell key={index} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip content={<ChartTooltipContent />} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>

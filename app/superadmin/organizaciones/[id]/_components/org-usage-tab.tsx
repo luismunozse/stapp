@@ -12,6 +12,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
 import type { OrganizationUsage, MonthlyOrders } from "@/types/superadmin"
 
 interface OrgUsageTabProps {
@@ -116,18 +118,11 @@ export function OrgUsageTab({ usage, ordersHistory = [] }: OrgUsageTabProps) {
                     axisLine={false}
                     allowDecimals={false}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                  />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Bar
                     dataKey="ordenes"
                     name="Órdenes"
-                    fill="hsl(var(--primary))"
+                    fill={chartSeriesColor(0)}
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>

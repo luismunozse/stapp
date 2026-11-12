@@ -21,6 +21,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { useCurrency } from "@/contexts/currency-context"
+import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface TecnicoRentabilidad {
   tecnicoId: string
@@ -54,14 +58,6 @@ interface RentabilidadTecnicosData {
   totales: Totales
   margenPromedio: number | null
   periodo: { desde: string; hasta: string }
-}
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-  }).format(amount)
 }
 
 const toYMD = (d: Date) => format(d, "yyyy-MM-dd")
@@ -102,6 +98,7 @@ const PRESET_OPTIONS: { key: PresetKey; label: string }[] = [
 ]
 
 export function RentabilidadTecnicos() {
+  const { formatPrice: formatCurrency, currency } = useCurrency()
   const [data, setData] = useState<TecnicoRentabilidad[]>([])
   const [totales, setTotales] = useState<Totales | null>(null)
   const [margenPromedio, setMargenPromedio] = useState<number | null>(0)
@@ -315,14 +312,19 @@ export function RentabilidadTecnicos() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" fontSize={12} />
+                  <XAxis
+                    type="number"
+                    fontSize={12}
+                    tickFormatter={(v: number) => formatCompactCurrency(v, currency)}
+                  />
                   <YAxis dataKey="nombre" type="category" width={80} fontSize={12} />
                   <Tooltip
+                    content={<ChartTooltipContent />}
                     formatter={(value: number) =>
                       [formatCurrency(value), "Ganancia"]
                     }
                   />
-                  <Bar dataKey="ganancia" name="Ganancia" fill="#22c55e" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="ganancia" name="Ganancia" fill={CHART_CONCEPT_COLORS.ganancia} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
