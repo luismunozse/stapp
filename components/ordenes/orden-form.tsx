@@ -50,6 +50,7 @@ import {
   ESTADO_FISICO_FOCO_ID,
   type EstadoFisicoValor,
 } from "./danos/estado-fisico-recepcion"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { danoInputSchema, validarDanosParaTipo, type DanoInput } from "@/lib/ordenes/danos"
 
 const ordenSchema = z.object({
@@ -254,6 +255,7 @@ interface OrdenCreadaData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  estadoFisico?: EstadoFisicoPDF | null
 }
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
@@ -1400,6 +1402,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         organizationTelefono: nuevaOrden.organizationTelefono ?? null,
         organizationDireccion: nuevaOrden.organizationDireccion ?? null,
         organizationComprobanteTerminos: nuevaOrden.organizationComprobanteTerminos ?? null,
+        // Solo si quedó guardado: el ticket no debe mostrar lo que la orden no tiene.
+        estadoFisico:
+          estadoFisicoEnviado && nuevaOrden.estadoFisicoGuardado !== false
+            ? {
+                diagrama: estadoFisico.danos[0]?.diagrama ?? "",
+                sinDanos: estadoFisico.danos.length === 0 && estadoFisico.sinDanos,
+                danos: estadoFisico.danos.map((d, i) => ({ ...d, numero: i + 1, momento: "recepcion" as const })),
+              }
+            : null,
       })
       setShowOrdenCreadaModal(true)
     } catch (error) {

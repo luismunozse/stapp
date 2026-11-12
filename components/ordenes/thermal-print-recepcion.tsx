@@ -21,6 +21,8 @@ import {
   type AnchoTermico,
 } from "@/lib/thermal-paper"
 
+import { lineasEstadoFisico, type EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
+
 export interface RecepcionReceiptEquipo {
   codigoOrden: string
   tipoDispositivo?: string | null
@@ -35,6 +37,8 @@ export interface RecepcionReceiptEquipo {
   imei?: string | null
   problemaReportado: string
   accesorios?: string | null
+  /** Estado físico al ingreso de este equipo (si se registró); se imprime como lista de texto. */
+  estadoFisico?: EstadoFisicoPDF | null
 }
 
 export interface RecepcionReceiptData {
@@ -270,6 +274,14 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
           <div className="whitespace-pre-wrap break-words">Problema: {equipo.problemaReportado}</div>
           {equipo.accesorios && (
             <div className="whitespace-pre-wrap break-words">Accesorios: {equipo.accesorios}</div>
+          )}
+          {equipo.estadoFisico && (
+            <>
+              <div>Estado físico:</div>
+              {lineasEstadoFisico(equipo.estadoFisico, "recepcion").map((l, k) => (
+                <div key={k} className="whitespace-pre-wrap break-words"> {l}</div>
+              ))}
+            </>
           )}
         </div>
       ))}

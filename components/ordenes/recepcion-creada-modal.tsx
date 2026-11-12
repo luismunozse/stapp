@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Check, ExternalLink, Tag, Layers } from "lucide-react"
 import Link from "next/link"
 import { printDeviceLabel } from "./print-label"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { ThermalPrintRecepcion, type RecepcionReceiptEquipo } from "./thermal-print-recepcion"
 import { construirMensajeRecepcion } from "@/lib/recepcion-whatsapp"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
@@ -35,6 +36,7 @@ export interface EquipoRecepcionEnviado {
   color?: string | null
   imei?: string | null
   accesorios?: string | null
+  estadoFisico?: EstadoFisicoPDF | null
 }
 
 /**
@@ -113,6 +115,7 @@ export function RecepcionCreadaModal({
     imei: equipos[i]?.imei ?? null,
     problemaReportado: equipos[i]?.problemaReportado ?? "",
     accesorios: equipos[i]?.accesorios ?? null,
+    estadoFisico: equipos[i]?.estadoFisico ?? null,
   }))
 
   const handlePrintLabels = async () => {

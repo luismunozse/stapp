@@ -9,6 +9,7 @@ import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
 import { construirTrabajos } from "@/lib/ordenes/trabajos-orden"
 import { resolveOrdenPapel } from "@/lib/orden-papel"
+import { listarDanosOrden } from "@/lib/ordenes/danos-server"
 
 export async function GET(
   request: Request,
@@ -224,6 +225,12 @@ export async function GET(
     // Avances que el taller marcó visibles para el cliente (solo se dibujan en la hoja de entrega).
     const avances = await cargarAvancesVisibles(orden.id, organizationId!)
 
+    // Estado físico al ingreso: si la tabla de daños no está disponible, el PDF sale igual sin el bloque.
+    const estadoFisico = await listarDanosOrden(orden.id, organizationId!, { incluirAutor: false }).catch((e) => {
+      console.error("No se pudo cargar el estado físico para el PDF:", e)
+      return null
+    })
+
     // Preparar datos para el PDF - ensuring all values are primitives
     const pdfData: OrdenPDFData = {
       numeroOrden: orden.numero_orden,
@@ -304,6 +311,7 @@ export async function GET(
       cobros,
       timeline,
       avances,
+      estadoFisico,
     }
 
     // Hoja de esta impresión: la que pide el request (?papel=) o, si no pide ninguna válida,

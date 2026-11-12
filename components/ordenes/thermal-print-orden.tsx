@@ -28,6 +28,7 @@ import {
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
+import { lineasEstadoFisico, type EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { useCurrency } from "@/contexts/currency-context"
 
 interface ThermalPrintOrdenProps {
@@ -37,6 +38,8 @@ interface ThermalPrintOrdenProps {
     organizationTelefono?: string | null
     organizationDireccion?: string | null
     organizationComprobanteTerminos?: string | null
+    /** Pins marcados en la recepción (solo al crear la orden); se imprimen como lista de texto. */
+    estadoFisico?: EstadoFisicoPDF | null
   }
 }
 
@@ -56,6 +59,7 @@ interface PreviewData {
   color: string | null
   imei: string | null
   accesorios: string | null
+  estadoFisico: string[]
   problemaReportado: string
   observaciones: string | null
   presupuesto: number | null
@@ -107,6 +111,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       color: orden.color ?? null,
       imei: orden.imei ?? null,
       accesorios: orden.accesorios ?? null,
+      estadoFisico: orden.estadoFisico ? lineasEstadoFisico(orden.estadoFisico, "recepcion") : [],
       problemaReportado: orden.problemaReportado,
       observaciones: orden.observaciones ?? null,
       presupuesto: orden.presupuesto ?? null,
@@ -135,6 +140,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       color: preview.color,
       imei: preview.imei,
       accesorios: preview.accesorios,
+      estadoFisico: preview.estadoFisico,
       problemaReportado: preview.problemaReportado,
       presupuesto: preview.presupuesto,
       costoFinal: preview.costoFinal,
@@ -421,6 +427,14 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
         <>
           <div>Accesorios:</div>
           <div className="whitespace-pre-wrap break-words"> {data.accesorios}</div>
+        </>
+      )}
+      {data.estadoFisico.length > 0 && (
+        <>
+          <div>Estado físico:</div>
+          {data.estadoFisico.map((l, i) => (
+            <div key={i} className="whitespace-pre-wrap break-words"> {l}</div>
+          ))}
         </>
       )}
 

@@ -201,6 +201,8 @@ export interface OrdenTicketData {
   color?: string | null
   imei?: string | null
   accesorios?: string | null
+  /** Líneas de texto del estado físico al ingreso (lineasEstadoFisico). */
+  estadoFisico?: string[] | null
   problemaReportado: string
   presupuesto?: number | null
   costoFinal?: number | null
@@ -285,6 +287,10 @@ export function generateOrdenTicketCommands(
   if (data.accesorios) {
     add(line("Accesorios:"))
     for (const l of wrapText(data.accesorios, W)) add(line(" " + l))
+  }
+  if (data.estadoFisico && data.estadoFisico.length > 0) {
+    add(line("Estado fisico:"))
+    for (const e of data.estadoFisico) for (const l of wrapText(e, W)) add(line(" " + l))
   }
   add(separator(W))
 
