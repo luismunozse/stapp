@@ -109,70 +109,54 @@ export function Hero({ prices }: { prices: PlanPrices }) {
           <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
             {/* Columna izquierda: la transformación */}
             <div className="text-center lg:text-left">
-              <m.h1
-                className="text-4xl font-bold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
+              {/* El h1, el texto y los CTA se pintan sin animación de entrada:
+                  son el LCP y no pueden esperar a que hidrate el JS. */}
+              <h1 className="text-4xl font-bold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
                 Menos caos en tu taller.{" "}
                 <span className="text-primary">Más plata a fin de mes.</span>
-              </m.h1>
+              </h1>
 
-              <m.p
-                className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl lg:mx-0"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
+              <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl lg:mx-0">
                 STApp ordena tus reparaciones, cobros y stock, y avisa solo a
                 tus clientes por WhatsApp. Vos dedicate a reparar.
-              </m.p>
+              </p>
 
-              <m.div
-                className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-              >
-                <Link
-                  href="/registro?plan=profesional"
-                  className="w-full sm:w-auto"
-                  onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Probar gratis" })}
+              <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
+                <Button
+                  asChild
+                  size="lg"
+                  className="group h-14 w-full rounded-full px-10 text-lg shadow-lg shadow-primary/25 transition-shadow hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
                 >
-                  <Button
-                    size="lg"
-                    className="group h-14 w-full rounded-full px-10 text-lg shadow-lg shadow-primary/25 transition-shadow hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
+                  <Link
+                    href="/registro?plan=profesional"
+                    onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Probar gratis" })}
                   >
                     Probar gratis
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                </Link>
-                <a
-                  href={WHATSAPP_DEMO_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto"
-                  onClick={() => track("landing_cta_click", { cta: "hero_demo", label: "Agendar una demo" })}
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="h-14 w-full rounded-full px-8 text-lg sm:w-auto"
                 >
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-14 w-full rounded-full px-8 text-lg sm:w-auto"
+                  <a
+                    href={WHATSAPP_DEMO_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => track("landing_cta_click", { cta: "hero_demo", label: "Agendar una demo" })}
                   >
                     Agendar una demo
-                  </Button>
-                </a>
-              </m.div>
+                  </a>
+                </Button>
+              </div>
             </div>
 
             {/* Columna derecha: producto REAL + tarjetas UI flotantes */}
-            <m.div
+            <div
               id="demo"
               className="relative isolate mx-auto w-full max-w-xl scroll-mt-24 px-4 sm:px-6 lg:px-0"
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.25 }}
             >
               {/* Glow suave detrás */}
               <div
@@ -194,17 +178,12 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               <FloatingWhatsAppCard reduceMotion={reduceMotion} />
               <FloatingCobroCard reduceMotion={reduceMotion} />
-            </m.div>
+            </div>
           </div>
         </div>
 
         {/* Trust strip: solo hechos reales, debajo del hero */}
-        <m.div
-          className="container relative mx-auto mt-14 px-4 sm:px-6 lg:mt-16 lg:px-8"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-        >
+        <div className="container relative mx-auto mt-14 px-4 sm:px-6 lg:mt-16 lg:px-8">
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y py-5 text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
               <Check className="h-4 w-4 text-primary" />
@@ -223,7 +202,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
               Soporte directo por WhatsApp
             </span>
           </div>
-        </m.div>
+        </div>
       </section>
     </LazyMotion>
   )

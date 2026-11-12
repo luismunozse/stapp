@@ -97,17 +97,17 @@ export default async function UseCasePage({ params }: PageProps) {
               {useCase.heroDescription}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/registro">
-                <Button size="lg" className="w-full sm:w-auto">
+              <Button asChild size="lg" className="w-full sm:w-auto">
+                <Link href="/registro">
                   Probar 30 días gratis
                   <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <Link href="/precios">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+                <Link href="/precios">
                   Ver precios
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </div>
         </section>
@@ -178,7 +178,7 @@ export default async function UseCasePage({ params }: PageProps) {
               Cómo funciona paso a paso
             </h2>
             <p className="text-center text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Un flujo pensado para talleres reales, probado con cientos de órdenes por mes.
+              Un flujo pensado para el día a día de un taller real.
             </p>
             <ol className="space-y-5">
               {useCase.workflow.map((step, index) => (
@@ -301,17 +301,17 @@ export default async function UseCasePage({ params }: PageProps) {
               30 días con acceso completo. Sin tarjeta de crédito.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/registro">
-                <Button size="lg">
+              <Button asChild size="lg">
+                <Link href="/registro">
                   Comenzar Gratis
                   <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <Link href="/precios">
-                <Button size="lg" variant="outline">
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/precios">
                   Ver planes y precios
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </Card>
         </section>

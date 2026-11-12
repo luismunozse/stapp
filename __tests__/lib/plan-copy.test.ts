@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
 import {
+  FALLBACK_ALL_PLANS,
+  buildPlanComparison,
+  featuresGained,
   buildPricingFaqs,
   freeOrdersText,
   getFreePlanInfo,
@@ -15,7 +18,7 @@ const freePlan = (overrides: Partial<AllPlansPrices["free"]> = {}): AllPlansPric
     tierOrder: 0,
     ars: { monthly: 0, yearly: 0 },
     usd: { monthly: 0, yearly: 0 },
-    limits: { ordenes: 40, tecnicos: 2, clientes: 150, vendedores: 1, storageMb: 1000 },
+    limits: { ordenes: 40, tecnicos: 2, clientes: 150, vendedores: 1, storageMb: 1000, sucursales: 1 },
     featureFlags: { client_portal: true },
     ...overrides,
   },
@@ -57,5 +60,47 @@ describe("plan-copy", () => {
     expect(text).not.toMatch(/USD|internacionales/)
     expect(text).toContain("MercadoPago")
     expect(text).toContain("pesos argentinos")
+  })
+
+  it("la comparación lee límites y flags de cada plan", () => {
+    const plans = {
+      ...FALLBACK_ALL_PLANS,
+      free: {
+        ...FALLBACK_ALL_PLANS.free,
+        limits: { ...FALLBACK_ALL_PLANS.free.limits, ordenes: 40 },
+        featureFlags: { pos_sales: true, client_portal: true, whatsapp_notifications: true },
+      },
+    }
+    const { plans: cols, limitRows, featureRows } = buildPlanComparison(plans)
+    expect(cols.map((p) => p.slug)).toEqual(["free", "profesional"])
+    expect(limitRows.find((r) => r.label === "Reparaciones por mes")!.values).toEqual(["40", "Ilimitado"])
+    expect(limitRows.find((r) => r.label === "Almacenamiento")!.values).toEqual(["100MB", "5GB"])
+    expect(limitRows.find((r) => r.label === "Sucursales")!.values).toEqual(["1", "3"])
+    // Si superadmin le prende WhatsApp al Free, la tabla lo refleja.
+    expect(featureRows.find((r) => r.label === "Avisos automáticos por WhatsApp")!.values).toEqual([true, true])
+    expect(featureRows.find((r) => r.label === "Reportes avanzados del negocio")!.values).toEqual([false, true])
+  })
+
+  it("la comparación ignora planes que no se venden en la landing", () => {
+    const plans = {
+      ...FALLBACK_ALL_PLANS,
+      emprendedor: { ...FALLBACK_ALL_PLANS.free, slug: "emprendedor", nombre: "Emprendedor", tierOrder: 1 },
+    }
+    expect(buildPlanComparison(plans).plans.map((p) => p.slug)).toEqual(["free", "profesional"])
+  })
+
+  it("featuresGained lista solo lo que el plan suma sobre el otro", () => {
+    const gained = featuresGained(FALLBACK_ALL_PLANS.profesional, FALLBACK_ALL_PLANS.free)
+    expect(gained).toContain("Avisos automáticos por WhatsApp")
+    expect(gained).not.toContain("Ventas de mostrador (POS)")
+  })
+
+  it("el FAQ del Profesional sale de los datos del plan", () => {
+    const faq = buildPricingFaqs(getFreePlanInfo(), FALLBACK_ALL_PLANS).find(
+      (f) => f.question === "¿Qué incluye el plan Profesional?"
+    )!
+    expect(faq.answer).toContain("hasta 3 sucursales")
+    expect(faq.answer).toContain("5GB de almacenamiento")
+    expect(faq.answer).toContain("avisos automáticos por WhatsApp")
   })
 })

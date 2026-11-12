@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
+import { invalidatePricesCache } from "@/lib/pricing"
 
 const toggleSchema = z.object({
   activo: z.boolean(),
@@ -94,6 +95,9 @@ export async function POST(
         { status: 500 }
       )
     }
+
+    // Landing, /precios y el cobro leen los planes de la Data Cache.
+    invalidatePricesCache()
 
     return NextResponse.json({
       success: true,

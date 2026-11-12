@@ -176,12 +176,12 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         {/* Header */}
         <header className="border-b bg-card">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <Link href="/empresa/blog">
-              <Button variant="ghost" className="gap-2">
+            <Button asChild variant="ghost" className="gap-2">
+              <Link href="/empresa/blog">
                 <ArrowLeft className="h-4 w-4" />
                 Volver al blog
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </header>
 

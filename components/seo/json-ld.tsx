@@ -37,7 +37,7 @@ export function OrganizationJsonLd() {
     },
     image: `${siteUrl}/icon-512.png`,
     description:
-      "STApp es el software líder de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación y notificaciones por WhatsApp.",
+      "STApp es un software de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación y notificaciones por WhatsApp.",
     foundingDate: "2025",
     areaServed: [
       { "@type": "Country", name: "Argentina" },

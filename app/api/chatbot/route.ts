@@ -3,7 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import Anthropic from "@anthropic-ai/sdk"
 import { headers } from "next/headers"
-import { getPremiumPrices } from "@/lib/pricing"
+import { getAllPlanPrices } from "@/lib/pricing"
+import { FALLBACK_ALL_PLANS, buildPricingFaqs, getFreePlanInfo } from "@/lib/plan-copy"
 import { extractLeadData, shouldExtract, type ChatTurn } from "@/lib/chatbot/extract-lead-data"
 import { upsertLeadFromConversation } from "@/lib/chatbot/upsert-lead"
 import { CONTACT_EMAIL, CONTACT_PHONE_DISPLAY } from "@/lib/contact"
@@ -263,10 +264,14 @@ function fallbackMessage(reason: { status?: number; message?: string } | null): 
 }
 
 async function buildContextPrompt(): Promise<string> {
-  const prices = await getPremiumPrices()
+  // Precios, límites y features salen de la tabla `plans` (misma fuente que
+  // la landing y /precios). Solo pesos: el único cobro es MercadoPago.
+  const allPlans = await getAllPlanPrices()
+  const prices = (allPlans.profesional ?? FALLBACK_ALL_PLANS.profesional).ars
+  const planFaqs = buildPricingFaqs(getFreePlanInfo(allPlans), allPlans)
+  const planAnswer = (question: string) => planFaqs.find((f) => f.question === question)?.answer ?? ""
   const formatArs = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-  const savingsArs = Math.round(((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100)
-  const savingsUsd = Math.round(((prices.usd.monthly * 12 - prices.usd.yearly) / (prices.usd.monthly * 12)) * 100)
+  const savingsArs = Math.round(((prices.monthly * 12 - prices.yearly) / (prices.monthly * 12)) * 100)
 
   return `Sos Santi, el asistente virtual de STApp, un software completo para gestionar negocios de reparación y servicio técnico: electrónica y computación, electrodomésticos y refrigeración, talleres mecánicos, motos y bicicleterías, relojería y joyería, y otros oficios técnicos.
 
@@ -288,15 +293,14 @@ REGISTRO Y ACCESO:
 - Asistente de bienvenida según tu rubro: cargás tu negocio y tu logo, y hacés una orden de práctica para ver los avisos que recibe tu cliente. También podés cargar datos de ejemplo desde el panel para explorar
 - Buscador global: buscá órdenes, clientes, inventario y más desde cualquier pantalla
 
-PLAN:
-Un solo plan: Plan Premium, todo incluido.
-- Primeros 30 días gratis, sin tarjeta de crédito requerida
-- Argentina: $${formatArs(prices.ars.monthly)} ARS/mes o $${formatArs(prices.ars.yearly)}/año (ahorro ~${savingsArs}% con plan anual)
-- Otros países: USD $${prices.usd.monthly}/mes o USD $${prices.usd.yearly}/año (ahorro ~${savingsUsd}% con plan anual)
-- Garantía de devolución de 30 días. Cancelás cuando quieras, sin penalidades.
-- Pagos seguros con MercadoPago (Argentina) o tarjeta internacional (otros países)
+PLANES (no inventes otros planes ni otros precios):
+- Plan Free, gratis para siempre. ${planAnswer("¿Qué incluye el plan Free?")}
+- Plan Profesional: $${formatArs(prices.monthly)} ARS/mes o $${formatArs(prices.yearly)} ARS/año (ahorro ~${savingsArs}% con plan anual). ${planAnswer("¿Qué incluye el plan Profesional?")}
+- Al registrarte tenés 30 días gratis del plan Profesional, sin tarjeta de crédito. Si no te suscribís, la cuenta pasa al plan Free sin perder datos.
+- Cancelás cuando quieras, sin penalidades.
+- Se paga solo con MercadoPago, en pesos argentinos. No hay cobro en dólares ni con tarjeta internacional: si alguien pregunta desde otro país, decile que por ahora el cobro es solo en pesos vía MercadoPago y que escriba a soporte.
 
-Todo incluido en el plan:
+Detalle del plan Profesional:
 - Órdenes ilimitadas
 - Técnicos ilimitados
 - Vendedores ilimitados
@@ -448,7 +452,7 @@ CASOS DE USO TÍPICOS:
 - Talleres con múltiples técnicos y sucursales
 
 SUCURSALES Y MULTI-MONEDA:
-- Multi-sucursal: gestioná hasta 3 sucursales con el plan Premium, con órdenes, ventas, caja, depósitos y personal por sucursal.
+- Multi-sucursal: gestioná varias sucursales con el plan Profesional, con órdenes, ventas, caja, depósitos y personal por sucursal.
 - Multi-moneda: cada negocio elige su moneda entre 11 (ARS, USD, MXN, CLP, COP, PEN, UYU, BRL, BOB, PYG, EUR). Cotización del dólar actualizada automáticamente en el panel.
 
 RUBROS SOPORTADOS:

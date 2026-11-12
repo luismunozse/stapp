@@ -90,12 +90,12 @@ export default function TrabajaConNosotrosPage() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <Link href="/">
-            <Button variant="ghost" className="gap-2">
+          <Button asChild variant="ghost" className="gap-2">
+            <Link href="/">
               <ArrowLeft className="h-4 w-4" />
               Volver al inicio
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </header>
 

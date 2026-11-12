@@ -5,16 +5,22 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Check, X, Zap } from "lucide-react"
+import { Check, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealFocal } from "./reveal"
 import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
-import { freeOrdersText, getFreePlanInfo, type FreePlanInfo } from "@/lib/plan-copy"
+import {
+  FALLBACK_ALL_PLANS,
+  PLAN_FEATURES,
+  featuresGained,
+  featuresIncluded,
+  freeOrdersText,
+  getFreePlanInfo,
+} from "@/lib/plan-copy"
 
 interface PlanFeature {
   text: string
-  included: boolean
   highlight?: string
 }
 
@@ -31,10 +37,28 @@ interface Plan {
   ctaVariant: "outline" | "default"
 }
 
-// Bullets orientados a resultado, no a specs. El detalle completo de cada
-// plan vive en /precios (linkeado debajo de las cards). Los límites y el
-// seguimiento online del Free salen de la tabla plans (ver lib/plan-copy.ts).
-function buildPlans(free: FreePlanInfo): Plan[] {
+const WHATSAPP_FEATURE = PLAN_FEATURES.find((f) => f.key === "whatsapp_notifications")?.label
+
+// Bullets de las cards derivados de la tabla `plans` (ver lib/plan-copy.ts):
+// el Free lista lo que incluye y el Profesional lo que suma, sin funciones
+// tachadas. La tabla completa vive en /precios.
+function buildPlans(allPlans: AllPlansPrices | undefined): Plan[] {
+  const free = allPlans?.free ?? FALLBACK_ALL_PLANS.free
+  const pro = allPlans?.profesional ?? FALLBACK_ALL_PLANS.profesional
+  const freeInfo = getFreePlanInfo(allPlans)
+
+  const proFeatures: PlanFeature[] = []
+  const { ordenes, tecnicos, clientes, sucursales } = pro.limits
+  if (ordenes == null && tecnicos == null && clientes == null) {
+    proFeatures.push({ text: "Reparaciones, técnicos y clientes sin límite" })
+  }
+  if (sucursales != null && sucursales > 1) {
+    proFeatures.push({ text: `Hasta ${sucursales} sucursales` })
+  }
+  for (const text of featuresGained(pro, free).slice(0, 4)) {
+    proFeatures.push(text === WHATSAPP_FEATURE ? { text, highlight: "Diferencial" } : { text })
+  }
+
   return [
     {
       name: "Free",
@@ -42,12 +66,9 @@ function buildPlans(free: FreePlanInfo): Plan[] {
       description: "Para arrancar y conocer STApp",
       priceMultiplier: 0,
       features: [
-        { text: freeOrdersText(free.limits), included: true },
-        { text: "Tus clientes siguen su reparación online", included: free.clientPortal },
-        { text: "Ventas de mostrador (POS)", included: true },
-        { text: "Inventario básico", included: true },
-        { text: "Avisos automáticos por WhatsApp", included: false },
-        { text: "Números y reportes del negocio", included: false },
+        { text: freeOrdersText(freeInfo.limits) },
+        ...featuresIncluded(free).map((text) => ({ text })),
+        { text: "Inventario y caja diaria" },
       ],
       cta: "Comenzar gratis",
       ctaHref: "/registro",
@@ -56,18 +77,11 @@ function buildPlans(free: FreePlanInfo): Plan[] {
     {
       name: "Profesional",
       slug: "profesional",
-      description: "Tu taller completo, sin límites",
+      description: "Todo lo del Free, más:",
       priceMultiplier: 1,
       badge: "Más popular",
       recommended: true,
-      features: [
-        { text: "Reparaciones, técnicos y clientes ilimitados", included: true },
-        { text: "Avisos automáticos por WhatsApp", included: true, highlight: "Diferencial" },
-        { text: "Caja diaria y números claros del negocio", included: true },
-        { text: "Presupuestos que tu cliente aprueba online", included: true },
-        { text: "Hasta 3 sucursales", included: true },
-        { text: "Tu logo en presupuestos y comprobantes", included: true, highlight: "Tu marca" },
-      ],
+      features: proFeatures,
       cta: "Probar gratis",
       ctaHref: "/registro?plan=profesional",
       ctaVariant: "default",
@@ -88,14 +102,16 @@ function roundToNice(n: number): number {
 interface PricingSectionProps {
   prices: PlanPrices
   allPlans?: AllPlansPrices
+  /** En /precios la tabla está debajo: no tiene sentido linkear a sí misma. */
+  showComparisonLink?: boolean
 }
 
-export function PricingSection({ prices, allPlans }: PricingSectionProps) {
+export function PricingSection({ prices, allPlans, showComparisonLink = true }: PricingSectionProps) {
   const [annual, setAnnual] = useState(false)
 
   // Base: precios del plan Profesional (el del medio)
   const basePriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
-  const plans = buildPlans(getFreePlanInfo(allPlans))
+  const plans = buildPlans(allPlans)
   const savingsPercent = Math.round(
     ((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100
   )
@@ -224,41 +240,22 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                   </div>
 
                   {/* CTA */}
-                  <Link href={plan.ctaHref} className="block mb-6">
-                    <m.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                    >
-                      <Button
-                        className={cn("w-full", plan.recommended && "shadow-lg")}
-                        size="lg"
-                        variant={plan.ctaVariant}
-                      >
-                        {plan.cta}
-                      </Button>
-                    </m.div>
-                  </Link>
+                  <Button
+                    asChild
+                    className={cn("w-full mb-6", plan.recommended && "shadow-lg")}
+                    size="lg"
+                    variant={plan.ctaVariant}
+                  >
+                    <Link href={plan.ctaHref}>{plan.cta}</Link>
+                  </Button>
 
                   {/* Features */}
                   <div className="border-t pt-5 flex-1">
                     <ul className="space-y-2.5">
                       {plan.features.map((feature) => (
-                        <li
-                          key={feature.text}
-                          className={cn(
-                            "flex items-start gap-2 text-sm",
-                            !feature.included && "text-muted-foreground/70"
-                          )}
-                        >
-                          {feature.included ? (
-                            <Check className="w-4 h-4 flex-shrink-0 text-green-500 mt-0.5" />
-                          ) : (
-                            <X className="w-4 h-4 flex-shrink-0 text-muted-foreground/40 mt-0.5" />
-                          )}
-                          <span className={cn(!feature.included && "line-through")}>
-                            {feature.text}
-                          </span>
+                        <li key={feature.text} className="flex items-start gap-2 text-sm">
+                          <Check className="w-4 h-4 flex-shrink-0 text-success-600 mt-0.5" aria-hidden="true" />
+                          <span>{feature.text}</span>
                           {feature.highlight && (
                             <span className="text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
                               {feature.highlight}
@@ -278,11 +275,13 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             <p className="text-sm text-muted-foreground">
               Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.
             </p>
-            <p className="text-sm">
-              <Link href="/precios" className="font-medium text-primary hover:underline">
-                Ver la comparación completa de planes
-              </Link>
-            </p>
+            {showComparisonLink && (
+              <p className="text-sm">
+                <Link href="/precios#comparacion" className="font-medium text-primary hover:underline">
+                  Ver la comparación completa de planes
+                </Link>
+              </p>
+            )}
             <m.div
               className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
               whileHover={{ scale: 1.05 }}
