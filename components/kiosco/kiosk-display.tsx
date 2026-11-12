@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Maximize, Minimize, RefreshCw, WifiOff, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { getEstadoOrdenUi } from "@/lib/estado-orden-ui"
+import { StatusPill } from "@/components/ui/status-pill"
 
 interface KioskOrder {
   id: string
@@ -50,34 +52,10 @@ const ESTADO_ORDER = [
   "RECIBIDO",
 ]
 
-const estadoLabels: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "LISTO PARA RETIRAR",
-}
-
-const estadoColors: Record<string, string> = {
-  RECIBIDO: "bg-gray-500",
-  EN_DIAGNOSTICO: "bg-blue-500",
-  PRESUPUESTADO: "bg-amber-500",
-  APROBADO: "bg-emerald-500",
-  EN_REPARACION: "bg-orange-500",
-  ESPERANDO_REPUESTO: "bg-purple-500",
-  REPARADO: "bg-green-500",
-}
-
-const estadoBorderColors: Record<string, string> = {
-  RECIBIDO: "border-gray-500/40",
-  EN_DIAGNOSTICO: "border-blue-500/40",
-  PRESUPUESTADO: "border-amber-500/40",
-  APROBADO: "border-emerald-500/40",
-  EN_REPARACION: "border-orange-500/40",
-  ESPERANDO_REPUESTO: "border-purple-500/40",
-  REPARADO: "border-green-500/40",
+// Etiqueta, ícono y tono salen de lib/estado-orden-ui.ts (los mismos del
+// seguimiento público). REPARADO va en mayúsculas para que se lea de lejos.
+function kioskLabel(estado: string): string {
+  return estado === "REPARADO" ? "LISTO PARA RETIRAR" : getEstadoOrdenUi(estado).labelCliente
 }
 
 const ITEMS_PER_PAGE = 16
@@ -121,14 +99,13 @@ function OrderCard({
 
       {!compact && (
         <div className="mb-2">
-          <span
-            className={cn(
-              "inline-block px-3 py-1 rounded-full text-xs font-semibold text-white",
-              estadoColors[orden.estado] || "bg-gray-600"
-            )}
+          <StatusPill
+            tone={getEstadoOrdenUi(orden.estado).tone}
+            icon={getEstadoOrdenUi(orden.estado).icon}
+            className="px-3 py-1"
           >
-            {estadoLabels[orden.estado] || orden.estado}
-          </span>
+            {kioskLabel(orden.estado)}
+          </StatusPill>
         </div>
       )}
 
@@ -265,7 +242,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
       .filter((estado) => groups[estado]?.length > 0)
       .map((estado) => ({
         estado,
-        label: estadoLabels[estado] || estado,
+        label: kioskLabel(estado),
         ordenes: groups[estado],
       }))
   }, [ordenes])
@@ -329,8 +306,9 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
   )
 
   return (
+    // `dark`: el kiosco siempre es oscuro, así las píldoras usan su variante oscura.
     <div
-      className="min-h-dvh text-white flex flex-col"
+      className="dark min-h-dvh text-white flex flex-col"
       style={{
         background: `linear-gradient(135deg, ${organizacion.colorPrimary}15, ${organizacion.colorSecondary}10, #0a0a0a)`,
         backgroundColor: "#0a0a0a",
@@ -365,7 +343,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
           <p className="text-sm text-gray-400">
             Actualizado: {lastUpdate.toLocaleTimeString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
           </p>
-          <button
+          <button aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
             onClick={toggleFullscreen}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
@@ -391,10 +369,9 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
               <div key={group.estado}>
                 <div className="flex items-center gap-3 mb-3">
                   <span
-                    className={cn(
-                      "inline-block w-3 h-3 rounded-full",
-                      estadoColors[group.estado] || "bg-gray-600"
-                    )}
+                    aria-hidden="true"
+                    className="inline-block w-3 h-3 rounded-full"
+                    style={{ backgroundColor: getEstadoOrdenUi(group.estado).chartColor }}
                   />
                   <h2 className="text-lg font-semibold text-gray-200">
                     {group.label}
@@ -412,9 +389,9 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
                     <div
                       key={orden.id}
                       className={cn(
-                        "bg-white/5 backdrop-blur-sm border rounded-lg p-3 hover:bg-white/10 transition-all",
-                        estadoBorderColors[orden.estado] || "border-white/10"
+                        "bg-white/5 backdrop-blur-sm border rounded-lg p-3 hover:bg-white/10 transition-all"
                       )}
+                      style={{ borderColor: `${getEstadoOrdenUi(orden.estado).chartColor}66` }}
                     >
                       <span
                         className={cn(
@@ -462,7 +439,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
             {/* Pagination indicators */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-4 mt-6">
-                <button
+                <button aria-label="Página anterior"
                   onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
                   disabled={currentPage === 0}
@@ -485,7 +462,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
                   ))}
                 </div>
 
-                <button
+                <button aria-label="Página siguiente"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
                   disabled={currentPage === totalPages - 1}

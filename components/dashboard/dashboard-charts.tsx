@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import type { EstadoOrden } from "@/types"
 
 // Skeleton loader para gráficos
 function ChartSkeleton() {
@@ -45,20 +46,7 @@ const OrdenesPorTecnicoChart = dynamic(
 )
 
 // Tipos
-interface OrdenesData {
-  RECIBIDO: number
-  EN_DIAGNOSTICO: number
-  PRESUPUESTADO: number
-  APROBADO: number
-  EN_REPARACION: number
-  ESPERANDO_REPUESTO: number
-  REPARADO: number
-  ENTREGADO: number
-  ENTREGADO_SIN_REPARACION: number
-  ENTREGADO_SIN_COBRO: number
-  CANCELADO: number
-  SIN_REPARACION: number
-}
+type OrdenesData = Partial<Record<EstadoOrden, number>>
 
 interface IngresosDia {
   fecha: string

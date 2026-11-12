@@ -395,7 +395,7 @@ function NuevoKitDialog({
               />
             </div>
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive-text">{error}</p>}
           <p className="text-xs text-muted-foreground">
             Se crea el item con stock 0. Después agregás los componentes en la
             receta y, si es ENSAMBLADO, ensamblás para generar stock.

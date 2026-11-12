@@ -190,7 +190,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                           <tr key={c.id} className="border-b last:border-0">
                             <td className="py-2 pr-2">
                               <span className={`text-xs font-bold ${
-                                i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
+                                i === 0 ? "text-warning-text" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                               }`}>
                                 {i + 1}
                               </span>

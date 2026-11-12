@@ -460,7 +460,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               placeholder={tipoCliente === "EMPRESA" ? "Nombre del contacto" : "Nombre completo"}
             />
             {errors.nombre && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.nombre.message}
               </p>
             )}
@@ -488,7 +488,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
                   placeholder={countryConfig.taxIdPlaceholder}
                 />
                 {errors.cuit && (
-                  <p className="text-sm text-destructive mt-1">
+                  <p className="text-sm text-destructive-text mt-1">
                     {errors.cuit.message}
                   </p>
                 )}
@@ -508,7 +508,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               maxLength={15}
             />
             {errors.telefono && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.telefono.message}
               </p>
             )}
@@ -525,7 +525,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               placeholder="cliente@email.com"
             />
             {errors.email && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.email.message}
               </p>
             )}
@@ -543,7 +543,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               placeholder={countryConfig.personalIdPlaceholder}
             />
             {errors.dni && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.dni.message}
               </p>
             )}
@@ -603,7 +603,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
                     placeholder="15"
                   />
                   {errors.descuentoPct && (
-                    <p className="text-sm text-destructive mt-1">
+                    <p className="text-sm text-destructive-text mt-1">
                       {errors.descuentoPct.message}
                     </p>
                   )}

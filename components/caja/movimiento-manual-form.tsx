@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -349,15 +350,15 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
                       Ver
                     </a>
                   )}
-                  <Button
+                  <IconButton
+                    label="Quitar comprobante"
                     type="button"
                     variant="ghost"
-                    size="icon"
                     className="h-6 w-6"
                     onClick={handleRemoveComprobante}
                   >
                     <X className="h-3 w-3" />
-                  </Button>
+                  </IconButton>
                 </div>
               )}
             </div>
@@ -377,12 +378,8 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="mr-2 h-4 w-4" />
-            )}
+          <Button type="submit" className="w-full sm:w-auto" loading={loading}>
+            <Plus className="mr-2 h-4 w-4" />
             Registrar Movimiento
           </Button>
         </form>

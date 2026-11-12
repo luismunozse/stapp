@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -147,9 +148,9 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/superadmin/leads")}>
+        <IconButton label="Volver a leads" variant="ghost" onClick={() => router.push("/superadmin/leads")}>
           <ArrowLeft className="w-4 h-4" />
-        </Button>
+        </IconButton>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{lead.nombre || "Lead sin nombre"}</h1>
           <p className="text-muted-foreground text-sm">

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ImagePlus, Loader2, Star, Trash2, Package, ArrowUp, ArrowDown } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
+import { useModal } from "@/contexts/modal-context"
 
 interface Imagen {
   id: string
@@ -28,6 +29,7 @@ interface Props {
 const MAX_IMAGES = 10
 
 export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNombre, onChange }: Props) {
+  const { confirm } = useModal()
   const [imagenes, setImagenes] = useState<Imagen[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -124,7 +126,13 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
   }
 
   const eliminar = async (img: Imagen) => {
-    if (!confirm("¿Eliminar esta imagen?")) return
+    const ok = await confirm({
+      title: "¿Eliminar esta imagen?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     setBusyId(img.id)
     try {
       const res = await fetch(`/api/inventario/${inventarioId}/imagenes/${img.id}`, {
@@ -159,13 +167,10 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
           <Button
             size="sm"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || imagenes.length >= MAX_IMAGES}
+            disabled={imagenes.length >= MAX_IMAGES}
+            loading={uploading}
           >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-            ) : (
-              <ImagePlus className="h-3.5 w-3.5 mr-1" />
-            )}
+            <ImagePlus className="h-3.5 w-3.5 mr-1" />
             Subir imagen
           </Button>
           <input
@@ -181,7 +186,7 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
         </div>
 
         {error && (
-          <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2 mb-2">
+          <div className="text-sm text-destructive-text bg-destructive/10 rounded-md px-3 py-2 mb-2">
             {error}
           </div>
         )}

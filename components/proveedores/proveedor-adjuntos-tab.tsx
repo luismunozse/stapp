@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 interface Adjunto {
   id: string
@@ -29,7 +30,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 function fileIcon(mime: string | null) {
   if (!mime) return <FileIcon className="h-5 w-5" />
-  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-destructive" />
+  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-destructive-text" />
   if (mime.startsWith("image/")) return <FileImage className="h-5 w-5 text-info-500" />
   if (mime.includes("excel") || mime.includes("spreadsheet") || mime === "text/csv")
     return <FileSpreadsheet className="h-5 w-5 text-success-500" />
@@ -60,6 +61,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
+  const { confirm } = useModal()
   const { timezone } = useCurrency()
   const { data: adjuntos = [], mutate } = useSWR<Adjunto[]>(
     `/api/proveedores/${proveedorId}/adjuntos`,
@@ -102,7 +104,13 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
   }
 
   const remove = async (a: Adjunto) => {
-    if (!confirm(`¿Eliminar "${a.nombre}"?`)) return
+    const ok = await confirm({
+      title: `¿Eliminar "${a.nombre}"?`,
+      description: "El archivo adjunto se borra y no se puede recuperar.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedorId}/adjuntos/${a.id}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Adjunto eliminado")
@@ -195,7 +203,7 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
                       </a>
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(a)} title="Eliminar">
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4 text-destructive-text" />
                     </Button>
                   </div>
                 </div>

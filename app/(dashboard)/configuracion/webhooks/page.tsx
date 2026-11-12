@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
@@ -299,9 +300,9 @@ export default function WebhooksPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-start gap-3 sm:items-center">
           <Link href="/configuracion">
-            <Button variant="ghost" size="icon" className="shrink-0">
+            <IconButton label="Volver a configuración" variant="ghost" className="shrink-0">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
@@ -402,7 +403,7 @@ export default function WebhooksPage() {
                         size="icon"
                         title="Archivar"
                         onClick={() => setDeleteId(w.id)}
-                        className="text-destructive hover:text-destructive"
+                        className="text-destructive-text hover:text-destructive-text"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -502,13 +503,13 @@ export default function WebhooksPage() {
                         onChange={(e) => updateHeaderRow(i, "v", e.target.value)}
                         className="flex-1 font-mono text-xs"
                       />
-                      <Button
+                      <IconButton
+                        label="Quitar encabezado"
                         variant="ghost"
-                        size="icon"
                         onClick={() => removeHeaderRow(i)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      </IconButton>
                     </div>
                   ))}
                 </div>
@@ -723,7 +724,7 @@ function DeliveryRow({
             {new Date(delivery.createdAt).toLocaleString("es-AR", { timeZone: timezone })}
           </span>
           {delivery.status === "FAILED" && (
-            <Button
+            <Button aria-label="Reintentar entrega"
               variant="ghost"
               size="sm"
               onClick={() => onRetry(delivery.id)}

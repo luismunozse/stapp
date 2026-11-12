@@ -325,7 +325,7 @@ export function CatalogoCarritosAbandonadosTab() {
                           size="sm"
                           onClick={() => setDiscardId(c.id)}
                           disabled={actingId === c.id}
-                          className="gap-1.5 text-destructive ml-auto"
+                          className="gap-1.5 text-destructive-text ml-auto"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Descartar

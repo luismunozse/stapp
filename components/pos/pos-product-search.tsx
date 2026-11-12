@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { Input } from "@/components/ui/input"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import {
   Popover,
   PopoverContent,
@@ -460,8 +461,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
           </div>
           {/* Item 5: scan feedback — brief green flash when barcode adds a product */}
           {scanSuccess && (
-            <div className="flex items-center gap-1.5 px-1 py-1 rounded-md bg-success/10 border border-success/20 text-success text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-150">
-              <span className="text-success">✓</span>
+            <div className="flex items-center gap-1.5 px-1 py-1 rounded-md bg-success/10 border border-success/20 text-success-text text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-150">
+              <span className="text-success-text">✓</span>
               <span className="truncate">{scanSuccess.nombre}</span>
             </div>
           )}
@@ -484,14 +485,14 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             <div className="max-w-lg mx-auto space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Producto manual (sin inventario)</p>
-                <Button
+                <IconButton
+                  label="Cerrar producto manual"
                   variant="ghost"
-                  size="icon"
                   className="h-7 w-7"
                   onClick={() => setShowManualForm(false)}
                 >
                   <X className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -621,7 +622,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     </span>
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       product.stock <= 3
-                        ? "bg-destructive/10 text-destructive"
+                        ? "bg-destructive/10 text-destructive-text"
                         : "bg-muted text-muted-foreground"
                     }`}>
                       Stock: {product.stock}

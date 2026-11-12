@@ -17,7 +17,6 @@ import {
   Download,
   ExternalLink,
   FileText,
-  Loader2,
   Printer,
   Tag,
 } from "lucide-react"
@@ -304,26 +303,18 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
               variant="outline"
               className="flex-1 min-w-[110px]"
               onClick={handleDownloadPDF}
-              disabled={downloading}
+              loading={downloading}
             >
-              {downloading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileText className="mr-2 h-4 w-4" />
-              )}
+              <FileText className="mr-2 h-4 w-4" />
               PDF
             </Button>
             <Button
               variant="outline"
               className="flex-1 min-w-[110px]"
               onClick={handlePrint}
-              disabled={printing}
+              loading={printing}
             >
-              {printing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Printer className="mr-2 h-4 w-4" />
-              )}
+              <Printer className="mr-2 h-4 w-4" />
               Imprimir
             </Button>
             <OrdenPapelSelect

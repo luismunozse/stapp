@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Check, ExternalLink, Loader2, Tag, Layers } from "lucide-react"
+import { Check, ExternalLink, Tag, Layers } from "lucide-react"
 import Link from "next/link"
 import { printDeviceLabel } from "./print-label"
 import { ThermalPrintRecepcion, type RecepcionReceiptEquipo } from "./thermal-print-recepcion"
@@ -214,13 +214,9 @@ export function RecepcionCreadaModal({
               variant="outline"
               className="flex-1 min-w-[140px]"
               onClick={handlePrintLabels}
-              disabled={printingLabels}
+              loading={printingLabels}
             >
-              {printingLabels ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Tag className="mr-2 h-4 w-4" />
-              )}
+              <Tag className="mr-2 h-4 w-4" />
               Etiquetas ({resultado.ordenes.length})
             </Button>
           </div>

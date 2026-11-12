@@ -3,50 +3,23 @@
 import { memo, useMemo } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ESTADO_ORDEN_UI, ESTADOS_ORDEN } from "@/lib/estado-orden-ui"
+import type { EstadoOrden } from "@/types"
 
-interface OrdenesData {
-  RECIBIDO: number
-  EN_DIAGNOSTICO: number
-  PRESUPUESTADO: number
-  APROBADO: number
-  EN_REPARACION: number
-  ESPERANDO_REPUESTO: number
-  REPARADO: number
-  ENTREGADO: number
-  ENTREGADO_SIN_REPARACION: number
-  ENTREGADO_SIN_COBRO: number
-  CANCELADO: number
-  SIN_REPARACION: number
-}
+type OrdenesData = Partial<Record<EstadoOrden, number>>
 
 interface OrdenesPorEstadoChartProps {
   data: OrdenesData
 }
 
-const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
-  RECIBIDO: { label: "Recibido", color: "#3b82f6" },
-  EN_DIAGNOSTICO: { label: "En Diagnóstico", color: "#8b5cf6" },
-  PRESUPUESTADO: { label: "Presupuestado", color: "#f59e0b" },
-  APROBADO: { label: "Aprobado", color: "#10b981" },
-  EN_REPARACION: { label: "En Reparación", color: "#06b6d4" },
-  ESPERANDO_REPUESTO: { label: "Esperando Repuesto", color: "#f97316" },
-  REPARADO: { label: "Reparado", color: "#22c55e" },
-  ENTREGADO: { label: "Entregado", color: "#6b7280" },
-  ENTREGADO_SIN_REPARACION: { label: "Retirado s/rep", color: "#d97706" },
-  ENTREGADO_SIN_COBRO: { label: "Entregado s/cobro", color: "#a3a3a3" },
-  CANCELADO: { label: "Cancelado", color: "#ef4444" },
-  SIN_REPARACION: { label: "Sin Reparación", color: "#dc2626" },
-}
-
 export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
   const { chartData, total } = useMemo(() => {
-    const chartData = Object.entries(data)
-      .filter(([_, value]) => value > 0)
-      .map(([estado, value]) => ({
-        name: ESTADO_CONFIG[estado]?.label || estado,
-        value,
-        color: ESTADO_CONFIG[estado]?.color || "#gray",
-      }))
+    // Mismo orden, etiqueta y color que la píldora (lib/estado-orden-ui.ts).
+    const chartData = ESTADOS_ORDEN.filter((estado) => (data[estado] ?? 0) > 0).map((estado) => ({
+      name: ESTADO_ORDEN_UI[estado].label,
+      value: data[estado] ?? 0,
+      color: ESTADO_ORDEN_UI[estado].chartColor,
+    }))
     const total = chartData.reduce((sum, item) => sum + item.value, 0)
     return { chartData, total }
   }, [data])
@@ -55,7 +28,7 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Órdenes por Estado</CardTitle>
+          <CardTitle className="text-base">Órdenes por estado</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
@@ -69,7 +42,7 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
   return (
     <Card>
       <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
-        <CardTitle className="text-sm sm:text-base">Órdenes por Estado</CardTitle>
+        <CardTitle className="text-sm sm:text-base">Órdenes por estado</CardTitle>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0">
         <ResponsiveContainer width="100%" height={220}>

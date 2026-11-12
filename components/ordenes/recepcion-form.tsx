@@ -668,7 +668,7 @@ export function RecepcionForm() {
               }}
             />
             {errors.clienteId && (
-              <p className="text-sm text-destructive mt-1">{errors.clienteId.message}</p>
+              <p className="text-sm text-destructive-text mt-1">{errors.clienteId.message}</p>
             )}
           </div>
 

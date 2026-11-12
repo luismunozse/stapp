@@ -102,7 +102,7 @@ export function ComprobantesArcaList() {
 
       {fallo ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm">
-          <p className="text-destructive">No pudimos cargar las facturas. Probá de nuevo en un momento.</p>
+          <p className="text-destructive-text">No pudimos cargar las facturas. Probá de nuevo en un momento.</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => void cargar()}>
             Reintentar
           </Button>
@@ -196,7 +196,7 @@ function FilaComprobante({
         )}
         <div className="text-xs text-muted-foreground">{tituloComprobante(c.tipo, null, c.esNotaCredito)}</div>
         {c.estado === "rechazado" && c.errorMsg && (
-          <div className="mt-1 text-xs text-destructive">{c.errorMsg}</div>
+          <div className="mt-1 text-xs text-destructive-text">{c.errorMsg}</div>
         )}
       </td>
       <td className="p-3">

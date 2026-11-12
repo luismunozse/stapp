@@ -8,7 +8,6 @@ import {
   MessageCircle,
   RefreshCw,
   Filter,
-  Loader2,
   UserCheck,
   UserX,
   ArrowLeft,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -101,9 +101,9 @@ export function ConversacionesContent() {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)}>
+          <IconButton label="Volver a conversaciones" variant="ghost" onClick={() => setSelectedId(null)}>
             <ArrowLeft className="w-4 h-4" />
-          </Button>
+          </IconButton>
           <div className="flex-1">
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Bot className="w-5 h-5 text-purple-500" />

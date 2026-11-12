@@ -227,7 +227,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = fals
               onKeyDown={handleKeyDown}
               className="font-mono"
             />
-            <Button onClick={handleSearch} disabled={loading || !code.trim()}>
+            <Button aria-label="Buscar código" onClick={handleSearch} disabled={loading || !code.trim()}>
               <Search className="h-4 w-4" />
             </Button>
           </div>
@@ -239,7 +239,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = fals
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-destructive-text bg-destructive/10 rounded-md px-3 py-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {error}
             </div>

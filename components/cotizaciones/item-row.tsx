@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Input } from "@/components/ui/input"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import {
   Select,
   SelectContent,
@@ -236,7 +237,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                           <div className="font-medium">{inv.nombre}</div>
                           <div className="text-xs text-muted-foreground">
                             {disp <= 0 ? (
-                              <span className="text-destructive font-medium">Sin stock</span>
+                              <span className="text-destructive-text font-medium">Sin stock</span>
                             ) : (
                               <>Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${disp})` : ""}</>
                             )}
@@ -264,16 +265,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
           <Button type="button" variant={vinculado ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => vinculado ? clearLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
             {vinculado ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
           </Button>
-          <Button
+          <IconButton
+            label="Quitar ítem"
             type="button"
             variant="ghost"
-            size="icon"
             onClick={() => onRemove(index)}
             disabled={disabled}
-            className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+            className="h-8 w-8 text-destructive-text hover:text-destructive-text shrink-0"
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
         {showTipoRepuesto && (
           <div>
@@ -373,6 +374,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             className="w-20"
           />
           <Button
+            aria-label={item.descuentoTipo === "fijo" ? "Monto fijo en pesos (tocá para pasar a porcentaje)" : "Porcentaje (tocá para pasar a monto fijo)"}
             type="button"
             variant={item.descuentoTipo === "fijo" ? "default" : "outline"}
             size="icon"
@@ -455,7 +457,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                       </div>
                       <span className="text-xs shrink-0">
                         {disp <= 0 ? (
-                          <span className="text-destructive font-medium">Sin stock</span>
+                          <span className="text-destructive-text font-medium">Sin stock</span>
                         ) : (
                           <span className="text-muted-foreground">Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${disp})` : ""}</span>
                         )}
@@ -565,6 +567,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             className="w-full"
           />
           <Button
+            aria-label={item.descuentoTipo === "fijo" ? "Monto fijo en pesos (tocá para pasar a porcentaje)" : "Porcentaje (tocá para pasar a monto fijo)"}
             type="button"
             variant={item.descuentoTipo === "fijo" ? "default" : "outline"}
             size="icon"
@@ -580,16 +583,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
           {formatPrice(neto)}
         </div>
         <div className="text-right">
-          <Button
+          <IconButton
+            label="Quitar ítem"
             type="button"
             variant="ghost"
-            size="icon"
             onClick={() => onRemove(index)}
             disabled={disabled}
-            className="h-8 w-8 text-destructive hover:text-destructive"
+            className="h-8 w-8 text-destructive-text hover:text-destructive-text"
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
     </>

@@ -286,15 +286,8 @@ export function CobrarMultipleDialog({
                 </div>
 
                 {/* Botón cobrar */}
-                <Button className="w-full" onClick={handleCobrar} disabled={submitting}>
-                  {submitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Registrando...
-                    </>
-                  ) : (
-                    `Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`
-                  )}
+                <Button className="w-full" onClick={handleCobrar} loading={submitting}>
+                  {`Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`}
                 </Button>
               </>
             )}

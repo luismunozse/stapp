@@ -166,10 +166,16 @@ describe("GarantiaCard", () => {
     })
   })
 
-  it("no usa colores crudos", async () => {
+  it("no usa colores crudos sin su par de modo oscuro", async () => {
     respond([base], [detalle({}, [reclamo("RECHAZADO"), reclamo("RESUELTO"), reclamo("ACEPTADO")])])
     const { container } = render(<GarantiaCard ordenId="o1" ordenEstado="ENTREGADO" isAdmin />)
     await screen.findByText("Rechazado")
-    expect(container.innerHTML).not.toMatch(/\b(bg|text|border)-(green|red|yellow|blue|gray)-\d{2,3}\b/)
+    // Un color crudo solo se acepta con su variante `dark:` en el mismo
+    // elemento (p. ej. el tono `danger` de StatusPill: text-red-700 dark:text-red-300).
+    const crudo = /(^|\s)(bg|text|border)-(green|red|yellow|blue|gray)-\d{2,3}(\s|$)/
+    for (const el of Array.from(container.querySelectorAll("[class]"))) {
+      const cls = el.getAttribute("class") ?? ""
+      if (crudo.test(cls)) expect(cls, cls).toMatch(/\bdark:(bg|text|border)-(green|red|yellow|blue|gray)-/)
+    }
   })
 })

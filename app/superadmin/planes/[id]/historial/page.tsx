@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, History, Package, ChevronLeft, ChevronRight } from "lucide-react"
 import { AuditTimeline } from "../../_components/audit-timeline"
@@ -75,9 +76,9 @@ export default function PlanHistorialPage({ params }: PageProps) {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/superadmin/planes">
-          <Button variant="ghost" size="icon">
+          <IconButton label="Volver a planes" variant="ghost">
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </IconButton>
         </Link>
         <div className="flex-1">
           <h1 className="text-3xl font-bold flex items-center gap-2">

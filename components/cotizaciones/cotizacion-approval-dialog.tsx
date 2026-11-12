@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useCurrency } from "@/contexts/currency-context"
-import { Loader2, CheckCircle } from "lucide-react"
+import { CheckCircle } from "lucide-react"
 
 interface CotizacionApprovalDialogProps {
   open: boolean
@@ -108,7 +108,7 @@ export function CotizacionApprovalDialog({
           />
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-sm text-destructive-text">{error}</p>
           )}
 
           <div className="flex justify-end gap-2 pt-2">
@@ -121,19 +121,11 @@ export function CotizacionApprovalDialog({
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={loading || !firma}
+              disabled={!firma}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Aprobando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Aprobar Cotizacion
-                </>
-              )}
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Aprobar Cotizacion
             </Button>
           </div>
         </div>

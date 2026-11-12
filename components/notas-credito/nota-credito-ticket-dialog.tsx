@@ -114,7 +114,7 @@ export function NotaCreditoTicketDialog({ notaCreditoId, open, onOpenChange, anc
         </DialogHeader>
 
         {error ? (
-          <p role="alert" className="text-sm text-destructive">{error}</p>
+          <p role="alert" className="text-sm text-destructive-text">{error}</p>
         ) : !datos ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

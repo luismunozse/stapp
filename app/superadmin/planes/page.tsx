@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { Package, Plus, Users, Building2, Check, X, Edit, Power, History } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
@@ -301,9 +302,9 @@ export default function PlanesPage() {
                   </Button>
                 </Link>
                 <Link href={`/superadmin/planes/${plan.id}/historial`}>
-                  <Button variant="ghost" size="icon">
+                  <IconButton label="Ver historial del plan" variant="ghost">
                     <History className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </Link>
                 <Button
                   variant={plan.activo ? "destructive" : "default"}

@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { round2 } from "@/lib/ventas/totales"
@@ -105,8 +105,8 @@ export function CierreDialog({
               <span className="font-medium text-success-600">{formatPrice(totalIngresosEfectivo)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-destructive">- Egresos efectivo</span>
-              <span className="font-medium text-destructive">{formatPrice(totalEgresosEfectivo)}</span>
+              <span className="text-destructive-text">- Egresos efectivo</span>
+              <span className="font-medium text-destructive-text">{formatPrice(totalEgresosEfectivo)}</span>
             </div>
             <div className="border-t pt-2 flex justify-between font-bold">
               <span>Efectivo esperado</span>
@@ -115,8 +115,8 @@ export function CierreDialog({
             {totalCostosFinancieros > 0 && (
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-destructive">Costo terminales (tarjetas)</span>
-                  <span className="font-medium text-destructive">-{formatPrice(totalCostosFinancieros)}</span>
+                  <span className="text-destructive-text">Costo terminales (tarjetas)</span>
+                  <span className="font-medium text-destructive-text">-{formatPrice(totalCostosFinancieros)}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-1">
                   <span className="font-medium">Ingreso real del día</span>
@@ -159,7 +159,7 @@ export function CierreDialog({
                 ) : diferencia > 0 ? (
                   <TrendingUp className="h-4 w-4 text-warning-600" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-destructive" />
+                  <TrendingDown className="h-4 w-4 text-destructive-text" />
                 )}
                 <span className="text-sm font-medium">
                   {cuadrada
@@ -175,7 +175,7 @@ export function CierreDialog({
                     ? "text-success-600"
                     : diferencia > 0
                     ? "text-warning-600"
-                    : "text-destructive"
+                    : "text-destructive-text"
                 }`}
               >
                 {formatPrice(Math.abs(diferencia))}
@@ -195,14 +195,13 @@ export function CierreDialog({
             />
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive-text">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button onClick={handleSubmit} loading={loading}>
             Cerrar Caja
           </Button>
         </DialogFooter>

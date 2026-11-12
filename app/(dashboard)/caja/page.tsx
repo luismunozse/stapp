@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -136,18 +137,18 @@ export default function CajaPage() {
 
       {/* Selector de fecha */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <Button variant="outline" size="icon" onClick={() => cambiarDia(-1)}>
+        <IconButton label="Día anterior" variant="outline" onClick={() => cambiarDia(-1)}>
           <ChevronLeft className="h-4 w-4" />
-        </Button>
+        </IconButton>
         <Input
           type="date"
           value={fecha}
           onChange={(e) => setFecha(e.target.value)}
           className="w-auto"
         />
-        <Button variant="outline" size="icon" onClick={() => cambiarDia(1)} disabled={esHoy}>
+        <IconButton label="Día siguiente" variant="outline" onClick={() => cambiarDia(1)} disabled={esHoy}>
           <ChevronRight className="h-4 w-4" />
-        </Button>
+        </IconButton>
         {!esHoy && (
           <Button variant="ghost" size="sm" onClick={() => setFecha(new Date().toISOString().split("T")[0])}>
             Hoy

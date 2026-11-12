@@ -193,7 +193,7 @@ export function TopClientes() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Award className="h-5 w-5 text-warning" />
+            <Award className="h-5 w-5 text-warning-text" />
             Top 10 Clientes
           </CardTitle>
           <CardDescription>
@@ -219,7 +219,7 @@ export function TopClientes() {
                     <div
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 ${
                         index < 3
-                          ? "bg-warning/10 text-warning dark:bg-warning/20"
+                          ? "bg-warning/10 text-warning-text dark:bg-warning/20"
                           : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >

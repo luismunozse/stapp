@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { OrderStatusBadge } from "@/components/ui/badge"
@@ -177,9 +178,9 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/ordenes">
-          <Button variant="outline" size="icon">
+          <IconButton label="Volver a órdenes" variant="outline">
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </Link>
         <div>
           <h1 className="text-2xl font-bold">Lote {recepcion.codigo}</h1>

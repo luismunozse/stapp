@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, ShoppingCart } from "lucide-react"
+import { ShoppingCart } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 
@@ -193,12 +193,8 @@ export function ConvertirVentaDialog({
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando venta...</>
-            ) : (
-              <><ShoppingCart className="mr-2 h-4 w-4" />Crear Venta</>
-            )}
+          <Button onClick={handleSubmit} loading={loading}>
+            <ShoppingCart className="mr-2 h-4 w-4" />Crear Venta
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   ArrowUp,
@@ -247,22 +247,22 @@ export function MovimientosHistorial({
               Página {page} de {totalPages} ({total} movimientos)
             </span>
             <div className="flex items-center gap-2">
-              <Button
+              <IconButton
+                label="Página anterior"
                 variant="outline"
-                size="icon"
                 onClick={handlePrevPage}
                 disabled={page <= 1}
               >
                 <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Página siguiente"
                 variant="outline"
-                size="icon"
                 onClick={handleNextPage}
                 disabled={page >= totalPages}
               >
                 <ChevronRight className="h-4 w-4" />
-              </Button>
+              </IconButton>
             </div>
           </div>
         )}

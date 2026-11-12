@@ -395,7 +395,7 @@ function StatCard({
     blue: "bg-info-50 text-info-700 border-info-200/50 dark:bg-info/15 dark:text-info-300 dark:border-info/30",
     amber: "bg-warning-50 text-warning-700 border-warning-200/50 dark:bg-warning/15 dark:text-warning-300 dark:border-warning/30",
     emerald: "bg-success-50 text-success-700 border-success-200/50 dark:bg-success/15 dark:text-success-300 dark:border-success/30",
-    red: "bg-destructive/10 text-destructive border-destructive/25",
+    red: "bg-destructive/10 text-destructive-text border-destructive/25",
   }
   return (
     <div className={`rounded-lg border p-3 ${tones[tone]}`}>

@@ -363,7 +363,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
               <Download className="h-3 w-3 mr-1" />
               CSV
             </Button>
-            <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
+            <Button aria-label="Actualizar eventos" size="sm" variant="ghost" onClick={load} disabled={loading}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/select"
 import {
   CreditCard,
-  Loader2,
   Banknote,
   ArrowDownUp,
   CheckCircle2,
@@ -514,7 +513,7 @@ export function PosCheckoutDialog({
                   variant="outline"
                   size="sm"
                   disabled={!cliente.id}
-                  className="h-7 text-xs text-warning border-warning/40 hover:bg-warning-50"
+                  className="h-7 text-xs text-warning-text border-warning/40 hover:bg-warning-50"
                   onClick={() => {
                     setPagoParcial(true)
                     setPagosLines([createPagoLine(0)])
@@ -545,10 +544,10 @@ export function PosCheckoutDialog({
           </div>
           ) : (
             <div className="rounded-lg bg-warning-50 border border-warning/30 p-4 text-center space-y-2">
-              <p className="text-sm font-medium text-warning">
+              <p className="text-sm font-medium text-warning-text">
                 Venta sin pago — el total queda pendiente
               </p>
-              <p className="text-2xl font-bold text-destructive">{formatPrice(totalEfectivo)}</p>
+              <p className="text-2xl font-bold text-destructive-text">{formatPrice(totalEfectivo)}</p>
               <p className="text-xs text-muted-foreground">
                 El cobro se registra después desde el detalle de la venta
               </p>
@@ -582,8 +581,8 @@ export function PosCheckoutDialog({
           {isCashOnly && (
             <div className="rounded-lg border border-info/20 bg-info-50 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-info" />
-                <Label className="text-sm font-medium text-info">
+                <Banknote className="h-4 w-4 text-info-text" />
+                <Label className="text-sm font-medium text-info-text">
                   Cálculo de vuelto
                 </Label>
               </div>
@@ -621,7 +620,7 @@ export function PosCheckoutDialog({
                 <ArrowDownUp className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className={cn(
                   "text-right min-w-[100px]",
-                  vuelto > 0 ? "text-success" : "text-muted-foreground"
+                  vuelto > 0 ? "text-success-text" : "text-muted-foreground"
                 )}>
                   <div className="text-xs text-muted-foreground">Vuelto</div>
                   <div className="text-xl font-bold">{formatPrice(vuelto)}</div>
@@ -629,7 +628,7 @@ export function PosCheckoutDialog({
               </div>
 
               {montoRecibido !== "" && montoRecibido < totalEfectivo && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive-text">
                   Faltan {formatPrice(totalEfectivo - montoRecibido)}
                 </p>
               )}
@@ -671,7 +670,7 @@ export function PosCheckoutDialog({
 
           {/* Submit */}
           {pendienteRequiereCliente && (
-            <p className="text-xs text-destructive text-center">
+            <p className="text-xs text-destructive-text text-center">
               Seleccioná un cliente para dejar saldo pendiente / fiar
             </p>
           )}
@@ -682,19 +681,11 @@ export function PosCheckoutDialog({
             <Button
               className="flex-1 h-12 text-base font-semibold"
               onClick={handleSubmit}
-              disabled={loading || pendienteRequiereCliente}
+              disabled={pendienteRequiereCliente}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Confirmar Venta
-                </>
-              )}
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              Confirmar Venta
             </Button>
           </div>
         </div>

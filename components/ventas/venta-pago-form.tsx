@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -139,9 +140,9 @@ export function VentaPagoForm({
             <DollarSign className="h-5 w-5" />
             Registrar Pago
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -153,13 +154,13 @@ export function VentaPagoForm({
             </div>
             <div>
               <span className="text-muted-foreground">Abonado</span>
-              <div className="font-semibold text-success">
+              <div className="font-semibold text-success-text">
                 {formatPrice(montoAbonado)}
               </div>
             </div>
             <div>
               <span className="text-muted-foreground">Pendiente</span>
-              <div className="font-semibold text-destructive">
+              <div className="font-semibold text-destructive-text">
                 {formatPrice(pendiente)}
               </div>
             </div>

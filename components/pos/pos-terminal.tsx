@@ -13,7 +13,6 @@ import {
   Package,
   Printer,
   Unplug,
-  Loader2,
   AlertTriangle,
   RotateCcw,
 } from "lucide-react"
@@ -763,21 +762,19 @@ export function PosTerminal() {
               size="sm"
               className={cn(
                 "h-8 gap-1.5 text-xs",
-                printer.connected && "text-success",
-                printer.error && "text-destructive"
+                printer.connected && "text-success-text",
+                printer.error && "text-destructive-text"
               )}
               onClick={printer.connected ? printer.disconnect : printer.connect}
-              disabled={printer.connecting}
               title={
                 printer.connected
                   ? `Conectada: ${printer.device?.name} (click para desconectar)`
                   : "Conectar impresora térmica"
               }
               aria-label={printerLabel}
+              loading={printer.connecting}
             >
-              {printer.connecting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : printer.connected ? (
+              {printer.connected ? (
                 <Printer className="h-3.5 w-3.5" />
               ) : (
                 <Unplug className="h-3.5 w-3.5" />

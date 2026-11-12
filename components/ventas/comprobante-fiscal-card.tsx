@@ -231,7 +231,7 @@ export function ComprobanteFiscalCard({
         )}
 
         {avisoVisible?.tono === "error" && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-sm text-destructive-text">
             {avisoVisible.texto}
           </p>
         )}
@@ -247,16 +247,9 @@ export function ComprobanteFiscalCard({
           <Button
             variant={rechazado ? "outline" : "default"}
             onClick={() => setConfirmandoEmision(true)}
-            disabled={emitiendo}
+            loading={emitiendo}
           >
-            {emitiendo ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Emitiendo...
-              </>
-            ) : (
-              etiquetaEmitir
-            )}
+            {etiquetaEmitir}
           </Button>
         )}
 
@@ -397,7 +390,7 @@ function FacturaBloque({ grupo, puedeAnular = false, onAnular, verificandoId = n
       )}
 
       {factura.estado === "rechazado" && factura.errorMsg && (
-        <p className="flex items-start gap-2 text-sm text-destructive">
+        <p className="flex items-start gap-2 text-sm text-destructive-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{factura.errorMsg}</span>
         </p>
@@ -443,15 +436,8 @@ function NotaCreditoBloque({ nota, verificando, onVerificar }: NotaCreditoBloque
           factura: primero verificá con ARCA.
         </p>
         {onVerificar ? (
-          <Button variant="outline" size="sm" onClick={() => onVerificar(nota)} disabled={verificando}>
-            {verificando ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                Verificando...
-              </>
-            ) : (
-              "Verificar con ARCA"
-            )}
+          <Button variant="outline" size="sm" onClick={() => onVerificar(nota)} loading={verificando}>
+            Verificar con ARCA
           </Button>
         ) : (
           <p className="text-sm text-muted-foreground">

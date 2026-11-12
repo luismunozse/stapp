@@ -335,7 +335,7 @@ export function ComisionesVendedoresView() {
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
           ) : error ? (
-            <div role="alert" className="py-10 text-center text-sm text-destructive">
+            <div role="alert" className="py-10 text-center text-sm text-destructive-text">
               No se pudieron cargar las comisiones.
             </div>
           ) : items.length === 0 ? (

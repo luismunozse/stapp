@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -69,6 +70,7 @@ import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
+import { OrdenAvances } from "@/components/ordenes/orden-avances"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
 import { siguienteEstado } from "@/lib/ordenes/siguiente-estado"
@@ -685,23 +687,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <Link href={listaHref} aria-label="Volver a órdenes">
-            <Button variant="outline" size="icon">
+            <IconButton label="Volver a órdenes" variant="outline">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">
                 Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
               </h1>
-              {isRetiro ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  <Package className="h-3 w-3" />
-                  Retirado sin reparacion
-                </span>
-              ) : (
-                <OrderStatusBadge status={orden.estado} showIcon />
-              )}
+              <OrderStatusBadge status={orden.estado} showIcon />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               {orden.cliente?.nombre && <span className="font-medium">{orden.cliente.nombre}</span>}
@@ -897,7 +892,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           {isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button aria-label="Más acciones" variant="outline" size="sm">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -922,7 +917,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-destructive-text focus:text-destructive-text"
                   onClick={handleDeleteOrden}
                   disabled={deleting}
                 >
@@ -1199,6 +1194,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   textareaClassName="bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
                   valueClassName="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2"
                 />
+              </div>
+
+              {/* Avances: bitácora por etapas; los visibles salen en el PDF de entrega */}
+              <div className="mt-4 pt-4 border-t">
+                <OrdenAvances ordenId={ordenId} userId={session?.user?.id} isAdmin={isAdmin} />
               </div>
             </CardContent>
           </Card>

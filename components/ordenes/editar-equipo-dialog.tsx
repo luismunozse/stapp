@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2, Lock, X } from "lucide-react"
+import { Lock, X } from "lucide-react"
 import { toast } from "sonner"
 import {
   ResponsiveDialog,
@@ -251,7 +251,7 @@ function EditarEquipoForm({
                 aria-describedby={imeiError ? "editar-imei-error" : undefined}
               />
               {imeiError && (
-                <p id="editar-imei-error" className="text-sm text-destructive">
+                <p id="editar-imei-error" className="text-sm text-destructive-text">
                   {imeiError}
                 </p>
               )}
@@ -310,8 +310,7 @@ function EditarEquipoForm({
         <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={saving || !dispositivo.trim()}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" disabled={!dispositivo.trim()} loading={saving}>
           Guardar
         </Button>
       </ResponsiveDialogFooter>

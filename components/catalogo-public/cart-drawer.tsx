@@ -8,6 +8,7 @@ import {
   ImagePlus, MessageSquare, Camera, Ticket, AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -277,9 +278,9 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                   <ShoppingCart className="h-5 w-5" />
                   {step === "cart" ? "Tu solicitud" : "Tus datos"}
                 </h2>
-                <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10">
+                <IconButton label="Cerrar" variant="ghost" onClick={onClose} className="h-10 w-10">
                   <X className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
               {cart.items.length > 0 && (
                 <ol className="px-4 pb-3 flex items-center gap-2 text-xs">
@@ -405,7 +406,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             <button
                               type="button"
                               onClick={() => cart.remove(k)}
-                              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition shrink-0"
+                              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive-text transition shrink-0"
                               aria-label="Quitar"
                               title="Quitar del carrito"
                             >
@@ -565,7 +566,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       </div>
                     )}
                     {cuponError && (
-                      <p className="text-xs text-destructive mt-1 inline-flex items-center gap-1">
+                      <p className="text-xs text-destructive-text mt-1 inline-flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {cuponError}
                       </p>
@@ -672,7 +673,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       </span>
                     </div>
                     {sinCanalDePedido && (
-                      <p className="text-xs text-destructive inline-flex items-start gap-1.5">
+                      <p className="text-xs text-destructive-text inline-flex items-start gap-1.5">
                         <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                         Este catálogo no está tomando pedidos online por el momento.
                       </p>

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -49,27 +50,20 @@ interface Deposito {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+const CONTEO_ESTADO: Record<Conteo["estado"], { label: string; tone: StatusTone; icon: typeof PlayCircle }> = {
+  EN_PROGRESO: { label: "En progreso", tone: "info", icon: PlayCircle },
+  FINALIZADO: { label: "Finalizado", tone: "success", icon: CheckCircle2 },
+  CANCELADO: { label: "Cancelado", tone: "muted", icon: XCircle },
+}
+
 function estadoBadge(estado: Conteo["estado"]) {
-  switch (estado) {
-    case "EN_PROGRESO":
-      return (
-        <Badge variant="outline" className="gap-1 border-blue-500/60 text-blue-600">
-          <PlayCircle className="h-3 w-3" /> En progreso
-        </Badge>
-      )
-    case "FINALIZADO":
-      return (
-        <Badge variant="outline" className="gap-1 border-emerald-500/60 text-emerald-600">
-          <CheckCircle2 className="h-3 w-3" /> Finalizado
-        </Badge>
-      )
-    case "CANCELADO":
-      return (
-        <Badge variant="outline" className="gap-1 border-muted-foreground/40 text-muted-foreground">
-          <XCircle className="h-3 w-3" /> Cancelado
-        </Badge>
-      )
-  }
+  const e = CONTEO_ESTADO[estado]
+  if (!e) return null
+  return (
+    <StatusPill tone={e.tone} icon={e.icon}>
+      {e.label}
+    </StatusPill>
+  )
 }
 
 export default function ConteosPage() {

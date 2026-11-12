@@ -3,8 +3,8 @@ import { BusinessLogo } from "@/components/shared/business-logo"
 import { cn } from "@/lib/utils"
 
 const TONOS = {
-  success: "bg-success/10 text-success",
-  error: "bg-destructive/10 text-destructive",
+  success: "bg-success/10 text-success-text",
+  error: "bg-destructive/10 text-destructive-text",
   info: "bg-primary/10 text-primary",
 } as const
 

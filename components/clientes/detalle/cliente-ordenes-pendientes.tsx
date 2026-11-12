@@ -60,7 +60,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
                   <div className="font-medium text-sm">#{o.numeroOrden} · {o.dispositivo}</div>
                   <PaymentStatusBadge status={o.estadoCobro} showIcon={false} className="text-xs mt-0.5" />
                 </div>
-                <div className="font-semibold tabular-nums text-destructive">{formatPrice(o.pendiente)}</div>
+                <div className="font-semibold tabular-nums text-destructive-text">{formatPrice(o.pendiente)}</div>
               </div>
             ))}
           </div>

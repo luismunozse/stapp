@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, Check, X, Loader2, Zap } from "lucide-react"
+import { Copy, Check, X, Zap } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   getWhatsAppTemplates,
@@ -186,9 +187,9 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
             <WhatsAppIcon className="h-5 w-5 text-green-600" />
             Enviar WhatsApp a {context.cliente.nombre}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={handleClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={handleClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -253,13 +254,10 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
             <Button
               onClick={handleSendViaApi}
               className="flex-1 bg-green-600 hover:bg-green-700"
-              disabled={!customMessage.trim() || sendingApi}
+              disabled={!customMessage.trim()}
+              loading={sendingApi}
             >
-              {sendingApi ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="mr-2 h-4 w-4" />
-              )}
+              <Zap className="mr-2 h-4 w-4" />
               Enviar directo
             </Button>
           ) : (

@@ -101,7 +101,7 @@ export function DatePicker({
         {label && (
           <Label htmlFor={id}>
             {label}
-            {required && <span className="text-destructive ml-1">*</span>}
+            {required && <span className="text-destructive-text ml-1">*</span>}
           </Label>
         )}
         <Input
@@ -124,7 +124,7 @@ export function DatePicker({
       {label && (
         <Label htmlFor={id}>
           {label}
-          {required && <span className="text-destructive ml-1">*</span>}
+          {required && <span className="text-destructive-text ml-1">*</span>}
         </Label>
       )}
       <Popover open={open} onOpenChange={setOpen}>

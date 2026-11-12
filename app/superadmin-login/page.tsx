@@ -172,7 +172,7 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive-text px-4 py-3 rounded">
                 <p>{error}</p>
               </div>
             )}
@@ -202,6 +202,7 @@ function LoginForm() {
                   className="pr-10"
                 />
                 <Button
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   type="button"
                   variant="ghost"
                   size="icon"

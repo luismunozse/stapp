@@ -3,12 +3,11 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft,
-  Bug,
-  Lightbulb,
   HelpCircle,
   Send,
   Loader2,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { TICKET_ESTADO, TICKET_PRIORIDAD, TICKET_TIPO } from "@/components/soporte/ticket-config"
 
 interface TicketData {
   id: string
@@ -38,24 +38,9 @@ interface TicketData {
   adjuntos: SupportTicketAttachment[]
 }
 
-const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
-  BUG: { label: "Bug / Error", icon: Bug, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  SUGERENCIA: { label: "Sugerencia", icon: Lightbulb, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  PREGUNTA: { label: "Pregunta", icon: HelpCircle, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-}
-
-const estadoConfig: Record<string, { label: string; color: string }> = {
-  ABIERTO: { label: "Abierto", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  EN_PROCESO: { label: "En proceso", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  RESUELTO: { label: "Resuelto", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  CERRADO: { label: "Cerrado", color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400" },
-}
-
-const prioridadConfig: Record<string, { label: string; color: string }> = {
-  BAJA: { label: "Baja", color: "bg-slate-100 text-slate-600" },
-  MEDIA: { label: "Media", color: "bg-yellow-100 text-yellow-700" },
-  ALTA: { label: "Alta", color: "bg-red-100 text-red-700" },
-}
+const tipoConfig = TICKET_TIPO
+const estadoConfig = TICKET_ESTADO
+const prioridadConfig = TICKET_PRIORIDAD
 
 export function TicketDetail({ ticketId }: { ticketId: string }) {
   const router = useRouter()
@@ -224,9 +209,9 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/soporte")}>
+        <IconButton label="Volver a soporte" variant="ghost" onClick={() => router.push("/soporte")}>
           <ArrowLeft className="h-4 w-4" />
-        </Button>
+        </IconButton>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold truncate">{ticket.asunto}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -361,7 +346,7 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                       alt={`Adjunto ${i + 1}`}
                       className="h-16 w-16 object-cover rounded-lg border"
                     />
-                    <button
+                    <button aria-label="Quitar imagen"
                       onClick={() => removeImage(i)}
                       className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -399,18 +384,16 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                 rows={2}
                 className="resize-none"
               />
-              <Button
+              <IconButton
+                label="Enviar mensaje"
+                variant="default"
                 onClick={handleSend}
-                disabled={sending || (!newMessage.trim() && selectedImages.length === 0)}
-                size="icon"
+                loading={sending}
+                disabled={(!newMessage.trim() && selectedImages.length === 0)}
                 className="shrink-0 self-end"
               >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
+                <Send className="h-4 w-4" />
+              </IconButton>
             </div>
             {ticket.estado === "RESUELTO" && (
               <p className="text-xs text-amber-600 mt-1">

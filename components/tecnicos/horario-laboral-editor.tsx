@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Plus, Trash2, Loader2, Save } from "lucide-react"
@@ -150,15 +151,15 @@ export function HorarioLaboralEditor({ tecnicoId, initial, onSaved }: HorarioLab
                           onChange={(e) => updateFranja(key, idx, "a", e.target.value)}
                           className="h-8 w-28"
                         />
-                        <Button
+                        <IconButton
+                          label="Quitar franja"
                           type="button"
-                          size="icon"
                           variant="ghost"
                           onClick={() => removeFranja(key, idx)}
                           className="h-7 w-7"
                         >
                           <Trash2 className="h-3 w-3" />
-                        </Button>
+                        </IconButton>
                       </div>
                     ))}
                   </div>

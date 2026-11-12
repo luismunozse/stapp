@@ -9,6 +9,7 @@ import {
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ContactRow } from "./contact-row"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { EmptyState } from "@/components/ui/empty-state"
+import { useModal } from "@/contexts/modal-context"
 
 interface Contacto {
   id: string
@@ -45,6 +47,7 @@ const empty: Draft = {
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) {
+  const { confirm } = useModal()
   const { data: contactos = [], mutate } = useSWR<Contacto[]>(
     `/api/proveedores/${proveedorId}/contactos`,
     fetcher,
@@ -112,7 +115,13 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
   }
 
   const remove = async (id: string) => {
-    if (!confirm("¿Eliminar este contacto?")) return
+    const ok = await confirm({
+      title: "¿Eliminar este contacto?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedorId}/contactos/${id}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Contacto eliminado")
@@ -223,12 +232,12 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePrincipal(c)} title={c.principal ? "Quitar como principal" : "Marcar principal"}>
                     <Star className={`h-3.5 w-3.5 ${c.principal ? "fill-yellow-400 text-yellow-400" : ""}`} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(c)}>
+                  <IconButton label="Editar contacto" variant="ghost" className="h-7 w-7" onClick={() => startEdit(c)}>
                     <Edit className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => remove(c.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                  </IconButton>
+                  <IconButton label="Eliminar contacto" variant="ghost" className="h-7 w-7" onClick={() => remove(c.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive-text" />
+                  </IconButton>
                 </div>
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs pl-6">

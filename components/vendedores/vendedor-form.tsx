@@ -224,6 +224,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
                 className="pr-10"
               />
               <Button
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 type="button"
                 variant="ghost"
                 size="icon"

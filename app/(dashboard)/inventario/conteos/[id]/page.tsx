@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +24,7 @@ import {
 } from "lucide-react"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
+import { toast } from "sonner"
 
 interface Conteo {
   id: string
@@ -133,7 +135,9 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
       const matchedInvId = result.item.id
       const conteoItem = items.find((it) => it.inventario?.id === matchedInvId)
       if (!conteoItem) {
-        alert("Item no está en este conteo (revisá filtros del scope)")
+        toast.error("Este artículo no está en el conteo", {
+          description: "Revisá los filtros con los que se armó el conteo.",
+        })
         return
       }
       // Auto-incrementa cantidad. Si nunca se contó, arranca en 1.
@@ -153,7 +157,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
         router.push("/inventario/conteos")
       } else {
         const j = await res.json().catch(() => ({}))
-        alert(j.error || "Error al cancelar")
+        toast.error(j.error || "No se pudo cancelar el conteo")
       }
     } finally {
       setFinalizing(false)
@@ -171,7 +175,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
       })
       const json = await res.json()
       if (!res.ok) {
-        alert(json.error || "Error al finalizar")
+        toast.error(json.error || "No se pudo finalizar el conteo")
         return
       }
       await Promise.all([refetchConteo(), refetchItems()])
@@ -208,9 +212,9 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Link href="/inventario/conteos">
-          <Button variant="ghost" size="icon">
+          <IconButton label="Volver a conteos" variant="ghost">
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -299,7 +303,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
           <Button variant="outline" onClick={() => setShowScanner(true)}>
             <ScanLine className="h-4 w-4 mr-1" /> Escanear
           </Button>
-          <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-destructive hover:text-destructive">
+          <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-destructive-text hover:text-destructive-text">
             Cancelar conteo
           </Button>
           <Button onClick={() => setFinalizeOpen(true)}>
@@ -388,7 +392,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
                       {pending ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
-                        <span className={`text-sm font-bold ${it.diferencia > 0 ? "text-emerald-600" : it.diferencia < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        <span className={`text-sm font-bold ${it.diferencia > 0 ? "text-emerald-600" : it.diferencia < 0 ? "text-destructive-text" : "text-muted-foreground"}`}>
                           {it.diferencia > 0 ? "+" : ""}{it.diferencia}
                         </span>
                       )}

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { X, Upload, Download, AlertCircle, CheckCircle2, FileSpreadsheet } from "lucide-react"
@@ -226,9 +227,9 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Importar {entityLabel}</CardTitle>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
               <X className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">

@@ -61,7 +61,7 @@ export function Transformation() {
               >
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                    <X className="h-3.5 w-3.5 text-destructive" />
+                    <X className="h-3.5 w-3.5 text-destructive-text" />
                   </span>
                   <p className="text-base text-muted-foreground sm:text-lg">
                     {par.dolor}

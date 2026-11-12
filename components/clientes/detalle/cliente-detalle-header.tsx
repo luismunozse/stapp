@@ -15,7 +15,7 @@ import type { ResumenDeudaCliente } from "@/lib/cliente-deuda-resumen"
 import type { Cliente } from "@/types"
 
 const TONE_CLASS = {
-  destructive: "text-destructive",
+  destructive: "text-destructive-text",
   info: "text-info-600",
   muted: "text-muted-foreground",
 } as const

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
-import { Plus, Trash2, Search, Loader2, X } from "lucide-react"
+import { Plus, Trash2, Search, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useDebouncedValue } from "@/components/catalogo/use-debounced-value"
 import {
@@ -383,7 +383,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                     Cliente registrado
                     <button
                       type="button"
-                      className="inline-flex items-center gap-0.5 text-destructive hover:underline"
+                      className="inline-flex items-center gap-0.5 text-destructive-text hover:underline"
                       onClick={() => setValue("clienteId", null)}
                     >
                       <X className="h-3 w-3" /> quitar
@@ -391,7 +391,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                   </p>
                 ) : null}
                 {errors.clienteNombre && (
-                  <p className="text-sm text-destructive">{errors.clienteNombre.message}</p>
+                  <p className="text-sm text-destructive-text">{errors.clienteNombre.message}</p>
                 )}
               </div>
               <div className="space-y-2">
@@ -480,7 +480,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                         <p className="text-xs text-muted-foreground">Ítem libre: no mueve stock</p>
                       )}
                       {errors.items?.[index]?.descripcion && (
-                        <p className="text-sm text-destructive">{errors.items[index]?.descripcion?.message}</p>
+                        <p className="text-sm text-destructive-text">{errors.items[index]?.descripcion?.message}</p>
                       )}
                     </div>
                     {fields.length > 1 && (
@@ -488,7 +488,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="mt-8 text-destructive"
+                        className="mt-8 text-destructive-text"
                         aria-label="Quitar producto"
                         onClick={() => remove(index)}
                       >
@@ -539,7 +539,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                     </p>
                   )}
                   {(errors.items?.[index]?.cantidad || errors.items?.[index]?.precioUnitario) && (
-                    <p className="text-sm text-destructive">
+                    <p className="text-sm text-destructive-text">
                       {errors.items[index]?.cantidad?.message || errors.items[index]?.precioUnitario?.message}
                     </p>
                   )}
@@ -548,7 +548,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
             })}
 
             {errors.items?.message && (
-              <p className="text-sm text-destructive">{errors.items.message}</p>
+              <p className="text-sm text-destructive-text">{errors.items.message}</p>
             )}
           </div>
 
@@ -575,7 +575,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                   />
                 </div>
                 {errors.descuentoGlobal && (
-                  <p className="text-sm text-destructive">{errors.descuentoGlobal.message}</p>
+                  <p className="text-sm text-destructive-text">{errors.descuentoGlobal.message}</p>
                 )}
               </div>
             </div>
@@ -597,7 +597,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                 <span>{formatPrice(totales.subtotal)}</span>
               </div>
               {totales.descuentoTotal > 0 && (
-                <div className="flex justify-between text-destructive">
+                <div className="flex justify-between text-destructive-text">
                   <span>Descuento:</span>
                   <span>-{formatPrice(totales.descuentoTotal)}</span>
                 </div>
@@ -625,13 +625,13 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                 </div>
               )}
               {pendiente > 0 && (
-                <div className="flex justify-between font-medium text-warning">
+                <div className="flex justify-between font-medium text-warning-text">
                   <span>Queda pendiente:</span>
                   <span>{formatPrice(pendiente)}</span>
                 </div>
               )}
               {totalPorDebajoDeLoCobrado && (
-                <p className="pt-1 text-xs text-destructive">
+                <p className="pt-1 text-xs text-destructive-text">
                   El total no puede quedar por debajo de lo ya cobrado. Para devolver dinero registrá una devolución.
                 </p>
               )}
@@ -643,15 +643,8 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || totalPorDebajoDeLoCobrado}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                "Guardar Cambios"
-              )}
+            <Button type="submit" disabled={totalPorDebajoDeLoCobrado} loading={loading}>
+              Guardar Cambios
             </Button>
           </div>
         </form>

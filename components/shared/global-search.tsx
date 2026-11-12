@@ -156,7 +156,7 @@ export function GlobalSearch() {
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12"
               autoComplete="off"
             />
-            <button onClick={handleClose} className="p-1 hover:bg-muted rounded">
+            <button aria-label="Cerrar búsqueda" onClick={handleClose} className="p-1 hover:bg-muted rounded">
               <X className="h-4 w-4" />
             </button>
           </div>

@@ -48,7 +48,7 @@ export function PrediccionRepuestosChart() {
       case "CRITICO":
         return <Badge variant="destructive">Critico</Badge>
       case "BAJO":
-        return <Badge className="bg-warning/15 text-warning dark:bg-warning/20">Bajo</Badge>
+        return <Badge className="bg-warning/15 text-warning-text dark:bg-warning/20">Bajo</Badge>
       case "SIN_USO":
         return <Badge variant="outline">Sin uso</Badge>
       default:

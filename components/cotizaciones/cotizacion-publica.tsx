@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { estadoConfig } from "@/components/cotizaciones/estado-config"
 import { Button } from "@/components/ui/button"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Textarea } from "@/components/ui/textarea"
@@ -104,11 +105,12 @@ interface CotizacionData {
   }[]
 }
 
-const estadoConfig: Record<string, { label: string; color: string }> = {
-  BORRADOR: { label: "Borrador", color: "bg-muted text-muted-foreground" },
-  ENVIADA: { label: "Pendiente de aprobacion", color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
-  ACEPTADA: { label: "Aprobada", color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", color: "bg-destructive/10 text-destructive" },
+// Tono e ícono compartidos con el panel; la etiqueta está pensada para el cliente.
+const etiquetaCliente: Record<string, string> = {
+  BORRADOR: "Borrador",
+  ENVIADA: "Pendiente de aprobación",
+  ACEPTADA: "Aprobada",
+  RECHAZADA: "Rechazada",
 }
 
 export function CotizacionPublica({ token }: { token: string }) {
@@ -235,6 +237,7 @@ export function CotizacionPublica({ token }: { token: string }) {
   }
 
   const config = estadoConfig[data.estado] || estadoConfig.BORRADOR
+  const estadoLabel = etiquetaCliente[data.estado] || config.label
   // Vencida sólo cuando HOY (en la tz de la org) es posterior al día de
   // vencimiento — válida durante todo el día de vencimiento, sin cortar la
   // tarde anterior por el desfase UTC.
@@ -300,7 +303,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               <FileText className="h-5 w-5" />
               {data.numeroCotizacion}
             </CardTitle>
-            <Badge className={config.color}>{config.label}</Badge>
+            <StatusPill tone={config.tone} icon={config.icon}>{estadoLabel}</StatusPill>
           </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
@@ -312,7 +315,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             {data.fechaVencimiento && (
               <div>
                 <p className="text-muted-foreground">Valida hasta</p>
-                <p className={`font-medium ${isExpired ? "text-destructive" : ""}`}>
+                <p className={`font-medium ${isExpired ? "text-destructive-text" : ""}`}>
                   {formatDate(data.fechaVencimiento)}
                   {isExpired && " (Vencida)"}
                 </p>
@@ -610,7 +613,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                     ? `(${data.descuentoGlobalValor}%)`
                     : ""}
                 </span>
-                <span className="text-destructive">-{fmt(globalDiscountAmount)}</span>
+                <span className="text-destructive-text">-{fmt(globalDiscountAmount)}</span>
               </div>
             )}
             {hasIVA && (
@@ -698,15 +701,15 @@ export function CotizacionPublica({ token }: { token: string }) {
       {data.estado === "RECHAZADA" && (
         <Card className="border-destructive/25 bg-destructive/10">
           <CardContent className="flex items-start gap-3 py-4">
-            <XCircle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+            <XCircle className="h-6 w-6 text-destructive-text flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-destructive">Cotizacion rechazada</p>
+              <p className="font-medium text-destructive-text">Cotizacion rechazada</p>
               {(data as any).motivoRechazo && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   Motivo: {(data as any).motivoRechazo}
                 </p>
               )}
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 Contacte al servicio tecnico si desea una nueva cotizacion.
               </p>
             </div>
@@ -741,7 +744,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             </Button>
             <Button
               variant="outline"
-              className="w-full text-destructive hover:text-destructive/80 border-destructive/25 hover:bg-destructive/10"
+              className="w-full text-destructive-text hover:text-destructive-text/80 border-destructive/25 hover:bg-destructive/10"
               onClick={() => setShowReject(true)}
             >
               <XCircle className="mr-2 h-4 w-4" />
@@ -755,7 +758,7 @@ export function CotizacionPublica({ token }: { token: string }) {
       {showReject && (
         <Card className="border-destructive/25">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-destructive">Rechazar cotizacion</CardTitle>
+            <CardTitle className="text-lg text-destructive-text">Rechazar cotizacion</CardTitle>
             <p className="text-sm text-muted-foreground">
               Indique el motivo del rechazo (opcional).
             </p>
@@ -770,7 +773,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               disabled={rejecting}
             />
             {approveError && (
-              <p className="text-sm text-destructive">{approveError}</p>
+              <p className="text-sm text-destructive-text">{approveError}</p>
             )}
             <div className="flex gap-2">
               <Button
@@ -784,14 +787,10 @@ export function CotizacionPublica({ token }: { token: string }) {
               <Button
                 variant="destructive"
                 onClick={handleReject}
-                disabled={rejecting}
                 className="flex-1"
+                loading={rejecting}
               >
-                {rejecting ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Rechazando...</>
-                ) : (
-                  <><XCircle className="mr-2 h-4 w-4" />Confirmar rechazo</>
-                )}
+                <XCircle className="mr-2 h-4 w-4" />Confirmar rechazo
               </Button>
             </div>
           </CardContent>
@@ -823,7 +822,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             />
 
             {approveError && (
-              <p className="text-sm text-destructive">{approveError}</p>
+              <p className="text-sm text-destructive-text">{approveError}</p>
             )}
 
             <div className="flex gap-2">
@@ -843,19 +842,11 @@ export function CotizacionPublica({ token }: { token: string }) {
               <Button
                 className="flex-1"
                 onClick={handleApprove}
-                disabled={approving || (data.tipo !== "PRESUPUESTO" && !firma)}
+                disabled={data.tipo !== "PRESUPUESTO" && !firma}
+                loading={approving}
               >
-                {approving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Aprobando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Confirmar aprobación
-                  </>
-                )}
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Confirmar aprobación
               </Button>
             </div>
           </CardContent>

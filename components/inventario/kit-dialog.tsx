@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -414,7 +415,7 @@ export function KitDialog({
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : !data ? (
-          <div className="py-8 text-center text-sm text-destructive">
+          <div className="py-8 text-center text-sm text-destructive-text">
             {error || "Error al cargar el kit"}
           </div>
         ) : (
@@ -614,14 +615,14 @@ export function KitDialog({
                               }
                               aria-label="Obligatorio"
                             />
-                            <Button
-                              size="icon"
+                            <IconButton
+                              label="Quitar componente"
                               variant="ghost"
                               className="h-7 w-7"
                               onClick={() => eliminarComponente(c.id)}
                             >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive-text" />
+                            </IconButton>
                           </div>
                         </div>
                       )
@@ -704,7 +705,7 @@ export function KitDialog({
                                 <span
                                   className={
                                     insuf
-                                      ? "text-destructive font-medium"
+                                      ? "text-destructive-text font-medium"
                                       : "text-muted-foreground"
                                   }
                                 >
@@ -727,14 +728,11 @@ export function KitDialog({
                     <div className="flex gap-2">
                       <Button
                         onClick={() => ensamblar("ENSAMBLAR")}
-                        disabled={submitting || !validacionEnsamblar.puede}
+                        disabled={!validacionEnsamblar.puede}
                         className="flex-1"
+                        loading={submitting}
                       >
-                        {submitting ? (
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        ) : (
-                          <Hammer className="h-4 w-4 mr-1" />
-                        )}
+                        <Hammer className="h-4 w-4 mr-1" />
                         Ensamblar {cantEnsamblarNum > 0 ? cantEnsamblarNum : ""} kits
                       </Button>
                       <Button
@@ -804,7 +802,7 @@ export function KitDialog({
             </Tabs>
 
             {error && (
-              <p className="text-sm text-destructive flex items-center gap-1">
+              <p className="text-sm text-destructive-text flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {error}
               </p>

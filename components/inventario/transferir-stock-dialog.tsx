@@ -240,7 +240,7 @@ export function TransferirStockDialog({
                 className="mt-1"
               />
               {excedeOrigen && (
-                <p className="text-xs text-destructive mt-1">
+                <p className="text-xs text-destructive-text mt-1">
                   Excede disponible en origen ({origenRow?.disponible})
                 </p>
               )}
@@ -257,7 +257,7 @@ export function TransferirStockDialog({
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive-text">{error}</p>}
           </div>
         )}
 
@@ -267,17 +267,14 @@ export function TransferirStockDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={
-              submitting ||
-              loading ||
+            disabled={loading ||
               data.length < 2 ||
               !origen ||
               !destino ||
               cantInvalida ||
-              excedeOrigen
-            }
+              excedeOrigen}
+            loading={submitting}
           >
-            {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
             Transferir
           </Button>
         </DialogFooter>

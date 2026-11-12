@@ -124,11 +124,11 @@ export function CatalogoCategoriasTab() {
                   )}
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={() => setEditing(cat)}>
+                  <Button aria-label="Editar categoría" variant="outline" size="sm" onClick={() => setEditing(cat)}>
                     <Pencil className="h-3 w-3" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDeleteId(cat.id)}>
-                    <Trash2 className="h-3 w-3 text-destructive" />
+                  <Button aria-label="Eliminar categoría" variant="outline" size="sm" onClick={() => setDeleteId(cat.id)}>
+                    <Trash2 className="h-3 w-3 text-destructive-text" />
                   </Button>
                 </div>
               </CardContent>
@@ -260,7 +260,7 @@ function CategoriaDialog({
                   {imagenUrl ? "Cambiar" : "Subir"}
                 </Button>
                 {imagenUrl && (
-                  <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive"
+                  <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive-text"
                     onClick={() => setImagenUrl(null)}>
                     <X className="h-4 w-4" /> Quitar
                   </Button>

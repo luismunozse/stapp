@@ -274,7 +274,7 @@ function IosWaitlist() {
         )}
 
         {status === "error" && (
-          <p className="text-sm text-destructive mt-2">{errorMsg}</p>
+          <p className="text-sm text-destructive-text mt-2">{errorMsg}</p>
         )}
       </Card>
     </m.div>

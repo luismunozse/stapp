@@ -97,7 +97,7 @@ export function OrdenEstadoCard({
       <CardContent className="space-y-3">
         {esTerminal ? (
           <div className={`text-sm font-medium text-center py-2 px-3 rounded-md ${esRetiro ? "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800" : "bg-muted"}`}>
-            {esRetiro ? "Retirado sin reparacion" : ESTADO_LABELS[estado]}
+            {esRetiro ? "Retirado sin reparación" : ESTADO_LABELS[estado]}
           </div>
         ) : (
           <div className="space-y-2">
@@ -142,8 +142,8 @@ export function OrdenEstadoCard({
 
         {fechaPrometidaVencida && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/25 text-xs">
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
-            <span className="text-destructive font-medium">
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive-text shrink-0" />
+            <span className="text-destructive-text font-medium">
               Fecha prometida vencida
             </span>
           </div>

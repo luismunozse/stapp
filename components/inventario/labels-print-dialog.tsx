@@ -598,7 +598,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                 </p>
               )}
               {printError && (
-                <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                <div className="text-sm text-destructive-text bg-destructive/10 rounded-md px-3 py-2">
                   {printError}
                 </div>
               )}
@@ -666,7 +666,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                       {note && (
                         <div
                           className={`flex items-center gap-1 mt-0.5 text-xs ${
-                            content.printable ? "text-amber-600" : "text-destructive"
+                            content.printable ? "text-amber-600" : "text-destructive-text"
                           }`}
                         >
                           <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -820,7 +820,7 @@ function ThermalConfig({
       )}
 
       {error && (
-        <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2 flex items-center gap-2">
+        <div className="text-sm text-destructive-text bg-destructive/10 rounded-md px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>

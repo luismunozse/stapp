@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -245,41 +246,41 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
       {selectedFoto && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
           <div className="absolute top-4 right-4 flex gap-2">
-            <Button variant="ghost" size="icon" onClick={downloadFoto} className="text-white hover:bg-white/20">
+            <IconButton label="Descargar foto" variant="ghost" onClick={downloadFoto} className="text-white hover:bg-white/20">
               <Download className="h-5 w-5" />
-            </Button>
-            <Button
+            </IconButton>
+            <IconButton
+              label="Eliminar foto"
               variant="ghost"
-              size="icon"
               onClick={() => handleDelete(selectedFoto)}
               disabled={deleting === selectedFoto}
               className="text-white hover:bg-red-500/50"
             >
               <Trash2 className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={closeViewer} className="text-white hover:bg-white/20">
+            </IconButton>
+            <IconButton label="Cerrar visor" variant="ghost" onClick={closeViewer} className="text-white hover:bg-white/20">
               <X className="h-5 w-5" />
-            </Button>
+            </IconButton>
           </div>
 
           {fotos.length > 1 && (
             <>
-              <Button
+              <IconButton
+                label="Foto anterior"
                 variant="ghost"
-                size="icon"
                 onClick={() => navigateFoto("prev")}
                 className="absolute left-4 text-white hover:bg-white/20"
               >
                 <ChevronLeft className="h-8 w-8" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
+                label="Foto siguiente"
                 variant="ghost"
-                size="icon"
                 onClick={() => navigateFoto("next")}
                 className="absolute right-4 text-white hover:bg-white/20"
               >
                 <ChevronRight className="h-8 w-8" />
-              </Button>
+              </IconButton>
             </>
           )}
 

@@ -107,9 +107,9 @@ export function ComparativaIngresos() {
     : Minus
 
   const trendColor = data.cambio.direccion === "up"
-    ? "text-success"
+    ? "text-success-text"
     : data.cambio.direccion === "down"
-    ? "text-destructive"
+    ? "text-destructive-text"
     : "text-muted-foreground"
 
   return (

@@ -432,7 +432,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando comisiones…
             </div>
           ) : error ? (
-            <div role="alert" className="py-12 text-center text-sm text-destructive">
+            <div role="alert" className="py-12 text-center text-sm text-destructive-text">
               No se pudieron cargar las comisiones.
             </div>
           ) : items.length === 0 ? (

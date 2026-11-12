@@ -89,10 +89,10 @@ export function AccesoriosPicker({
                 className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded text-sm"
               >
                 {acc}
-                <button
+                <button aria-label="Quitar accesorio"
                   type="button"
                   onClick={() => onToggle(acc)}
-                  className="hover:text-destructive"
+                  className="hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>

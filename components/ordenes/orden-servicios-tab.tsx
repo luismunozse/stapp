@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -473,9 +474,9 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
                   <span className="font-semibold">
                     {formatPrice(servicio.cantidad * servicio.precioUnitario)}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveServicio(servicio.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <IconButton label="Quitar servicio" variant="ghost" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveServicio(servicio.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive-text" />
+                  </IconButton>
                 </div>
               </div>
             ))}

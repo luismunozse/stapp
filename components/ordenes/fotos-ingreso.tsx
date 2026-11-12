@@ -92,7 +92,7 @@ export function FotosIngreso({
                   alt="Preview"
                   className="w-full h-24 object-cover rounded-lg border"
                 />
-                <button
+                <button aria-label="Eliminar foto"
                   type="button"
                   onClick={() => onRemove(foto.id)}
                   className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"

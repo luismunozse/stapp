@@ -5,7 +5,7 @@ import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { OrderStatusBadge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -23,7 +23,6 @@ import {
   Hash,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-import { cn } from "@/lib/utils"
 
 interface Orden {
   id: string
@@ -44,34 +43,6 @@ interface Response {
   limit: number
   total: number
   totalPages: number
-}
-
-const estadoLabels: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
-  ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Entregado s/reparación",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
-}
-
-const estadoColors: Record<string, string> = {
-  RECIBIDO: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
-  EN_DIAGNOSTICO: "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300",
-  PRESUPUESTADO: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  APROBADO: "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
-  EN_REPARACION: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300",
-  ESPERANDO_REPUESTO: "bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300",
-  REPARADO: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300",
-  ENTREGADO: "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300",
-  ENTREGADO_SIN_REPARACION: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  CANCELADO: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
-  SIN_REPARACION: "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300",
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -197,14 +168,11 @@ export function TecnicoHistorial({ tecnicoId }: { tecnicoId: string }) {
                     <Calendar className="h-3 w-3" />
                     {formatDate(orden.fechaIngreso)}
                   </span>
-                  <Badge
-                    className={cn(
-                      "text-xs whitespace-nowrap",
-                      estadoColors[orden.estado] || "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {estadoLabels[orden.estado] || orden.estado}
-                  </Badge>
+                  <OrderStatusBadge
+                    status={orden.estado}
+                    showIcon={false}
+                    className="text-xs whitespace-nowrap"
+                  />
                 </div>
               </Link>
             ))}

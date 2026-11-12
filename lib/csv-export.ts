@@ -416,6 +416,8 @@ export async function arrayToXLSX<T extends Record<string, any>>(
 export async function triggerDownload(blob: Blob, filename: string): Promise<void> {
   const { Capacitor } = await import("@capacitor/core")
   if (Capacitor.isNativePlatform()) {
+    // Import dinámico: este módulo también corre en el server (generación de xlsx).
+    const { toast } = await import("sonner")
     try {
       const { Filesystem, Directory } = await import("@capacitor/filesystem")
       const base64 = await blobToBase64(blob)
@@ -424,10 +426,10 @@ export async function triggerDownload(blob: Blob, filename: string): Promise<voi
         data: base64,
         directory: Directory.Documents,
       })
-      alert(`Archivo guardado en Documentos: ${filename}`)
+      toast.success("Archivo guardado en Documentos", { description: filename })
     } catch (error) {
       console.error("Error guardando archivo nativo:", error)
-      alert("Error al guardar el archivo")
+      toast.error("No se pudo guardar el archivo")
     }
     return
   }

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { serieEstado } from "@/components/inventario/serie-estado"
 import { Input } from "@/components/ui/input"
 import {
   Hash,
@@ -33,14 +34,6 @@ interface SerieRow {
   lote: { id: string; numero_lote: string } | null
 }
 
-const ESTADO_COLOR: Record<SerieRow["estado"], string> = {
-  DISPONIBLE: "border-emerald-500/60 text-emerald-600",
-  RESERVADO: "border-blue-500/60 text-blue-600",
-  VENDIDO: "border-muted-foreground/40 text-muted-foreground",
-  GARANTIA_ACTIVA: "border-amber-500/60 text-amber-600",
-  DEVUELTO: "border-red-500/60 text-red-600",
-  BLOQUEADO: "border-red-500/60 text-red-600",
-}
 
 export default function SeriesGlobalPage() {
   const { formatDate } = useCurrency()
@@ -107,7 +100,7 @@ export default function SeriesGlobalPage() {
       </Card>
 
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive-text">{error}</p>
       )}
 
       <Card>
@@ -162,12 +155,9 @@ export default function SeriesGlobalPage() {
                         {s.lote?.numero_lote ?? "—"}
                       </td>
                       <td className="p-3">
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${ESTADO_COLOR[s.estado]}`}
-                        >
-                          {s.estado}
-                        </Badge>
+                        <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-xs">
+                          {serieEstado(s.estado).label}
+                        </StatusPill>
                       </td>
                       <td className="p-3 text-xs text-muted-foreground">
                         {s.fecha_venta

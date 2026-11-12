@@ -7,6 +7,7 @@ import { UsageStats } from "@/components/billing/usage-stats"
 import { PaymentHistory } from "@/components/billing/payment-history"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useModal } from "@/contexts/modal-context"
@@ -156,9 +157,9 @@ function BillingContent() {
       {/* Header */}
       <div className="flex items-center gap-3 sm:gap-4">
         <Link href="/configuracion">
-          <Button variant="ghost" size="icon" className="shrink-0">
+          <IconButton label="Volver a configuración" variant="ghost" className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </Link>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Facturación</h1>

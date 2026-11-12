@@ -303,7 +303,7 @@ export function BloqueDeArchivo({
         Deshacer
       </button>
       {stock > 0 && !bloqueo && <span className="text-xs text-muted-foreground">Conserva {unidades(stock)}</span>}
-      {bloqueo && <span className="basis-full text-xs font-medium text-destructive">{bloqueo.motivo}</span>}
+      {bloqueo && <span className="basis-full text-xs font-medium text-destructive-text">{bloqueo.motivo}</span>}
       {aviso && <span className="basis-full text-xs text-muted-foreground">{aviso}</span>}
     </div>
   )

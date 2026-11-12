@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -308,24 +309,24 @@ export function TiposDispositivoEditor() {
                     }`}
                   >
                     <div className="flex flex-col gap-1">
-                      <Button
+                      <IconButton
+                        label="Subir tipo"
                         variant="ghost"
-                        size="icon"
                         className="h-6 w-6"
                         onClick={() => handleMoveItem(tipo.id, "up")}
                         disabled={index === 0}
                       >
                         <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
+                        label="Bajar tipo"
                         variant="ghost"
-                        size="icon"
                         className="h-6 w-6"
                         onClick={() => handleMoveItem(tipo.id, "down")}
                         disabled={index === tipos.length - 1}
                       >
                         <ChevronDown className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -373,7 +374,7 @@ export function TiposDispositivoEditor() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(tipo)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="text-destructive-text hover:text-destructive-text hover:bg-destructive/10"
                         title={tipo.esBase ? "Desactivar tipo" : "Eliminar tipo"}
                       >
                         <Trash2 className="h-4 w-4" />

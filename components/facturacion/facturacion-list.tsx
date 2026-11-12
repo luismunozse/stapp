@@ -31,6 +31,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
 import { GenerarFacturaModal } from "./generar-factura-modal"
+import { toast } from "sonner"
 
 type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
@@ -91,7 +92,7 @@ export function FacturacionList() {
       mutate()
     } catch (error) {
       console.error("Error deleting factura:", error)
-      alert(error instanceof Error ? error.message : "Error al eliminar remito")
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el remito")
     } finally {
       setActionLoading(false)
     }
@@ -115,7 +116,7 @@ export function FacturacionList() {
       mutate()
     } catch (error) {
       console.error("Error voiding factura:", error)
-      alert(error instanceof Error ? error.message : "Error al anular remito")
+      toast.error(error instanceof Error ? error.message : "No se pudo anular el remito")
     } finally {
       setActionLoading(false)
     }
@@ -159,7 +160,7 @@ export function FacturacionList() {
           Generar remito
         </Button>
         <div className="flex border rounded-lg overflow-hidden ml-auto">
-          <Button
+          <Button aria-label="Vista detallada"
             variant={viewMode === "detail" ? "default" : "ghost"}
             size="sm"
             className="rounded-none"
@@ -167,7 +168,7 @@ export function FacturacionList() {
           >
             <LayoutGrid className="h-4 w-4" />
           </Button>
-          <Button
+          <Button aria-label="Vista de lista"
             variant={viewMode === "list" ? "default" : "ghost"}
             size="sm"
             className="rounded-none"
@@ -284,7 +285,7 @@ export function FacturacionList() {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => handleDeleteClick(factura)}
-                                      className="text-destructive hover:text-destructive"
+                                      className="text-destructive-text hover:text-destructive-text"
                                     >
                                       <Trash2 className="h-4 w-4 mr-2" />
                                       Eliminar
@@ -339,7 +340,7 @@ export function FacturacionList() {
                                   size="sm"
                                   onClick={() => handleDeleteClick(factura)}
                                   title="Eliminar"
-                                  className="text-destructive hover:text-destructive"
+                                  className="text-destructive-text hover:text-destructive-text"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

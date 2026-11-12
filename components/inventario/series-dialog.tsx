@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { serieEstado } from "@/components/inventario/serie-estado"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -67,14 +69,6 @@ interface Props {
   onSuccess?: () => void
 }
 
-const ESTADO_COLOR: Record<Serie["estado"], string> = {
-  DISPONIBLE: "border-emerald-500/60 text-emerald-600",
-  RESERVADO: "border-blue-500/60 text-blue-600",
-  VENDIDO: "border-muted-foreground/40 text-muted-foreground",
-  GARANTIA_ACTIVA: "border-amber-500/60 text-amber-600",
-  DEVUELTO: "border-red-500/60 text-red-600",
-  BLOQUEADO: "border-red-500/60 text-red-600",
-}
 
 export function SeriesDialog({
   open,
@@ -369,15 +363,15 @@ export function SeriesDialog({
               </Select>
             </div>
 
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-xs text-destructive-text">{error}</p>}
             {okMsg && <p className="text-xs text-emerald-600">{okMsg}</p>}
 
             <Button
               onClick={handleSubmit}
-              disabled={submitting || candidatos.length === 0}
+              disabled={candidatos.length === 0}
               className="w-full"
+              loading={submitting}
             >
-              {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               Registrar {candidatos.length > 0 ? `(${candidatos.length})` : ""}
             </Button>
           </div>
@@ -429,12 +423,9 @@ export function SeriesDialog({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono text-xs truncate">{s.numero_serie}</span>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs ${ESTADO_COLOR[s.estado]}`}
-                      >
-                        {s.estado}
-                      </Badge>
+                      <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-xs">
+                        {serieEstado(s.estado).label}
+                      </StatusPill>
                     </div>
                     {(s.fecha_venta || s.fecha_garantia_vence) && (
                       <div className="text-xs text-muted-foreground flex items-center gap-3">

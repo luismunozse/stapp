@@ -610,7 +610,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive-text"
               title="Eliminar"
               aria-label="Eliminar"
               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
@@ -847,7 +847,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             </Button>
           </Link>
           <div className="flex items-center border rounded-md">
-            <Button
+            <Button aria-label="Vista de cuadrícula"
               variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
               className="h-8 w-8 p-0 rounded-r-none"
@@ -855,7 +855,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
-            <Button
+            <Button aria-label="Vista de lista"
               variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
               className="h-8 w-8 p-0 rounded-l-none"
@@ -1284,7 +1284,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-muted-foreground hover:text-destructive"
+                              className="text-muted-foreground hover:text-destructive-text"
                               title="Eliminar"
                               aria-label="Eliminar"
                               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
@@ -1320,7 +1320,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <div className="text-center">
                             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
                             <div className={`text-lg font-bold leading-none ${
-                              sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : "text-foreground"
+                              sinStock ? "text-destructive-text" : esStockBajo ? "text-amber-600" : "text-foreground"
                             }`}>
                               {item.stock}
                             </div>

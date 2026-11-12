@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -141,7 +142,7 @@ export function LeadsList() {
                         {formatDate(lead.created_at)}
                       </td>
                       <td className="p-4">
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
+                        <Button aria-label="Ver lead" variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
                           <Eye className="w-4 h-4" />
                         </Button>
                       </td>
@@ -166,9 +167,9 @@ export function LeadsList() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {getEstadoBadge(lead.estado)}
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedLead(lead)}>
+                      <IconButton label="Ver lead" variant="ghost" className="h-7 w-7" onClick={() => setSelectedLead(lead)}>
                         <Eye className="w-3.5 h-3.5" />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
                   <div className="space-y-1.5 text-xs text-muted-foreground">

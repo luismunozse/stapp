@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Moon, Sun, Monitor } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { cn } from "@/lib/utils"
 
 type Theme = "light" | "dark" | "system"
@@ -74,9 +75,9 @@ export function ThemeToggle({ className, variant = "icon" }: ThemeToggleProps) {
   // Prevent hydration mismatch
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className={className} disabled>
+      <IconButton label="Cambiar tema" variant="ghost" className={className} disabled>
         <Sun className="h-5 w-5" />
-      </Button>
+      </IconButton>
     )
   }
 

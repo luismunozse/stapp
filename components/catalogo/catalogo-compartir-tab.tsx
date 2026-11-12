@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -266,7 +267,7 @@ export function CatalogoCompartirTab() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setBannerUrl(null)}
-                    className="gap-1.5 text-destructive"
+                    className="gap-1.5 text-destructive-text"
                   >
                     <Trash2 className="h-4 w-4" />
                     Quitar
@@ -385,7 +386,7 @@ export function CatalogoCompartirTab() {
                       onClick={() => setTrustBadges((prev) => prev.filter((_, j) => j !== i))}
                       aria-label="Quitar sello"
                     >
-                      <X className="h-4 w-4 text-destructive" />
+                      <X className="h-4 w-4 text-destructive-text" />
                     </Button>
                   </div>
                 )
@@ -427,9 +428,9 @@ export function CatalogoCompartirTab() {
             <Label className="text-xs">Link público</Label>
             <div className="flex gap-1 mt-1">
               <Input value={url} readOnly className="font-mono text-xs" />
-              <Button variant="outline" size="icon" onClick={copyUrl}>
+              <IconButton label="Copiar enlace" variant="outline" onClick={copyUrl}>
                 <Copy className="h-4 w-4" />
-              </Button>
+              </IconButton>
               {activo && (
                 <Button variant="outline" size="icon" asChild>
                   <a href={url} target="_blank" rel="noreferrer">

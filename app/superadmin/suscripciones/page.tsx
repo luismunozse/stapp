@@ -438,7 +438,7 @@ export default function SuscripcionesPage() {
       render: (sub) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+            <Button aria-label="Más acciones" size="sm" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => router.push(`/superadmin/organizaciones/${sub.organization?.id}`)}>

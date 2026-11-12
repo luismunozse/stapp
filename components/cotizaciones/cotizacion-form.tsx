@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -15,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, BookOpen, Smartphone, Wrench } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { getCountryConfig } from "@/lib/countries"
@@ -514,9 +515,9 @@ export function CotizacionForm({
               ? isPresupuesto ? "Editar Presupuesto" : "Editar Cotización"
               : isPresupuesto ? "Nuevo Presupuesto" : "Nueva Cotización"}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -594,15 +595,16 @@ export function CotizacionForm({
                         }
                       }}
                     />
-                    <Button
+                    <IconButton
+                      label="Crear sector"
                       type="button"
                       variant="outline"
-                      size="icon"
-                      disabled={!nuevoSectorNombre.trim() || crearSectorLoading}
+                      loading={crearSectorLoading}
+                      disabled={!nuevoSectorNombre.trim()}
                       onClick={handleCrearSector}
                     >
-                      {crearSectorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    </Button>
+                      <Plus className="h-4 w-4" />
+                    </IconButton>
                   </div>
                 </div>
               )}
@@ -756,6 +758,7 @@ export function CotizacionForm({
                         className="flex-1"
                       />
                       <Button
+                        aria-label={condiciones.anticipoTipo === "fijo" ? "Monto fijo en pesos (tocá para pasar a porcentaje)" : "Porcentaje (tocá para pasar a monto fijo)"}
                         type="button"
                         variant={condiciones.anticipoTipo === "fijo" ? "default" : "outline"}
                         size="icon"
@@ -913,6 +916,7 @@ export function CotizacionForm({
                     className="w-32"
                   />
                   <Button
+                    aria-label={descuentoGlobalTipo === "fijo" ? "Monto fijo en pesos (tocá para pasar a porcentaje)" : "Porcentaje (tocá para pasar a monto fijo)"}
                     type="button"
                     variant={descuentoGlobalTipo === "fijo" ? "default" : "outline"}
                     size="icon"

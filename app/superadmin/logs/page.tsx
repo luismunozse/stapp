@@ -548,7 +548,7 @@ export default function LogsPage() {
             {ACTION_LABELS[log.action] || log.action}) —{" "}
             {formatDateTime(log.created_at)}
           </span>
-          <Button
+          <Button aria-label="Contraer detalle"
             size="sm"
             variant="ghost"
             onClick={() => toggleRow(log.id)}
@@ -568,7 +568,7 @@ export default function LogsPage() {
         {changes.before && changes.after ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <span className="text-xs font-medium text-destructive/80 mb-1 block">
+              <span className="text-xs font-medium text-destructive-text/80 mb-1 block">
                 Antes:
               </span>
               <pre className="text-xs overflow-x-auto p-2 bg-destructive/5 rounded border border-destructive/10">
@@ -728,7 +728,7 @@ export default function LogsPage() {
       header: "",
       render: (log) =>
         log.changes ? (
-          <Button
+          <Button aria-label={expandedRows.has(log.id) ? "Contraer detalle" : "Ver detalle"}
             size="sm"
             variant="ghost"
             onClick={(e) => {
@@ -846,9 +846,9 @@ export default function LogsPage() {
             <Card className="border-destructive/50 bg-destructive/5">
               <CardContent className="p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-5 w-5 text-destructive-text flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-destructive">
+                    <p className="text-sm font-medium text-destructive-text">
                       Alto número de intentos fallidos de login
                     </p>
                     <p className="text-sm text-muted-foreground">
@@ -865,7 +865,7 @@ export default function LogsPage() {
                     <Button
                       variant="link"
                       size="sm"
-                      className="h-auto p-0 mt-2 text-destructive"
+                      className="h-auto p-0 mt-2 text-destructive-text"
                       onClick={() => handleTabChange("security")}
                     >
                       Ver detalles en pestaña Seguridad →
@@ -972,14 +972,14 @@ export default function LogsPage() {
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle
-                    className={`h-4 w-4 ${stats.loginsFailed7Days > 0 ? "text-destructive" : "text-muted-foreground"}`}
+                    className={`h-4 w-4 ${stats.loginsFailed7Days > 0 ? "text-destructive-text" : "text-muted-foreground"}`}
                   />
                   <span className="text-xs text-muted-foreground">
                     Fallidos (7d)
                   </span>
                 </div>
                 <p
-                  className={`text-2xl font-bold mt-1 ${stats.loginsFailed7Days > 0 ? "text-destructive" : ""}`}
+                  className={`text-2xl font-bold mt-1 ${stats.loginsFailed7Days > 0 ? "text-destructive-text" : ""}`}
                 >
                   {stats.loginsFailed7Days}
                 </p>

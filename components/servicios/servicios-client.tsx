@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -361,23 +362,23 @@ export function ServiciosClient() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold whitespace-nowrap mr-auto sm:mr-0">{formatPrice(servicio.precio)}</span>
-                <Button
+                <IconButton
+                  label="Editar servicio"
                   variant="ghost"
-                  size="icon"
                   className="h-8 w-8"
                   onClick={() => handleOpenEdit(servicio)}
                 >
                   <Edit className="h-4 w-4" />
-                </Button>
-                <Button
+                </IconButton>
+                <IconButton
+                  label="Eliminar servicio"
                   variant="ghost"
-                  size="icon"
                   className="h-8 w-8"
                   disabled={deletingId === servicio.id}
                   onClick={() => handleDelete(servicio)}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                  <Trash2 className="h-4 w-4 text-destructive-text" />
+                </IconButton>
               </div>
             </div>
           ))}

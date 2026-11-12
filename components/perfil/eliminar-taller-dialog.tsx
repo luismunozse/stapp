@@ -213,7 +213,7 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
         </section>
 
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-sm text-destructive-text">
             {error}
           </p>
         ) : null}

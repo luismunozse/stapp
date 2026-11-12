@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { ArrowLeft, KeyRound } from "lucide-react"
 import { ApiKeysManager } from "@/components/configuracion/api-keys-manager"
 
@@ -11,9 +11,9 @@ export default function ApiKeysPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Link href="/configuracion">
-            <Button variant="ghost" size="icon">
+            <IconButton label="Volver a configuración" variant="ghost">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">

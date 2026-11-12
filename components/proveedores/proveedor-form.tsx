@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -115,7 +116,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormProps) {
-  const { showError } = useModal()
+  const { confirm, showError } = useModal()
   const { pais } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>(proveedor?.tags || [])
@@ -156,7 +157,13 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
 
   const handleLogoRemove = async () => {
     if (!proveedor) return
-    if (!confirm("¿Eliminar logo?")) return
+    const ok = await confirm({
+      title: "¿Eliminar el logo?",
+      description: "El proveedor queda sin logo hasta que subas otro.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedor.id}/logo`, { method: "DELETE" })
     if (res.ok) {
       setLogoUrl(null)
@@ -244,9 +251,9 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{proveedor ? "Editar Proveedor" : "Nuevo Proveedor"}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -286,7 +293,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                     <button
                       type="button"
                       onClick={handleLogoRemove}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-muted text-destructive"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-muted text-destructive-text"
                     >
                       <Trash2 className="h-3 w-3" />
                       Quitar
@@ -305,7 +312,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                 placeholder="Nombre del proveedor"
               />
               {errors.nombre && (
-                <p className="text-sm text-destructive">{errors.nombre.message}</p>
+                <p className="text-sm text-destructive-text">{errors.nombre.message}</p>
               )}
             </div>
 
@@ -332,7 +339,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                 placeholder="5491112345678"
               />
               {errors.whatsapp ? (
-                <p className="text-sm text-destructive">{errors.whatsapp.message}</p>
+                <p className="text-sm text-destructive-text">{errors.whatsapp.message}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Sólo dígitos (10-15). Sin +, espacios ni guiones.
@@ -351,7 +358,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                 placeholder="contacto@proveedor.com"
               />
               {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
+                <p className="text-sm text-destructive-text">{errors.email.message}</p>
               )}
             </div>
           </div>
@@ -373,7 +380,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
               placeholder="https://www.proveedor.com"
             />
             {errors.website && (
-              <p className="text-sm text-destructive">{errors.website.message}</p>
+              <p className="text-sm text-destructive-text">{errors.website.message}</p>
             )}
           </div>
 
@@ -531,7 +538,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                     <button
                       type="button"
                       onClick={() => removeTag(t)}
-                      className="hover:text-destructive"
+                      className="hover:text-destructive-text"
                       aria-label={`Quitar ${t}`}
                     >
                       <X className="h-3 w-3" />
