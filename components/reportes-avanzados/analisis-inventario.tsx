@@ -260,15 +260,15 @@ export function AnalisisInventario() {
                             los roles sin acceso a inventario: se oculta, no se
                             pinta como $0. */}
                         <p className="text-xs text-muted-foreground">
-                          {item.precioCompra !== null
-                            ? `${item.stock} uds x ${formatPrice(item.precioCompra)}`
-                            : `${item.stock} uds`}
+                          {data.resumen.valorCompra === null
+                            ? `${item.stock} uds`
+                            : `${item.stock} uds x ${item.precioCompra == null ? "—" : formatPrice(item.precioCompra)}`}
                         </p>
                       </div>
                     </div>
-                    {item.valorEnStock != null && (
+                    {data.resumen.valorCompra !== null && (
                       <Badge variant="default" className="bg-success text-white text-xs shrink-0">
-                        {formatPrice(item.valorEnStock)}
+                        {item.valorEnStock == null ? "—" : formatPrice(item.valorEnStock)}
                       </Badge>
                     )}
                   </div>

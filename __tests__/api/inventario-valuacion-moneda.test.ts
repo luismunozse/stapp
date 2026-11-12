@@ -146,6 +146,58 @@ describe("reportes de inventario", () => {
   })
 })
 
+describe("precios por ítem en los reportes", () => {
+  const usdMuerto = { ...usd, id: "u", stock: 3 }
+
+  it("inventario-analytics convierte precioCompra a local y no pinta $0 sin cotización", async () => {
+    wireInv([local, usdMuerto])
+    const ok = await parseResponse(await getAnalytics())
+    const u = ok.body.sinMovimiento.find((i: any) => i.id === "u")
+    expect(u.precioCompra).toBe(12000)
+    expect(u.precioVenta).toBe(24000)
+    expect(u.capitalInmovilizado).toBe(36000)
+
+    vi.mocked(resolverTipoCambio).mockResolvedValue(tcNo)
+    const no = await parseResponse(await getAnalytics())
+    const n = no.body.sinMovimiento.find((i: any) => i.id === "u")
+    expect(n.precioCompra).toBeNull()
+    expect(n.precioVenta).toBeNull()
+    expect(n.capitalInmovilizado).toBeNull()
+    // la categoría suma solo lo que tiene equivalente
+    expect(no.body.porCategoria[0].valorCosto).toBe(1000)
+    expect(no.body.valorizacion.excluidosSinCotizacion).toBe(1)
+  })
+
+  it("inventario-analytics degrada si falla la cotización", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(resolverTipoCambio).mockRejectedValue(new Error("boom"))
+    wireInv([local, usdMuerto])
+    const res = await getAnalytics()
+    expect(res.status).toBe(200)
+    const { body } = await parseResponse(res)
+    expect(body.valorizacion.valorCosto).toBe(1000)
+    expect(body.valorizacion.excluidosSinCotizacion).toBe(1)
+  })
+
+  it("analisis-inventario convierte precios por ítem y valorEnStock; null sin equivalente", async () => {
+    wireInv([local, usdMuerto])
+    const ok = await parseResponse(await getAnalisis())
+    const u = ok.body.masValiosos.find((i: any) => i.id === "u")
+    expect(u.precioCompra).toBe(12000)
+    expect(u.precioVenta).toBe(24000)
+    expect(u.valorEnStock).toBe(36000)
+
+    vi.mocked(resolverTipoCambio).mockResolvedValue(tcNo)
+    const no = await parseResponse(await getAnalisis())
+    const all = [...no.body.stockCritico, ...no.body.masValiosos, ...no.body.sinStock]
+    for (const i of all.filter((x: any) => x.id === "u")) {
+      expect(i.precioCompra).toBeNull()
+      expect(i.precioVenta).toBeNull()
+    }
+    expect(no.body.porCategoria[0].valorTotal).toBe(1000)
+  })
+})
+
 describe("GET /api/inventario/analisis-abc", () => {
   const rpcRow = (id: string, extra: Record<string, unknown> = {}) => ({
     inventario_id: id, codigo: id, nombre: id, categoria: "X", tipo_dispositivo: "CELULAR",
@@ -189,9 +241,34 @@ describe("GET /api/inventario/analisis-abc", () => {
     vi.mocked(resolverTipoCambio).mockResolvedValue(tcNo)
     wire()
     const { body } = await parseResponse(await getAbc(createGetRequest()))
-    expect(body.data).toHaveLength(1)
+    // la fila se conserva: revenue y clasificación quedan como los calculó SQL
+    expect(body.data).toHaveLength(2)
+    const b = body.data.find((r: any) => r.inventarioId === "b")
+    expect(b.capitalInmovilizado).toBeNull()
+    expect(b.margenTotal).toBeNull()
+    expect(b.margenUnitario).toBeNull()
+    expect(b.revenue).toBe(72000)
+    expect(b.clasificacionAbc).toBe("A")
+    expect(body.totales.items).toBe(2)
+    expect(body.totales.revenue).toBe(144000)
+    expect(body.resumenAbc.A.count).toBe(2)
+    // solo los totales de valor de stock dejan afuera la fila sin equivalente
     expect(body.totales.capitalInmovilizado).toBe(500)
+    expect(body.totales.capitalMuerto).toBe(500)
+    expect(body.totales.margenTotal).toBe(900)
     expect(body.excluidosSinCotizacion).toBe(1)
+  })
+
+  it("si falla la resolución de la cotización degrada a sin cotización", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(cargarConfigMoneda).mockRejectedValue(new Error("db down"))
+    wire()
+    const res = await getAbc(createGetRequest())
+    expect(res.status).toBe(200)
+    const { body } = await parseResponse(res)
+    expect(body.excluidosSinCotizacion).toBe(1)
+    expect(body.data.find((r: any) => r.inventarioId === "b").capitalInmovilizado).toBeNull()
+    expect(body.totales.capitalInmovilizado).toBe(500)
   })
 
   it("sin ítems en divisa no resuelve cotización", async () => {

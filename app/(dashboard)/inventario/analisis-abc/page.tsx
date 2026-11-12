@@ -23,12 +23,13 @@ interface Row {
   tipoDispositivo: string
   proveedorNombre: string | null
   stockActual: number
-  precioCompra: number
-  precioVenta: number
-  capitalInmovilizado: number
+  precioCompra: number | null
+  precioVenta: number | null
+  /** null: ítem en divisa sin cotización (se muestra "—"). */
+  capitalInmovilizado: number | null
   qtyVendida: number
   revenue: number
-  margenTotal: number
+  margenTotal: number | null
   ventasCount: number
   ultimaVentaAt: string | null
   diasSinVenta: number | null
@@ -108,8 +109,8 @@ export default function AnalisisAbcPage() {
     ]
     const rows = filtered.map((r) => [
       r.codigo, `"${r.nombre.replace(/"/g, '""')}"`, r.categoria, r.proveedorNombre || "",
-      r.stockActual, r.precioCompra, r.precioVenta, r.capitalInmovilizado,
-      r.qtyVendida, r.revenue, r.margenTotal, r.ventasCount,
+      r.stockActual, r.precioCompra ?? "", r.precioVenta ?? "", r.capitalInmovilizado ?? "",
+      r.qtyVendida, r.revenue, r.margenTotal ?? "", r.ventasCount,
       r.diasSinVenta ?? "", r.rotacion, r.diasPromedioStock ?? "",
       r.pctRevenue, r.pctRevenueAcumulado,
       r.clasificacionAbc, r.clasificacionRotacion,
@@ -318,9 +319,9 @@ export default function AnalisisAbcPage() {
                       <td className="p-2 text-right">{r.stockActual}</td>
                       <td className="p-2 text-right">{r.qtyVendida}</td>
                       <td className="p-2 text-right font-medium">{formatPrice(r.revenue)}</td>
-                      <td className="p-2 text-right text-emerald-600">{formatPrice(r.margenTotal)}</td>
+                      <td className="p-2 text-right text-emerald-600">{r.margenTotal == null ? "—" : formatPrice(r.margenTotal)}</td>
                       <td className={`p-2 text-right ${muerta ? "text-destructive-text font-medium" : ""}`}>
-                        {formatPrice(r.capitalInmovilizado)}
+                        {r.capitalInmovilizado == null ? "—" : formatPrice(r.capitalInmovilizado)}
                       </td>
                       <td className="p-2 text-right">{r.rotacion > 0 ? r.rotacion.toFixed(1) : "—"}</td>
                       <td className="p-2 text-right">

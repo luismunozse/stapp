@@ -54,8 +54,10 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
   // un VENDEDOR sin el opt-in de inventario, porque la ruta es
   // requireAdminOrVendedor. Sumar esos null los coerce a 0, así que el total se
   // oculta en vez de mostrar "$0 inmovilizado" sobre una tabla con filas.
-  const costosPorItemOcultos = Array.isArray(data?.sinMovimiento)
-    && data.sinMovimiento.some((i: any) => i.capitalInmovilizado === null || i.precioCompra === null)
+  // Un null suelto por item también puede ser "sin equivalente en moneda local"
+  // (ítem en divisa sin cotización): eso se pinta "—". Lo que oculta la columna es
+  // el null del costo de la organización, que viaja con el mismo gate.
+  const costosPorItemOcultos = data?.valorizacion?.valorCosto === null
 
   // Mismo null para el costo por categoría, que se reduce a un item cuando la
   // categoría tiene un único SKU.
@@ -217,7 +219,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                   <p className="text-xs text-muted-foreground">Productos sin ventas en 90 días con stock disponible</p>
                   {data.sinMovimiento.length > 0 && !costosPorItemOcultos && (
                     <Badge variant="destructive" className="text-xs">
-                      {formatPrice(data.sinMovimiento.reduce((s: number, i: any) => s + i.capitalInmovilizado, 0))} inmovilizado
+                      {formatPrice(data.sinMovimiento.reduce((s: number, i: any) => s + (i.capitalInmovilizado ?? 0), 0))} inmovilizado
                     </Badge>
                   )}
                 </div>
@@ -247,8 +249,8 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 text-right">{item.stock}</td>
                             {!costosPorItemOcultos && (
                               <>
-                                <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
-                                <td className="py-2 text-right font-medium text-destructive-text">{formatPrice(item.capitalInmovilizado)}</td>
+                                <td className="py-2 pr-2 text-right">{item.precioCompra == null ? "—" : formatPrice(item.precioCompra)}</td>
+                                <td className="py-2 text-right font-medium text-destructive-text">{item.capitalInmovilizado == null ? "—" : formatPrice(item.capitalInmovilizado)}</td>
                               </>
                             )}
                           </tr>

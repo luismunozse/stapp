@@ -42,7 +42,8 @@ export async function GET() {
 
     if (inventarioError) throw inventarioError
 
-    const items: ItemInventario[] = (inventario || []).map((item) => ({
+    // Precios crudos, cada uno en la moneda de su ítem (solo para calcular).
+    const raw: ItemInventario[] = (inventario || []).map((item) => ({
       id: item.id,
       codigo: item.codigo,
       nombre: item.nombre,
@@ -52,9 +53,21 @@ export async function GET() {
       precioVenta: item.precio_venta,
       moneda: (item.moneda ?? null) as "USD" | "EUR" | null,
     }))
+    const rawPorId = new Map(raw.map((r) => [r.id, r]))
 
     // Cotización una sola vez y solo si algún ítem está en divisa.
-    const ctx = await resolverContextoValuacion(organizationId!, items)
+    const ctx = await resolverContextoValuacion(organizationId!, raw)
+
+    // Lo que viaja en la respuesta va todo en moneda local: null cuando no hay equivalente.
+    const items: ItemInventario[] = raw.map((r) => ({
+      ...r,
+      precioCompra: r.precioCompra == null ? null : montoLocal(r.precioCompra, r.moneda, ctx),
+      precioVenta: r.precioVenta == null ? null : montoLocal(r.precioVenta, r.moneda, ctx),
+    }))
+    const valorLocalDe = (item: ItemInventario) => {
+      const r = rawPorId.get(item.id)!
+      return montoLocal((r.precioCompra || 0) * r.stock, r.moneda, ctx)
+    }
 
     const { data: orgConfig } = await supabaseAdmin
       .from("organizations")
@@ -81,8 +94,8 @@ export async function GET() {
     const sinStock = items.filter((item) => item.stock === 0)
 
     // Calcular valor total del inventario
-    const vCompra = valuarLocal(items, (item) => (item.precioCompra || 0) * item.stock, ctx)
-    const vVenta = valuarLocal(items, (item) => (item.precioVenta || 0) * item.stock, ctx)
+    const vCompra = valuarLocal(raw, (item) => (item.precioCompra || 0) * item.stock, ctx)
+    const vVenta = valuarLocal(raw, (item) => (item.precioVenta || 0) * item.stock, ctx)
     const valorTotalCompra = vCompra.total
     const valorTotalVenta = vVenta.total
 
@@ -98,7 +111,7 @@ export async function GET() {
       }
       existing.cantidad++
       existing.stockTotal += item.stock
-      existing.valorTotal += montoLocal((item.precioCompra || 0) * item.stock, item.moneda, ctx)
+      existing.valorTotal += valorLocalDe(item) ?? 0
       categoriaMap.set(cat, existing)
     })
 
@@ -120,13 +133,13 @@ export async function GET() {
     // y orden pasan a stock, que ya ve. Para quien sí puede, no cambia nada.
     const masValiososBase = items.map((item) => ({
       ...item,
-      valorEnStock: montoLocal((item.precioCompra || 0) * item.stock, item.moneda, ctx),
+      valorEnStock: valorLocalDe(item),
     }))
 
     const masValiosos = canViewCost
       ? masValiososBase
-          .filter((item) => item.valorEnStock > 0)
-          .sort((a, b) => b.valorEnStock - a.valorEnStock)
+          .filter((item) => (item.valorEnStock ?? 0) > 0)
+          .sort((a, b) => (b.valorEnStock ?? 0) - (a.valorEnStock ?? 0))
           .slice(0, 10)
       : masValiososBase
           .filter((item) => item.stock > 0)
@@ -172,7 +185,7 @@ export async function GET() {
       itemsStockCritico: stockCritico.length,
       categorias: porCategoria.length,
       aproximado: vCompra.aproximado || vVenta.aproximado,
-      excluidosSinCotizacion: contarExcluidos(items, ctx),
+      excluidosSinCotizacion: contarExcluidos(raw, ctx),
     }
 
     // El costo de compra sigue la misma regla que inventario.precio_compra en
@@ -204,7 +217,7 @@ export async function GET() {
     const gateItem = (item: ItemInventario) =>
       canViewCost ? item : { ...item, precioCompra: null }
 
-    const gateValioso = (item: ItemInventario & { valorEnStock: number }) =>
+    const gateValioso = (item: ItemInventario & { valorEnStock: number | null }) =>
       canViewCost ? item : { ...item, precioCompra: null, valorEnStock: null }
 
     const porCategoriaGated = porCategoria.map((cat) => ({

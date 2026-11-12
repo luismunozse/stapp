@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolverContextoValuacion } from "@/lib/currency/valuacion.server"
-import { precioALocal, type MonedaCatalogo } from "@/lib/currency/catalogo"
+import { montoLocal } from "@/lib/currency/valuacion.server"
+import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 
 // GET /api/inventario/analisis-abc?dias=90&diasMuerto=90
 // Devuelve análisis ABC + rotación por item, con totales agregados.
@@ -32,13 +33,14 @@ export async function GET(request: Request) {
       proveedorId: string | null
       proveedorNombre: string | null
       stockActual: number
-      precioCompra: number
-      precioVenta: number
-      capitalInmovilizado: number
+      // null: ítem en divisa sin equivalente local (sin cotización / otra divisa)
+      precioCompra: number | null
+      precioVenta: number | null
+      capitalInmovilizado: number | null
       qtyVendida: number
       revenue: number
-      margenUnitario: number
-      margenTotal: number
+      margenUnitario: number | null
+      margenTotal: number | null
       ventasCount: number
       ultimaVentaAt: string | null
       diasSinVenta: number | null
@@ -102,42 +104,48 @@ export async function GET(request: Request) {
       ? await resolverContextoValuacion(organizationId!, [...monedaPorId.values()])
       : null
 
+    // Todas las filas se conservan: revenue, conteos, porcentajes y clasificación son los de SQL.
+    // Un ítem en divisa sin equivalente queda con capital y margen en null y fuera de los totales
+    // de valor de stock; se cuenta en excluidosSinCotizacion.
     let excluidosSinCotizacion = 0
     let aproximado = false
-    const rows: Row[] = []
-    for (const r of rowsRpc) {
+    const rows: Row[] = rowsRpc.map((r) => {
       const d = monedaPorId.get(r.inventarioId)
-      if (!d || ctx === null) {
-        rows.push(r)
-        continue
-      }
-      const pc = precioALocal(d.pc ?? 0, d.moneda, ctx.config, ctx.tc)
-      const pv = precioALocal(d.pv ?? 0, d.moneda, ctx.config, ctx.tc)
+      if (!d || ctx === null) return r
+      const pc = montoLocal(d.pc ?? 0, d.moneda, ctx)
+      const pv = montoLocal(d.pv ?? 0, d.moneda, ctx)
       if (pc === null || pv === null) {
         excluidosSinCotizacion++
-        continue
+        return {
+          ...r,
+          precioCompra: null,
+          precioVenta: null,
+          capitalInmovilizado: null,
+          margenUnitario: null,
+          margenTotal: null,
+        }
       }
       aproximado = true
       const margenUnitario = pv - pc
-      rows.push({
+      return {
         ...r,
         precioCompra: pc,
         precioVenta: pv,
         capitalInmovilizado: Math.round((Number(r.stockActual) || 0) * pc * 100) / 100,
         margenUnitario: Math.round(margenUnitario * 100) / 100,
         margenTotal: Math.round((Number(r.qtyVendida) || 0) * Math.max(margenUnitario, 0) * 100) / 100,
-      })
-    }
+      }
+    })
 
-    // Totales agregados
+    // Totales agregados (los de valor de stock suman solo filas con equivalente)
     const totales = {
       items: rows.length,
       revenue: rows.reduce((s, r) => s + r.revenue, 0),
-      margenTotal: rows.reduce((s, r) => s + r.margenTotal, 0),
-      capitalInmovilizado: rows.reduce((s, r) => s + r.capitalInmovilizado, 0),
+      margenTotal: rows.reduce((s, r) => s + (r.margenTotal ?? 0), 0),
+      capitalInmovilizado: rows.reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
       capitalMuerto: rows
         .filter((r) => r.clasificacionRotacion === "MUERTA")
-        .reduce((s, r) => s + r.capitalInmovilizado, 0),
+        .reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
     }
 
     const porAbc = {
@@ -166,7 +174,7 @@ export async function GET(request: Request) {
         C: { count: porAbc.C.length, revenue: porAbc.C.reduce((s, r) => s + r.revenue, 0) },
         SIN_VENTAS: {
           count: porAbc.SIN_VENTAS.length,
-          capitalInmovilizado: porAbc.SIN_VENTAS.reduce((s, r) => s + r.capitalInmovilizado, 0),
+          capitalInmovilizado: porAbc.SIN_VENTAS.reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
         },
       },
       resumenRotacion: porRotacion,

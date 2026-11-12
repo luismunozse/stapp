@@ -103,7 +103,7 @@ export async function GET() {
           nombre: item.nombre,
           codigo: item.codigo,
           stock: item.stock,
-          precioVenta: item.precio_venta,
+          precioVenta: montoLocal(item.precio_venta, item.moneda, ctx),
           totalVendido,
           tasaRotacion: Math.round(tasaRotacion * 100) / 100,
         }
@@ -126,14 +126,14 @@ export async function GET() {
         nombre: item.nombre,
         codigo: item.codigo,
         stock: item.stock,
-        precioCompra: item.precio_compra,
-        precioVenta: item.precio_venta,
+        precioCompra: montoLocal(item.precio_compra, item.moneda, ctx),
+        precioVenta: montoLocal(item.precio_venta, item.moneda, ctx),
         capitalInmovilizado: montoLocal((item.stock || 0) * (item.precio_compra || 0), item.moneda, ctx),
       }))
 
     const sinMovimiento = (
       canViewCost
-        ? sinMovimientoBase.sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
+        ? sinMovimientoBase.sort((a, b) => (b.capitalInmovilizado ?? 0) - (a.capitalInmovilizado ?? 0))
         : sinMovimientoBase.sort(
             (a, b) => b.stock - a.stock || (a.nombre || "").localeCompare(b.nombre || "", "es")
           )
@@ -177,8 +177,8 @@ export async function GET() {
       if (!catMap[cat]) catMap[cat] = { categoria: cat, items: 0, stock: 0, valorCosto: 0, valorVenta: 0 }
       catMap[cat].items++
       catMap[cat].stock += item.stock || 0
-      catMap[cat].valorCosto += montoLocal((item.stock || 0) * (item.precio_compra || 0), item.moneda, ctx)
-      catMap[cat].valorVenta += montoLocal((item.stock || 0) * (item.precio_venta || 0), item.moneda, ctx)
+      catMap[cat].valorCosto += montoLocal((item.stock || 0) * (item.precio_compra || 0), item.moneda, ctx) ?? 0
+      catMap[cat].valorVenta += montoLocal((item.stock || 0) * (item.precio_venta || 0), item.moneda, ctx) ?? 0
     })
     const porCategoria = Object.values(catMap).sort((a, b) => b.valorVenta - a.valorVenta)
 
