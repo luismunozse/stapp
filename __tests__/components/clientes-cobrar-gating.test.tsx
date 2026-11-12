@@ -10,7 +10,11 @@ const puedeCobrarMock = vi.fn(() => true)
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { role: "ADMIN" } } }) }))
 vi.mock("@/hooks/use-puede-cobrar", () => ({ usePuedeCobrar: () => puedeCobrarMock() }))
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/clientes",
+}))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, formatDate: (d: string) => d, pais: "AR" }),
 }))

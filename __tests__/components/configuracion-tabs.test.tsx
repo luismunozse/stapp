@@ -52,7 +52,7 @@ const configResponse = {
   plazoPagoDias: null,
 }
 
-const LABELS = ["Secciones", "Empresa", "Facturación", "Comprobantes", "Comisiones", "Avisos", "Seguridad"]
+const LABELS = ["Secciones", "Empresa", "IVA y ARCA", "Comprobantes", "Comisiones", "Avisos", "Seguridad"]
 
 // Slot with its own local state: only forceMount keeps it alive across tab switches.
 function StatefulSlot() {
@@ -126,7 +126,7 @@ describe("ConfiguracionForm — tabs", () => {
   it("honours initialTab", async () => {
     await renderForm({ initialTab: "facturacion" })
 
-    expect(screen.getByRole("tab", { name: "Facturación" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByRole("tab", { name: "IVA y ARCA" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByLabelText("Régimen de IVA")).toBeVisible()
     expect(screen.getByText("slot-secciones")).not.toBeVisible()
   })
@@ -209,7 +209,7 @@ describe("ConfiguracionForm — tabs", () => {
     // Secciones: no save bar
     expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
 
-    for (const label of ["Empresa", "Facturación", "Comprobantes"]) {
+    for (const label of ["Empresa", "IVA y ARCA", "Comprobantes"]) {
       fireEvent.click(screen.getByRole("tab", { name: label }))
       expect(screen.getByRole("button", { name: /Guardar Cambios/ })).toBeInTheDocument()
     }

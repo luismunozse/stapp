@@ -7,39 +7,17 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
-  LayoutDashboard,
-  ClipboardList,
-  Users,
-  Wrench,
-  Hammer,
-  Package,
-  FileMinus,
-  FileText,
-  BarChart3,
   LogOut,
-  Settings,
-  Store,
   MoreHorizontal,
-  TrendingUp,
-  ShoppingCart,
-  Headset,
-  Receipt,
-  Landmark,
   HelpCircle,
   User,
   PanelLeft,
   ChevronsLeft,
-  Mail,
   BookOpen,
   ChevronDown,
-  Wallet,
-  Truck,
-  Percent,
-  BookMarked,
-  CalendarDays,
-  ShieldCheck,
+  CreditCard,
 } from "lucide-react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
@@ -47,6 +25,7 @@ import { useEscapeKey } from "@/hooks/use-escape-key"
 import { isNativePlatform } from "@/lib/capacitor"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { GlobalSearch } from "@/components/shared/global-search"
+import { CommandPaletteTrigger } from "@/components/shared/command-palette-trigger"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { SucursalSwitcher } from "@/components/layout/sucursal-switcher"
@@ -62,109 +41,17 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import {
+  ORG_FEATURES_APAGADAS,
+  accionesVisibles,
+  bottomNavItems,
+  esRutaActiva,
+  seccionesVisibles,
+  type OrgFeatures,
+} from "@/lib/navegacion"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" | "vendedoresManejanCaja"; tecnicoFeatureFlag?: "tecnicosOperanPos" }
-
-type NavSection = { label: string; items: NavItem[] }
-
-// roles = undefined means visible to all roles
-const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
-  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-  { href: "/garantias", label: "Garantías", icon: ShieldCheck, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-  { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
-  { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
-  { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
-  { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
-  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
-  { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
-  { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
-  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
-  { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
-  { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
-  { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
-  { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
-  { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
-  { href: "/notas-credito", label: "Notas de crédito", icon: FileMinus, roles: ["ADMIN"] },
-  { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
-  { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
-  { href: "/soporte", label: "Soporte", icon: Headset },
-]
-
-// Grouped nav sections for desktop sidebar
-// Primer nivel: 6 ítems principales siempre visibles
-// Subítems menos usados agrupados en secciones colapsables
-const navSections: NavSection[] = [
-  {
-    label: "",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-      { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
-      { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-      { href: "/garantias", label: "Garantías", icon: ShieldCheck, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-      { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
-      { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
-      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
-      { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
-    ],
-  },
-  {
-    label: "Ventas",
-    items: [
-      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
-      { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
-      { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
-    ],
-  },
-  {
-    label: "Finanzas",
-    items: [
-      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
-      { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
-      { href: "/notas-credito", label: "Notas de crédito", icon: FileMinus, roles: ["ADMIN"] },
-      { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
-    ],
-  },
-  {
-    label: "Más",
-    items: [
-      { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
-      { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
-      { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
-      { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
-      { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
-      { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
-      { href: "/soporte", label: "Soporte", icon: Headset },
-    ],
-  },
-]
-
-// Items principales para el bottom nav (los 4 más usados, por rol)
-const bottomNavByRole: Record<string, NavItem[]> = {
-  ADMIN: [
-    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
-    { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-    { href: "/clientes", label: "Clientes", icon: Users },
-    { href: "/inventario", label: "Inventario", icon: Package },
-  ],
-  VENDEDOR: [
-    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
-    { href: "/pos", label: "POS", icon: Store },
-    { href: "/ventas", label: "Ventas", icon: ShoppingCart },
-    { href: "/clientes", label: "Clientes", icon: Users },
-    { href: "/inventario", label: "Inventario", icon: Package, vendedorFeatureFlag: "vendedoresAdministranInventario" },
-  ],
-  TECNICO: [
-    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
-    { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-    { href: "/agenda", label: "Agenda", icon: CalendarDays },
-    { href: "/clientes", label: "Clientes", icon: Users },
-  ],
-}
+/** La suscripción a STApp. Solo el ADMIN la gestiona (la ruta es admin-only). */
+const MI_PLAN_HREF = "/configuracion/billing"
 
 export function Navbar() {
   const pathname = usePathname()
@@ -182,12 +69,7 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
-  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean; tecnicosOperanPos: boolean; vendedoresManejanCaja: boolean }>({
-    moduloAgenda: false,
-    vendedoresAdministranInventario: false,
-    tecnicosOperanPos: false,
-    vendedoresManejanCaja: false,
-  })
+  const [orgFeatures, setOrgFeatures] = useState<OrgFeatures>(ORG_FEATURES_APAGADAS)
 
   useEffect(() => {
     let cancelled = false
@@ -213,27 +95,6 @@ export function Navbar() {
       window.removeEventListener("stapp:org-features-updated", onUpdated)
     }
   }, [])
-
-  const isFeatureEnabled = useCallback((flag?: NavItem["featureFlag"]) => {
-    if (!flag) return true
-    return !!orgFeatures[flag]
-  }, [orgFeatures])
-
-  // ADMIN siempre ve el módulo; VENDEDOR solo si la org habilitó el flag.
-  // A diferencia de featureFlag (que oculta para TODOS los roles), esta
-  // gate solo restringe al rol VENDEDOR.
-  const vendedorAllowed = useCallback((item: NavItem) => (
-    userRole !== "VENDEDOR" || !item.vendedorFeatureFlag || !!orgFeatures[item.vendedorFeatureFlag]
-  ), [userRole, orgFeatures])
-
-  // Inverso de vendedorFeatureFlag: en vez de SACARLE el módulo a un rol que ya
-  // está en `roles`, se lo AGREGA a uno que no está. El técnico habilitado ve
-  // el POS sin dejar de ser TECNICO — sigue siendo asignable a órdenes y
-  // conserva "Mi desempeño".
-  const rolePermitido = useCallback((item: NavItem) => {
-    if (!item.roles || item.roles.includes(userRole)) return true
-    return userRole === "TECNICO" && !!item.tecnicoFeatureFlag && !!orgFeatures[item.tecnicoFeatureFlag]
-  }, [userRole, orgFeatures])
 
   useEffect(() => {
     let cancelled = false
@@ -280,37 +141,10 @@ export function Navbar() {
     }
   }, [mobileMenuOpen])
 
-  const allNavItems = [
-    ...navItems.filter(item =>
-      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
-    ),
-    ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
-      { href: "/proveedores", label: "Proveedores", icon: Store }
-    ] : []),
-    ...(isAdmin ? [
-      { href: "/configuracion", label: "Configuración", icon: Settings }
-    ] : [])
-  ]
-
-  // Build grouped sections filtered by role + feature flags
-  const filteredSections = navSections.map(section => ({
-    ...section,
-    items: section.items.filter(item =>
-      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
-    ),
-  })).filter(section => section.items.length > 0)
-
-  // Add extra items to "Más" section
-  const extraItems: NavItem[] = [
-    ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [{ href: "/proveedores", label: "Proveedores", icon: Store }] : []),
-    ...(isAdmin ? [{ href: "/configuracion", label: "Configuración", icon: Settings }] : []),
-  ]
-  const masSection = filteredSections.find(s => s.label === "Más")
-  if (masSection) {
-    masSection.items.push(...extraItems)
-  } else if (extraItems.length > 0) {
-    filteredSections.push({ label: "Más", items: extraItems })
-  }
+  // Todo sale de lib/navegacion: sidebar, menú mobile, barra inferior y paleta.
+  const filteredSections = useMemo(() => seccionesVisibles(userRole, orgFeatures), [userRole, orgFeatures])
+  const allNavItems = useMemo(() => filteredSections.flatMap((section) => section.items), [filteredSections])
+  const acciones = useMemo(() => accionesVisibles(userRole, orgFeatures), [userRole, orgFeatures])
 
   // Collapsible sections state - persisted in localStorage
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
@@ -347,8 +181,7 @@ export function Navbar() {
     }
   }
 
-  const filteredBottomNavItems = (bottomNavByRole[userRole] ?? bottomNavByRole.ADMIN)
-    .filter(item => isFeatureEnabled(item.featureFlag) && vendedorAllowed(item))
+  const filteredBottomNavItems = bottomNavItems(userRole, orgFeatures)
 
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(
@@ -356,12 +189,14 @@ export function Navbar() {
   )
 
   // Verificar si algún item de "más" está activo
-  const isMoreActive = moreItems.some(
-    item => pathname === item.href || pathname.startsWith(item.href + "/")
-  )
+  const isMoreActive = moreItems.some(item => esRutaActiva(pathname, item.href))
 
   return (
     <>
+      {/* Paleta de comandos: un solo montaje (y un solo Ctrl/Cmd+K) para
+          escritorio y mobile. Los disparadores de cada barra solo la abren. */}
+      <GlobalSearch navItems={allNavItems} acciones={acciones} />
+
       {/* Desktop Sidebar */}
       <aside
         className={cn(
@@ -417,7 +252,7 @@ export function Navbar() {
               {filteredSections.map((section) => {
                 const userCollapsed = section.label ? !!collapsedSections[section.label] : false
                 const hasActiveChild = section.items.some(
-                  item => pathname === item.href || pathname.startsWith(item.href + "/")
+                  item => esRutaActiva(pathname, item.href)
                 )
                 // Auto-expand when section contains the active route, even if user collapsed it
                 const isSectionCollapsed = userCollapsed && !hasActiveChild
@@ -455,7 +290,7 @@ export function Navbar() {
                       <div className="space-y-0.5">
                         {section.items.map((item) => {
                           const Icon = item.icon
-                          const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                          const isActive = esRutaActiva(pathname, item.href)
 
                           const linkContent = (
                             <Link
@@ -516,7 +351,7 @@ export function Navbar() {
       )}>
         <PlanBadge />
         <AsistenteNavButton variant="pill" />
-        <GlobalSearch />
+        <CommandPaletteTrigger variant="pill" />
         <DeadlineCalendar />
         <SucursalSwitcher />
         <NotificationBell />
@@ -543,6 +378,14 @@ export function Navbar() {
                 Mi perfil
               </DropdownMenuItem>
             </Link>
+            {isAdmin && (
+              <Link href={MI_PLAN_HREF}>
+                <DropdownMenuItem className="cursor-pointer">
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Mi plan
+                </DropdownMenuItem>
+              </Link>
+            )}
             <Link href="/ayuda/manual">
               <DropdownMenuItem className="cursor-pointer">
                 <BookOpen className="mr-2 h-4 w-4" />
@@ -576,7 +419,7 @@ export function Navbar() {
           </Link>
           <div className="flex items-center gap-1 flex-shrink-0">
             <AsistenteNavButton variant="icon" />
-            <GlobalSearch />
+            <CommandPaletteTrigger variant="icon" />
             <NotificationBell />
             <DeadlineCalendar />
             <ThemeToggle variant="icon" />
@@ -642,7 +485,7 @@ export function Navbar() {
                 <div className="space-y-0.5">
                   {section.items.map((item) => {
                     const Icon = item.icon
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                    const isActive = esRutaActiva(pathname, item.href)
                     return (
                       <Link
                         key={`${item.href}-${item.label}`}
@@ -679,6 +522,16 @@ export function Navbar() {
               <User className="mr-3 h-5 w-5 flex-shrink-0" />
               Mi perfil
             </Link>
+            {isAdmin && (
+              <Link
+                href={MI_PLAN_HREF}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+              >
+                <CreditCard className="mr-3 h-5 w-5 flex-shrink-0" />
+                Mi plan
+              </Link>
+            )}
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
@@ -715,7 +568,7 @@ export function Navbar() {
         <div className={`grid h-16`} style={{ gridTemplateColumns: `repeat(${filteredBottomNavItems.length + 1}, minmax(0, 1fr))` }}>
           {filteredBottomNavItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isActive = esRutaActiva(pathname, item.href)
             return (
               <Link
                 key={item.href}

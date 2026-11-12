@@ -13,7 +13,7 @@ import { watchConsole, settle } from "./helpers/utils"
 test.describe("Performance & UX", () => {
   test("el dashboard carga dentro de un presupuesto razonable", async ({ page }) => {
     await page.goto(ROUTES.dashboard, { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Inicio" })).toBeVisible()
 
     // DOMContentLoaded relativo al inicio de navegación (no incluye datos lazy).
     const timing = await page.evaluate(() => {
@@ -29,7 +29,7 @@ test.describe("Performance & UX", () => {
   test("responsive: el dashboard es usable en mobile (375px)", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await page.goto(ROUTES.dashboard)
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Inicio" })).toBeVisible()
     // No debe haber scroll horizontal (síntoma clásico de layout roto en mobile).
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow, "no debe haber overflow horizontal en mobile").toBeLessThanOrEqual(2)

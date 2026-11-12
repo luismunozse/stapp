@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { PullToRefresh } from "@/components/ui/pull-to-refresh"
@@ -50,6 +50,21 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const puedeCotizar = cotizacionesLoading || hasCotizaciones
   const [showForm, setShowForm] = useState(false)
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+
+  // ?nuevo=1 (paleta de comandos): abre el alta una vez y saca el parámetro
+  // para que recargar o cerrar el formulario no lo vuelva a abrir.
+  const nuevoParam = searchParams?.get("nuevo") === "1"
+  useEffect(() => {
+    if (!nuevoParam) return
+    setShowForm(true)
+    const next = new URLSearchParams(searchParams?.toString() ?? "")
+    next.delete("nuevo")
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nuevoParam])
   const [showImport, setShowImport] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)

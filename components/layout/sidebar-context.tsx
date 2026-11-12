@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
+import { esCampoEditable } from "@/lib/teclado"
 
 const COOKIE_NAME = "sidebar:state"
 const SIDEBAR_WIDTH = "16rem"       // 256px - w-64
@@ -44,10 +45,10 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setCollapsed(!collapsed)
   }, [collapsed, setCollapsed])
 
-  // Atajo de teclado Ctrl+B
+  // Atajo de teclado Ctrl+B. Dentro de un campo la tecla es del campo.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "b") {
+      if (e.ctrlKey && e.key.toLowerCase() === "b" && !esCampoEditable(e.target)) {
         e.preventDefault()
         toggle()
       }

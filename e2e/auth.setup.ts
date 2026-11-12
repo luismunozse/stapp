@@ -34,7 +34,7 @@ setup("authenticate", async ({ page }) => {
 
   // A successful tenant login redirects to the dashboard.
   await page.waitForURL(/\/dashboard/, { timeout: 25_000 })
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Inicio" })).toBeVisible()
 
   await page.context().storageState({ path: STORAGE_STATE })
 

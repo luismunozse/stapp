@@ -6,7 +6,7 @@ export const tourSteps: DriveStep[] = [
   {
     element: "#nav-dashboard",
     popover: {
-      title: "Dashboard",
+      title: "Inicio",
       description:
         "Tu panel principal con el resumen de órdenes, ingresos y actividad reciente de tu taller.",
       side: "right",
