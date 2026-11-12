@@ -55,7 +55,7 @@ const SECTIONS: SettingSection[] = [
       {
         href: "/configuracion/tipos-dispositivo",
         icon: Smartphone,
-        label: "Tipos de Dispositivo",
+        label: "Tipos de dispositivo",
         labelShort: "Dispositivos",
         desc: "Gestioná los tipos de dispositivo",
         descShort: "Tipos disponibles",
@@ -71,7 +71,7 @@ const SECTIONS: SettingSection[] = [
       {
         href: "/configuracion/kiosco",
         icon: Monitor,
-        label: "Modo Kiosco",
+        label: "Modo kiosco",
         labelShort: "Kiosco",
         desc: "Pantallas de estado para tu local",
         descShort: "Pantallas",
@@ -107,7 +107,7 @@ const SECTIONS: SettingSection[] = [
       {
         href: "/configuracion/categorias-gasto",
         icon: Tag,
-        label: "Categorías de Gasto",
+        label: "Categorías de gasto",
         labelShort: "Categorías",
         desc: "Clasificá tus gastos para el cálculo de ganancia",
         descShort: "Clasificación de gastos",
@@ -115,7 +115,7 @@ const SECTIONS: SettingSection[] = [
       {
         href: "/configuracion/gastos-recurrentes",
         icon: Repeat,
-        label: "Gastos Recurrentes",
+        label: "Gastos recurrentes",
         labelShort: "Recurrentes",
         desc: "Alquiler, sueldos y otros gastos fijos",
         descShort: "Alquiler, sueldos, etc",
@@ -145,7 +145,7 @@ const SECTIONS: SettingSection[] = [
       {
         href: "/configuracion/plantillas-whatsapp",
         icon: WhatsAppIcon,
-        label: "Plantillas WhatsApp",
+        label: "Plantillas de WhatsApp",
         labelShort: "Plantillas",
         desc: "Personalizá los mensajes por tipo",
         descShort: "Mensajes predeterminados",

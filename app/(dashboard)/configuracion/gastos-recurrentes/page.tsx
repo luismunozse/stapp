@@ -42,8 +42,8 @@ interface Gasto {
 const METODOS = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "TRANSFERENCIA", label: "Transferencia" },
-  { value: "TARJETA_DEBITO", label: "Tarjeta Débito" },
-  { value: "TARJETA_CREDITO", label: "Tarjeta Crédito" },
+  { value: "TARJETA_DEBITO", label: "Tarjeta de débito" },
+  { value: "TARJETA_CREDITO", label: "Tarjeta de crédito" },
   { value: "MERCADOPAGO", label: "MercadoPago" },
   { value: "OTRO", label: "Otro" },
 ]

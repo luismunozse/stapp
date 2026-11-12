@@ -17,7 +17,7 @@ export default async function WhatsAppConfigPage() {
   return (
     <PageShell
       title="WhatsApp Business"
-      description="Conecta tu cuenta de WhatsApp Business para enviar notificaciones automaticas a tus clientes."
+      description="Conectá tu cuenta de WhatsApp Business para enviar notificaciones automáticas a tus clientes."
       backHref="/configuracion"
       backLabel="Volver a configuración"
     >

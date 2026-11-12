@@ -112,7 +112,7 @@ export function TiposDispositivoEditor() {
 
   const handleDelete = async (tipo: TipoDispositivoCustom) => {
     const confirmed = await confirm({
-      title: tipo.esBase ? "Desactivar Tipo" : "Eliminar Tipo",
+      title: tipo.esBase ? "Desactivar tipo" : "Eliminar tipo",
       description: tipo.esBase
         ? `¿Desactivar el tipo "${tipo.nombre}"? Podrás reactivarlo después.`
         : `¿Eliminar el tipo "${tipo.nombre}"?`,
@@ -189,7 +189,7 @@ export function TiposDispositivoEditor() {
 
     if (!res.ok) {
       const error = await res.json()
-      await showError(error.error || "Error al guardar configuracion")
+      await showError(error.error || "Error al guardar la configuración")
       throw new Error("Save failed")
     }
 
@@ -217,15 +217,15 @@ export function TiposDispositivoEditor() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
-                Tipos de Dispositivo
+                Tipos de dispositivo
               </CardTitle>
               <CardDescription>
-                Administra los tipos de dispositivo disponibles para tu organizacion
+                Administrá los tipos de dispositivo disponibles para tu organización
               </CardDescription>
             </div>
             <Button onClick={() => setShowForm(!showForm)}>
               <Plus className="mr-2 h-4 w-4" />
-              Nuevo Tipo
+              Nuevo tipo
             </Button>
           </div>
         </CardHeader>
@@ -248,7 +248,7 @@ export function TiposDispositivoEditor() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="codigo">Codigo</Label>
+                  <Label htmlFor="codigo">Código</Label>
                   <Input
                     id="codigo"
                     value={codigo}
@@ -258,11 +258,11 @@ export function TiposDispositivoEditor() {
                     className="uppercase"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Solo letras, numeros y guion bajo
+                    Solo letras, números y guion bajo
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="prefijo">Prefijo para ordenes</Label>
+                  <Label htmlFor="prefijo">Prefijo para órdenes</Label>
                   <Input
                     id="prefijo"
                     value={prefijoOrden}
@@ -273,7 +273,7 @@ export function TiposDispositivoEditor() {
                     className="uppercase"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Se usara en el codigo de orden
+                    Se usará en el código de orden
                   </p>
                 </div>
               </div>
@@ -284,7 +284,7 @@ export function TiposDispositivoEditor() {
                   ) : (
                     <Plus className="mr-2 h-4 w-4" />
                   )}
-                  Agregar Tipo
+                  Agregar tipo
                 </Button>
                 <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
                   Cancelar
@@ -343,7 +343,7 @@ export function TiposDispositivoEditor() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 mt-1">
-                        <span>Codigo: {tipo.codigo}</span>
+                        <span>Código: {tipo.codigo}</span>
                         <span>|</span>
                         <span>Prefijo: {tipo.prefijoOrden}</span>
                       </div>

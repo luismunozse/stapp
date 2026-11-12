@@ -33,7 +33,7 @@ const CAMPO_EXTRA_TIPOS = [
   { value: "text", label: "Texto libre" },
   { value: "select", label: "Lista desplegable" },
   { value: "buttons", label: "Botones" },
-  { value: "counter", label: "Contador numerico" },
+  { value: "counter", label: "Contador numérico" },
 ]
 
 export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }: TipoConfigEditorProps) {
@@ -41,7 +41,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
 
   // Campos visibility
   const [imeiVisible, setImeiVisible] = useState(config.campos?.imei?.visible !== false)
-  const [imeiLabel, setImeiLabel] = useState(config.campos?.imei?.label || "Numero de Serie")
+  const [imeiLabel, setImeiLabel] = useState(config.campos?.imei?.label || "Número de serie")
   const [imeiPlaceholder, setImeiPlaceholder] = useState(config.campos?.imei?.placeholder || "")
   const [imeiValidacionImei, setImeiValidacionImei] = useState(config.campos?.imei?.validacion === "imei")
   const [passwordVisible, setPasswordVisible] = useState(config.campos?.password?.visible !== false)
@@ -191,13 +191,13 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                   <Input
                     value={imeiLabel}
                     onChange={(e) => setImeiLabel(e.target.value)}
-                    placeholder="Label"
+                    placeholder="Etiqueta"
                     className="h-7 text-xs"
                   />
                   <Input
                     value={imeiPlaceholder}
                     onChange={(e) => setImeiPlaceholder(e.target.value)}
-                    placeholder="Placeholder"
+                    placeholder="Texto de ejemplo"
                     className="h-7 text-xs"
                   />
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
@@ -215,7 +215,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
 
             {/* Password */}
             <div className="flex items-center justify-between border rounded-lg p-3">
-              <span className="text-sm font-medium">Contrasena</span>
+              <span className="text-sm font-medium">Contraseña</span>
               <button aria-label="Mostrar contraseña" aria-pressed={passwordVisible}
                 type="button"
                 onClick={() => setPasswordVisible(!passwordVisible)}
@@ -336,7 +336,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                   {campo.tipo === "counter" && (
                     <div className="pl-6 flex gap-2">
                       <div>
-                        <Label className="text-xs text-muted-foreground">Min</Label>
+                        <Label className="text-xs text-muted-foreground">Mín.</Label>
                         <Input
                           type="number"
                           value={campo.min ?? 0}
@@ -345,7 +345,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                         />
                       </div>
                       <div>
-                        <Label className="text-xs text-muted-foreground">Max</Label>
+                        <Label className="text-xs text-muted-foreground">Máx.</Label>
                         <Input
                           type="number"
                           value={campo.max ?? 4}
@@ -374,7 +374,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
           )}
           {camposExtra.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-2">
-              Sin campos adicionales. Agrega campos como procesador, RAM, etc.
+              Sin campos adicionales. Agregá campos como procesador, RAM, etc.
             </p>
           )}
         </div>
@@ -382,19 +382,19 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
         {/* Info section styling (only if there are extra fields) */}
         {camposExtra.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium mb-3">Seccion de informacion adicional</h4>
+            <h4 className="text-sm font-medium mb-3">Sección de información adicional</h4>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs">Titulo</Label>
+                <Label className="text-xs">Título</Label>
                 <Input
                   value={infoTitle}
                   onChange={(e) => setInfoTitle(e.target.value)}
-                  placeholder="Informacion del Equipo"
+                  placeholder="Información del equipo"
                   className="h-8 text-xs"
                 />
               </div>
               <div>
-                <Label className="text-xs">Icono (emoji)</Label>
+                <Label className="text-xs">Ícono (emoji)</Label>
                 <Input
                   value={infoIcon}
                   onChange={(e) => setInfoIcon(e.target.value)}
@@ -520,7 +520,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             <Input
               value={nuevoProblema}
               onChange={(e) => setNuevoProblema(e.target.value)}
-              placeholder="Problema comun"
+              placeholder="Problema común"
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addProblema() } }}
             />
@@ -559,7 +559,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             <Input
               value={nuevaCategoria}
               onChange={(e) => setNuevaCategoria(e.target.value)}
-              placeholder="Nueva categoria"
+              placeholder="Nueva categoría"
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategoria() } }}
             />
