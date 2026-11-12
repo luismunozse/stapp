@@ -63,11 +63,11 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Roles y permisos",
-        body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo a todas las funciones. El Técnico puede gestionar órdenes asignadas, ver clientes y cotizaciones. El Vendedor puede gestionar ventas, clientes, POS y proveedores.",
+        body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo a todas las funciones. El Técnico puede gestionar órdenes asignadas, ver clientes y presupuestos. El Vendedor puede gestionar ventas, clientes, POS y proveedores.",
         steps: [
           "Administrador (ADMIN): acceso total — órdenes, inventario, comprobantes, reportes, configuración, técnicos, vendedores, caja y más",
-          "Técnico (TECNICO): órdenes asignadas, clientes, cotizaciones y dashboard",
-          "Vendedor (VENDEDOR): ventas, POS, clientes (puede crearlos y editarlos, pero no eliminarlos), proveedores, reportes de ventas y dashboard",
+          "Técnico (TECNICO): órdenes asignadas, clientes, presupuestos e inicio",
+          "Vendedor (VENDEDOR): ventas, POS, clientes (puede crearlos y editarlos, pero no eliminarlos), proveedores, reportes de ventas e inicio",
         ],
         tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema. Algunos permisos extra de técnicos y vendedores (por ejemplo tomar órdenes sin asignar, o abrir y cerrar la caja) se activan en Configuración > Secciones > Roles y permisos.",
       },
@@ -109,12 +109,12 @@ export const manualSections: ManualSection[] = [
   },
   {
     id: "dashboard",
-    title: "Dashboard",
+    title: "Inicio",
     roles: ["ADMIN", "TECNICO", "VENDEDOR"],
     content: [
       {
         subtitle: "Panel principal",
-        body: "El Dashboard es tu centro de control. Muestra un resumen en tiempo real del estado de tu taller con métricas clave como: total de órdenes, órdenes pendientes, total de clientes, items con stock bajo, ingresos del mes y más.",
+        body: "Inicio es tu centro de control. Muestra un resumen en tiempo real del estado de tu taller con métricas clave como: total de órdenes, órdenes pendientes, total de clientes, items con stock bajo, ingresos del mes y más.",
       },
       {
         subtitle: "Métricas y estadísticas",
@@ -131,7 +131,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Órdenes recientes",
-        body: "En la parte inferior del dashboard verás las últimas órdenes creadas con su estado actual, permitiéndote acceder rápidamente a las más recientes.",
+        body: "En la parte inferior de Inicio verás las últimas órdenes creadas con su estado actual, permitiéndote acceder rápidamente a las más recientes.",
       },
       {
         subtitle: "Campanita de avisos",
@@ -309,7 +309,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Eliminar un cliente",
-        body: "Solo un administrador puede eliminar clientes, y solo si no tienen historial. Si el cliente tiene órdenes, ventas, cotizaciones o cuenta corriente, vas a ver el aviso \"No se puede eliminar un cliente con historial\" y no se borra nada. A los demás roles no les aparece la opción \"Eliminar\".",
+        body: "Solo un administrador puede eliminar clientes, y solo si no tienen historial. Si el cliente tiene órdenes, ventas, presupuestos o cuenta corriente, vas a ver el aviso \"No se puede eliminar un cliente con historial\" y no se borra nada. A los demás roles no les aparece la opción \"Eliminar\".",
         roles: ["ADMIN"],
       },
       {
@@ -458,7 +458,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Alertas de stock bajo",
-        body: "Cuando un producto baja del stock mínimo configurado, aparece una alerta en el Dashboard y en la lista de inventario. Esto te ayuda a reponer antes de quedarte sin repuestos.",
+        body: "Cuando un producto baja del stock mínimo configurado, aparece una alerta en Inicio y en la lista de inventario. Esto te ayuda a reponer antes de quedarte sin repuestos.",
         tip: "Configurá el stock mínimo en función de la demanda habitual de cada repuesto para evitar quedarte sin stock en momentos críticos.",
       },
       {
@@ -641,14 +641,14 @@ export const manualSections: ManualSection[] = [
   },
   {
     id: "cotizaciones",
-    title: "Cotizaciones / Presupuestos",
+    title: "Presupuestos",
     roles: ["ADMIN", "TECNICO"],
     content: [
       {
-        subtitle: "Crear una cotización",
-        body: "Las cotizaciones te permiten enviar presupuestos formales a tus clientes antes de realizar una reparación o venta.",
+        subtitle: "Crear un presupuesto",
+        body: "Los presupuestos te permiten enviar propuestas formales a tus clientes antes de realizar una reparación o venta.",
         steps: [
-          "Andá a \"Cotizaciones\" y hacé clic en \"Nueva Cotización\"",
+          "Andá a \"Presupuestos\" y hacé clic en \"Nuevo presupuesto\"",
           "Seleccioná el cliente",
           "Agregá los items con descripción, cantidad y precio unitario (podés aplicar descuento por item)",
           "Opcionalmente aplicá un descuento global (en monto fijo o porcentaje)",
@@ -657,11 +657,11 @@ export const manualSections: ManualSection[] = [
           "Opcionalmente agregá notas o condiciones",
           "Guardá como borrador o enviá directamente al cliente",
         ],
-        tip: "El IVA en cotizaciones es configurable porque cada país, actividad y régimen fiscal usa una alícuota distinta. Si no discriminás IVA —por ejemplo, si sos monotributista en Argentina—, dejalo en 0%.",
+        tip: "El IVA en los presupuestos es configurable porque cada país, actividad y régimen fiscal usa una alícuota distinta. Si no discriminás IVA —por ejemplo, si sos monotributista en Argentina—, dejalo en 0%.",
       },
       {
-        subtitle: "Estados de cotización",
-        body: "Las cotizaciones pasan por los siguientes estados:",
+        subtitle: "Estados del presupuesto",
+        body: "Los presupuestos pasan por los siguientes estados:",
         steps: [
           "BORRADOR: en preparación, no visible para el cliente",
           "ENVIADA: enviada al cliente por email o enlace",
@@ -670,18 +670,18 @@ export const manualSections: ManualSection[] = [
         ],
       },
       {
-        subtitle: "Enlace público de cotización",
-        body: "Cada cotización genera un enlace público único que podés compartir con el cliente. Desde ahí, el cliente puede ver el detalle, aceptar o rechazar el presupuesto, e incluso firmar digitalmente.",
+        subtitle: "Enlace público del presupuesto",
+        body: "Cada presupuesto genera un enlace público único que podés compartir con el cliente. Desde ahí, el cliente puede ver el detalle, aceptar o rechazar el presupuesto, e incluso firmar digitalmente.",
       },
       {
         subtitle: "Convertir a remito",
-        body: "Una vez aceptada, podés convertir la cotización en remito con un solo clic, trasladando todos los items y montos automáticamente.",
+        body: "Una vez aceptada, podés convertir el presupuesto en remito con un solo clic, trasladando todos los items y montos automáticamente.",
         roles: ["ADMIN"],
         seeAlso: ["facturacion"],
       },
       {
         subtitle: "Firma digital",
-        body: "Las cotizaciones soportan firma digital del cliente. Al aceptar un presupuesto desde el enlace público, el cliente puede firmar directamente en pantalla.",
+        body: "Los presupuestos admiten firma digital del cliente. Al aceptar un presupuesto desde el enlace público, el cliente puede firmar directamente en pantalla.",
       },
     ],
   },
@@ -924,7 +924,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Alertas de vencimiento",
-        body: "El dashboard muestra las garantías próximas a vencer para que puedas anticiparte a posibles reclamos.",
+        body: "Inicio muestra las garantías próximas a vencer para que puedas anticiparte a posibles reclamos.",
         roles: ["ADMIN"],
       },
     ],
@@ -978,7 +978,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Gestión de emails",
-        body: "Desde esta sección podés ver el historial de emails enviados desde STApp: notificaciones de órdenes, cotizaciones enviadas, remitos y comunicaciones con clientes.",
+        body: "Desde esta sección podés ver el historial de emails enviados desde STApp: notificaciones de órdenes, presupuestos enviados, remitos y comunicaciones con clientes.",
       },
       {
         subtitle: "Plantillas de email",
@@ -1132,7 +1132,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Navegación móvil",
-        body: "En móvil, la navegación se adapta con una barra inferior con 4 accesos rápidos: Dashboard, Órdenes, Clientes e Inventario (según tu rol). El resto de las opciones están en el menú \"Más\".",
+        body: "En móvil, la navegación se adapta con una barra inferior con 4 accesos rápidos: Inicio, Órdenes, Clientes e Inventario (según tu rol). El resto de las opciones están en el menú \"Más\".",
       },
       {
         subtitle: "Entrar a tu negocio desde la app",
@@ -1259,7 +1259,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Planes disponibles",
-        body: "STApp ofrece un plan Premium con todas las funciones incluidas. Podés elegir entre facturación mensual o anual (con descuento).",
+        body: "STApp ofrece el plan Profesional con todas las funciones incluidas. Podés elegir entre facturación mensual o anual (con descuento).",
       },
       {
         subtitle: "Métodos de pago",
