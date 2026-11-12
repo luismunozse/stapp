@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { venceLaGracia } from "@/lib/subscriptions/sweep-rules"
 
 export type PlanSlug = "free" | "profesional" | string
 
@@ -525,8 +526,25 @@ export async function hasValidAccess(organizationId: string): Promise<{
     subscription.currentPeriodEnd &&
     new Date(subscription.currentPeriodEnd) <= new Date()
   ) {
+    // Cancelada por el taller: lo pagado ya se uso, termina aca.
+    if (subscription.cancelAtPeriodEnd) {
+      await markCanceled(organizationId)
+      return { hasAccess: false, reason: "canceled", trialInfo }
+    }
     if (subscription.paymentProvider === "MANUAL") {
       await downgradeToFree(organizationId)
+      return { hasAccess: true, trialInfo }
+    }
+    // Con debito automatico MercadoPago sigue reintentando el cobro: misma
+    // gracia que el barrido diario (cron/subscription-sweep), para no cortarle
+    // el sistema a quien va a pagar.
+    if (
+      !venceLaGracia({
+        tienePreapproval: subscription.autoDebito,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        ahora: new Date(),
+      })
+    ) {
       return { hasAccess: true, trialInfo }
     }
     await markPastDue(organizationId)
@@ -572,6 +590,20 @@ async function downgradeToFree(organizationId: string): Promise<void> {
       .eq("organization_id", organizationId)
   } catch (error) {
     console.error("[Subscriptions] Error downgrading to Free:", error)
+  }
+}
+
+/** Cierra una sub ACTIVE que el taller cancelo, al vencer su periodo. */
+async function markCanceled(organizationId: string): Promise<void> {
+  try {
+    if (await isSuperadminOrg(organizationId)) return
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({ status: "CANCELED", cancel_at_period_end: false, updated_at: new Date().toISOString() })
+      .eq("organization_id", organizationId)
+      .eq("status", "ACTIVE")
+  } catch (error) {
+    console.error("[Subscriptions] Error marking canceled:", error)
   }
 }
 

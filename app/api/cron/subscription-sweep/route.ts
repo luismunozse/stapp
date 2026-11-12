@@ -20,6 +20,7 @@ type Sub = {
   payment_provider: string | null
   current_period_end: string | null
   mercadopago_preapproval_id: string | null
+  cancel_at_period_end: boolean | null
   organizations: { slug: string } | { slug: string }[] | null
 }
 
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
     const results = {
       downgradedManual: 0,
       markedPastDue: 0,
+      canceledAtPeriodEnd: 0,
       skipped: 0,
       failed: 0,
       downgradedTrialLimbo: 0,
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
       .from("subscriptions")
       .select(`
         id, organization_id, plan_id, payment_provider, current_period_end,
-        mercadopago_preapproval_id,
+        mercadopago_preapproval_id, cancel_at_period_end,
         organizations!inner ( slug ),
         plans!inner ( tipo )
       `)
@@ -86,6 +88,35 @@ export async function GET(request: Request) {
       const slug = Array.isArray(sub.organizations)
         ? sub.organizations[0]?.slug
         : sub.organizations?.slug
+
+      // Cancelada por el taller: el periodo pago termino y no hay cobro que
+      // esperar. Termina como CANCELED, no como PAST_DUE ("el pago fallo").
+      if (sub.cancel_at_period_end && sub.payment_provider !== "MANUAL") {
+        const { error: upErr } = await supabaseAdmin
+          .from("subscriptions")
+          .update({ status: "CANCELED", cancel_at_period_end: false, updated_at: nowIso })
+          .eq("id", sub.id)
+          .eq("status", "ACTIVE")
+
+        if (upErr) {
+          console.error(`[subscription-sweep] FAIL cancel ${slug}:`, upErr.message)
+          results.failed++
+          continue
+        }
+
+        await supabaseAdmin.from("subscription_history").insert({
+          subscription_id: sub.id,
+          organization_id: sub.organization_id,
+          action: "CANCELED",
+          previous_status: "ACTIVE",
+          new_status: "CANCELED",
+          details: { reason: "cron_sweep_cancel_at_period_end", expired_at: sub.current_period_end },
+          performed_by: "system:cron",
+        })
+
+        results.canceledAtPeriodEnd++
+        continue
+      }
 
       if (sub.payment_provider === "MANUAL") {
         const { error: upErr } = await supabaseAdmin
