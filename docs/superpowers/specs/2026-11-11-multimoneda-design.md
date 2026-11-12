@@ -184,8 +184,13 @@ aplicar fuera de hora pico). Incluye rollback y probes.
    `calcular_costo_kit` se redefinen en migraciones propias de cada entrega (S4–S6), no en
    la 399.
 
-Prerrequisito: la 365 y la 365b aplicadas en producción (se verifica con
-`verify/365_probes.sql` antes del primer deploy de S3).
+Estado en producción (verificado el 2026-11-11 con una consulta de solo lectura): **la 365 y
+la 365b NO están aplicadas**: no existen `organizacion_moneda` ni `sesion_caja_saldos`, ni
+ninguna de las columnas o CHECK de la 365. Por eso S3 aplica primero la 365 y la 365b y después
+la 399, fuera de hora pico, porque la 365 toma ACCESS EXCLUSIVE sobre tablas muy usadas. Como
+la 365 nunca se aplicó, el plan de S3 evalúa corregirla directamente (EUR, `moneda_extranjera`)
+en lugar de crear CHECK que la 399 borra enseguida. Verificación posterior:
+`verify/365_probes.sql` y `verify/399_probes.sql`.
 
 ## 5. Componentes
 
@@ -206,7 +211,7 @@ Prerrequisito: la 365 y la 365b aplicadas en producción (se verifica con
 Cada una es un PR propio. Todo queda apagado detrás de `multimoneda_habilitada` hasta que
 termine S5.
 
-1. **S3:** migración 399, `config-moneda` (EUR), resolvedor y endpoint de cotización, pantalla
+1. **S3:** aplicar 365 + 365b (nunca se aplicaron) y la migración 399, `config-moneda` (EUR), resolvedor y endpoint de cotización, pantalla
    de configuración.
 2. **S4:** catálogo (formularios, listado, valuación, variantes, kits, ajuste masivo, import,
    API v1).
