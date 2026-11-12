@@ -1,32 +1,19 @@
 "use client"
 
-import Link from "next/link"
-import { IconButton } from "@/components/ui/icon-button"
-import { ArrowLeft, KeyRound } from "lucide-react"
+import { KeyRound } from "lucide-react"
 import { ApiKeysManager } from "@/components/configuracion/api-keys-manager"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default function ApiKeysPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <KeyRound className="h-6 w-6" /> API Keys
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Credenciales de acceso programático a la API de STApp.
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <PageShell
+      title="API keys"
+      description="Credenciales de acceso programático a la API de STApp."
+      icon={KeyRound}
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+    >
       <ApiKeysManager />
-    </div>
+    </PageShell>
   )
 }

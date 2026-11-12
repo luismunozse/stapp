@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PersonalInfo } from "@/components/perfil/personal-info"
@@ -151,14 +152,10 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Mi Perfil</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Gestiona tu informacion personal y seguridad
-        </p>
-      </div>
-
+    <PageShell
+      title="Mi perfil"
+      description="Gestiona tu informacion personal y seguridad"
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto">
           <TabsList className="w-auto min-w-full sm:min-w-0">
@@ -270,6 +267,6 @@ export default function PerfilPage() {
           <PushSettings />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }

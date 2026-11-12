@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import {
-  ArrowLeft,
   Plus,
   Pencil,
   Trash2,
@@ -296,28 +295,18 @@ export default function WebhooksPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-start gap-3 sm:items-center">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost" className="shrink-0">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <WebhookIcon className="h-6 w-6" /> Webhooks
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Endpoints que reciben notificaciones HTTPS firmadas con HMAC SHA256
-              cuando ocurren eventos en tu cuenta.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Webhooks"
+      description="Endpoints que reciben notificaciones HTTPS firmadas con HMAC SHA256 cuando ocurren eventos en tu cuenta."
+      icon={WebhookIcon}
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+      actions={
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo webhook
         </Button>
-      </div>
+      }
+    >
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -680,7 +669,7 @@ export default function WebhooksPage() {
         loading={saving}
         onConfirm={handleDelete}
       />
-    </div>
+    </PageShell>
   )
 }
 
