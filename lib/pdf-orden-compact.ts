@@ -400,7 +400,7 @@ export async function generateOrdenCompactPDF(
   const PHONE_TOKENS = new Set(["celular", "telefono", "smartphone", "movil"])
   const isPhone = norm(safe(data.tipoDispositivo)).split(/[^a-z0-9]+/).filter(Boolean).some((tok) => PHONE_TOKENS.has(tok))
   const identificadorLabel = isPhone ? "IMEI" : t(term, "serie")
-  const problema = safe(data.problemaReportado) || "Sin descripcion"
+  const problema = safe(data.problemaReportado) || "Sin descripción"
   const accesorios = safe(data.accesorios)
   const metadataCampos = Array.isArray(data.metadataCampos) ? data.metadataCampos : []
   const metadataText = metadataCampos.map((m) => `${m.label}: ${m.valor}`).join(" · ")
