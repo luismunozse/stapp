@@ -13,7 +13,12 @@ import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizaci
 import { randomBytes } from "crypto"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
-import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import {
+  aplicarAlcanceOrdenes,
+  ordenEnAlcance,
+  resolverAlcanceOrdenesDeSesion,
+  resolverAlcanceOrdenesPorId,
+} from "@/lib/ordenes/alcance-lectura"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -326,7 +331,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
@@ -376,15 +381,23 @@ export async function POST(request: Request) {
     if (data.ordenId) {
       const practica = await rejectIfPractica(data.ordenId, organizationId!)
       if (practica) return practica
-      // Verificar que la orden existe y pertenece a la organización
+      // La orden tiene que ser de la organización y estar en el alcance de
+      // sucursal de quien cotiza: la cotización reescribe su presupuesto y su
+      // costo_final, igual que el PUT al vincularla (ver [id]/route.ts).
       const { data: orden, error: ordenError } = await supabaseAdmin
         .from("ordenes_servicio")
-        .select("id, organization_id, cliente_id")
+        .select("id, organization_id, cliente_id, sucursal_id, tecnico_id")
         .eq("id", data.ordenId)
         .eq("organization_id", organizationId!)
         .single()
 
-      if (ordenError || !orden) {
+      const alcance = await resolverAlcanceOrdenesPorId({
+        role,
+        userId,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+
+      if (ordenError || !orden || !ordenEnAlcance(alcance, orden)) {
         return NextResponse.json(
           { error: "Orden no encontrada" },
           { status: 404 }
