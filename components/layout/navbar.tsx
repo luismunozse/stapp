@@ -219,8 +219,8 @@ export function Navbar() {
                 size="icon"
                 className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent shrink-0"
                 onClick={toggle}
-                aria-label="Colapsar sidebar"
-                title="Colapsar sidebar (Ctrl+B)"
+                aria-label="Contraer barra lateral"
+                title="Contraer barra lateral (Ctrl+B)"
               >
                 <ChevronsLeft className="h-4 w-4" />
               </Button>
@@ -235,8 +235,8 @@ export function Navbar() {
                 size="icon"
                 className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
                 onClick={toggle}
-                aria-label="Expandir sidebar"
-                title="Expandir sidebar (Ctrl+B)"
+                aria-label="Expandir barra lateral"
+                title="Expandir barra lateral (Ctrl+B)"
               >
                 <PanelLeft className="h-4 w-4" />
               </Button>
@@ -405,7 +405,7 @@ export function Navbar() {
               onClick={handleLogout}
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Cerrar Sesión
+              Cerrar sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

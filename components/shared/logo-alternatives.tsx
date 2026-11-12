@@ -733,7 +733,7 @@ export function LogoShowcase() {
 
   return (
     <div className="p-8 space-y-8">
-      <h2 className="text-2xl font-bold mb-6">Alternativas de Logo para STApp</h2>
+      <h2 className="text-2xl font-bold mb-6">Alternativas de logo para STApp</h2>
 
       <div className="grid gap-8">
         {logos.map(({ name, component: Logo, desc }) => (
