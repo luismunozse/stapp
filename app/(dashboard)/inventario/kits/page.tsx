@@ -289,6 +289,7 @@ function NuevoKitDialog({
           stock: 0,
           precioCompra: 0,
           precioVenta: Number(precioVenta) || 0,
+          moneda: null,
         }),
       })
       if (!createRes.ok) {

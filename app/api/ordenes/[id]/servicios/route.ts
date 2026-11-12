@@ -113,6 +113,7 @@ export async function POST(
         codigo: `SRV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         nombre,
         precio: precioUnitario,
+        moneda: null,
       })
       if (catalogoError) console.error("Error guardando en catalogo:", catalogoError)
     }
