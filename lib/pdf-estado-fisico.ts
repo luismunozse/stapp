@@ -24,26 +24,28 @@ const SIZE_TITULO = 9
 const SIZE_LISTA = 7.5
 const LINE_H = 9.5
 const MAX_VISTA_H = 100
+const MAX_VISTA_H_COMPACTO = 56
+const LINE_H_COMPACTO = 8.5
 const PIN_R = 5
 const GAP_VISTAS = 10
 
-function lineasAjustadas(lineas: string[], font: PDFFont, maxW: number): string[] {
+function lineasAjustadas(lineas: string[], font: PDFFont, maxW: number, size = SIZE_LISTA): string[] {
   const salida: string[] = []
   for (const l of lineas) {
-    const partes = wrapPdfTexto(textoSeguro(font, l), font, SIZE_LISTA, maxW)
+    const partes = wrapPdfTexto(textoSeguro(font, l), font, size, maxW)
     salida.push(...(partes.length ? partes : [""]))
   }
   return salida
 }
 
-function medirVistas(e: EstadoFisicoPDF, maxW: number) {
+function medirVistas(e: EstadoFisicoPDF, maxW: number, maxAlto: number) {
   const vistas = diagramaPorRef(e.diagrama).vistas.map((v) => {
     const [, , w, h] = v.viewBox.split(/\s+/).map(Number)
     return { v, w, h }
   })
   const sumW = vistas.reduce((a, x) => a + x.w, 0)
   const maxH = Math.max(...vistas.map((x) => x.h))
-  const scale = Math.min((maxW - GAP_VISTAS * (vistas.length - 1)) / sumW, MAX_VISTA_H / maxH)
+  const scale = Math.min((maxW - GAP_VISTAS * (vistas.length - 1)) / sumW, maxAlto / maxH)
   return { vistas, scale, alto: maxH * scale }
 }
 
@@ -57,8 +59,12 @@ export function dibujarEstadoFisico(
   e: EstadoFisicoPDF,
   box: { x: number; y: number; w: number },
   fonts: { regular: PDFFont; bold: PDFFont },
+  opts: { compacto?: boolean } = {},
 ): number {
   const { regular, bold } = fonts
+  const compacto = opts.compacto === true
+  const lineH = compacto ? LINE_H_COMPACTO : LINE_H
+  const sizeLista = compacto ? 7 : SIZE_LISTA
   let y = box.y
   page.drawText("Estado físico al ingreso", { x: box.x, y: y - 8, size: SIZE_TITULO, font: bold, color: MONO.label })
   y -= 14
@@ -68,10 +74,10 @@ export function dibujarEstadoFisico(
   const diag = e.danos.some((d) => d.momento === "diagnostico") ? lineasEstadoFisico(e, "diagnostico") : []
 
   if (!hayPinsRecepcion && diag.length === 0) {
-    const lineas = lineasAjustadas(recepcion, regular, box.w)
+    const lineas = lineasAjustadas(recepcion, regular, box.w, sizeLista)
     for (const l of lineas) {
-      page.drawText(l, { x: box.x, y: y - 7, size: SIZE_LISTA + 0.5, font: regular, color: MONO.ink })
-      y -= LINE_H + 1
+      page.drawText(l, { x: box.x, y: y - 7, size: sizeLista + 0.5, font: regular, color: MONO.ink })
+      y -= lineH + 1
     }
     return box.y - y + 2
   }
@@ -79,12 +85,12 @@ export function dibujarEstadoFisico(
   const dibujoW = box.w * 0.55
   const listaX = box.x + dibujoW + 14
   const listaW = box.w - dibujoW - 14
-  const { vistas, scale, alto } = medirVistas(e, dibujoW)
+  const { vistas, scale, alto } = medirVistas(e, dibujoW, compacto ? MAX_VISTA_H_COMPACTO : MAX_VISTA_H)
 
   // Vistas una al lado de la otra + pins numerados (todos los momentos, misma numeración que la lista).
   let vx = box.x
   for (const { v, w, h } of vistas) {
-    page.drawSvgPath(v.paths.join(" "), { x: vx, y, scale, borderColor: MONO.ink, borderWidth: 0.8 })
+    page.drawSvgPath(v.paths.join(" "), { x: vx, y, scale, borderColor: MONO.ink, borderWidth: 1 / scale })
     page.drawText(textoSeguro(regular, v.label), { x: vx, y: y - h * scale - 8, size: 6, font: regular, color: MONO.faint })
     for (const d of e.danos.filter((p) => p.vista === v.id)) {
       const cx = vx + Math.min(Math.max(d.x, 0), 1) * w * scale
@@ -100,11 +106,11 @@ export function dibujarEstadoFisico(
   const dibujoH = alto + 12
 
   // Lista a la derecha.
-  const lineasLista = lineasAjustadas(recepcion, regular, listaW)
+  const lineasLista = lineasAjustadas(recepcion, regular, listaW, sizeLista)
   let ly = y
   for (const l of lineasLista) {
-    page.drawText(l, { x: listaX, y: ly - 7, size: SIZE_LISTA, font: regular, color: MONO.ink })
-    ly -= LINE_H
+    page.drawText(l, { x: listaX, y: ly - 7, size: sizeLista, font: regular, color: MONO.ink })
+    ly -= lineH
   }
   y -= Math.max(dibujoH, ly === y ? 0 : y - ly)
 
@@ -113,9 +119,9 @@ export function dibujarEstadoFisico(
     y -= 4
     page.drawText("Detectados en diagnóstico", { x: box.x, y: y - 7, size: SIZE_TITULO - 1, font: bold, color: MONO.label })
     y -= 12
-    for (const l of lineasAjustadas(diag, regular, box.w)) {
-      page.drawText(l, { x: box.x, y: y - 7, size: SIZE_LISTA, font: regular, color: MONO.ink })
-      y -= LINE_H
+    for (const l of lineasAjustadas(diag, regular, box.w, sizeLista)) {
+      page.drawText(l, { x: box.x, y: y - 7, size: sizeLista, font: regular, color: MONO.ink })
+      y -= lineH
     }
   }
   return box.y - y + 2
@@ -127,10 +133,11 @@ export function medirEstadoFisico(
   e: EstadoFisicoPDF,
   w: number,
   fonts: { regular: PDFFont; bold: PDFFont },
+  opts: { compacto?: boolean } = {},
 ): number {
   const probe = doc.addPage([595, 842])
   try {
-    return dibujarEstadoFisico(probe, e, { x: 0, y: 800, w }, fonts)
+    return dibujarEstadoFisico(probe, e, { x: 0, y: 800, w }, fonts, opts)
   } finally {
     doc.removePage(doc.getPageCount() - 1)
   }

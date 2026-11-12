@@ -76,6 +76,7 @@ describe("generateOrdenPDF con estadoFisico", () => {
   })
   it("recepción: dibuja el bloque con la lista y el de diagnóstico", async () => {
     const r = await imprimir({ estadoFisico: base })
+    expect(r.paginas).toBe(1)
     expect(r.texto).toContain("Estado físico al ingreso")
     expect(r.texto).toContain("Golpe (frente)")
     expect(r.texto).toContain("Detectados en diagnóstico")
@@ -83,6 +84,23 @@ describe("generateOrdenPDF con estadoFisico", () => {
   it("sin daños: una línea", async () => {
     const r = await imprimir({ estadoFisico: { diagrama: "celular@1", sinDanos: true, danos: [] } })
     expect(r.texto).toContain("Sin daños visibles al ingreso")
+  })
+  it("recepción sin lugar ni en compacto: el bloque va en una segunda página", async () => {
+    const muchos = {
+      ...base,
+      danos: Array.from({ length: 24 }, (_, i) => ({
+        numero: i + 1,
+        vista: "frente" as const,
+        x: 0.5,
+        y: 0.5,
+        tipo: "rayon" as const,
+        nota: "nota larga ".repeat(12),
+        momento: "recepcion" as const,
+      })),
+    }
+    const r = await imprimir({ estadoFisico: muchos })
+    expect(r.paginas).toBe(2)
+    expect(r.texto).toContain("Estado físico al ingreso")
   })
   it("entrega: el bloque va en una segunda página", async () => {
     const r = await imprimir({ ...ENTREGA, estadoFisico: base })

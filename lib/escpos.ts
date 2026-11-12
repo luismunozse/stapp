@@ -62,7 +62,9 @@ export function textToBytes(text: string): number[] {
       continue
     }
     const code = ch.charCodeAt(0)
-    if (code <= 0x7f) {
+    if (ch === "\u2013" || ch === "\u2014") {
+      bytes.push(0x2d) // guiones largos -> '-'
+    } else if (code <= 0x7f) {
       bytes.push(code) // ASCII == CP858
     } else {
       bytes.push(0x3f) // '?' para lo no mapeado

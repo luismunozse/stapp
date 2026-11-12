@@ -2277,13 +2277,21 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Estado físico al ingreso (diagrama de daños): va en la hoja si cabe en el hueco que
   // reparte esta zona (la hoja es una página fija); si no, en una página aparte al final.
   if (estadoFisico) {
-    const efH = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, { regular: archivoRegular, bold: archivoBold })
+    const efFonts = { regular: archivoRegular, bold: archivoBold }
     const hueco = isPrintSheet ? ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2 : Infinity
+    // Primero a tamaño completo; si no entra, compacto (antes de la firma); si tampoco, página aparte.
+    const efH = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts)
     if (efH + 8 <= hueco) {
-      dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, { regular: archivoRegular, bold: archivoBold })
+      dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts)
       ry -= efH + 8
     } else {
-      estadoFisicoEnPaginaAparte = true
+      const efHCompacto = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts, { compacto: true })
+      if (efHCompacto + 8 <= hueco) {
+        dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts, { compacto: true })
+        ry -= efHCompacto + 8
+      } else {
+        estadoFisicoEnPaginaAparte = true
+      }
     }
   }
   const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0

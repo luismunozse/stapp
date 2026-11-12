@@ -275,7 +275,7 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
           {equipo.accesorios && (
             <div className="whitespace-pre-wrap break-words">Accesorios: {equipo.accesorios}</div>
           )}
-          {equipo.estadoFisico && (
+          {equipo.estadoFisico && lineasEstadoFisico(equipo.estadoFisico, "recepcion").length > 0 && (
             <>
               <div>Estado físico:</div>
               {lineasEstadoFisico(equipo.estadoFisico, "recepcion").map((l, k) => (
