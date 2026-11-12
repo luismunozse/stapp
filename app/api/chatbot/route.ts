@@ -7,6 +7,7 @@ import { getPremiumPrices } from "@/lib/pricing"
 import { extractLeadData, shouldExtract, type ChatTurn } from "@/lib/chatbot/extract-lead-data"
 import { upsertLeadFromConversation } from "@/lib/chatbot/upsert-lead"
 import { CONTACT_EMAIL, CONTACT_PHONE_DISPLAY } from "@/lib/contact"
+import { rateLimitDb } from "@/lib/rate-limit-db"
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -38,6 +39,23 @@ function checkRateLimit(identifier: string): boolean {
   return true
 }
 
+// Topes compartidos entre instancias (tabla rate_limit_buckets). El de arriba
+// es por sessionId, que elige el cliente: no frena a un script. Estos son por
+// IP y uno global por dia, para que el gasto en Anthropic tenga techo.
+const CHATBOT_TOPE_IP_CORTO = { max: 20, windowSeconds: 10 * 60 }
+const CHATBOT_TOPE_IP_DIA = { max: 80, windowSeconds: 24 * 60 * 60 }
+const CHATBOT_TOPE_GLOBAL_DIA = { max: 1500, windowSeconds: 24 * 60 * 60 }
+
+/** x-vercel-forwarded-for lo pone el CDN y el cliente no lo puede falsear. */
+function clientIp(h: Headers): string {
+  return (
+    h.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    h.get("x-real-ip")?.trim() ||
+    "unknown"
+  )
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now()
 
@@ -53,7 +71,24 @@ export async function POST(request: Request) {
     }
 
     const headersList = await headers()
-    const ip = headersList.get("x-forwarded-for") || headersList.get("x-real-ip") || "unknown"
+    const ip = clientIp(headersList)
+
+    const porIp =
+      (await rateLimitDb(`chatbot:ip10m:${ip}`, CHATBOT_TOPE_IP_CORTO.max, CHATBOT_TOPE_IP_CORTO.windowSeconds)) &&
+      (await rateLimitDb(`chatbot:ipdia:${ip}`, CHATBOT_TOPE_IP_DIA.max, CHATBOT_TOPE_IP_DIA.windowSeconds))
+    if (!porIp) {
+      return NextResponse.json(
+        { error: "Demasiados mensajes. Esperá un momento." },
+        { status: 429 }
+      )
+    }
+    if (!(await rateLimitDb("chatbot:global", CHATBOT_TOPE_GLOBAL_DIA.max, CHATBOT_TOPE_GLOBAL_DIA.windowSeconds))) {
+      return NextResponse.json(
+        { error: `El asistente no está disponible ahora. Escribinos a ${CONTACT_EMAIL} o al ${CONTACT_PHONE_DISPLAY}.` },
+        { status: 429 }
+      )
+    }
+
     const userAgent = headersList.get("user-agent") || "unknown"
     const referrer = headersList.get("referer") || headersList.get("referrer") || null
 
