@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolverContextoValuacion } from "@/lib/currency/valuacion.server"
+import { precioALocal, type MonedaCatalogo } from "@/lib/currency/catalogo"
 
 // GET /api/inventario/analisis-abc?dias=90&diasMuerto=90
 // Devuelve análisis ABC + rotación por item, con totales agregados.
@@ -48,7 +50,7 @@ export async function GET(request: Request) {
       clasificacionRotacion: "ALTA" | "MEDIA" | "BAJA" | "MUERTA" | "NUEVA"
     }
 
-    const rows: Row[] = (data || []).map((r: any) => ({
+    const rowsRpc: Row[] = (data || []).map((r: any) => ({
       inventarioId: r.inventario_id,
       codigo: r.codigo,
       nombre: r.nombre,
@@ -74,6 +76,58 @@ export async function GET(request: Request) {
       clasificacionAbc: r.clasificacion_abc,
       clasificacionRotacion: r.clasificacion_rotacion,
     }))
+
+    // La función SQL calcula capital y margen con el precio crudo. Los ítems en divisa se
+    // recalculan en local; sin equivalente (sin cotización / otra divisa) se excluyen y se cuentan.
+    const ids = rowsRpc.map((r) => r.inventarioId)
+    const monedaPorId = new Map<string, { moneda: MonedaCatalogo; pc: number | null; pv: number | null }>()
+    if (ids.length > 0) {
+      const { data: precios, error: preciosErr } = await supabaseAdmin
+        .from("inventario")
+        .select("id, moneda, precio_compra, precio_venta")
+        .eq("organization_id", organizationId!)
+        .in("id", ids)
+      if (preciosErr) throw preciosErr
+      for (const p of precios || []) {
+        if (p.moneda != null) {
+          monedaPorId.set(p.id, {
+            moneda: p.moneda as MonedaCatalogo,
+            pc: p.precio_compra == null ? null : Number(p.precio_compra),
+            pv: p.precio_venta == null ? null : Number(p.precio_venta),
+          })
+        }
+      }
+    }
+    const ctx = monedaPorId.size > 0
+      ? await resolverContextoValuacion(organizationId!, [...monedaPorId.values()])
+      : null
+
+    let excluidosSinCotizacion = 0
+    let aproximado = false
+    const rows: Row[] = []
+    for (const r of rowsRpc) {
+      const d = monedaPorId.get(r.inventarioId)
+      if (!d || ctx === null) {
+        rows.push(r)
+        continue
+      }
+      const pc = precioALocal(d.pc ?? 0, d.moneda, ctx.config, ctx.tc)
+      const pv = precioALocal(d.pv ?? 0, d.moneda, ctx.config, ctx.tc)
+      if (pc === null || pv === null) {
+        excluidosSinCotizacion++
+        continue
+      }
+      aproximado = true
+      const margenUnitario = pv - pc
+      rows.push({
+        ...r,
+        precioCompra: pc,
+        precioVenta: pv,
+        capitalInmovilizado: Math.round((Number(r.stockActual) || 0) * pc * 100) / 100,
+        margenUnitario: Math.round(margenUnitario * 100) / 100,
+        margenTotal: Math.round((Number(r.qtyVendida) || 0) * Math.max(margenUnitario, 0) * 100) / 100,
+      })
+    }
 
     // Totales agregados
     const totales = {
@@ -103,6 +157,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       periodo: { dias, diasMuerto },
+      aproximado,
+      excluidosSinCotizacion,
       totales,
       resumenAbc: {
         A: { count: porAbc.A.length, revenue: porAbc.A.reduce((s, r) => s + r.revenue, 0) },

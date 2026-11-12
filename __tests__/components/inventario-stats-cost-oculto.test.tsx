@@ -92,3 +92,52 @@ describe("InventarioProveedorStats — valor a costo con valor nulo", () => {
     await waitFor(() => expect(screen.getByText("Valor a costo")).toBeInTheDocument())
   })
 })
+
+describe("valuación con ítems en divisa", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("InventarioStats antepone ≈ y avisa los excluidos (singular y plural)", async () => {
+    stubFetch({
+      totalSkus: 3, valorCosto: 1000, valorVenta: 5000, sinStock: 0, bajoStock: 0, valorEnRiesgo: 200,
+      aproximado: true, excluidosSinCotizacion: 1,
+    })
+    render(<InventarioStats refreshKey={11} />)
+    await waitFor(() => expect(screen.getByText("≈ $1000")).toBeInTheDocument())
+    expect(screen.getByText("1 producto en divisa sin cotización no se incluye")).toBeInTheDocument()
+  })
+
+  it("InventarioStats no muestra ≈ ni aviso si no hay divisa", async () => {
+    stubFetch({
+      totalSkus: 3, valorCosto: 1000, valorVenta: 5000, sinStock: 0, bajoStock: 0, valorEnRiesgo: 200,
+      aproximado: false, excluidosSinCotizacion: 0,
+    })
+    render(<InventarioStats refreshKey={12} />)
+    await waitFor(() => expect(screen.getByText("$1000")).toBeInTheDocument())
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/sin cotización/)).not.toBeInTheDocument()
+  })
+
+  it("InventarioStats avisa en plural", async () => {
+    stubFetch({
+      totalSkus: 3, valorCosto: 1000, valorVenta: 5000, sinStock: 0, bajoStock: 0, valorEnRiesgo: 200,
+      aproximado: false, excluidosSinCotizacion: 3,
+    })
+    render(<InventarioStats refreshKey={13} />)
+    await waitFor(() =>
+      expect(screen.getByText("3 productos en divisa sin cotización no se incluyen")).toBeInTheDocument()
+    )
+  })
+
+  it("InventarioProveedorStats antepone ≈ y avisa los excluidos", async () => {
+    stubFetch({
+      totalArticulos: 4, totalStock: 20, valorVenta: 8000, itemsBajoStock: 0, itemsSinStock: 0,
+      truncated: false, valorCosto: 3000, margenEstimado: 5000, aproximado: true, excluidosSinCotizacion: 2,
+    })
+    render(<InventarioProveedorStats proveedorNombre="ACME" proveedorId="prov-9" />)
+    await waitFor(() => expect(screen.getByText("≈ $3000")).toBeInTheDocument())
+    expect(screen.getByText("2 productos en divisa sin cotización no se incluyen")).toBeInTheDocument()
+  })
+})

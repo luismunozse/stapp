@@ -9,6 +9,7 @@ import { Package, AlertTriangle, DollarSign, Layers, TrendingUp, AlertCircle } f
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 import {
   PieChart,
   Pie,
@@ -55,6 +56,8 @@ interface AnalisisData {
     itemsSinStock: number
     itemsStockCritico: number
     categorias: number
+    aproximado?: boolean
+    excluidosSinCotizacion?: number
   }
   stockCritico: ItemInventario[]
   sinStock: ItemInventario[]
@@ -157,7 +160,7 @@ export function AnalisisInventario() {
         {data.resumen.valorCompra !== null && (
           <StatCard
             title="Valor Inventario"
-            value={formatPrice(data.resumen.valorCompra)}
+            value={`${prefijoAprox(data.resumen.aproximado)}${formatPrice(data.resumen.valorCompra)}`}
             description="Costo compra"
             icon={DollarSign}
             tone="default"
@@ -166,7 +169,7 @@ export function AnalisisInventario() {
         {data.resumen.margenPotencial !== null && (
           <StatCard
             title="Margen Pot."
-            value={formatPrice(data.resumen.margenPotencial)}
+            value={`${prefijoAprox(data.resumen.aproximado)}${formatPrice(data.resumen.margenPotencial)}`}
             description="Si se vende todo"
             icon={TrendingUp}
             tone="success"
@@ -180,6 +183,7 @@ export function AnalisisInventario() {
           tone="warning"
         />
       </div>
+      <AvisoExcluidos n={data.resumen.excluidosSinCotizacion} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Chart por Categoría */}

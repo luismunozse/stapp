@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search, BarChart3, Flame, TrendingUp, TrendingDown, Skull, Sparkles, Download } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 
 type AbcClass = "A" | "B" | "C" | "SIN_VENTAS"
 type RotClass = "ALTA" | "MEDIA" | "BAJA" | "MUERTA" | "NUEVA"
@@ -41,6 +42,8 @@ interface Row {
 
 interface Resp {
   periodo: { dias: number; diasMuerto: number }
+  aproximado?: boolean
+  excluidosSinCotizacion?: number
   totales: { items: number; revenue: number; margenTotal: number; capitalInmovilizado: number; capitalMuerto: number }
   resumenAbc: {
     A: { count: number; revenue: number }
@@ -173,15 +176,16 @@ export default function AnalisisAbcPage() {
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <div className="text-xs uppercase text-muted-foreground">Capital inmovilizado</div>
-              <div className="text-lg font-bold">{formatPrice(data.totales.capitalInmovilizado)}</div>
+              <div className="text-lg font-bold">{prefijoAprox(data.aproximado)}{formatPrice(data.totales.capitalInmovilizado)}</div>
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
                 <Skull className="h-3 w-3" /> Capital muerto
               </div>
-              <div className="text-lg font-bold text-destructive-text">{formatPrice(data.totales.capitalMuerto)}</div>
+              <div className="text-lg font-bold text-destructive-text">{prefijoAprox(data.aproximado)}{formatPrice(data.totales.capitalMuerto)}</div>
             </CardContent></Card>
           </div>
+          <AvisoExcluidos n={data.excluidosSinCotizacion} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>

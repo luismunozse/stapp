@@ -5,6 +5,7 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolverContextoValuacion, valuarLocal, contarExcluidos, montoLocal } from "@/lib/currency/valuacion.server"
 
 interface ItemInventario {
   id: string
@@ -14,6 +15,7 @@ interface ItemInventario {
   stock: number
   precioCompra: number | null
   precioVenta: number | null
+  moneda: "USD" | "EUR" | null
 }
 
 interface CategoriaResumen {
@@ -35,7 +37,7 @@ export async function GET() {
     // Obtener todo el inventario
     const { data: inventario, error: inventarioError } = await supabaseAdmin
       .from("inventario")
-      .select("id, codigo, nombre, categoria, stock, precio_compra, precio_venta")
+      .select("id, codigo, nombre, categoria, stock, precio_compra, precio_venta, moneda")
       .eq("organization_id", organizationId!)
 
     if (inventarioError) throw inventarioError
@@ -48,7 +50,11 @@ export async function GET() {
       stock: item.stock || 0,
       precioCompra: item.precio_compra,
       precioVenta: item.precio_venta,
+      moneda: (item.moneda ?? null) as "USD" | "EUR" | null,
     }))
+
+    // Cotización una sola vez y solo si algún ítem está en divisa.
+    const ctx = await resolverContextoValuacion(organizationId!, items)
 
     const { data: orgConfig } = await supabaseAdmin
       .from("organizations")
@@ -75,14 +81,10 @@ export async function GET() {
     const sinStock = items.filter((item) => item.stock === 0)
 
     // Calcular valor total del inventario
-    const valorTotalCompra = items.reduce(
-      (sum, item) => sum + (item.precioCompra || 0) * item.stock,
-      0
-    )
-    const valorTotalVenta = items.reduce(
-      (sum, item) => sum + (item.precioVenta || 0) * item.stock,
-      0
-    )
+    const vCompra = valuarLocal(items, (item) => (item.precioCompra || 0) * item.stock, ctx)
+    const vVenta = valuarLocal(items, (item) => (item.precioVenta || 0) * item.stock, ctx)
+    const valorTotalCompra = vCompra.total
+    const valorTotalVenta = vVenta.total
 
     // Agrupar por categoría
     const categoriaMap = new Map<string, CategoriaResumen>()
@@ -96,7 +98,7 @@ export async function GET() {
       }
       existing.cantidad++
       existing.stockTotal += item.stock
-      existing.valorTotal += (item.precioCompra || 0) * item.stock
+      existing.valorTotal += montoLocal((item.precioCompra || 0) * item.stock, item.moneda, ctx)
       categoriaMap.set(cat, existing)
     })
 
@@ -118,7 +120,7 @@ export async function GET() {
     // y orden pasan a stock, que ya ve. Para quien sí puede, no cambia nada.
     const masValiososBase = items.map((item) => ({
       ...item,
-      valorEnStock: (item.precioCompra || 0) * item.stock,
+      valorEnStock: montoLocal((item.precioCompra || 0) * item.stock, item.moneda, ctx),
     }))
 
     const masValiosos = canViewCost
@@ -169,6 +171,8 @@ export async function GET() {
       itemsSinStock: sinStock.length,
       itemsStockCritico: stockCritico.length,
       categorias: porCategoria.length,
+      aproximado: vCompra.aproximado || vVenta.aproximado,
+      excluidosSinCotizacion: contarExcluidos(items, ctx),
     }
 
     // El costo de compra sigue la misma regla que inventario.precio_compra en

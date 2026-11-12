@@ -21,6 +21,7 @@ import {
   Wallet,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -97,7 +98,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                       <span className="text-xs font-medium text-muted-foreground uppercase">Capital Invertido</span>
                       <Wallet className="h-3.5 w-3.5 text-blue-500" />
                     </div>
-                    <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
+                    <div className="text-lg font-bold">{prefijoAprox(data.valorizacion.aproximado)}{formatPrice(data.valorizacion.valorCosto)}</div>
                   </CardContent>
                 </Card>
               )}
@@ -107,7 +108,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                     <span className="text-xs font-medium text-muted-foreground uppercase">Valor en Venta</span>
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
                   </div>
-                  <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
+                  <div className="text-lg font-bold">{prefijoAprox(data.valorizacion.aproximado)}{formatPrice(data.valorizacion.valorVenta)}</div>
                 </CardContent>
               </Card>
               {!costoOrgOculto && (
@@ -117,7 +118,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                       <span className="text-xs font-medium text-muted-foreground uppercase">Margen Potencial</span>
                       <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
                     </div>
-                    <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
+                    <div className="text-lg font-bold text-emerald-600">{prefijoAprox(data.valorizacion.aproximado)}{formatPrice(data.valorizacion.margenPotencial)}</div>
                     <p className="text-xs text-muted-foreground">
                       {data.valorizacion.valorCosto > 0
                         ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
@@ -137,6 +138,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                 </CardContent>
               </Card>
             </div>
+            <AvisoExcluidos n={data.valorizacion.excluidosSinCotizacion} />
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-1 border-b pb-1">
