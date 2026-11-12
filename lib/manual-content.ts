@@ -233,6 +233,16 @@ export const manualSections: ManualSection[] = [
         tip: "El teléfono y el IMEI se omiten si están vacíos. El problema se corta en 3 líneas en las etiquetas de 30 mm y en 5 en las de 40 mm.",
       },
       {
+        subtitle: "Comprobante térmico: sale con mucho papel en blanco",
+        body: "Si al imprimir un comprobante o ticket con \"Imprimir (navegador)\" sale una tira larga con blanco arriba y abajo, el sistema no está agregando ese espacio: la impresora tiene configurado un papel de largo fijo y lo expulsa entero. Se corrige una sola vez en la computadora donde está instalada la impresora.",
+        steps: [
+          "Abrí las preferencias de impresión de la impresora térmica y, en el tamaño de papel, elegí uno de rollo o \"Receipt\" (largo variable) en lugar de uno de largo fijo. El nombre exacto cambia según la marca",
+          "En la ventana de impresión del navegador, abrí \"Más opciones\" y destildá \"Encabezados y pies de página\", para que no salgan la fecha y la dirección web",
+          "Si la impresora está conectada por USB, podés usar \"Imprimir térmica\": corta donde termina el comprobante y no depende de esa configuración",
+        ],
+        tip: "Vale para el comprobante de la orden, el de recepción, el ticket de venta y el de la nota de crédito.",
+      },
+      {
         subtitle: "Firma de recepción",
         body: "Si el tipo de equipo tiene un checklist configurado, el paso \"Fotos y Checklist\" de la nueva orden muestra el \"Checklist de Recepción\" con sus observaciones y el recuadro \"Firma del Cliente (Conformidad de recepción)\". La firma se guarda aunque no marques ningún ítem y sale impresa en el PDF de la orden.",
         tip: "Si no ves el recuadro de firma, configurá un checklist para ese tipo de equipo en Configuración > Checklist.",

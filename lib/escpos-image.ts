@@ -12,6 +12,7 @@ const ESC_ESC = 0x1b
 
 interface RasterOptions {
   maxWidth?: number    // max width in dots (default 384)
+  maxHeight?: number   // max height in dots (default: no limit)
   threshold?: number   // 0-255, pixels darker than this = black (default 200)
   dither?: boolean     // Floyd-Steinberg dithering (default true)
   contrast?: boolean   // stretch luminance before binarize (default true)
@@ -20,22 +21,41 @@ interface RasterOptions {
   center?: boolean     // pad raster with white columns on left to center (default true)
 }
 
+/**
+ * Tamaño del raster en puntos: entra en maxWidth × maxHeight sin agrandar la
+ * imagen ni deformarla, con el ancho en múltiplo de 8 (un byte = 8 puntos).
+ */
+export function rasterSize(
+  imgWidth: number,
+  imgHeight: number,
+  maxWidth: number,
+  maxHeight: number = Infinity
+): { width: number; height: number } | null {
+  if (imgWidth <= 0 || imgHeight <= 0) return null
+  const ratio = Math.min(1, maxWidth / imgWidth, maxHeight / imgHeight)
+  let width = Math.floor(imgWidth * ratio)
+  width = width - (width % 8)
+  if (width <= 0) return null
+  const height = Math.floor(imgHeight * (width / imgWidth))
+  if (height <= 0) return null
+  return { width, height }
+}
+
 export async function imageUrlToRaster(
   url: string,
   options: RasterOptions = {}
 ): Promise<Uint8Array | null> {
-  const { maxWidth = 384, threshold = 200, dither = true, contrast = true, gamma = 0.7, printerDots = 576, center = true } = options
+  const { maxWidth = 384, maxHeight = Infinity, threshold = 200, dither = true, contrast = true, gamma = 0.7, printerDots = 576, center = true } = options
 
   try {
     // Load image
     const img = await loadImage(url)
 
     // Compute scaled dimensions, force width to multiple of 8
-    const ratio = Math.min(1, maxWidth / img.width)
-    let targetW = Math.floor(img.width * ratio)
-    targetW = targetW - (targetW % 8) // multiple of 8
-    if (targetW <= 0) return null
-    const targetH = Math.floor(img.height * (targetW / img.width))
+    const size = rasterSize(img.width, img.height, maxWidth, maxHeight)
+    if (!size) return null
+    const targetW = size.width
+    const targetH = size.height
 
     // Draw to canvas
     const canvas = document.createElement("canvas")

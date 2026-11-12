@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Receipt, Printer } from "lucide-react"
 import { useTerminologia } from "@/contexts/currency-context"
+import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import {
   readAncho,
@@ -214,6 +215,8 @@ ${styles}
             <Printer className="h-4 w-4 mr-2" />
             Imprimir (navegador)
           </Button>
+
+          <AvisoImpresionNavegador />
         </DialogContent>
       </Dialog>
     </>
