@@ -23,6 +23,7 @@ const SELECT_ORDEN = `
 `
 
 export const verOrden: Herramienta = {
+  etiqueta: "Buscando la orden…",
   definicion: {
     name: "ver_orden",
     description:

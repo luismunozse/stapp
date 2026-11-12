@@ -19,6 +19,13 @@ export interface UsoAcumulado {
   cache_creation_input_tokens: number
 }
 
+/** Lo que el panel va mostrando mientras se arma la respuesta (solo en modo streaming). */
+export type EventoAsistente =
+  | { tipo: "texto"; delta: string }
+  | { tipo: "herramienta"; nombre: string; etiqueta: string }
+
+export const ETIQUETA_GENERICA = "Consultando tus datos…"
+
 export interface ResultadoAsistente {
   texto: string
   uso: UsoAcumulado
@@ -33,6 +40,8 @@ interface Entrada {
   mensaje: string
   herramientas: readonly Herramienta[]
   ctx: ContextoHerramienta
+  /** Si viene, cada ronda se pide en streaming y se avisa el texto y las herramientas a medida que llegan. */
+  alEvento?: (evento: EventoAsistente) => void
 }
 
 function sumarUso(acc: UsoAcumulado, u: Anthropic.Usage) {
@@ -49,6 +58,36 @@ function textoDe(response: Anthropic.Message): string {
     .map((b) => b.text)
     .join("")
     .trim()
+}
+
+type ParamsMensaje = Anthropic.MessageCreateParamsNonStreaming
+
+/**
+ * Una ronda. En streaming el resultado es el mismo mensaje final (`finalMessage`); solo cambia que
+ * el texto y el nombre de cada herramienta se avisan apenas empiezan a llegar.
+ */
+async function pedirRonda(
+  client: Pick<Anthropic, "messages">,
+  params: ParamsMensaje,
+  alEvento: ((e: EventoAsistente) => void) | undefined,
+  etiquetas: Map<string, string>,
+  separarDelTextoAnterior: boolean
+): Promise<Anthropic.Message> {
+  if (!alEvento) return client.messages.create(params)
+  const stream = client.messages.stream(params)
+  let primerTexto = true
+  for await (const evento of stream) {
+    if (evento.type === "content_block_start" && evento.content_block.type === "tool_use") {
+      const nombre = evento.content_block.name
+      alEvento({ tipo: "herramienta", nombre, etiqueta: etiquetas.get(nombre) ?? ETIQUETA_GENERICA })
+    } else if (evento.type === "content_block_delta" && evento.delta.type === "text_delta" && evento.delta.text) {
+      // El texto de una ronda nueva va en un párrafo aparte del de la anterior.
+      const delta = primerTexto && separarDelTextoAnterior ? `\n\n${evento.delta.text}` : evento.delta.text
+      primerTexto = false
+      alEvento({ tipo: "texto", delta })
+    }
+  }
+  return stream.finalMessage()
 }
 
 async function ejecutarLlamada(
@@ -79,16 +118,21 @@ async function ejecutarLlamada(
  * Bucle de herramientas: el modelo pide datos, STApp los busca con los permisos del usuario y se
  * los devuelve, hasta que responde con texto. Las herramientas son de solo lectura.
  */
-export async function ejecutarAsistente({ client, system, historial, mensaje, herramientas, ctx }: Entrada): Promise<ResultadoAsistente> {
+export async function ejecutarAsistente({ client, system, historial, mensaje, herramientas, ctx, alEvento }: Entrada): Promise<ResultadoAsistente> {
   const uso: UsoAcumulado = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
   const llamadas: LlamadaRegistrada[] = []
   const porNombre = new Map(herramientas.map((h) => [h.definicion.name, h]))
+  const etiquetas = new Map(herramientas.flatMap((h) => (h.etiqueta ? [[h.definicion.name, h.etiqueta] as const] : [])))
+  // Texto de todas las rondas: si el modelo escribe algo antes de consultar ("Busco la orden…"),
+  // queda en la respuesta igual que se vio en pantalla.
+  const textos: string[] = []
+  const textoFinal = () => textos.join("\n\n")
   const tools = definiciones(herramientas)
   const messages: Anthropic.MessageParam[] = [...historial, { role: "user", content: mensaje }]
 
   for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
     const ultimaRonda = ronda === MAX_RONDAS
-    const response = await client.messages.create({
+    const response = await pedirRonda(client, {
       model: ASISTENTE_MODEL,
       max_tokens: MAX_TOKENS,
       output_config: { effort: EFFORT },
@@ -100,15 +144,17 @@ export async function ejecutarAsistente({ client, system, historial, mensaje, he
         ...(ultimaRonda && { tool_choice: { type: "none" as const } }),
       }),
       messages,
-    })
+    }, alEvento, etiquetas, textos.length > 0)
     sumarUso(uso, response.usage)
+    const texto = textoDe(response)
+    if (texto) textos.push(texto)
 
     if (response.stop_reason === "refusal") {
       return { texto: RESPUESTA_RECHAZADA, uso, llamadas }
     }
 
     if (response.stop_reason !== "tool_use" || ultimaRonda) {
-      return { texto: textoDe(response) || RESPUESTA_FALLIDA, uso, llamadas }
+      return { texto: textoFinal() || RESPUESTA_FALLIDA, uso, llamadas }
     }
 
     // El turno del asistente vuelve completo (incluidos los bloques de thinking, sin tocar).
@@ -119,5 +165,5 @@ export async function ejecutarAsistente({ client, system, historial, mensaje, he
     messages.push({ role: "user", content: resultados })
   }
 
-  return { texto: RESPUESTA_FALLIDA, uso, llamadas }
+  return { texto: textoFinal() || RESPUESTA_FALLIDA, uso, llamadas }
 }
