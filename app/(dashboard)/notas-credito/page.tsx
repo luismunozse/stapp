@@ -1,4 +1,5 @@
 import { NotasCreditoList } from "@/components/notas-credito/notas-credito-list"
+import { PageShell } from "@/components/ui/page-shell"
 
 // Solo ADMIN hasta el PR7: el middleware (lib/rutas-por-rol.ts) rebota al
 // resto y GET /api/notas-credito responde 403.
@@ -11,14 +12,12 @@ export default async function NotasCreditoPage({ searchParams }: NotasCreditoPag
   const clienteId = typeof cliente === "string" && cliente.trim() ? cliente.trim() : null
 
   return (
-    <div className="container space-y-6 py-6">
-      <div>
-        <h1 className="text-2xl font-bold">Notas de crédito</h1>
-        <p className="text-sm text-muted-foreground">
-          Las notas de crédito de ventas y órdenes, incluidas las anuladas y el historial de devoluciones.
-        </p>
-      </div>
+    <PageShell
+      title="Notas de crédito"
+      description="Las notas de crédito de ventas y órdenes, incluidas las anuladas y el historial de devoluciones."
+      className="container py-6"
+    >
       <NotasCreditoList clienteId={clienteId} />
-    </div>
+    </PageShell>
   )
 }

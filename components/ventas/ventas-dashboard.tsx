@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { SectionHeader } from "@/components/ui/section-header"
 import {
   ShoppingCart,
   Calendar,
@@ -55,9 +56,7 @@ export function VentasDashboard() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Dashboard de Ventas</h3>
-        </div>
+        <SectionHeader title="Dashboard de ventas" />
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -76,13 +75,15 @@ export function VentasDashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Dashboard de Ventas</h3>
-        <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          {expanded ? "Ocultar" : "Mostrar"}
-        </Button>
-      </div>
+      <SectionHeader
+        title="Dashboard de ventas"
+        actions={
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {expanded ? "Ocultar" : "Mostrar"}
+          </Button>
+        }
+      />
 
       {/* KPI Cards - Always visible */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
