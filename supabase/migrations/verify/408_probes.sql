@@ -151,6 +151,78 @@ END $$;
 INSERT INTO _r SELECT 34, 'ungrouped USD rows were never touched by any group write (U, X)', '2',
   count(*)::TEXT FROM inventario i, _s WHERE i.id IN (_s.u, _s.x) AND i.moneda = 'USD';
 
+-- 50-56: the same rules through the real save RPC (361) and the 408 wrapper.
+--   M1 (USD) and M2 (local) and M3 (USD): ungrouped items created here; ids of new groups/rows are
+--   client-style (c + 24 hex).
+CREATE FUNCTION pg_temp.cid(n INT) RETURNS TEXT LANGUAGE sql AS $$ SELECT 'c408' || lpad(n::text, 21, '0') $$;
+CREATE FUNCTION pg_temp.color(v TEXT) RETURNS JSONB LANGUAGE sql AS $$ SELECT jsonb_build_array(jsonb_build_object('opcion', 'Color', 'valor', v)) $$;
+CREATE FUNCTION pg_temp.grupo(n INT) RETURNS JSONB LANGUAGE sql AS $$
+  SELECT jsonb_build_object('id', pg_temp.cid(n), 'nombre', 'Probe 408 RPC ' || n,
+           'opciones', '[{"nombre":"Color","valores":["Rojo","Azul","Verde"]}]'::jsonb) $$;
+CREATE TEMP TABLE _m (m1 TEXT, m2 TEXT, m3 TEXT);
+DO $$
+DECLARE v_org TEXT; v_m1 TEXT; v_m2 TEXT; v_m3 TEXT;
+BEGIN
+  SELECT org INTO v_org FROM _s;
+  INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
+    VALUES (v_org, 'P408-M1', 'Probe 408 M1', 'P408Cat', 10, 20, 'USD') RETURNING id INTO v_m1;
+  INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
+    VALUES (v_org, 'P408-M2', 'Probe 408 M2', 'P408Cat', 100, 200) RETURNING id INTO v_m2;
+  INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
+    VALUES (v_org, 'P408-M3', 'Probe 408 M3', 'P408Cat', 10, 20, 'USD') RETURNING id INTO v_m3;
+  INSERT INTO _m VALUES (v_m1, v_m2, v_m3);
+END $$;
+-- (a) Promote the USD item M1 into a new group with one new variant: the new row inherits USD.
+DO $$ BEGIN
+  PERFORM pg_temp.probe(50, 'RPC: promoting a USD item into a new group with a new variant runs', 'ok',
+    format('SELECT guardar_grupo_variantes(%L, NULL, %L, %L, %L, %L, NULL)',
+      (SELECT org FROM _s), pg_temp.grupo(1), '{}',
+      jsonb_build_array(jsonb_build_object('id', (SELECT m1 FROM _m), 'atributos', pg_temp.color('Rojo')),
+                        jsonb_build_object('id', pg_temp.cid(2), 'atributos', pg_temp.color('Azul'), 'codigo', 'P408-N2')),
+      '[]'));
+END $$;
+INSERT INTO _r SELECT 51, 'RPC: the promoted item and the new variant are both USD in the new group', '2|2',
+  count(*)::TEXT || '|' || count(*) FILTER (WHERE i.moneda = 'USD')::TEXT
+  FROM inventario i JOIN _s ON i.organization_id = _s.org WHERE i.grupo_id = pg_temp.cid(1);
+-- (b) Grouping a USD item (M3) with a local one (M2) through the RPC is refused.
+DO $$
+DECLARE v_got TEXT := 'ok'; v_msg TEXT := '';
+BEGIN
+  BEGIN
+    PERFORM guardar_grupo_variantes((SELECT org FROM _s), NULL, pg_temp.grupo(3), '{}',
+      jsonb_build_array(jsonb_build_object('id', (SELECT m3 FROM _m), 'atributos', pg_temp.color('Rojo')),
+                        jsonb_build_object('id', (SELECT m2 FROM _m), 'atributos', pg_temp.color('Azul'))),
+      '[]', NULL);
+  EXCEPTION WHEN OTHERS THEN v_got := SQLSTATE; v_msg := SQLERRM;
+  END;
+  INSERT INTO _r VALUES (52, 'RPC: grouping a USD item with a local one raises 23514 MONEDA_GRUPO_MIXTA', '23514|MONEDA_GRUPO_MIXTA',
+    v_got || '|' || v_msg);
+END $$;
+INSERT INTO _r SELECT 53, 'RPC: after the refusal M2 and M3 are ungrouped with their own currencies', 'NULL:NULL|NULL:USD',
+  (SELECT COALESCE(grupo_id, 'NULL') || ':' || COALESCE(moneda, 'NULL') FROM inventario WHERE id = _m.m2) || '|' ||
+  (SELECT COALESCE(grupo_id, 'NULL') || ':' || COALESCE(moneda, 'NULL') FROM inventario WHERE id = _m.m3) FROM _m;
+-- (c) The wrapper saves the USD group (new price, one more new variant) and moves it to EUR.
+DO $$ BEGIN
+  PERFORM pg_temp.probe(54, 'wrapper: save + currency change of the USD group to EUR runs', 'ok',
+    format('SELECT guardar_grupo_variantes_moneda(%L, NULL, %L, %L, %L, %L, NULL, %L)',
+      (SELECT org FROM _s), pg_temp.grupo(1), '{}',
+      jsonb_build_array(jsonb_build_object('id', (SELECT m1 FROM _m), 'atributos', pg_temp.color('Rojo'), 'precio_venta', 18),
+                        jsonb_build_object('id', pg_temp.cid(2), 'atributos', pg_temp.color('Azul')),
+                        jsonb_build_object('id', pg_temp.cid(4), 'atributos', pg_temp.color('Verde'), 'codigo', 'P408-N4')),
+      '[]', 'EUR'));
+END $$;
+INSERT INTO _r SELECT 55, 'wrapper: every row of the group is EUR (M1, N2, new N4) and the price was saved', '3|3|18',
+  count(*)::TEXT || '|' || count(*) FILTER (WHERE i.moneda = 'EUR')::TEXT || '|' ||
+  trim_scale(max(i.precio_venta) FILTER (WHERE i.id = (SELECT m1 FROM _m)))::TEXT
+  FROM inventario i JOIN _s ON i.organization_id = _s.org WHERE i.grupo_id = pg_temp.cid(1);
+INSERT INTO _r SELECT 56, 'wrapper: ungrouped USD rows (M3, X) were not touched', '2',
+  count(*)::TEXT FROM inventario i, _s, _m WHERE i.id IN (_m.m3, _s.x) AND i.moneda = 'USD';
+DO $$ BEGIN
+  PERFORM pg_temp.probe(57, 'wrapper: an unknown currency is refused before saving', '22023',
+    format('SELECT guardar_grupo_variantes_moneda(%L, NULL, %L, %L, %L, %L, NULL, %L)',
+      (SELECT org FROM _s), pg_temp.grupo(1), '{}', '[]', '[]', 'ARS'));
+END $$;
+
 -- 40-49: kit cost. K = 500 x1 (local) + 10 USD x2.
 INSERT INTO _r SELECT 40, 'K at USD 1200, unit 10: 500 + 2 x round(12000/10)x10', '24500',
   COALESCE(trim_scale(calcular_costo_kit(k, org, 'USD', 1200, 10))::TEXT, 'NULL') FROM _s;
@@ -270,7 +342,7 @@ INSERT INTO _r SELECT 85, 'rehearsal: guardar_grupo_variantes_moneda is gone, gu
   (to_regprocedure('public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)') IS NOT NULL)::TEXT || '|' ||
   (to_regprocedure('public.guardar_grupo_variantes(text,text,jsonb,jsonb,jsonb,jsonb,text)') IS NOT NULL)::TEXT;
 
-INSERT INTO _r SELECT 999, 'probe rows recorded (a missing row means a probe did not run)', '36', count(*)::TEXT FROM _r;
+INSERT INTO _r SELECT 999, 'probe rows recorded (a missing row means a probe did not run)', '44', count(*)::TEXT FROM _r;
 
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 

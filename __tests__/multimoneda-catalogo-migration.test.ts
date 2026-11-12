@@ -145,5 +145,9 @@ describe("migration 408: moneda del grupo de variantes y costo de kit", () => {
     expect(pr).toMatch(/calcular_costo_kit\([^)]*'EUR', 1200, 10\)/)
     expect(pr).toMatch(/proname = 'calcular_costo_kit'/)
     expect(pr).toMatch(/INSERT INTO _r SELECT 999, [^;]*FROM _r;/)
+    // the group rules through the real save RPC and the wrapper
+    expect(pr).toMatch(/guardar_grupo_variantes\(\(SELECT org FROM _s\)[\s\S]*'23514\|MONEDA_GRUPO_MIXTA'/)
+    expect(pr).toMatch(/SELECT guardar_grupo_variantes\(%L, NULL/)
+    expect(pr).toMatch(/SELECT guardar_grupo_variantes_moneda\(%L, NULL[^;]*'EUR'\)\);/)
   })
 })
