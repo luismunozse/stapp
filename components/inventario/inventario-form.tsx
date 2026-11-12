@@ -866,7 +866,7 @@ export function InventarioForm({
       const confirmado = await confirm({
         title: "Abrir el producto existente",
         description:
-          `Se va a cargar "${match.nombre}" en este formulario. Lo que cargaste para el producto nuevo queda guardado como borrador y vuelve al abrir "Nuevo Item"` +
+          `Se va a cargar "${match.nombre}" en este formulario. Lo que cargaste para el producto nuevo queda guardado como borrador y vuelve al abrir "Nuevo ítem"` +
           (pendingFile ? ", salvo la foto, que hay que elegir de nuevo." : "."),
         confirmText: "Abrir el existente",
         cancelText: "Seguir con el nuevo",
@@ -1262,7 +1262,7 @@ export function InventarioForm({
     <Card>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle>{item ? "Editar Item" : "Nuevo Item"}</CardTitle>
+          <CardTitle>{item ? "Editar ítem" : "Nuevo ítem"}</CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={cerrar}>
             <X className="h-4 w-4" />
           </IconButton>
@@ -1302,7 +1302,7 @@ export function InventarioForm({
                   <>
                     <img
                       src={imagenPreview}
-                      alt="Preview"
+                      alt="Vista previa"
                       className="h-full w-full object-cover"
                     />
                     <button
@@ -1497,7 +1497,7 @@ export function InventarioForm({
               )}
               {tiposError && (
                 <p className="text-sm text-destructive-text mt-1 cursor-pointer" onClick={refetchTipos}>
-                  Error al cargar tipos. Toca para reintentar.
+                  No se pudieron cargar los tipos. Tocá para reintentar.
                 </p>
               )}
             </div>
@@ -1640,7 +1640,7 @@ export function InventarioForm({
             </div>
 
             <div>
-              <Label htmlFor="precioVenta">{variantesActivo ? "Precio base" : "Precio Venta *"}</Label>
+              <Label htmlFor="precioVenta">{variantesActivo ? "Precio base" : "Precio de venta *"}</Label>
               <Input
                 id="precioVenta"
                 type="text"
@@ -1744,7 +1744,7 @@ export function InventarioForm({
             {showStockConfig && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
                 <div>
-                  <Label htmlFor="stockMinimo">Stock Mínimo</Label>
+                  <Label htmlFor="stockMinimo">Stock mínimo</Label>
                   <Input
                     id="stockMinimo"
                     type="text"
@@ -1757,7 +1757,7 @@ export function InventarioForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="stockMaximo">Stock Máximo</Label>
+                  <Label htmlFor="stockMaximo">Stock máximo</Label>
                   <Input
                     id="stockMaximo"
                     type="text"
@@ -1770,7 +1770,7 @@ export function InventarioForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="puntoReorden">Punto Reorden</Label>
+                  <Label htmlFor="puntoReorden">Punto de reorden</Label>
                   <Input
                     id="puntoReorden"
                     type="text"
@@ -1837,7 +1837,7 @@ export function InventarioForm({
           </div>}
 
           {!variantesActivo && <div>
-            <Label htmlFor="barcode">Código de Barras</Label>
+            <Label htmlFor="barcode">Código de barras</Label>
             <Input
               id="barcode"
               {...register("barcode", {
@@ -1907,7 +1907,7 @@ export function InventarioForm({
                 },
               })}
               min={0}
-              placeholder="Usa el default de la organización"
+              placeholder="Valor de la organización"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Días de garantía pre-cargados al agregar este producto en el POS. Dejalo vacío para usar el valor de la organización.
@@ -1917,15 +1917,15 @@ export function InventarioForm({
           {/* Tracking avanzado — opt-in por item */}
           <details className="border rounded-md">
             <summary className="cursor-pointer text-sm font-medium px-3 py-2 hover:bg-muted/40">
-              Tracking avanzado
+              Seguimiento avanzado
             </summary>
             <div className="p-3 space-y-2 border-t">
               <p className="text-xs text-muted-foreground">
-                Activá sólo las features que vas a usar. Cada una habilita su dialog en el menú del item.
+                Activá solo las funciones que vas a usar. Cada una suma su opción en el menú del ítem.
               </p>
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
-                  <div className="text-sm">Trackear lotes / vencimientos</div>
+                  <div className="text-sm">Seguir lotes y vencimientos</div>
                   <div className="text-xs text-muted-foreground">Cada entrada asocia un # de lote y fecha de vencimiento.</div>
                 </div>
                 <input
@@ -1936,7 +1936,7 @@ export function InventarioForm({
               </label>
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
-                  <div className="text-sm">Trackear números de serie</div>
+                  <div className="text-sm">Seguir números de serie</div>
                   <div className="text-xs text-muted-foreground">1 fila por unidad con S/N único. Útil para garantías.</div>
                 </div>
                 <input

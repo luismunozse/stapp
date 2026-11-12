@@ -250,7 +250,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>{proveedor ? "Editar Proveedor" : "Nuevo Proveedor"}</CardTitle>
+          <CardTitle>{proveedor ? "Editar proveedor" : "Nuevo proveedor"}</CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
           </IconButton>
@@ -373,7 +373,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="website">Página Web</Label>
+            <Label htmlFor="website">Página web</Label>
             <Input
               id="website"
               {...register("website")}
@@ -474,7 +474,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="leadTimeDias">Lead time (días entrega)</Label>
+                <Label htmlFor="leadTimeDias">Demora de entrega (días)</Label>
                 <Input
                   id="leadTimeDias"
                   type="number"

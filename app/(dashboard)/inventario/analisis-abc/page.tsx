@@ -122,7 +122,7 @@ export default function AnalisisAbcPage() {
   return (
     <PageShell
       title="Análisis ABC + Rotación"
-      description="Clasifica items por revenue (Pareto) y velocidad de rotación. Detecta dead stock y capital inmovilizado."
+      description="Clasifica los ítems por ingresos (Pareto) y velocidad de rotación. Detecta stock sin movimiento y capital inmovilizado."
       icon={BarChart3}
       backHref="/inventario"
       actions={
@@ -290,7 +290,7 @@ export default function AnalisisAbcPage() {
                   <th className="p-2 text-center">Rotación</th>
                   <th className="p-2 text-right">Stock</th>
                   <th className="p-2 text-right">Vend.</th>
-                  <th className="p-2 text-right">Revenue</th>
+                  <th className="p-2 text-right">Ingresos</th>
                   <th className="p-2 text-right">Margen</th>
                   <th className="p-2 text-right">Capital</th>
                   <th className="p-2 text-right">Rot/año</th>

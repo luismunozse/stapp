@@ -72,7 +72,7 @@ describe("CatalogoItemDialog — stock lock para items linkeados a inventario", 
     const input = document.querySelector("#stock") as HTMLInputElement
     expect(input).not.toBeNull()
     expect(input.disabled).toBe(false)
-    expect(input.getAttribute("placeholder")).toMatch(/sin tracking/i)
+    expect(input.getAttribute("placeholder")).toMatch(/sin control de stock/i)
   })
 
   it("al guardar un item linkeado, el payload envía stock: null", async () => {

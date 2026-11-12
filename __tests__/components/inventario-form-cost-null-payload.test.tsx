@@ -141,7 +141,7 @@ describe("InventarioForm — the cost input when the item loaded without a cost"
 
     expect(screen.queryByLabelText("Costo *")).not.toBeInTheDocument()
     // The rest of the form still works: only the cost is withheld.
-    expect(screen.getByLabelText("Precio Venta *")).toBeInTheDocument()
+    expect(screen.getByLabelText("Precio de venta *")).toBeInTheDocument()
   })
 
   it("explains the absence instead of leaving a silent gap", () => {

@@ -323,7 +323,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
   const handleDelete = async (id: string, nombre?: string) => {
     const confirmed = await confirm({
-      title: "Eliminar Item",
+      title: "Eliminar ítem",
       description: `¿Eliminar "${nombre ?? "este item"}" del inventario? Si nunca fue usado en órdenes o ventas se borra definitivamente; si ya tiene historial, te vamos a ofrecer archivarlo.`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -727,7 +727,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             onClick={() => { setBajoStock(!bajoStock); setPage(1) }}
           >
             <AlertCircle className="h-4 w-4" />
-            Bajo Stock
+            Bajo stock
           </Button>
           <Button
             variant="outline"
@@ -871,7 +871,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           </Button>
           <Button onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="h-4 w-4" />
-            Nuevo Item
+            Nuevo ítem
           </Button>
           <Button
             variant="destructive"

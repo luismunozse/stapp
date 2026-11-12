@@ -26,9 +26,9 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const TABS = [
   { id: "rotacion", label: "Rotación", icon: RotateCcw },
-  { id: "muerto", label: "Stock Muerto", icon: AlertTriangle },
-  { id: "reorden", label: "Punto de Reorden", icon: Package },
-  { id: "categorias", label: "Por Categoría", icon: Layers },
+  { id: "muerto", label: "Stock muerto", icon: AlertTriangle },
+  { id: "reorden", label: "Punto de reorden", icon: Package },
+  { id: "categorias", label: "Por categoría", icon: Layers },
 ] as const
 
 type TabId = typeof TABS[number]["id"]
@@ -72,7 +72,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Análisis de Inventario</DialogTitle>
+          <DialogTitle>Análisis de inventario</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
@@ -94,7 +94,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                 <Card>
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground uppercase">Capital Invertido</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase">Capital invertido</span>
                       <Wallet className="h-3.5 w-3.5 text-blue-500" />
                     </div>
                     <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
@@ -104,7 +104,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-muted-foreground uppercase">Valor en Venta</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Valor en venta</span>
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
                   </div>
                   <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
@@ -114,7 +114,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                 <Card>
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground uppercase">Margen Potencial</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase">Margen potencial</span>
                       <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
                     </div>
                     <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
@@ -129,7 +129,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-muted-foreground uppercase">Stock Total</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Stock total</span>
                     <Package className="h-3.5 w-3.5 text-orange-500" />
                   </div>
                   <div className="text-lg font-bold">{data.valorizacion.totalUnidades}</div>
@@ -232,7 +232,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           {!costosPorItemOcultos && (
                             <>
                               <th className="pb-2 pr-2 text-right">P. Costo</th>
-                              <th className="pb-2 text-right">Capital Inmovilizado</th>
+                              <th className="pb-2 text-right">Capital inmovilizado</th>
                             </>
                           )}
                         </tr>
@@ -261,7 +261,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
             {activeTab === "reorden" && (
               <div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Productos que necesitan reposición basado en velocidad de venta (últimos 90 días, lead time 2 semanas)
+                  Productos que necesitan reposición según la velocidad de venta (últimos 90 días, demora de entrega de 2 semanas)
                 </p>
                 {data.alertasReorden.length === 0 ? (
                   <p className="text-sm text-emerald-600 py-4 text-center">Todos los productos tienen stock suficiente</p>
@@ -326,8 +326,8 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Categoría</th>
                           <th className="pb-2 pr-2 text-right">Productos</th>
                           <th className="pb-2 pr-2 text-right">Unidades</th>
-                          {!costoPorCategoriaOculto && <th className="pb-2 pr-2 text-right">Valor Costo</th>}
-                          <th className="pb-2 text-right">Valor Venta</th>
+                          {!costoPorCategoriaOculto && <th className="pb-2 pr-2 text-right">Valor costo</th>}
+                          <th className="pb-2 text-right">Valor venta</th>
                         </tr>
                       </thead>
                       <tbody>
