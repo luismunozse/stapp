@@ -83,10 +83,27 @@ describe("GET /api/clientes/[id]/deuda-sucursal", () => {
     expect(vi.mocked(supabaseAdmin.rpc)).not.toHaveBeenCalled()
   })
 
-  it("TECNICO with sucursalId 'suc-A' → RPC called with p_sucursal_id: 'suc-A'", async () => {
+  it("TECNICO without tecnicos_ven_deuda_clientes → 403 and the RPC is never called", async () => {
     mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
     mockCookie(null)
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "organizations") return createChainMock({ tecnicos_ven_deuda_clientes: false }) as any
+      if (table === "clientes") return createChainMock({ id: "cliente-1" }) as any
+      return createChainMock(null) as any
+    })
+
+    const { status, body } = await parseResponse(await callRoute())
+
+    expect(status).toBe(403)
+    expect(body.code).toBe("DEUDA_NO_PERMITIDA")
+    expect(vi.mocked(supabaseAdmin.rpc)).not.toHaveBeenCalled()
+  })
+
+  it("TECNICO with sucursalId 'suc-A' and the org permission → RPC called with p_sucursal_id: 'suc-A'", async () => {
+    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
+    mockCookie(null)
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "organizations") return createChainMock({ tecnicos_ven_deuda_clientes: true }) as any
       if (table === "clientes") return createChainMock({ id: "cliente-1" }) as any
       return createChainMock(null) as any
     })

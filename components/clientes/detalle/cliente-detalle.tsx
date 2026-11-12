@@ -58,9 +58,12 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   const { data: ccData, mutate: mutateCC } = useSWR(
     `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
   )
+  // A TECNICO without `tecnicos_ven_deuda_clientes` gets no debt: the server says so in the
+  // client record (`deudaOculta`), and the debt-only reads are not even attempted (they 403).
+  const deudaOculta = !!(cliente as (Cliente & { deudaOculta?: boolean }) | undefined)?.deudaOculta
   // Fiado + unpaid orders for the active sucursal (same source as the WhatsApp reminder).
   const { data: deudaData, error: deudaError, mutate: mutateDeuda } = useSWR<{ deudaTotal?: number; porSucursal?: boolean }>(
-    `/api/clientes/${clienteId}/deuda-sucursal`, clienteFetcher, { revalidateOnFocus: false }
+    cliente && !deudaOculta ? `/api/clientes/${clienteId}/deuda-sucursal` : null, clienteFetcher, { revalidateOnFocus: false }
   )
   const { data: ordenesData } = useSWR(
     `/api/ordenes?clienteId=${clienteId}&limit=1`, fetcher, { revalidateOnFocus: false }
@@ -114,6 +117,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         resumen={resumen}
         deudaError={!!deudaError && !deudaData}
         porSucursal={!!deudaData?.porSucursal}
+        deudaOculta={deudaOculta}
         totalOrdenes={totalOrdenes}
         onEdit={() => setShowEdit(true)}
         onWhatsApp={() => setShowWhatsApp(true)}
@@ -121,7 +125,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
 
       <div className="space-y-6 pt-6">
         <ClienteDetalleDatos cliente={cliente} />
-        <Card>
+        {!deudaOculta && <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Cuenta corriente</CardTitle>
             <div className="flex flex-wrap gap-2">
@@ -136,12 +140,14 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
           <CardContent>
             <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} saldoGlobal={!!deudaData?.porSucursal} />
           </CardContent>
-        </Card>
-        <ClienteOrdenesPendientes
-          clienteId={clienteId}
-          clienteNombre={cliente.nombre}
-          onCobrado={refreshMoney}
-        />
+        </Card>}
+        {!deudaOculta && (
+          <ClienteOrdenesPendientes
+            clienteId={clienteId}
+            clienteNombre={cliente.nombre}
+            onCobrado={refreshMoney}
+          />
+        )}
         <ClienteOrdenesHistorial clienteId={clienteId} />
         <ClienteCotizaciones clienteId={clienteId} />
         {cliente.tipoCliente === "EMPRESA" && (

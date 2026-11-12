@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin, requireAuth } from "@/lib/auth-utils"
+import { requireAdmin, requireAuth, puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
@@ -80,8 +80,14 @@ export async function GET(
     }
 
     // Formatear respuesta con órdenes y sectores
+    // Sin permiso de deuda, un saldo negativo (fiado que debe) se informa como 0; el saldo
+    // a favor sigue visible porque se usa para cobrar con cuenta corriente.
+    const verDeuda = await puedeVerDeudaClientes(role, organizationId!)
+    const base = formatCliente(cliente)
     const clienteFormatted = {
-      ...formatCliente(cliente),
+      ...base,
+      ...(!verDeuda && { saldoCuenta: Math.max(base?.saldoCuenta ?? 0, 0) }),
+      deudaOculta: !verDeuda,
       sectores: cliente.sectores_cliente
         ?.filter((s: any) => s.activo)
         .map((s: any) => ({

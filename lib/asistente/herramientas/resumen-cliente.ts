@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { supabaseAdmin } from "@/lib/supabase"
 import { combinarOr, terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
-import { resolveTecnicosVenDeudaClientes } from "@/lib/auth-utils"
+import { puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { alcanceListaOrdenes } from "./alcance-lista"
 import { SELECT_ORDEN_LISTA, ordenResumida } from "./formato-orden"
 import type { ContextoHerramienta, Herramienta } from "./tipos"
@@ -19,10 +19,8 @@ const ORDENES_POR_CLIENTE = 5
  * La deuda de un cliente la ven ADMIN y VENDEDOR. Un TECNICO solo si la organización activó
  * `tecnicos_ven_deuda_clientes` (decisión del dueño, 2026-11-12). Fail-closed.
  */
-export async function puedeVerDeuda(ctx: ContextoHerramienta): Promise<boolean> {
-  if (ctx.actor.role === "ADMIN" || ctx.actor.role === "VENDEDOR") return true
-  if (ctx.actor.role === "TECNICO") return resolveTecnicosVenDeudaClientes(ctx.actor.organizationId)
-  return false
+export function puedeVerDeuda(ctx: ContextoHerramienta): Promise<boolean> {
+  return puedeVerDeudaClientes(ctx.actor.role, ctx.actor.organizationId)
 }
 
 async function deudaDe(clienteId: string, ctx: ContextoHerramienta) {

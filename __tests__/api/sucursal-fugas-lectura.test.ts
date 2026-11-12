@@ -65,6 +65,8 @@ describe("LEAK 1 — GET /api/clientes/[id]/ordenes-pendientes — branch filter
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
       cuenta_corriente: createChainMock([]),
+      // Sin este permiso un TECNICO recibe 403 (deuda de clientes oculta).
+      organizations: createChainMock({ tecnicos_ven_deuda_clientes: true }),
     })
 
     const req = createGetRequest("http://localhost:3000/api/clientes/cliente-1/ordenes-pendientes")

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
@@ -15,6 +15,10 @@ export async function GET(
     if (error) return error
 
     const { id: clienteId } = await params
+
+    // Sin permiso de deuda (TECNICO sin `tecnicos_ven_deuda_clientes`): solo el saldo a
+    // favor, que necesitan los cobros con cuenta corriente; nada de movimientos ni fiado.
+    const verDeuda = await puedeVerDeudaClientes(role, organizationId!)
 
     // Non-admins read only the lines stamped with their branch. `saldo` below is
     // the client's overall balance and stays org-wide on purpose (design decision):
@@ -34,6 +38,18 @@ export async function GET(
 
     if (clienteError || !cliente) {
       return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 })
+    }
+
+    if (!verDeuda) {
+      return NextResponse.json({
+        saldo: Math.max(parseFloat(cliente.saldo_cuenta || "0"), 0),
+        clienteNombre: cliente.nombre,
+        movimientos: [],
+        total: 0,
+        page: 1,
+        limit: 0,
+        deudaOculta: true,
+      })
     }
 
     // Obtener movimientos recientes
