@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -159,7 +160,7 @@ const SEGMENT_COLORS: Record<string, string> = {
   amber: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
   blue: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30",
   yellow: "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30",
-  gray: "border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950/30",
+  gray: "border-border bg-muted/40",
 }
 
 const SEGMENT_ICONS: Record<string, typeof AlertTriangle> = {
@@ -299,17 +300,11 @@ export default function EmailCampaignsPage() {
   const campaigns = data?.campaigns || []
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Mail className="h-6 w-6" />
-          Campañas de Email
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Envia emails masivos a segmentos de organizaciones
-        </p>
-      </div>
-
+    <PageShell
+      title="Campañas de email"
+      description="Envia emails masivos a segmentos de organizaciones"
+      icon={Mail}
+    >
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           {/* Paso 1: Segmentos */}
@@ -576,7 +571,7 @@ export default function EmailCampaignsPage() {
         loading={sending}
         onConfirm={handleConfirmSend}
       />
-    </div>
+    </PageShell>
   )
 }
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { Package, Plus, Users, Building2, Check, X, Edit, Power, History } from "lucide-react"
@@ -55,29 +56,23 @@ export default function PlanesPage() {
   }
 
   const getPlanTypeColor = (tipo: string) => {
-    return tipo === "FREE" ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300" : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+    return tipo === "FREE" ? "bg-muted text-foreground" : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Package className="h-8 w-8" />
-            Gestión de Planes
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Administra los planes de suscripción del sistema
-          </p>
-        </div>
-        <Link href="/superadmin/planes/nuevo">
-          <Button className="gap-2">
+    <PageShell
+      title="Gestión de planes"
+      description="Administra los planes de suscripción del sistema"
+      icon={Package}
+      actions={
+        <Button asChild className="gap-2">
+          <Link href="/superadmin/planes/nuevo">
             <Plus className="h-4 w-4" />
             Crear Plan
-          </Button>
-        </Link>
-      </div>
+          </Link>
+        </Button>
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -363,6 +358,6 @@ export default function PlanesPage() {
         loading={toggling}
         onConfirm={handleToggle}
       />
-    </div>
+    </PageShell>
   )
 }

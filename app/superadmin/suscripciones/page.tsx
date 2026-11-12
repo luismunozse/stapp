@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -354,7 +355,7 @@ export default function SuscripcionesPage() {
       render: (sub) => (
         <input
           type="checkbox"
-          className="h-4 w-4 rounded border-gray-300"
+          className="h-4 w-4 rounded border-input"
           checked={selectedIds.has(sub.organization?.id)}
           onChange={() => toggleSelect(sub.organization?.id)}
         />
@@ -478,21 +479,17 @@ export default function SuscripcionesPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <CreditCard className="h-8 w-8" />
-            Suscripciones
-          </h1>
-          <p className="text-muted-foreground">Gestiona todas las suscripciones del sistema</p>
-          <LastUpdated formattedLastUpdated={formattedLastUpdated} onRefresh={fetchSubscriptions} loading={loading} />
-        </div>
+    <PageShell
+      title="Suscripciones"
+      description="Gestiona todas las suscripciones del sistema"
+      icon={CreditCard}
+      meta={<LastUpdated formattedLastUpdated={formattedLastUpdated} onRefresh={fetchSubscriptions} loading={loading} />}
+      actions={
         <Button variant="outline" onClick={handleExportCSV} disabled={subscriptions.length === 0}>
           <Download className="h-4 w-4 mr-2" /> Exportar CSV
         </Button>
-      </div>
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
@@ -813,6 +810,6 @@ export default function SuscripcionesPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

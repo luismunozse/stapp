@@ -1,9 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
   Mail,
   Phone,
   Building2,
@@ -23,7 +21,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { IconButton } from "@/components/ui/icon-button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -80,14 +78,14 @@ interface Lead {
 const urgenciaColors: Record<string, string> = {
   alta: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200",
   media: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200",
-  baja: "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-200",
+  baja: "bg-muted text-muted-foreground border-border",
 }
 
 function scoreBadgeClass(score: number): string {
   if (score >= 80) return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200"
   if (score >= 60) return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200"
   if (score >= 40) return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200"
-  return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-200"
+  return "bg-muted text-muted-foreground border-border"
 }
 
 interface LeadDetailResponse {
@@ -100,11 +98,10 @@ const estadoColors: Record<string, string> = {
   CONTACTADO: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200",
   CALIFICADO: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200",
   CONVERTIDO: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200",
-  DESCARTADO: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-200",
+  DESCARTADO: "bg-muted text-muted-foreground border-border",
 }
 
 export function LeadDetailContent({ leadId }: { leadId: string }) {
-  const router = useRouter()
   const { data, loading, fetchData } = useSuperadminFetch<LeadDetailResponse>({ showErrorToast: true })
   const { mutate, loading: saving } = useSuperadminMutation()
   const [estado, setEstado] = useState("")
@@ -145,37 +142,34 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
   const totalMensajes = conversaciones.reduce((acc, c) => acc + c.mensajes.length, 0)
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <IconButton label="Volver a leads" variant="ghost" onClick={() => router.push("/superadmin/leads")}>
-          <ArrowLeft className="w-4 h-4" />
-        </IconButton>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{lead.nombre || "Lead sin nombre"}</h1>
-          <p className="text-muted-foreground text-sm">
-            Capturado el {new Date(lead.created_at).toLocaleDateString("es-AR", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              timeZone: DEFAULT_TIMEZONE,
-            })} via {lead.origen}
-          </p>
-        </div>
-        <Badge variant="outline" className={cn("text-sm font-semibold gap-1", scoreBadgeClass(lead.score))}>
-          <Sparkles className="w-3 h-3" />
-          Score {lead.score}
-        </Badge>
-        {lead.urgencia && (
-          <Badge variant="outline" className={cn("text-sm gap-1", urgenciaColors[lead.urgencia])}>
-            <Flame className="w-3 h-3" />
-            {lead.urgencia}
+    <PageShell
+      title={lead.nombre || "Lead sin nombre"}
+      description={`Capturado el ${new Date(lead.created_at).toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: DEFAULT_TIMEZONE,
+      })} via ${lead.origen}`}
+      backHref="/superadmin/leads"
+      backLabel="Volver a leads"
+      meta={
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Badge variant="outline" className={cn("text-sm font-semibold gap-1", scoreBadgeClass(lead.score))}>
+            <Sparkles className="w-3 h-3" />
+            Score {lead.score}
           </Badge>
-        )}
-        <Badge className={cn("text-sm", estadoColors[lead.estado])}>{lead.estado}</Badge>
-      </div>
+          {lead.urgencia && (
+            <Badge variant="outline" className={cn("text-sm gap-1", urgenciaColors[lead.urgencia])}>
+              <Flame className="w-3 h-3" />
+              {lead.urgencia}
+            </Badge>
+          )}
+          <Badge className={cn("text-sm", estadoColors[lead.estado])}>{lead.estado}</Badge>
+        </div>
+      }
+    >
 
       {lead.resumen_conversacion && (
         <Card className={cn(lead.score >= 80 && "border-red-200 bg-red-50/50 dark:bg-red-950/20")}>
@@ -413,6 +407,6 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

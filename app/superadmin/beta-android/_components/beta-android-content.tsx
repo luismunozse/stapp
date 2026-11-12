@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Clipboard, FlaskConical, Inbox, Loader2, RefreshCw, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { BETA_MAX_IDS_POR_LOTE, emailsParaPlay, type BetaEstado } from "@/lib/android-beta"
@@ -32,7 +33,7 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
 const estadoColors: Record<BetaEstado, string> = {
   PENDIENTE: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
   AGREGADO: "bg-green-500/10 text-green-700 dark:text-green-400",
-  DESCARTADO: "bg-gray-500/10 text-gray-700 dark:text-gray-400",
+  DESCARTADO: "bg-muted text-muted-foreground",
 }
 
 export function BetaAndroidContent() {
@@ -109,18 +110,12 @@ export function BetaAndroidContent() {
     setSeleccion((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FlaskConical className="h-8 w-8" />
-            Beta Android
-          </h1>
-          <p className="text-muted-foreground">
-            Usuarios que se anotaron desde la app. Copiá los pendientes, pegalos en la lista de testers de Play Console y marcalos como agregados.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell
+      title="Beta de Android"
+      description="Usuarios que se anotaron desde la app. Copiá los pendientes, pegalos en la lista de testers de Play Console y marcalos como agregados."
+      icon={FlaskConical}
+      actions={
+        <>
           <Button variant="outline" size="sm" onClick={cargar} disabled={loading}>
             <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
             Actualizar
@@ -129,8 +124,9 @@ export function BetaAndroidContent() {
             <Clipboard className="h-4 w-4 mr-2" />
             Copiar emails pendientes ({emailsPendientes.length})
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       <Card>
         <CardHeader>
@@ -268,6 +264,6 @@ export function BetaAndroidContent() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

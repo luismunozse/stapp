@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -138,17 +139,11 @@ export default function BroadcastPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Megaphone className="h-6 w-6" />
-          Notificaciones Broadcast
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Envia notificaciones masivas a los usuarios de la plataforma
-        </p>
-      </div>
-
+    <PageShell
+      title="Notificaciones masivas"
+      description="Envia notificaciones masivas a los usuarios de la plataforma"
+      icon={Megaphone}
+    >
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Formulario */}
         <div className="lg:col-span-2 space-y-6">
@@ -400,6 +395,6 @@ export default function BroadcastPage() {
         loading={sending}
         onConfirm={handleConfirmSend}
       />
-    </div>
+    </PageShell>
   )
 }

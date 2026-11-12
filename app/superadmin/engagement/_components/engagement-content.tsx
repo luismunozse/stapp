@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -395,27 +396,26 @@ export function EngagementContent() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
-        {/* ================================================================ */}
-        {/* SECCIÓN 1 — HEADER Y ALERTA DE RIESGO                          */}
-        {/* ================================================================ */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Engagement y Retención</h1>
-            <p className="text-muted-foreground">
-              Monitoreo de salud, NPS y acciones de retención
+      {/* ================================================================ */}
+      {/* SECCIÓN 1 — HEADER Y ALERTA DE RIESGO                          */}
+      {/* ================================================================ */}
+      <PageShell
+        title="Salud y retención"
+        description="Monitoreo de salud, NPS y acciones de retención"
+        meta={
+          data?.summary.lastCalculatedAt && (
+            <p className="text-xs text-muted-foreground">
+              Último cálculo: {timeAgo(data.summary.lastCalculatedAt + "T00:00:00")}
             </p>
-            {data?.summary.lastCalculatedAt && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Último cálculo: {timeAgo(data.summary.lastCalculatedAt + "T00:00:00")}
-              </p>
-            )}
-          </div>
+          )
+        }
+        actions={
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             {loading ? "Cargando..." : "Actualizar"}
           </Button>
-        </div>
+        }
+      >
 
         {/* Alerta de riesgo */}
         {data && (highRisk > 0 || mediumRisk > 0) && (
@@ -1162,7 +1162,7 @@ export function EngagementContent() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageShell>
     </TooltipProvider>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -93,19 +94,13 @@ export default function MaintenanceBannerPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Wrench className="h-6 w-6" />
-          Banner de Mantenimiento
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Mostrá un aviso global a todas las organizaciones sobre mantenimiento,
-          actualizaciones o incidentes en curso.
-        </p>
-      </div>
-
-      <Card>
+    <PageShell
+      title="Banner de mantenimiento"
+      description="Mostrá un aviso global a todas las organizaciones sobre mantenimiento, actualizaciones o incidentes en curso."
+      icon={Wrench}
+      className="max-w-3xl"
+    >
+      <Card variant="flat">
         <CardHeader>
           <CardTitle className="text-base">Configuración</CardTitle>
           <CardDescription>
@@ -210,6 +205,6 @@ export default function MaintenanceBannerPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

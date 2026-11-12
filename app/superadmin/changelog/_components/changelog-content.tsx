@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -101,13 +102,11 @@ export function ChangelogContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Changelog</h1>
-          <p className="text-muted-foreground">Gestiona las novedades que ven los usuarios</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title="Novedades"
+      description="Gestiona las novedades que ven los usuarios"
+      actions={
+        <>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualizar
@@ -116,8 +115,9 @@ export function ChangelogContent() {
             <Plus className="h-4 w-4 mr-2" />
             Nueva entrada
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -148,11 +148,11 @@ export function ChangelogContent() {
       </div>
 
       {/* List */}
-      <Card>
+      <Card variant="flat">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Newspaper className="h-5 w-5" />
-            Entradas del Changelog
+            Entradas
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -277,6 +277,6 @@ export function ChangelogContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

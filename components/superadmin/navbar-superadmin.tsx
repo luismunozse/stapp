@@ -39,7 +39,7 @@ import { BetaAndroidBadge } from "@/components/superadmin/beta-android-badge"
 import { GlobalSearch } from "@/components/superadmin/global-search"
 
 const navItems = [
-  { href: "/superadmin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/superadmin/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/superadmin/organizaciones", label: "Organizaciones", icon: Building2 },
   { href: "/superadmin/suscripciones", label: "Suscripciones", icon: CreditCard },
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
@@ -47,15 +47,15 @@ const navItems = [
   { href: "/superadmin/leads", label: "Leads", icon: UserSearch },
   { href: "/superadmin/conversaciones", label: "Chatbot", icon: MessageCircle },
   { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
-  { href: "/superadmin/engagement", label: "Engagement", icon: HeartPulse },
-  { href: "/superadmin/lifecycle-emails", label: "Lifecycle Emails", icon: MailCheck },
-  { href: "/superadmin/feature-usage", label: "Feature Usage", icon: Puzzle },
-  { href: "/superadmin/email-campaigns", label: "Campañas Email", icon: MailCheck },
-  { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
+  { href: "/superadmin/engagement", label: "Retención", icon: HeartPulse },
+  { href: "/superadmin/lifecycle-emails", label: "Emails automáticos", icon: MailCheck },
+  { href: "/superadmin/feature-usage", label: "Uso de funciones", icon: Puzzle },
+  { href: "/superadmin/email-campaigns", label: "Campañas de email", icon: MailCheck },
+  { href: "/superadmin/broadcast", label: "Notificaciones masivas", icon: Megaphone },
   { href: "/superadmin/maintenance-banner", label: "Mantenimiento", icon: Wrench },
-  { href: "/superadmin/changelog", label: "Changelog", icon: Newspaper },
-  { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
-  { href: "/superadmin/beta-android", label: "Beta Android", icon: FlaskConical },
+  { href: "/superadmin/changelog", label: "Novedades", icon: Newspaper },
+  { href: "/superadmin/waitlist", label: "Lista de espera de iOS", icon: Smartphone },
+  { href: "/superadmin/beta-android", label: "Beta de Android", icon: FlaskConical },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]
 

@@ -256,7 +256,7 @@ export default function GastosRecurrentesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card variant="flat">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Configurados ({gastos.length})</CardTitle>
           </CardHeader>

@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { IconButton } from "@/components/ui/icon-button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, History, Package, ChevronLeft, ChevronRight } from "lucide-react"
 import { AuditTimeline } from "../../_components/audit-timeline"
@@ -72,26 +71,19 @@ export default function PlanHistorialPage({ params }: PageProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/superadmin/planes">
-          <IconButton label="Volver a planes" variant="ghost">
-            <ArrowLeft className="h-5 w-5" />
-          </IconButton>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <History className="h-8 w-8" />
-            Historial de Cambios
-          </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Package className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">{plan.nombre}</span>
-            <Badge variant="outline">{plan.tipo}</Badge>
-          </div>
+    <PageShell
+      title="Historial de cambios"
+      icon={History}
+      backHref="/superadmin/planes"
+      backLabel="Volver a planes"
+      meta={
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">{plan.nombre}</span>
+          <Badge variant="outline">{plan.tipo}</Badge>
         </div>
-      </div>
+      }
+    >
 
       {/* Stats */}
       <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
@@ -133,6 +125,6 @@ export default function PlanHistorialPage({ params }: PageProps) {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

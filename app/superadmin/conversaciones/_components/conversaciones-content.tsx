@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -189,20 +190,16 @@ export function ConversacionesContent() {
 
   // Vista de lista
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Conversaciones del Chatbot</h1>
-          <p className="text-muted-foreground text-sm">
-            Todas las conversaciones con Santi, incluyendo visitantes anónimos
-          </p>
-        </div>
+    <PageShell
+      title="Conversaciones del chatbot"
+      description="Todas las conversaciones con Santi, incluyendo visitantes anónimos"
+      actions={
         <Button variant="outline" size="sm" onClick={loadConversaciones} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Actualizar
         </Button>
-      </div>
+      }
+    >
 
       {/* Filter */}
       <div className="flex gap-3">
@@ -313,6 +310,6 @@ export function ConversacionesContent() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }
