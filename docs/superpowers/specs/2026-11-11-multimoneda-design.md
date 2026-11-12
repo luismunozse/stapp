@@ -157,12 +157,12 @@ reescribir caja, cuenta corriente, comisiones, reportes y ARCA).
   los diálogos de orden y cotización, con el motivo.
 - **REQ-6.4** "Cambiar cotización" sobre un documento en estado no permitido → 409.
   Sin motivo en modo manual → 400.
-- **REQ-6.5** Si la migración 399 no está aplicada (42703/42P01 al leer
+- **REQ-6.5** Si la migración 406 no está aplicada (42703/42P01 al leer
   `organizacion_moneda.moneda_extranjera`), la función se considera apagada: no hay errores 500.
 - **REQ-6.6** Nunca se convierte con 0, con un valor vacío ni con un precio de origen inválido
   (`PrecioOrigenInvalidoError` / `TipoCambioInvalidoError`, ya implementados en S2).
 
-## 4. Modelo de datos: migración 399
+## 4. Modelo de datos: migración 406
 
 Aditiva, re-ejecutable y con el mismo estilo que la 365 (CHECK `NOT VALID`, `lock_timeout`,
 aplicar fuera de hora pico). Incluye rollback y probes.
@@ -182,15 +182,15 @@ aplicar fuera de hora pico). Incluye rollback y probes.
    misma forma que la 365 (SELECT de la propia org para authenticated, todo para service_role).
 5. Las RPC `crear_venta_atomica`, `add_repuesto_inventario`, `agregar_servicio_orden` y
    `calcular_costo_kit` se redefinen en migraciones propias de cada entrega (S4–S6), no en
-   la 399.
+   la 406.
 
 Estado en producción (verificado el 2026-11-11 con una consulta de solo lectura): **la 365 y
 la 365b NO están aplicadas**: no existen `organizacion_moneda` ni `sesion_caja_saldos`, ni
 ninguna de las columnas o CHECK de la 365. Por eso S3 aplica primero la 365 y la 365b y después
-la 399, fuera de hora pico, porque la 365 toma ACCESS EXCLUSIVE sobre tablas muy usadas. Como
+la 406, fuera de hora pico, porque la 365 toma ACCESS EXCLUSIVE sobre tablas muy usadas. Como
 la 365 nunca se aplicó, el plan de S3 evalúa corregirla directamente (EUR, `moneda_extranjera`)
-en lugar de crear CHECK que la 399 borra enseguida. Verificación posterior:
-`verify/365_probes.sql` y `verify/399_probes.sql`.
+en lugar de crear CHECK que la 406 borra enseguida. Verificación posterior:
+`verify/365_probes.sql` y `verify/406_probes.sql`.
 
 ## 5. Componentes
 
@@ -211,7 +211,7 @@ en lugar de crear CHECK que la 399 borra enseguida. Verificación posterior:
 Cada una es un PR propio. Todo queda apagado detrás de `multimoneda_habilitada` hasta que
 termine S5.
 
-1. **S3:** aplicar 365 + 365b (nunca se aplicaron) y la migración 399, `config-moneda` (EUR), resolvedor y endpoint de cotización, pantalla
+1. **S3:** aplicar 365 + 365b (nunca se aplicaron) y la migración 406, `config-moneda` (EUR), resolvedor y endpoint de cotización, pantalla
    de configuración.
 2. **S4:** catálogo (formularios, listado, valuación, variantes, kits, ajuste masivo, import,
    API v1).
@@ -233,7 +233,7 @@ termine S5.
   - "Cambiar cotización": sus dos modos y los bloqueos por estado.
   - Convertir una cotización hereda su cotización.
 - **Migración:** test estático del SQL (como `multimoneda-fundacion-migration.test.ts`),
-  `verify/399_probes.sql` y `rollback/399_rollback.sql`.
+  `verify/406_probes.sql` y `rollback/406_rollback.sql`.
 - **Regresión:** una venta y una orden sin líneas en divisa dan los mismos totales que hoy
   (fixtures compartidos en `fixtures/currency/`).
 - **E2E (Playwright):** activar USD manual → producto en USD → venta en el POS → total y foto
