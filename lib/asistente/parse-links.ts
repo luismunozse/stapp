@@ -1,5 +1,6 @@
 // Parsea links internos [texto](/ruta) en las respuestas del asistente.
-// Solo rutas exactas en el allowlist de panelRoutes se renderiza como link.
+// Solo rutas exactas en el allowlist de panelRoutes, o el detalle de un registro
+// (/ordenes/<id>) que devuelven las herramientas, se renderizan como link.
 // Cualquier otra ruta (alucinada, traversal, externa) queda como texto plano.
 // También parsea negrita **texto** como segmentos bold.
 
@@ -13,6 +14,13 @@ export type AsistenteSegment =
 const LINK_RE = /\[([^\]\n]+)\]\((\/[^)\s]*)\)/g
 const BOLD_RE = /\*\*([^*\n]+)\*\*/g
 const RUTAS_VALIDAS = new Set(panelRoutes.map((r) => r.ruta))
+// Detalle de un registro: un solo segmento de id (cuid/uuid), sin query ni más segmentos.
+// La página destino vuelve a validar el permiso: el link no da acceso, solo navega.
+const RUTA_DETALLE_RE = /^\/ordenes\/[A-Za-z0-9-]{8,40}$/
+
+export function esRutaPermitida(href: string): boolean {
+  return RUTAS_VALIDAS.has(href) || RUTA_DETALLE_RE.test(href)
+}
 
 function parseBold(text: string): AsistenteSegment[] {
   const segments: AsistenteSegment[] = []
@@ -37,7 +45,7 @@ export function parseAsistenteLinks(text: string): AsistenteSegment[] {
   for (const match of normalized.matchAll(LINK_RE)) {
     const [full, rawLabel, href] = match
     const index = match.index ?? 0
-    if (!RUTAS_VALIDAS.has(href)) continue
+    if (!esRutaPermitida(href)) continue
     if (index > lastIndex) segments.push(...parseBold(normalized.slice(lastIndex, index)))
     segments.push({ type: "link", label: rawLabel.replaceAll("**", ""), href })
     lastIndex = index + full.length

@@ -86,3 +86,21 @@ describe('parseAsistenteLinks', () => {
     ])
   })
 })
+
+describe('parseAsistenteLinks: detalle de orden', () => {
+  it('acepta /ordenes/<id> que devuelven las herramientas', () => {
+    expect(parseAsistenteLinks('[Orden 12](/ordenes/cm3x9k2ab0001qwe)')).toEqual([
+      { type: 'link', label: 'Orden 12', href: '/ordenes/cm3x9k2ab0001qwe' },
+    ])
+  })
+
+  it.each([
+    '/ordenes/abc/../../superadmin',
+    '/ordenes/cm3x9k2ab0001qwe/editar',
+    '/ordenes/cm3x9k2ab0001qwe?x=1',
+    '/clientes/cm3x9k2ab0001qwe',
+    '/ordenes/ab',
+  ])('deja como texto %s', (href) => {
+    expect(parseAsistenteLinks(`[x](${href})`).some((s) => s.type === 'link')).toBe(false)
+  })
+})

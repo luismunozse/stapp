@@ -118,6 +118,7 @@ function req(body: unknown) {
 function claudeSuccess(overrides: Partial<any> = {}) {
   return {
     content: [{ type: "text", text: "Para agregar un cliente andá a Clientes → Nuevo." }],
+    stop_reason: "end_turn",
     usage: {
       input_tokens: 500,
       output_tokens: 80,
@@ -227,12 +228,35 @@ describe("POST /api/asistente", () => {
     const assistantRow = mensajeInserts[1].payload
     expect(assistantRow.tipo).toBe("ASSISTANT")
     expect(assistantRow.contenido).toBe("Para agregar un cliente andá a Clientes → Nuevo.")
-    expect(assistantRow.modelo).toBe("claude-haiku-4-5")
+    expect(assistantRow.modelo).toBe("claude-haiku-5-5")
     expect(assistantRow.input_tokens).toBe(500)
     expect(assistantRow.output_tokens).toBe(80)
     expect(assistantRow.cache_read_input_tokens).toBe(420)
     expect(assistantRow.cache_creation_input_tokens).toBe(0)
     expect(typeof assistantRow.tiempo_respuesta_ms).toBe("number")
+    // Sin llamadas a herramientas no se registra nada.
+    expect(assistantRow.herramientas).toBeNull()
+  })
+
+  it("manda las herramientas, la fecha en el mensaje (no en el system) y guarda el texto original", async () => {
+    mockAuthSuccess({ organizationId: "org-1", userId: "user-1" })
+    canUseAsistenteMock.mockResolvedValue(true)
+    checkAsistenteRateLimitMock.mockReturnValue(true)
+    const { inserts } = setupSupabase({ usedToday: 0, historial: [] })
+    createMessageMock.mockResolvedValueOnce(claudeSuccess())
+
+    await POST(req({ message: "¿Cómo viene la orden 12?" }))
+
+    const params = createMessageMock.mock.calls[0][0]
+    expect(params.model).toBe("claude-haiku-5-5")
+    expect(params.tools.map((t: any) => t.name)).toEqual(["ver_orden"])
+    expect(params.system[0].text).toBe("PROMPT DE PRUEBA (estático)")
+    const ultimo = params.messages[params.messages.length - 1]
+    expect(ultimo.role).toBe("user")
+    expect(ultimo.content).toMatch(/^\[Hoy es \d{4}-\d{2}-\d{2}\]\n\n¿Cómo viene la orden 12\?$/)
+
+    const userRow = inserts.filter((i) => i.table === "asistente_mensajes")[0].payload
+    expect(userRow.contenido).toBe("¿Cómo viene la orden 12?")
   })
 
   it("502 UPSTREAM_ERROR: Claude falla y no se quema el tope diario", async () => {
