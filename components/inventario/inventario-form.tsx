@@ -413,6 +413,8 @@ export function InventarioForm({
   const esKitActual = !!watch("esKit")
   const fotos = useFotosVariantes()
   const guardadoEnSesion = useRef(false)
+  /** Archived members the section does not list (no combination): they still take the group's currency. */
+  const archivadasSinCombinacion = useRef(0)
   const variantes = useVariantesForm({
     permite: permiteVariantes,
     item,
@@ -424,6 +426,7 @@ export function InventarioForm({
     // Opening a variant: the product's name is the group's base name, not the variant's.
     alHidratar: (lectura) => {
       setValue("nombre", lectura.grupo.nombre)
+      archivadasSinCombinacion.current = lectura.archivadas.filter((a) => !a.atributos || a.atributos.length === 0).length
       compartidosGuardados.current =
         item && !guardadoEnSesion.current ? compartidosDe(inventarioFormDefaults(item)) : compartidosDe(getValues())
     },
@@ -447,8 +450,26 @@ export function InventarioForm({
   // API refuses it too: the database would copy it to the siblings without converting their prices).
   const { config: configMoneda, tipoCambio } = useMoneda()
   const moneda: MonedaCatalogo = watch("moneda") ?? null
-  const monedaInicial: MonedaCatalogo = item?.moneda ?? null
-  const monedaBloqueada = !!item?.grupoId && !variantesActivo
+  /** The currency the server has: the item's, or the one a save in this session applied. */
+  const monedaGuardada = useRef<MonedaCatalogo>(item?.moneda ?? null)
+  /** Prices were converted and that conversion has not been saved together with its currency yet. */
+  const preciosConvertidos = useRef(false)
+  // Another item loaded into this form (opening a duplicate) starts from its own currency.
+  useEffect(() => {
+    monedaGuardada.current = item?.moneda ?? null
+    preciosConvertidos.current = false
+  }, [item])
+  const monedaDeVariante = !!item?.grupoId && !variantesActivo
+  // An existing item (or group) whose cost this user cannot see: its stored cost would be relabeled
+  // without converting, so the currency cannot change here.
+  const monedaSinCosto = !!item && !costoCargado
+  const monedaBloqueada = monedaDeVariante || monedaSinCosto
+  // Archived members take the group's currency without their prices being converted.
+  const hayArchivadas =
+    variantesActivo &&
+    (Object.keys(variantes.estado.archivadas).length > 0 ||
+      archivadasSinCombinacion.current > 0 ||
+      Object.values(variantes.estado.filas).some((f) => f.archivar))
   /** The currency picked while the prices have amounts: it waits for convert / keep / cancel. */
   const [monedaPedida, setMonedaPedida] = useState<{ a: MonedaCatalogo } | null>(null)
   const cotizacionCambio =
@@ -472,6 +493,7 @@ export function InventarioForm({
     if (!monedaPedida || !configMoneda || cotizacionCambio === null) return
     const unidad = unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal)
     const de = moneda
+    if (hayArchivadas) return
     const convertir = (monto: number) =>
       Number.isFinite(monto) ? convertirPrecioCatalogo(monto, de, monedaPedida.a, cotizacionCambio, unidad) : monto
     // The section first: its base then already matches the converted fields and nothing re-applies it.
@@ -480,6 +502,7 @@ export function InventarioForm({
     setValue("precioVenta", convertir(Number(v.precioVenta)), { shouldDirty: true })
     if (costoCargado) setValue("precioCompra", convertir(Number(v.precioCompra)), { shouldDirty: true })
     fijarMoneda(monedaPedida.a)
+    preciosConvertidos.current = true
     setMonedaPedida(null)
   }
   const mantenerMoneda = () => {
@@ -1171,7 +1194,7 @@ export function InventarioForm({
       compartidosPrevios: compartidosGuardados.current,
       depositoId: mostrarDeposito && depositoEfectivo && filasNuevasConStock ? depositoEfectivo : null,
       // A new group always says its currency; a saved one only when it changed.
-      moneda: !variantes.agrupado || (data.moneda ?? null) !== monedaInicial ? (data.moneda ?? null) : undefined,
+      moneda: !variantes.agrupado || (data.moneda ?? null) !== monedaGuardada.current ? (data.moneda ?? null) : undefined,
     })
     if (salida.tipo !== "guardado") {
       const mensaje = salida.tipo === "pendiente" ? "Variantes todavía no está disponible. No se guardó nada." : salida.mensaje
@@ -1186,6 +1209,12 @@ export function InventarioForm({
     const { fallidas } = await fotos.subirTodas(filas.map((f) => ({ id: f.id, imagenUrl: f.imagenUrl, archivar: f.archivar })))
     // Saved, but the currency did not change: the form stays open so "Guardar" can try it again.
     const advertencia = salida.advertencia
+      ? `${salida.advertencia}.${preciosConvertidos.current ? " Los precios quedaron convertidos: volvé a guardar para aplicar la moneda." : ""}`
+      : undefined
+    if (!advertencia) {
+      monedaGuardada.current = data.moneda ?? null
+      preciosConvertidos.current = false
+    }
     if (fallidas.length > 0) {
       // Los datos ya están guardados, así que el borrador no sirve más; el formulario sigue abierto para reintentar las fotos.
       clearDraft()
@@ -1194,12 +1223,12 @@ export function InventarioForm({
         await showError(`Se guardó el producto, pero ${textoDeFotos(fallidas.length).toLowerCase()} Además, no pudimos volver a leer las variantes: cerrá y volvé a abrir el producto.`)
         return
       }
-      await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}${advertencia ? ` ${advertencia}.` : ""}`)
+      await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}${advertencia ? ` ${advertencia}` : ""}`)
       return
     }
     if (advertencia) {
       clearDraft()
-      await showWarning(`${advertencia}. Revisá la moneda y volvé a guardar.`)
+      await showWarning(preciosConvertidos.current ? advertencia : `${advertencia} Revisá la moneda y volvé a guardar.`)
       return
     }
 
@@ -1247,7 +1276,7 @@ export function InventarioForm({
       // lo trate como ajuste absoluto y pise las ventas hechas entre medio.
       const stockField = !item || stock !== item.stock ? { stock } : {}
       // The currency goes on every create; on an edit only when it changed (a variant may not change it).
-      const monedaField = !item || (monedaElegida ?? null) !== monedaInicial ? { moneda: monedaElegida ?? null } : {}
+      const monedaField = !item || (monedaElegida ?? null) !== monedaGuardada.current ? { moneda: monedaElegida ?? null } : {}
 
       const payload = item
         ? { ...rest, ...costoField, ...stockField, ...monedaField, barcode: normalizedBarcode }
@@ -1652,9 +1681,11 @@ export function InventarioForm({
           {configMoneda && (configMoneda.habilitada || moneda !== null) && (
             <div className="sm:w-1/3">
               <SelectorMoneda value={moneda} onChange={pedirMoneda} disabled={monedaBloqueada} />
-              {monedaBloqueada && (
+              {monedaDeVariante ? (
                 <p className="text-xs text-muted-foreground mt-1">La moneda se cambia desde el grupo de variantes.</p>
-              )}
+              ) : monedaSinCosto ? (
+                <p className="text-xs text-muted-foreground mt-1">Para cambiar la moneda tenés que poder ver los costos</p>
+              ) : null}
             </div>
           )}
 
@@ -1746,7 +1777,10 @@ export function InventarioForm({
             open={monedaPedida !== null}
             de={moneda}
             a={monedaPedida?.a ?? null}
-            puedeConvertir={cotizacionCambio !== null}
+            puedeConvertir={cotizacionCambio !== null && !hayArchivadas}
+            motivoSinConvertir={
+              hayArchivadas ? "Hay variantes archivadas: restauralas o eliminalas para convertir" : "No hay cotización disponible"
+            }
             onConvertir={convertirMoneda}
             onMantener={mantenerMoneda}
             onCancelar={() => setMonedaPedida(null)}

@@ -920,14 +920,15 @@ function cambiarCostoBase(estado: VariantesState, costo: number): Resultado {
 
 /**
  * Converts the base price and cost and every active row's price and cost (the currency of the group
- * changed). Whether a row follows the base does not change. A restored row is left alone: the client
- * never saw its stored price.
+ * changed). Whether a row follows the base does not change. On a restored row only what the user typed
+ * is converted (a typed price, a cost present on it): its stored values were never seen by the client.
  */
 function convertirPrecios(estado: VariantesState, convertir: (monto: number) => number): Resultado {
   const filas = Object.fromEntries(
     Object.entries(estado.filas).map(([id, f]) => {
-      if (f.archivar || f.restaurada) return [id, f]
-      const siguiente: Fila = { ...f, precioVenta: convertir(f.precioVenta) }
+      if (f.archivar) return [id, f]
+      const conviertePrecio = !f.restaurada || f.precioTocado
+      const siguiente: Fila = { ...f, precioVenta: conviertePrecio ? convertir(f.precioVenta) : f.precioVenta }
       if (typeof f.precioCompra === "number") siguiente.precioCompra = convertir(f.precioCompra)
       return [id, siguiente]
     })

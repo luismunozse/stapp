@@ -18,6 +18,8 @@ interface DialogoCambioMonedaProps {
   a: MonedaCatalogo
   /** There is a rate to convert with; without one only "keep the number" is possible. */
   puedeConvertir: boolean
+  /** Why "Convertir" is off; shown under it when `puedeConvertir` is false. */
+  motivoSinConvertir?: string
   onConvertir: () => void
   onMantener: () => void
   onCancelar: () => void
@@ -28,7 +30,16 @@ interface DialogoCambioMonedaProps {
  * or keep the same numbers in the new currency. Three outcomes, so it is built on ResponsiveDialog
  * (ConfirmDialog has two buttons and cannot disable only one of them).
  */
-export function DialogoCambioMoneda({ open, de, a, puedeConvertir, onConvertir, onMantener, onCancelar }: DialogoCambioMonedaProps) {
+export function DialogoCambioMoneda({
+  open,
+  de,
+  a,
+  puedeConvertir,
+  motivoSinConvertir = "No hay cotización disponible",
+  onConvertir,
+  onMantener,
+  onCancelar,
+}: DialogoCambioMonedaProps) {
   const { config } = useMoneda()
   const nombre = (m: MonedaCatalogo) => (m === null ? (config?.monedaLocal ?? "moneda local") : m)
 
@@ -47,7 +58,7 @@ export function DialogoCambioMoneda({ open, de, a, puedeConvertir, onConvertir, 
           <Button type="button" onClick={onConvertir} disabled={!puedeConvertir}>
             Convertir con la cotización de hoy
           </Button>
-          {!puedeConvertir && <p className="text-xs text-muted-foreground">No hay cotización disponible</p>}
+          {!puedeConvertir && <p className="text-xs text-muted-foreground">{motivoSinConvertir}</p>}
           <Button type="button" variant="outline" onClick={onMantener}>
             Mantener el número
           </Button>

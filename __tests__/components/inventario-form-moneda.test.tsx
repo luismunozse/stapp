@@ -292,6 +292,18 @@ describe("InventarioForm: moneda del precio", () => {
     expect(envio("PUT", "/api/inventario/i1")!.body).not.toHaveProperty("moneda")
   })
 
+  it("sin permiso para ver el costo, un ítem guardado no puede cambiar la moneda", () => {
+    renderForm({ item: item({ precioCompra: null }) })
+    expect(selector()).toBeDisabled()
+    expect(screen.getByText("Para cambiar la moneda tenés que poder ver los costos")).toBeInTheDocument()
+  })
+
+  it("sin permiso para ver el costo, un alta nueva sí elige la moneda", () => {
+    renderForm()
+    expect(selector()).toBeEnabled()
+    expect(screen.queryByText("Para cambiar la moneda tenés que poder ver los costos")).not.toBeInTheDocument()
+  })
+
   it("una variante editada sin la sección de variantes no puede cambiar la moneda", () => {
     renderForm({ item: item({ grupoId: "g1" }) })
     expect(selector()).toBeDisabled()
@@ -335,6 +347,55 @@ describe("InventarioForm: moneda del precio", () => {
       fireEvent.click(guardar())
       await waitFor(() => expect(grupoPut()).toBeDefined())
       expect(grupoPut()!.body).not.toHaveProperty("moneda")
+    })
+
+    it("sin permiso para ver los costos del grupo, el selector queda deshabilitado", async () => {
+      respuestaGrupoGet = () => ({ status: 200, body: grupoGet({ precioCompra: null }) })
+      renderForm({ item: itemAgrupado({ precioCompra: null }), permiteVariantes: true })
+      await screen.findAllByLabelText("Precio de Rojo")
+      expect(selector()).toBeDisabled()
+      expect(screen.getByText("Para cambiar la moneda tenés que poder ver los costos")).toBeInTheDocument()
+    })
+
+    it("con variantes archivadas no se puede convertir, pero sí mantener el número", async () => {
+      respuestaGrupoGet = () => ({
+        status: 200,
+        body: { ...grupoGet(), archivadas: [{ id: "v1", atributos: [{ opcion: "Color", valor: "Verde" }], stock: 0 }] },
+      })
+      renderForm({ item: itemAgrupado(), permiteVariantes: true })
+      await screen.findAllByLabelText("Precio de Rojo")
+      elegir("USD")
+      const dialogo = await screen.findByRole("dialog")
+      expect(within(dialogo).getByRole("button", { name: "Convertir con la cotización de hoy" })).toBeDisabled()
+      expect(within(dialogo).getByText("Hay variantes archivadas: restauralas o eliminalas para convertir")).toBeInTheDocument()
+      fireEvent.click(within(dialogo).getByRole("button", { name: "Mantener el número" }))
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+      expect(selector().value).toBe("USD")
+      await waitFor(() => expect(guardar()).not.toBeDisabled())
+      fireEvent.click(guardar())
+      await waitFor(() => expect(grupoPut()).toBeDefined())
+      expect(grupoPut()!.body.moneda).toBe("USD")
+    })
+
+    it("si la moneda no se aplicó tras convertir, el aviso dice que los precios quedaron convertidos", async () => {
+      respuestaGrupoPut = () => ({
+        status: 200,
+        body: { guardado: true, relectura: false, grupoId: "g1", advertencia: "El grupo se guardó, pero no se pudo cambiar la moneda: error inesperado" },
+      })
+      renderForm({ item: itemAgrupado(), permiteVariantes: true })
+      await screen.findAllByLabelText("Precio de Rojo")
+      elegir("USD")
+      fireEvent.click(await screen.findByRole("button", { name: "Convertir con la cotización de hoy" }))
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+      await waitFor(() => expect(guardar()).not.toBeDisabled())
+      fireEvent.click(guardar())
+      await waitFor(() => expect(showWarningMock).toHaveBeenCalled())
+      expect(showWarningMock.mock.calls[0][0]).toContain("Los precios quedaron convertidos: volvé a guardar para aplicar la moneda.")
+      expect(onSuccess).not.toHaveBeenCalled()
+      // Guardar again re-sends the currency.
+      fireEvent.click(guardar())
+      await waitFor(() => expect(llamadas.filter((l) => l.method === "PUT" && l.url.startsWith("/api/inventario/grupos/"))).toHaveLength(2))
+      expect(llamadas.filter((l) => l.method === "PUT").at(-1)!.body.moneda).toBe("USD")
     })
 
     it("si el grupo se guardó pero la moneda no, avisa y no cierra", async () => {
