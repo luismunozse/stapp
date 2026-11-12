@@ -240,10 +240,10 @@ describe("VentasDashboard — margen bruto nulo", () => {
 
     render(<VentasDashboard />)
 
-    expect(screen.queryByText("Margen Bruto")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen bruto")).not.toBeInTheDocument()
     // Las cifras de facturación no cambian de tier.
-    expect(screen.getByText("Ventas Hoy")).toBeInTheDocument()
-    expect(screen.getByText("Ticket Promedio")).toBeInTheDocument()
+    expect(screen.getByText("Ventas de hoy")).toBeInTheDocument()
+    expect(screen.getByText("Ticket promedio")).toBeInTheDocument()
   })
 
   it("muestra el margen bruto cuando el rol puede verlo", () => {
@@ -251,7 +251,7 @@ describe("VentasDashboard — margen bruto nulo", () => {
 
     render(<VentasDashboard />)
 
-    expect(screen.getByText("Margen Bruto")).toBeInTheDocument()
+    expect(screen.getByText("Margen bruto")).toBeInTheDocument()
     expect(screen.getByText("85.7%")).toBeInTheDocument()
     expect(screen.getByText("$6666")).toBeInTheDocument()
   })

@@ -27,8 +27,8 @@ const CONCEPTOS_EGRESO = [
 const METODOS = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "TRANSFERENCIA", label: "Transferencia" },
-  { value: "TARJETA_DEBITO", label: "Tarjeta Débito" },
-  { value: "TARJETA_CREDITO", label: "Tarjeta Crédito" },
+  { value: "TARJETA_DEBITO", label: "Tarjeta de débito" },
+  { value: "TARJETA_CREDITO", label: "Tarjeta de crédito" },
   { value: "MERCADOPAGO", label: "MercadoPago" },
   { value: "OTRO", label: "Otro" },
 ]
@@ -118,7 +118,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       return
     }
     if (!conceptoFinal) {
-      setError("Seleccione o ingrese un concepto")
+      setError("Elegí o escribí un concepto")
       return
     }
 
@@ -162,7 +162,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Nuevo Movimiento Manual</CardTitle>
+        <CardTitle className="text-base">Nuevo movimiento manual</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -376,7 +376,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
 
           <Button type="submit" className="w-full sm:w-auto" loading={loading}>
             <Plus className="mr-2 h-4 w-4" />
-            Registrar Movimiento
+            Registrar movimiento
           </Button>
         </form>
       </CardContent>

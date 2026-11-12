@@ -833,7 +833,7 @@ export function PosTerminal() {
           </Button>
           <div className="flex items-center gap-2">
             <Monitor className="h-4 w-4 text-primary" />
-            <h1 className="font-semibold text-sm sm:text-base">Punto de Venta</h1>
+            <h1 className="font-semibold text-sm sm:text-base">Punto de venta</h1>
           </div>
         </div>
 

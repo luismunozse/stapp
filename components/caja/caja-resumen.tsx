@@ -41,20 +41,20 @@ const METODO_ICONS: Record<string, any> = {
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
-  TARJETA_DEBITO: "Tarjeta Débito",
-  TARJETA_CREDITO: "Tarjeta Crédito",
+  TARJETA_DEBITO: "Tarjeta de débito",
+  TARJETA_CREDITO: "Tarjeta de crédito",
   MERCADOPAGO: "MercadoPago",
-  CUENTA_CORRIENTE: "Cuenta Corriente",
+  CUENTA_CORRIENTE: "Cuenta corriente",
   OTRO: "Otro",
 }
 
 const TIPO_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  COBRO_ORDEN: { label: "Cobro de Orden", icon: Wrench, color: "text-info-600" },
-  PAGO_FACTURA: { label: "Pago Remito", icon: FileText, color: "text-purple-600" },
+  COBRO_ORDEN: { label: "Cobro de orden", icon: Wrench, color: "text-info-600" },
+  PAGO_FACTURA: { label: "Pago de remito", icon: FileText, color: "text-purple-600" },
   PAGO_VENTA: { label: "Venta", icon: ShoppingBag, color: "text-success-600" },
-  DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-warning-600" },
-  INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-success-600" },
-  EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-destructive-text" },
+  DEPOSITO_CUENTA: { label: "Depósito a cuenta", icon: PiggyBank, color: "text-warning-600" },
+  INGRESO_MANUAL: { label: "Ingreso manual", icon: TrendingUp, color: "text-success-600" },
+  EGRESO_MANUAL: { label: "Egreso manual", icon: TrendingDown, color: "text-destructive-text" },
   ANULACION_VENTA: { label: "Venta anulada", icon: ShoppingBag, color: "text-destructive-text" },
   ANULACION_COBRO: { label: "Cobro anulado", icon: Wrench, color: "text-destructive-text" },
 }
@@ -99,7 +99,7 @@ export function CajaResumen({
     <div className="space-y-4">
       {/* Total del día */}
       <StatCard
-        title="Total del Día"
+        title="Total del día"
         value={formatPrice(data.totalDia)}
         description={[
           `${data.movimientos.length} movimiento${data.movimientos.length !== 1 ? "s" : ""}`,
@@ -152,7 +152,7 @@ export function CajaResumen({
       {Object.keys(data.porTipo).length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Por Origen</CardTitle>
+            <CardTitle className="text-base">Por origen</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -207,7 +207,7 @@ export function CajaResumen({
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              Órdenes Reparadas sin Cobrar ({data.sinCobrar.count})
+              Órdenes reparadas sin cobrar ({data.sinCobrar.count})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -242,7 +242,7 @@ export function CajaResumen({
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Detalle de Movimientos</CardTitle>
+            <CardTitle className="text-base">Detalle de movimientos</CardTitle>
             <div className="flex flex-wrap gap-2">
               <Select value={filtroMetodo || "all"} onValueChange={(v) => onFiltroMetodoChange(v === "all" ? "" : v)}>
                 <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">

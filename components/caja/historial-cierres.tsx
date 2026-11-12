@@ -96,7 +96,7 @@ export function HistorialCierres() {
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Fecha</th>
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Apertura</th>
-                  <th className="text-right p-3 font-medium">Saldo Inicial</th>
+                  <th className="text-right p-3 font-medium">Saldo inicial</th>
                   <th className="text-right p-3 font-medium hidden md:table-cell">Ingresos</th>
                   <th className="text-right p-3 font-medium hidden md:table-cell">Egresos</th>
                   <th className="text-right p-3 font-medium">Conteo</th>
@@ -246,7 +246,7 @@ function SesionDetailDialog({
       <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Detalle de Cierre - {sesion ? formatDate(sesion.fecha) : "..."}
+            Detalle de cierre - {sesion ? formatDate(sesion.fecha) : "..."}
           </DialogTitle>
         </DialogHeader>
         {isLoading ? (
@@ -258,7 +258,7 @@ function SesionDetailDialog({
             {/* Resumen */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 bg-muted rounded-lg text-center">
-                <div className="text-xs text-muted-foreground">Saldo Inicial</div>
+                <div className="text-xs text-muted-foreground">Saldo inicial</div>
                 <div className="font-bold">{formatPrice(sesion.saldoInicial)}</div>
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
@@ -270,14 +270,14 @@ function SesionDetailDialog({
                 <div className="font-bold text-destructive-text">{formatPrice(sesion.totalEgresos || 0)}</div>
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
-                <div className="text-xs text-muted-foreground">Conteo Físico</div>
+                <div className="text-xs text-muted-foreground">Conteo físico</div>
                 <div className="font-bold">{formatPrice(sesion.conteoFisico || 0)}</div>
               </div>
             </div>
 
             {/* Arqueo */}
             <div className="p-4 bg-muted rounded-lg space-y-2">
-              <div className="text-sm font-medium">Arqueo de Efectivo</div>
+              <div className="text-sm font-medium">Arqueo de efectivo</div>
               <div className="flex justify-between text-sm">
                 <span>Saldo inicial</span>
                 <span>{formatPrice(sesion.saldoInicial)}</span>

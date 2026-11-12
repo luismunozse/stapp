@@ -46,7 +46,7 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
         </div>
         <Button onClick={onAbrir} className="w-full sm:w-auto">
           <LockOpen className="mr-2 h-4 w-4" />
-          Abrir Caja
+          Abrir caja
         </Button>
       </div>
     )
@@ -75,7 +75,7 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
       </div>
       <Button variant="outline" onClick={onCerrar} className="w-full sm:w-auto">
         <Lock className="mr-2 h-4 w-4" />
-        Cerrar Caja
+        Cerrar caja
       </Button>
     </div>
   )

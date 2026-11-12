@@ -140,10 +140,10 @@ const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
   TARJETA: "Tarjeta",
-  TARJETA_DEBITO: "Tarjeta Débito",
-  TARJETA_CREDITO: "Tarjeta Crédito",
+  TARJETA_DEBITO: "Tarjeta de débito",
+  TARJETA_CREDITO: "Tarjeta de crédito",
   MERCADOPAGO: "MercadoPago",
-  CUENTA_CORRIENTE: "Cuenta Corriente",
+  CUENTA_CORRIENTE: "Cuenta corriente",
   OTRO: "Otro",
 }
 
@@ -214,7 +214,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     if (!venta) return
 
     const confirmed = await confirm({
-      title: "Anular Venta",
+      title: "Anular venta",
       description: `¿Estás seguro de anular la venta V${String(venta.numeroVenta).padStart(4, "0")}? El stock será restaurado automáticamente.`,
       confirmText: "Anular",
       cancelText: "Cancelar",
@@ -606,7 +606,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   className="w-full sm:w-auto"
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Registrar Pago
+                  Registrar pago
                 </Button>
               )}
             </div>
@@ -731,7 +731,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <tr className="border-b text-left text-sm text-muted-foreground">
                     <th className="pb-2">Producto</th>
                     <th className="pb-2 text-center">Cantidad</th>
-                    <th className="pb-2 text-right">Precio Unit.</th>
+                    <th className="pb-2 text-right">Precio unit.</th>
                     <th className="pb-2 text-right">Subtotal</th>
                     <th className="pb-2 text-center">Garantía</th>
                     <th className="pb-2"></th>

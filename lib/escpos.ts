@@ -134,8 +134,8 @@ const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
   TARJETA: "Tarjeta",
-  TARJETA_DEBITO: "T. Debito",
-  TARJETA_CREDITO: "T. Credito",
+  TARJETA_DEBITO: "T. Débito",
+  TARJETA_CREDITO: "T. Crédito",
   MERCADOPAGO: "MercadoPago",
   CUENTA_CORRIENTE: "Cta. Cte.",
   OTRO: "Otro",
@@ -369,7 +369,7 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
 
   // === HEADER: Empresa ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
-  add(line((data.nombreEmpresa || "Servicio Tecnico").substring(0, W / 2)))
+  add(line((data.nombreEmpresa || "Servicio Técnico").substring(0, W / 2)))
   add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
 
   if (data.telefonoEmpresa) {
@@ -417,7 +417,7 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
 
     // Warranty
     if (item.diasGarantia > 0) {
-      add(line(` Garantia: ${item.diasGarantia} dias`))
+      add(line(` Garantía: ${item.diasGarantia} días`))
     }
   }
 
@@ -472,9 +472,9 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   // === FOOTER ===
   add(CMD.ALIGN_CENTER)
   add(CMD.BOLD_ON)
-  add(line("Gracias por su compra!"))
+  add(line("¡Gracias por tu compra!"))
   add(CMD.BOLD_OFF)
-  add(line("Conserve este ticket"))
+  add(line("Conservá este ticket"))
   add(line("como comprobante"))
 
   // Cut (cut command provides minimal feed for cutter clearance)
@@ -546,7 +546,7 @@ export function generateNotaCreditoTicketCommands(
 
   // === EMPRESA ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
-  add(line((data.nombreEmpresa || "Servicio Tecnico").substring(0, W / 2)))
+  add(line((data.nombreEmpresa || "Servicio Técnico").substring(0, W / 2)))
   add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
   if (data.telefonoEmpresa) add(line(`Tel: ${data.telefonoEmpresa}`.substring(0, W)))
   if (data.direccionEmpresa) add(line(data.direccionEmpresa.substring(0, W)))

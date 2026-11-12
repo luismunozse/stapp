@@ -231,7 +231,7 @@ export function DevolucionForm({
   const onSubmit = async (data: DevolucionFormData) => {
     if (submittingRef.current) return
     if (selectedItems.length === 0) {
-      await showError("Selecciona al menos un producto para devolver")
+      await showError("Seleccioná al menos un producto para devolver")
       return
     }
 
@@ -495,7 +495,7 @@ export function DevolucionForm({
               loading={loading}
             >
               <RotateCcw className="mr-2 h-4 w-4" />
-              Registrar Devolución
+              Registrar devolución
             </Button>
           </div>
         </form>
