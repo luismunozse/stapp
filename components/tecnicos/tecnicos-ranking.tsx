@@ -404,28 +404,28 @@ export function TecnicosRanking() {
                                 {!r.activo && (
                                   <Badge
                                     variant="outline"
-                                    className="text-[9px] font-normal bg-muted"
+                                    className="text-xs font-normal bg-muted"
                                   >
                                     Inactivo
                                   </Badge>
                                 )}
                                 {bestBy.ingresos === r.id && r.ingresos > 0 && (
-                                  <Badge className="text-[9px] font-normal bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">
+                                  <Badge className="text-xs font-normal bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">
                                     Top ingresos
                                   </Badge>
                                 )}
                                 {bestBy.sla === r.id && r.tasaSla != null && (
-                                  <Badge className="text-[9px] font-normal bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300">
+                                  <Badge className="text-xs font-normal bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300">
                                     Mejor SLA
                                   </Badge>
                                 )}
                                 {bestBy.tat === r.id && r.tat > 0 && (
-                                  <Badge className="text-[9px] font-normal bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">
+                                  <Badge className="text-xs font-normal bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">
                                     TAT más rápido
                                   </Badge>
                                 )}
                               </span>
-                              <span className="text-[11px] text-muted-foreground truncate">
+                              <span className="text-xs text-muted-foreground truncate">
                                 {r.email}
                               </span>
                             </div>
@@ -450,7 +450,7 @@ export function TecnicosRanking() {
                         >
                           {formatPct(r.tasaSla)}
                           {r.vencidas > 0 && (
-                            <span className="text-[10px] text-red-600 ml-1">
+                            <span className="text-xs text-red-600 ml-1">
                               ({r.vencidas} venc.)
                             </span>
                           )}
@@ -484,19 +484,19 @@ export function TecnicosRanking() {
                         <span className="font-medium text-sm truncate flex flex-wrap items-center gap-1.5">
                           {r.nombre}
                           {!r.activo && (
-                            <Badge variant="outline" className="text-[9px] font-normal bg-muted">Inactivo</Badge>
+                            <Badge variant="outline" className="text-xs font-normal bg-muted">Inactivo</Badge>
                           )}
                           {bestBy.ingresos === r.id && r.ingresos > 0 && (
-                            <Badge className="text-[9px] font-normal bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">Top ingresos</Badge>
+                            <Badge className="text-xs font-normal bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">Top ingresos</Badge>
                           )}
                           {bestBy.sla === r.id && r.tasaSla != null && (
-                            <Badge className="text-[9px] font-normal bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300">Mejor SLA</Badge>
+                            <Badge className="text-xs font-normal bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300">Mejor SLA</Badge>
                           )}
                           {bestBy.tat === r.id && r.tat > 0 && (
-                            <Badge className="text-[9px] font-normal bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">TAT más rápido</Badge>
+                            <Badge className="text-xs font-normal bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">TAT más rápido</Badge>
                           )}
                         </span>
-                        <span className="block text-[11px] text-muted-foreground truncate">{r.email}</span>
+                        <span className="block text-xs text-muted-foreground truncate">{r.email}</span>
                       </Link>
                       <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                     </div>
@@ -521,7 +521,7 @@ export function TecnicosRanking() {
                         <span className="text-muted-foreground">SLA</span>
                         <div className={cn("font-medium tabular-nums", slaBajo && "text-red-600 dark:text-red-400")}>
                           {formatPct(r.tasaSla)}
-                          {r.vencidas > 0 && <span className="text-[10px] text-red-600 ml-1">({r.vencidas} venc.)</span>}
+                          {r.vencidas > 0 && <span className="text-xs text-red-600 ml-1">({r.vencidas} venc.)</span>}
                         </div>
                       </div>
                       <div>

@@ -50,7 +50,7 @@ export function VariantPicker({ variantes, varianteId, onSelect, topVarianteId, 
               <span>{v.etiqueta}</span>
               {esTop && !sinStock && (
                 <span
-                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold leading-none ${
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold leading-none ${
                     active
                       ? "bg-white/25 text-white"
                       : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300"

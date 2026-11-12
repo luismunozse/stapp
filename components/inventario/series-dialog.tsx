@@ -229,7 +229,7 @@ export function SeriesDialog({
                 size="sm"
                 variant={mode === "bulk" ? "default" : "outline"}
                 onClick={() => setMode("bulk")}
-                className="h-7 text-[11px] flex-1"
+                className="h-7 text-xs flex-1"
               >
                 Carga masiva
               </Button>
@@ -237,7 +237,7 @@ export function SeriesDialog({
                 size="sm"
                 variant={mode === "scan" ? "default" : "outline"}
                 onClick={() => setMode("scan")}
-                className="h-7 text-[11px] flex-1"
+                className="h-7 text-xs flex-1"
               >
                 <ScanLine className="h-3 w-3 mr-1" />
                 Escanear
@@ -255,7 +255,7 @@ export function SeriesDialog({
                   placeholder={"SN001\nSN002\nSN003"}
                   className="mt-1 font-mono text-xs min-h-[120px]"
                 />
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Detectados: {candidatos.length}
                 </p>
               </div>
@@ -277,13 +277,13 @@ export function SeriesDialog({
                 />
                 <div className="border rounded-md p-2 min-h-[80px] max-h-[140px] overflow-y-auto flex flex-wrap gap-1">
                   {scanQueue.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">Cola vacía</p>
+                    <p className="text-xs text-muted-foreground">Cola vacía</p>
                   ) : (
                     scanQueue.map((s) => (
                       <Badge
                         key={s}
                         variant="secondary"
-                        className="text-[10px] cursor-pointer"
+                        className="text-xs cursor-pointer"
                         onClick={() => removeScan(s)}
                         title="Click para quitar"
                       >
@@ -292,7 +292,7 @@ export function SeriesDialog({
                     ))
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {scanQueue.length} encolado(s)
                 </p>
               </div>
@@ -380,7 +380,7 @@ export function SeriesDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Series existentes</h3>
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-xs">
                 {series.length}
               </Badge>
             </div>
@@ -422,13 +422,13 @@ export function SeriesDialog({
                     className="rounded-md border p-2 text-xs space-y-1 hover:bg-muted/40"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[11px] truncate">{s.numero_serie}</span>
-                      <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-[10px]">
+                      <span className="font-mono text-xs truncate">{s.numero_serie}</span>
+                      <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-xs">
                         {serieEstado(s.estado).label}
                       </StatusPill>
                     </div>
                     {(s.fecha_venta || s.fecha_garantia_vence) && (
-                      <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+                      <div className="text-xs text-muted-foreground flex items-center gap-3">
                         {s.fecha_venta && (
                           <span>
                             Vendida: {formatDate(s.fecha_venta)}

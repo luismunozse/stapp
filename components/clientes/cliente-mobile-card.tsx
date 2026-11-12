@@ -77,7 +77,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
               </div>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {cliente.tipoCliente === "EMPRESA" && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
                     Empresa
                   </span>
                 )}

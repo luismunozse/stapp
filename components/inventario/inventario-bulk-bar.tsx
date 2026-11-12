@@ -268,7 +268,7 @@ export function InventarioBulkBar({
               />
               <span className="text-sm text-muted-foreground">%</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Positivo para aumentar, negativo para reducir.
             </p>
             <Button size="sm" className="w-full" onClick={handlePriceAdjust} disabled={pending || !percent}>

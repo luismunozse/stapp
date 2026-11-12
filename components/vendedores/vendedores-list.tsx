@@ -226,7 +226,7 @@ export function VendedoresList() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <CardTitle className="text-sm sm:text-lg truncate">{vendedor.nombre}</CardTitle>
                           {!vendedor.activo && (
-                            <Badge variant="outline" className="text-[9px] sm:text-[10px] border-muted-foreground/30 text-muted-foreground">
+                            <Badge variant="outline" className="text-xs border-muted-foreground/30 text-muted-foreground">
                               Inactivo
                             </Badge>
                           )}
@@ -268,21 +268,21 @@ export function VendedoresList() {
                       <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       <span className="text-xs sm:text-sm">Ventas</span>
                     </div>
-                    <Badge variant="secondary" className="text-[10px] sm:text-xs">{vendedor.ventasTotal}</Badge>
+                    <Badge variant="secondary" className="text-xs">{vendedor.ventasTotal}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                       <span className="text-xs sm:text-sm">Completadas</span>
                     </div>
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-[10px] sm:text-xs">
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
                       {vendedor.ventasCompletadas}
                     </Badge>
                   </div>
                   {vendedor.porcentajeComision > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-xs sm:text-sm text-muted-foreground">Comisión</span>
-                      <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                      <Badge variant="secondary" className="text-xs">
                         {vendedor.porcentajeComision}%
                       </Badge>
                     </div>

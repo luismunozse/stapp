@@ -224,7 +224,7 @@ export function SetupChecklist() {
                   >
                     {item.label}
                     {item.optional && !done && (
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-normal">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground font-normal">
                         opcional
                       </span>
                     )}
@@ -268,7 +268,7 @@ export function SetupChecklist() {
           </ul>
 
           <p className="text-xs text-muted-foreground">
-            Todos los items quedan marcados con <code className="bg-muted px-1 py-0.5 rounded text-[11px]">[demo]</code>{" "}
+            Todos los items quedan marcados con <code className="bg-muted px-1 py-0.5 rounded text-xs">[demo]</code>{" "}
             para que los puedas identificar y borrar después cuando quieras.
           </p>
 

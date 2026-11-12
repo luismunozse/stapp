@@ -357,13 +357,13 @@ export default function WebhooksPage() {
                     </div>
                     <div className="flex flex-wrap gap-1 mb-2">
                       {w.events.map((e) => (
-                        <Badge key={e} variant="outline" className="text-[10px]">
+                        <Badge key={e} variant="outline" className="text-xs">
                           {e}
                         </Badge>
                       ))}
                     </div>
                     {w.lastSuccessAt && (
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         Último éxito: {new Date(w.lastSuccessAt).toLocaleString("es-AR", { timeZone: timezone })}
                       </div>
                     )}
@@ -467,7 +467,7 @@ export default function WebhooksPage() {
                     />
                     <span className="flex-1 min-w-0">
                       <div className="font-medium truncate">{ev.label}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono truncate">
+                      <div className="text-xs text-muted-foreground font-mono truncate">
                         {ev.id}
                       </div>
                     </span>
@@ -706,12 +706,12 @@ function DeliveryRow({
     <div className="rounded-md border p-3 text-xs">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant={variant} className="text-[10px]">
+          <Badge variant={variant} className="text-xs">
             {delivery.status}
           </Badge>
           <span className="font-mono">{delivery.event}</span>
           {delivery.httpStatus !== null && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-xs">
               HTTP {delivery.httpStatus}
             </Badge>
           )}

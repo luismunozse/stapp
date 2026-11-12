@@ -571,10 +571,10 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
         <div className="flex flex-col gap-0.5">
           <OrderStatusBadge status={orden.estado} showIcon />
           {isUrgente(orden) && (
-            <span className="text-[10px] font-medium text-red-600 dark:text-red-400">Vencida</span>
+            <span className="text-xs font-medium text-red-600 dark:text-red-400">Vencida</span>
           )}
           {isProximaAVencer(orden) && (
-            <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Vence hoy</span>
+            <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Vence hoy</span>
           )}
         </div>
       ),

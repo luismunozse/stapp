@@ -112,7 +112,7 @@ export function InventarioProveedorStats({
           <div key={s.label} className="flex items-center gap-2">
             <div className="text-muted-foreground">{s.icon}</div>
             <div>
-              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">
                 {s.label}
               </div>
               <div className={`text-sm font-semibold ${s.color || ""}`}>{s.value}</div>
@@ -121,7 +121,7 @@ export function InventarioProveedorStats({
         ))}
       </div>
       {data.truncated && (
-        <div className="text-[11px] text-amber-600 mt-2">
+        <div className="text-xs text-amber-600 mt-2">
           Mostrando los primeros 10.000 items. Aplicá filtros adicionales para ver el total real.
         </div>
       )}

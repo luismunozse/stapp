@@ -83,11 +83,11 @@ export function OrdenesRecientes({ ordenes }: OrdenesRecientesProps) {
                 <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5 sm:mt-1">
                   {orden.cliente}
                 </p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   {orden.dispositivo}
                 </p>
               </div>
-              <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground shrink-0">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                 <Clock className="h-3 w-3" />
                 <span className="hidden sm:inline">{formatFecha(orden.fechaIngreso)}</span>
                 <span className="sm:hidden">{formatFecha(orden.fechaIngreso).replace("Hace menos de 1 hora", "<1h").replace("Hace ", "").replace(" horas", "h").replace(" hora", "h").replace(" días", "d").replace(" día", "d")}</span>

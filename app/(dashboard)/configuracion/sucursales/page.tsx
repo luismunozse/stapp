@@ -328,12 +328,12 @@ function SucursalList({
                 <div className="flex items-center gap-2">
                   <span className="font-medium truncate">{s.nombre}</span>
                   {s.principal && (
-                    <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/60 text-amber-600">
+                    <Badge variant="outline" className="text-xs gap-1 border-amber-500/60 text-amber-600">
                       <Star className="h-2.5 w-2.5" /> Principal
                     </Badge>
                   )}
                   {s.codigo && (
-                    <Badge variant="secondary" className="text-[10px]">{s.codigo}</Badge>
+                    <Badge variant="secondary" className="text-xs">{s.codigo}</Badge>
                   )}
                 </div>
                 {(s.direccion || s.telefono || s.notas) && (

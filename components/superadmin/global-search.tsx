@@ -129,7 +129,7 @@ export function GlobalSearch() {
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="flex-1 text-left">Buscar...</span>
-        <kbd className="pointer-events-none hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+        <kbd className="pointer-events-none hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground">
           <span className="text-xs">Ctrl</span>K
         </kbd>
       </button>
@@ -199,7 +199,7 @@ export function GlobalSearch() {
                         </div>
                         <span
                           className={cn(
-                            "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                            "text-xs font-medium px-1.5 py-0.5 rounded-full",
                             org.activo
                               ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                               : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -283,12 +283,12 @@ export function GlobalSearch() {
           {/* Footer */}
           <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
             <span>
-              <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">Esc</kbd>{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-xs">Esc</kbd>{" "}
               para cerrar
             </span>
             <span>
-              <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">Ctrl</kbd>{" "}
-              <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">K</kbd>{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-xs">Ctrl</kbd>{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-xs">K</kbd>{" "}
               búsqueda global
             </span>
           </div>

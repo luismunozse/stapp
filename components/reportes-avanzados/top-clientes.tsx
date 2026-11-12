@@ -245,14 +245,14 @@ export function TopClientes() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 pl-10 sm:pl-11">
-                    <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                    <Badge variant="secondary" className="text-xs">
                       {cliente.totalOrdenes} {cliente.totalOrdenes === 1 ? "orden" : "órdenes"}
                     </Badge>
-                    <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
+                    <Badge variant="default" className="bg-success text-white text-xs">
                       {formatPrice(cliente.totalGastado)}
                     </Badge>
                     {cliente.ultimaVisita && (
-                      <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         Última: {formatDate(cliente.ultimaVisita)}
                       </span>
                     )}

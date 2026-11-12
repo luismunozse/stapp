@@ -91,12 +91,12 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
                   />
                 )}
                 {isAtLimit && (
-                  <p className="text-[10px] sm:text-xs text-red-600">
+                  <p className="text-xs text-red-600">
                     Has alcanzado el límite
                   </p>
                 )}
                 {isNearLimit && !isAtLimit && (
-                  <p className="text-[10px] sm:text-xs text-yellow-600">
+                  <p className="text-xs text-yellow-600">
                     Cerca del límite
                   </p>
                 )}

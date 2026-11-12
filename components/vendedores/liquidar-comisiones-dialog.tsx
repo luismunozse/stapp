@@ -245,7 +245,7 @@ export function LiquidarComisionesDialog({
                             {c.numeroVenta != null ? `#${c.numeroVenta}` : "—"}
                           </span>
                           {kind && (
-                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                            <Badge variant="secondary" className="text-xs shrink-0">
                               {kind}
                             </Badge>
                           )}

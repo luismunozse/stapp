@@ -461,7 +461,7 @@ export function KitDialog({
               </div>
               {data.costoCalculado !== null && (
                 <div className="text-right">
-                  <div className="text-[10px] uppercase text-muted-foreground">
+                  <div className="text-xs uppercase text-muted-foreground">
                     Costo total receta
                   </div>
                   <div className="text-lg font-bold">
@@ -471,7 +471,7 @@ export function KitDialog({
               )}
             </div>
 
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {esEnsamblado
                 ? "ENSAMBLADO: el kit tiene stock propio. Al ensamblar, descuenta componentes y aumenta el stock del kit."
                 : "VIRTUAL: el kit no tiene stock propio. Al venderlo, se descuentan los componentes directamente (fase 2 — venta automática)."}
@@ -527,7 +527,7 @@ export function KitDialog({
                             <Plus className="h-3.5 w-3.5 text-primary shrink-0" />
                             <div className="flex-1 min-w-0">
                               <div className="font-medium truncate">{r.nombre}</div>
-                              <div className="text-[11px] text-muted-foreground">
+                              <div className="text-xs text-muted-foreground">
                                 {r.codigo} · Stock {r.stock}
                                 {r.precioCompra !== null && ` · ${formatPrice(r.precioCompra)}`}
                               </div>
@@ -571,12 +571,12 @@ export function KitDialog({
                                 {c.componente.nombre}
                               </span>
                               {c.componente.esKit && (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="text-xs">
                                   Sub-kit
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-[11px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                               {c.componente.codigo} · Disp.{" "}
                               {c.componente.disponible}
                               {c.componente.precioCompra !== null &&
@@ -686,7 +686,7 @@ export function KitDialog({
                     {/* Preview de consumo */}
                     {cantEnsamblarNum > 0 && data.componentes.length > 0 && (
                       <div className="border rounded-md">
-                        <div className="text-[11px] font-medium uppercase text-muted-foreground px-2 py-1 border-b bg-muted/30">
+                        <div className="text-xs font-medium uppercase text-muted-foreground px-2 py-1 border-b bg-muted/30">
                           Preview: se consumirá
                         </div>
                         <div className="divide-y text-xs">
@@ -775,11 +775,11 @@ export function KitDialog({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium truncate">{r.nombre}</span>
                             {r.esKit && (
-                              <Badge variant="outline" className="text-[10px]">
+                              <Badge variant="outline" className="text-xs">
                                 Sub-kit
                               </Badge>
                             )}
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge variant="secondary" className="text-xs">
                               {r.codigo}
                             </Badge>
                           </div>
@@ -789,7 +789,7 @@ export function KitDialog({
                             x {r.cantidadTotal}
                           </div>
                           {r.costoSubtotal !== null && (
-                            <div className="text-[10px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                               {formatPrice(r.costoSubtotal)}
                             </div>
                           )}

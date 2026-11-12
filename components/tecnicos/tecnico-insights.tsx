@@ -194,7 +194,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                     </span>
                     <Badge
                       variant={o.vencida ? "destructive" : "secondary"}
-                      className="text-[10px] shrink-0"
+                      className="text-xs shrink-0"
                     >
                       <CalendarClock className="h-3 w-3 mr-0.5" />
                       {formatPlazo(o.horasRestantes, o.vencida)}
@@ -226,7 +226,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                       </span>{" "}
                       <span className="text-muted-foreground">{o.dispositivo}</span>
                     </span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
+                    <Badge variant="outline" className="text-xs shrink-0">
                       <Clock className="h-3 w-3 mr-0.5" />
                       {o.dias}d
                     </Badge>
@@ -256,7 +256,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                 const isTop = s.completadas === semanaTopCount && s.completadas > 0
                 return (
                   <div key={idx} className="flex flex-col items-center flex-1 gap-1">
-                    <div className="text-[10px] font-medium">
+                    <div className="text-xs font-medium">
                       {s.completadas > 0 ? s.completadas : ""}
                     </div>
                     <div className="w-full flex items-end h-20">
@@ -269,7 +269,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                         title={`${s.semana}: ${s.completadas} órdenes · ${formatPrice(s.ingresos)}`}
                       />
                     </div>
-                    <div className="text-[9px] text-muted-foreground">{s.semana}</div>
+                    <div className="text-xs text-muted-foreground">{s.semana}</div>
                   </div>
                 )
               })}
@@ -323,7 +323,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
               especializacion.porMarca.map((m) => (
                 <div key={m.marca} className="flex justify-between text-xs py-0.5">
                   <span className="truncate">{m.marca}</span>
-                  <Badge variant="outline" className="text-[10px]">{m.count}</Badge>
+                  <Badge variant="outline" className="text-xs">{m.count}</Badge>
                 </div>
               ))
             )}
@@ -345,7 +345,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                 <div key={idx} className="flex justify-between items-center text-xs py-0.5">
                   <span className="truncate flex-1 pr-2">{r.nombre}</span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="text-[10px]">×{r.cantidad}</Badge>
+                    <Badge variant="outline" className="text-xs">×{r.cantidad}</Badge>
                     {r.monto != null && (
                       <span className="text-muted-foreground">{formatPrice(r.monto)}</span>
                     )}
@@ -406,7 +406,7 @@ function Kpi({
         >
           {value}
         </div>
-        {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
+        {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
       </CardContent>
     </Card>
   )
@@ -430,7 +430,7 @@ function MiniStat({
         <div className="min-w-0">
           <div className="text-xs text-muted-foreground">{label}</div>
           <div className="text-lg font-semibold">{value}</div>
-          {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
+          {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
         </div>
       </CardContent>
     </Card>

@@ -219,19 +219,19 @@ export default function ReposicionPage() {
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card><CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Items</div>
+            <div className="text-xs uppercase text-muted-foreground">Items</div>
             <div className="text-xl font-bold">{data.totales.items}</div>
           </CardContent></Card>
           <Card><CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Críticos</div>
+            <div className="text-xs uppercase text-muted-foreground">Críticos</div>
             <div className="text-xl font-bold text-destructive-text">{data.totales.criticos}</div>
           </CardContent></Card>
           <Card><CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Altos</div>
+            <div className="text-xs uppercase text-muted-foreground">Altos</div>
             <div className="text-xl font-bold text-amber-600">{data.totales.altos}</div>
           </CardContent></Card>
           <Card><CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Costo total</div>
+            <div className="text-xs uppercase text-muted-foreground">Costo total</div>
             <div className="text-lg font-bold">{formatPrice(data.totales.costoTotal)}</div>
           </CardContent></Card>
         </div>
@@ -276,9 +276,9 @@ export default function ReposicionPage() {
                         {g.proveedorNombre || "Sin proveedor asignado"}
                       </CardTitle>
                       {g.leadTimeDias !== null && (
-                        <Badge variant="secondary" className="text-[10px]">Lead {g.leadTimeDias}d</Badge>
+                        <Badge variant="secondary" className="text-xs">Lead {g.leadTimeDias}d</Badge>
                       )}
-                      <Badge variant="outline" className="text-[10px] shrink-0 whitespace-nowrap">{g.items.length} items</Badge>
+                      <Badge variant="outline" className="text-xs shrink-0 whitespace-nowrap">{g.items.length} items</Badge>
                     </div>
                     <div className="text-sm font-semibold shrink-0">{formatPrice(g.subtotal)}</div>
                   </div>
@@ -303,9 +303,9 @@ export default function ReposicionPage() {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-medium truncate">{it.nombre}</span>
                                 {prioridadBadge(it.prioridad)}
-                                <Badge variant="secondary" className="text-[10px]">{it.codigo}</Badge>
+                                <Badge variant="secondary" className="text-xs">{it.codigo}</Badge>
                               </div>
-                              <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
                                 <span>Stock {it.stockActual} / umbral {it.umbralAplicado}</span>
                                 {it.demanda30d > 0 && (
                                   <span>{it.demanda30d} vendidos / 30d ({it.demandaDiariaAvg.toFixed(2)}/día)</span>

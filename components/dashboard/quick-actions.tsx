@@ -53,7 +53,7 @@ export function QuickActions({ cobrosPendientesCount }: QuickActionsProps) {
             <Icon className="h-4 w-4" />
             {action.label}
             {action.badge !== undefined && (
-              <Badge variant="secondary" className="ml-1 bg-white/20 text-inherit text-[10px] px-1.5 py-0">
+              <Badge variant="secondary" className="ml-1 bg-white/20 text-inherit text-xs px-1.5 py-0">
                 {action.badge}
               </Badge>
             )}

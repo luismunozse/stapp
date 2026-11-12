@@ -391,7 +391,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 >
                   <Badge
                     variant="outline"
-                    className="h-4 px-1 text-[9px] font-normal border-amber-500/60 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
+                    className="h-4 px-1 text-xs leading-none font-normal border-amber-500/60 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
                   >
                     Duplicado
                   </Badge>
@@ -410,7 +410,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       headerClassName: "hidden xl:table-cell",
       render: (item) => {
         const nombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
-        return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{nombre}</Badge>
+        return <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">{nombre}</Badge>
       },
     },
     {
@@ -418,7 +418,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       header: "Categoría",
       className: "hidden xl:table-cell",
       headerClassName: "hidden xl:table-cell",
-      render: (item) => <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">{item.categoria}</Badge>,
+      render: (item) => <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">{item.categoria}</Badge>,
     },
     {
       key: "proveedor",
@@ -458,7 +458,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               onAdjusted={() => setRefreshKey((k) => k + 1)}
             />
             {item.stockReservado > 0 && (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight">
+              <span className="text-xs text-amber-600 dark:text-amber-400 leading-tight">
                 {item.stockReservado} res · {item.stock - item.stockReservado} disp
               </span>
             )}
@@ -535,7 +535,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               </Button>
             )}
             {isArchived && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
+              <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1174,7 +1174,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       <div className="mt-1.5 flex items-center gap-2 text-sm">
                         <span className="font-semibold">{formatPrice(item.precioVenta)}</span>
                         {margen !== null && margen > 0 && (
-                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400">+{formatPrice(margen)}</span>
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400">+{formatPrice(margen)}</span>
                         )}
                       </div>
                     </div>
@@ -1253,7 +1253,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                 >
                                   <Badge
                                     variant="outline"
-                                    className="h-4 px-1 text-[9px] font-normal border-amber-500/60 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
+                                    className="h-4 px-1 text-xs leading-none font-normal border-amber-500/60 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
                                   >
                                     Duplicado
                                   </Badge>
@@ -1264,7 +1264,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             {isArchived ? (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
+                              <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 text-muted-foreground">
                                 Archivado
                               </Badge>
                             ) : (
@@ -1296,17 +1296,17 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
                         {/* Row 2: Badges */}
                         <div className="flex items-center gap-1.5 mb-3">
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                          <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">
                             {tipoNombre}
                           </Badge>
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+                          <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
                             {item.categoria}
                           </Badge>
                           {item.proveedor && (
-                            <span className="text-[10px] text-muted-foreground truncate">{item.proveedor}</span>
+                            <span className="text-xs text-muted-foreground truncate">{item.proveedor}</span>
                           )}
                           {item.ubicacion && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground truncate" title={item.ubicacion}>
+                            <span className="flex items-center gap-0.5 text-xs text-muted-foreground truncate" title={item.ubicacion}>
                               <MapPin className="h-2.5 w-2.5" />
                               {item.ubicacion}
                             </span>
@@ -1318,7 +1318,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                         <div className={`grid ${item.precioCompra !== null ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-muted/50 p-2.5`}>
                           {/* Stock */}
                           <div className="text-center">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
+                            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
                             <div className={`text-lg font-bold leading-none ${
                               sinStock ? "text-destructive-text" : esStockBajo ? "text-amber-600" : "text-foreground"
                             }`}>
@@ -1327,7 +1327,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             {esStockBajo && !isArchived && (
                               <div className="flex items-center justify-center gap-0.5 mt-0.5">
                                 <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
-                                <span className="text-[9px] text-amber-600 font-medium">
+                                <span className="text-xs text-amber-600 font-medium">
                                   {sinStock ? "Sin stock" : "Bajo"}
                                 </span>
                               </div>
@@ -1335,11 +1335,11 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             {item.stockMinimo != null && !isArchived && (
                               <div className="flex items-center justify-center gap-0.5 mt-0.5">
                                 <Settings2 className="h-2 w-2 text-muted-foreground" />
-                                <span className="text-[8px] text-muted-foreground">mín: {item.stockMinimo}</span>
+                                <span className="text-xs text-muted-foreground">mín: {item.stockMinimo}</span>
                               </div>
                             )}
                             {item.stockReservado > 0 && !isArchived && (
-                              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                              <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                                 {item.stockReservado} reserv. · {item.stock - item.stockReservado} disp.
                               </div>
                             )}
@@ -1347,7 +1347,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           {/* Costo — oculto cuando el rol no puede verlo */}
                           {item.precioCompra !== null && (
                             <div className="text-center border-x border-border/50">
-                              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
+                              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
                               <div className="text-sm font-medium leading-none text-muted-foreground">
                                 {formatPrice(item.precioCompra)}
                               </div>
@@ -1355,12 +1355,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           )}
                           {/* Venta */}
                           <div className="text-center">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
+                            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
                             <div className="text-sm font-bold leading-none">
                               {formatPrice(item.precioVenta)}
                             </div>
                             {margen !== null && margen > 0 && (
-                              <div className="text-[9px] text-emerald-600 font-medium mt-0.5">
+                              <div className="text-xs text-emerald-600 font-medium mt-0.5">
                                 +{formatPrice(margen)}
                               </div>
                             )}
@@ -1372,7 +1372,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                            className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground"
                             onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
                           >
                             <TrendingUp className="mr-1 h-3 w-3" />
@@ -1381,7 +1381,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                            className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground"
                             onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
                           >
                             <History className="mr-1 h-3 w-3" />

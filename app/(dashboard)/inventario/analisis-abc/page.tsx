@@ -164,19 +164,19 @@ export default function AnalisisAbcPage() {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card><CardContent className="p-3">
-              <div className="text-[10px] uppercase text-muted-foreground">Items analizados</div>
+              <div className="text-xs uppercase text-muted-foreground">Items analizados</div>
               <div className="text-xl font-bold">{data.totales.items}</div>
             </CardContent></Card>
             <Card><CardContent className="p-3">
-              <div className="text-[10px] uppercase text-muted-foreground">Revenue {data.periodo.dias}d</div>
+              <div className="text-xs uppercase text-muted-foreground">Revenue {data.periodo.dias}d</div>
               <div className="text-lg font-bold">{formatPrice(data.totales.revenue)}</div>
             </CardContent></Card>
             <Card><CardContent className="p-3">
-              <div className="text-[10px] uppercase text-muted-foreground">Capital inmovilizado</div>
+              <div className="text-xs uppercase text-muted-foreground">Capital inmovilizado</div>
               <div className="text-lg font-bold">{formatPrice(data.totales.capitalInmovilizado)}</div>
             </CardContent></Card>
             <Card><CardContent className="p-3">
-              <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+              <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
                 <Skull className="h-3 w-3" /> Capital muerto
               </div>
               <div className="text-lg font-bold text-destructive-text">{formatPrice(data.totales.capitalMuerto)}</div>
@@ -304,7 +304,7 @@ export default function AnalisisAbcPage() {
                     <tr key={r.inventarioId} className={muerta ? "bg-destructive/5" : ""}>
                       <td className="p-2 min-w-[200px]">
                         <div className="font-medium truncate max-w-[280px]">{r.nombre}</div>
-                        <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
                           <span>{r.codigo}</span>
                           {r.proveedorNombre && <span className="truncate">· {r.proveedorNombre}</span>}
                         </div>

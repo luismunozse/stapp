@@ -449,13 +449,13 @@ export function SeguimientoContent({ token }: { token: string }) {
               <h1 className="text-base font-bold leading-tight">
                 {data.organizacion.nombre || "Servicio Técnico"}
               </h1>
-              <p className="text-[11px] text-primary-foreground/60">Seguimiento de orden</p>
+              <p className="text-xs text-primary-foreground/60">Seguimiento de orden</p>
             </div>
           </div>
 
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] text-primary-foreground/60 uppercase tracking-wider font-medium mb-1">
+              <p className="text-xs text-primary-foreground/60 uppercase tracking-wider font-medium mb-1">
                 Orden
               </p>
               <p className="text-3xl font-extrabold tracking-tight leading-none">
@@ -468,7 +468,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 <span className="truncate max-w-[140px]">{data.dispositivo}</span>
               </div>
               {data.marca && (
-                <p className="text-[11px] text-primary-foreground/50 mt-1">{data.marca}</p>
+                <p className="text-xs text-primary-foreground/50 mt-1">{data.marca}</p>
               )}
             </div>
           </div>
@@ -536,7 +536,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                     {estadoUi.labelCliente}
                   </p>
                   {isReady && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
                       <Sparkles className="h-3 w-3" />
                       Listo
                     </span>
@@ -549,7 +549,7 @@ export function SeguimientoContent({ token }: { token: string }) {
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
+              <div className="flex justify-between text-xs text-muted-foreground font-medium">
                 <span>Progreso</span>
                 <span>{progressPercent}%</span>
               </div>
@@ -629,14 +629,14 @@ export function SeguimientoContent({ token }: { token: string }) {
                 return steps.map((step, index, arr) => {
                   const StepIcon = stepperIconMap[step.icon] || CheckCircle2
                   return (
-                    <div key={step.key} className="flex flex-col items-center relative flex-1">
+                    <div key={step.key} className="flex flex-col items-center relative flex-1 min-w-0">
                       {index < arr.length - 1 && (
                         <div className="absolute top-[11px] left-[calc(50%+11px)] right-[calc(-50%+11px)] h-[2px] bg-amber-500" />
                       )}
                       <div className="relative z-10 flex items-center justify-center h-6 w-6 rounded-full bg-amber-500 text-white">
                         <StepIcon className="h-3.5 w-3.5" />
                       </div>
-                      <p className="mt-1 text-center leading-tight text-amber-600 dark:text-amber-400 text-[9px] sm:text-[10px] font-medium">
+                      <p className="mt-1 w-full text-center leading-tight break-words hyphens-auto text-amber-700 dark:text-amber-400 text-xs font-medium">
                         {step.label}
                       </p>
                     </div>
@@ -657,7 +657,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 const StepIcon = ESTADO_ORDEN_UI[estado].icon
 
                 return (
-                  <div key={estado} className="flex flex-col items-center relative flex-1">
+                  <div key={estado} className="flex flex-col items-center relative flex-1 min-w-0">
                     {index < estadoFlow.length - 1 && (
                       <div
                         className={`absolute top-[11px] left-[calc(50%+11px)] right-[calc(-50%+11px)] h-[2px] transition-colors duration-500 ${
@@ -681,12 +681,12 @@ export function SeguimientoContent({ token }: { token: string }) {
                       )}
                     </div>
 
-                    <p className={`mt-1 text-center leading-tight ${
+                    <p className={`mt-1 w-full text-center leading-tight break-words hyphens-auto ${
                       isPast
-                        ? "text-green-600 dark:text-green-400 text-[9px] sm:text-[10px] font-medium"
+                        ? "text-green-600 dark:text-green-400 text-xs font-medium"
                         : isCurrent
-                          ? "text-primary text-[9px] sm:text-[10px] font-bold"
-                          : "text-muted-foreground/40 text-[9px] sm:text-[10px]"
+                          ? "text-primary text-xs font-bold"
+                          : "text-muted-foreground/40 text-xs"
                     }`}>
                       {estadoShortLabels[estado]}
                     </p>
@@ -712,7 +712,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 <Search className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">
+                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">
                   Diagnóstico del {term("tecnico")}
                 </p>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{data.diagnostico}</p>
@@ -755,7 +755,7 @@ export function SeguimientoContent({ token }: { token: string }) {
               </div>
               <div className="flex-1 min-w-0 space-y-2">
                 <div>
-                  <p className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">
+                  <p className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">
                     Presupuesto rechazado
                   </p>
                   <p className="text-sm font-semibold mt-0.5">
@@ -770,7 +770,7 @@ export function SeguimientoContent({ token }: { token: string }) {
 
                 {rejectedCotizacion.motivoRechazo && (
                   <div className="rounded-md bg-red-50/60 dark:bg-red-950/30 p-2 border border-red-100 dark:border-red-900">
-                    <p className="text-[10px] font-medium text-red-700 dark:text-red-300 uppercase tracking-wider mb-0.5">
+                    <p className="text-xs font-medium text-red-700 dark:text-red-300 uppercase tracking-wider mb-0.5">
                       Motivo
                     </p>
                     <p className="text-sm whitespace-pre-wrap">{rejectedCotizacion.motivoRechazo}</p>
@@ -808,7 +808,7 @@ export function SeguimientoContent({ token }: { token: string }) {
       <Card>
         <CardContent className="p-0 divide-y">
           <div className="p-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">
               <DeviceIcon className="h-3.5 w-3.5" />
               {term("equipo")}
             </div>
@@ -823,19 +823,19 @@ export function SeguimientoContent({ token }: { token: string }) {
           </div>
 
           <div className="px-4 py-3">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Problema reportado</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Problema reportado</p>
             <p className="text-sm leading-relaxed">{data.problemaReportado}</p>
           </div>
 
           {data.accesorios && (
             <div className="px-4 py-3">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Accesorios recibidos</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Accesorios recibidos</p>
               <p className="text-sm">{data.accesorios}</p>
             </div>
           )}
 
           <div className="px-4 py-3">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">
               <Calendar className="h-3.5 w-3.5" />
               Fechas
             </div>
@@ -916,7 +916,7 @@ export function SeguimientoContent({ token }: { token: string }) {
         </Card>
       )}
 
-      <p className="text-center text-[10px] text-muted-foreground/50 pb-6 pt-2">
+      <p className="text-center text-xs text-muted-foreground/50 pb-6 pt-2">
         Powered by STApp
       </p>
     </div>
@@ -925,7 +925,7 @@ export function SeguimientoContent({ token }: { token: string }) {
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="px-2 py-0.5 bg-muted rounded-md text-[11px] font-medium text-muted-foreground">
+    <span className="px-2 py-0.5 bg-muted rounded-md text-xs font-medium text-muted-foreground">
       {children}
     </span>
   )
@@ -950,7 +950,7 @@ function DateItem({ label, value, highlight, urgency }: {
             ? "bg-amber-50 dark:bg-amber-950/30"
             : "bg-muted/50"
     }`}>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{label}</p>
+      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">{label}</p>
       <p className={`text-sm font-semibold mt-0.5 ${
         highlight
           ? "text-green-700 dark:text-green-400"

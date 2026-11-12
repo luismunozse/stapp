@@ -94,7 +94,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                 <Card>
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Capital Invertido</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase">Capital Invertido</span>
                       <Wallet className="h-3.5 w-3.5 text-blue-500" />
                     </div>
                     <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
@@ -104,7 +104,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Valor en Venta</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Valor en Venta</span>
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
                   </div>
                   <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
@@ -114,11 +114,11 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                 <Card>
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase">Margen Potencial</span>
                       <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
                     </div>
                     <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {data.valorizacion.valorCosto > 0
                         ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
                         : ""}
@@ -129,11 +129,11 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Stock Total</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Stock Total</span>
                     <Package className="h-3.5 w-3.5 text-orange-500" />
                   </div>
                   <div className="text-lg font-bold">{data.valorizacion.totalUnidades}</div>
-                  <p className="text-[10px] text-muted-foreground">{data.valorizacion.totalItems} productos</p>
+                  <p className="text-xs text-muted-foreground">{data.valorizacion.totalItems} productos</p>
                 </CardContent>
               </Card>
             </div>
@@ -153,7 +153,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                     <Icon className="h-3.5 w-3.5" />
                     {tab.label}
                     {tab.id === "reorden" && data.alertasReorden.length > 0 && (
-                      <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 ml-1">
+                      <Badge variant="destructive" className="text-xs leading-none px-1 py-0 h-4 ml-1">
                         {data.alertasReorden.length}
                       </Badge>
                     )}
@@ -193,7 +193,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                               <Badge variant={
                                 item.tasaRotacion > 4 ? "default" :
                                 item.tasaRotacion > 2 ? "secondary" : "outline"
-                              } className={`text-[10px] ${
+                              } className={`text-xs ${
                                 item.tasaRotacion > 4 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" :
                                 item.tasaRotacion > 2 ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" : ""
                               }`}>
@@ -286,7 +286,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           }`}>
                             <td className="py-2 pr-2">
                               <div className="font-medium">{item.nombre}</div>
-                              <div className="text-[10px] text-muted-foreground">{item.codigo}</div>
+                              <div className="text-xs text-muted-foreground">{item.codigo}</div>
                             </td>
                             <td className="py-2 pr-2 text-right font-medium">{item.stock}</td>
                             <td className="py-2 pr-2 text-right">{item.promedioDiario}</td>
@@ -300,7 +300,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             </td>
                             <td className="py-2 pr-2 text-right">{item.puntoReorden}</td>
                             <td className="py-2 text-right">
-                              <Badge variant="outline" className="text-[10px] font-bold">
+                              <Badge variant="outline" className="text-xs font-bold">
                                 +{item.cantidadSugerida}
                               </Badge>
                             </td>

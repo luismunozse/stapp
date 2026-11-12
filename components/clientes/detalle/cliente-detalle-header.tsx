@@ -56,7 +56,7 @@ export function ClienteDetalleHeader({
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-2xl font-bold leading-tight break-words min-w-0">{cliente.nombre}</h1>
               {esEmpresa && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">Empresa</span>
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">Empresa</span>
               )}
               <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
             </div>
@@ -119,7 +119,7 @@ export function ClienteDetalleHeader({
             </div>
           )}
           {porSucursal && resumen.debe !== null && (
-            <div className="text-[11px] text-muted-foreground">en esta sucursal</div>
+            <div className="text-xs text-muted-foreground">en esta sucursal</div>
           )}
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">

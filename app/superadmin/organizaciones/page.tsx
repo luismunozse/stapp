@@ -299,7 +299,7 @@ export default function OrganizacionesPage() {
                 {org.possibleDuplicates && org.possibleDuplicates.length > 0 && (
                   <span
                     title={dupTitle}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950 border border-amber-300 dark:border-amber-800"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950 border border-amber-300 dark:border-amber-800"
                   >
                     <Copy className="h-3 w-3" />
                     Posible duplicado

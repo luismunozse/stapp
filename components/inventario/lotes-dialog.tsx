@@ -66,7 +66,7 @@ function estadoBadge(estado: Lote["estado"]) {
   }
   const m = map[estado]
   return (
-    <StatusPill tone={m.tone} size="sm" className="text-[10px]">
+    <StatusPill tone={m.tone} size="sm" className="text-xs">
       {m.label}
     </StatusPill>
   )
@@ -291,7 +291,7 @@ export function LotesDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Lotes existentes</h3>
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-xs">
                 Total activo: {totalActivo}
               </Badge>
             </div>
@@ -341,7 +341,7 @@ export function LotesDialog({
                         )}
                       </div>
                       {l.notas && (
-                        <p className="text-[11px] text-muted-foreground truncate">{l.notas}</p>
+                        <p className="text-xs text-muted-foreground truncate">{l.notas}</p>
                       )}
                     </div>
                   )
@@ -352,7 +352,7 @@ export function LotesDialog({
               const d = diasParaVencer(l.fecha_vencimiento)
               return d !== null && d < 0 && l.estado === "ACTIVO"
             }) && (
-              <div className="flex items-start gap-2 text-[11px] rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200 text-amber-900 p-2">
+              <div className="flex items-start gap-2 text-xs rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200 text-amber-900 p-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <div>Tenés lotes vencidos sin procesar. Ejecutá "Marcar vencidos" desde Inventario / Lotes.</div>
               </div>

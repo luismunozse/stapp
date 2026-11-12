@@ -110,7 +110,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
           onClick={(e) => {
             e.stopPropagation()
           }}
-          className="absolute top-2 right-2 flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+          className="absolute top-2 right-2 flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
           title="Ver stock en otras sucursales"
           aria-label="Ver stock en otras sucursales"
         >
@@ -126,7 +126,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
       >
         <div className="space-y-2">
           <p className="text-xs font-semibold truncate">{productName}</p>
-          <p className="text-[10px] text-muted-foreground">Stock por sucursal / depósito</p>
+          <p className="text-xs text-muted-foreground">Stock por sucursal / depósito</p>
           {loading ? (
             <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -146,7 +146,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
                       {row.sucursalNombre ?? row.depositoNombre}
                     </span>
                     {row.sucursalNombre && (
-                      <span className="text-[10px] text-muted-foreground block truncate">
+                      <span className="text-xs text-muted-foreground block truncate">
                         {row.depositoNombre}
                       </span>
                     )}
@@ -162,7 +162,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
               ))}
             </div>
           )}
-          <p className="text-[9px] text-muted-foreground pt-1">
+          <p className="text-xs text-muted-foreground pt-1">
             Solo lectura — para transferir usá el módulo de transferencias.
           </p>
         </div>
@@ -584,7 +584,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     >
                       <div className="flex items-center gap-1.5 mb-1">
                         <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-[10px] font-medium text-muted-foreground">Variantes</span>
+                        <span className="text-xs font-medium text-muted-foreground">Variantes</span>
                       </div>
                       <span className="text-sm font-medium line-clamp-2 leading-tight mb-auto">{tarjeta.nombre}</span>
                       <span className="mt-2 text-sm font-bold text-primary">
@@ -609,7 +609,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
 
                   <div className="flex items-center gap-1.5 mb-1">
                     <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-[10px] font-mono text-muted-foreground truncate">
+                    <span className="text-xs font-mono text-muted-foreground truncate">
                       {product.codigo}
                     </span>
                   </div>
@@ -620,7 +620,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     <span className="text-sm sm:text-base font-bold text-primary">
                       {formatPrice(product.precioVenta)}
                     </span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       product.stock <= 3
                         ? "bg-destructive/10 text-destructive-text"
                         : "bg-muted text-muted-foreground"

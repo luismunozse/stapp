@@ -190,7 +190,7 @@ export default function LotesPage() {
                             {l.nombre}
                           </Link>
                           {l.codigo && (
-                            <div className="text-[11px] text-muted-foreground">{l.codigo}</div>
+                            <div className="text-xs text-muted-foreground">{l.codigo}</div>
                           )}
                         </td>
                         <td className="p-3 font-mono text-xs">{l.numero_lote}</td>
@@ -211,7 +211,7 @@ export default function LotesPage() {
                             >
                               <CalendarClock className="h-3 w-3" />
                               {formatDate(l.fecha_vencimiento)}
-                              <span className="text-[11px] ml-1">
+                              <span className="text-xs ml-1">
                                 ({dr < 0 ? `hace ${-dr}d` : `en ${dr}d`})
                               </span>
                             </span>
@@ -222,7 +222,7 @@ export default function LotesPage() {
                         <td className="p-3">
                           <Badge
                             variant="outline"
-                            className={`text-[10px] ${
+                            className={`text-xs ${
                               l.estado === "VENCIDO"
                                 ? "border-red-500/60 text-red-600"
                                 : l.estado === "BLOQUEADO"

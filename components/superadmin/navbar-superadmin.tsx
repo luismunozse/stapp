@@ -103,7 +103,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 border border-primary/30">
               <Shield className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-bold text-primary uppercase tracking-widest">
+              <span className="text-xs font-bold text-primary uppercase tracking-widest">
                 SuperAdmin
               </span>
             </div>
@@ -164,7 +164,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-2">
             <STAppLogo size="sm" />
-            <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+            <span className="text-xs font-bold text-primary uppercase tracking-wider">
               SuperAdmin
             </span>
           </div>

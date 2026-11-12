@@ -329,7 +329,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
                             />
                           ) : null}
                         </td>
-                        <td className="px-2 py-1.5 font-mono text-[11px] whitespace-nowrap">{item.codigo}</td>
+                        <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap">{item.codigo}</td>
                         <td className="px-2 py-1.5 max-w-[280px] truncate" title={item.nombre}>{item.nombre}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
                           {item.precioCompra != null ? formatPrice(item.precioCompra) : "—"}
@@ -344,7 +344,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
                               value={ov.compra ?? ""}
                               onChange={(e) => setOverride(item.id, "compra", e.target.value)}
                             />
-                            <span className="text-[10px] text-muted-foreground w-12 text-right">
+                            <span className="text-xs text-muted-foreground w-12 text-right">
                               {compraNuevo != null ? deltaPct(item.precioCompra, compraNuevo) : ""}
                             </span>
                           </div>
@@ -362,7 +362,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
                               value={ov.venta ?? ""}
                               onChange={(e) => setOverride(item.id, "venta", e.target.value)}
                             />
-                            <span className="text-[10px] text-muted-foreground w-12 text-right">
+                            <span className="text-xs text-muted-foreground w-12 text-right">
                               {ventaNuevo != null ? deltaPct(item.precioVenta, ventaNuevo) : ""}
                             </span>
                           </div>

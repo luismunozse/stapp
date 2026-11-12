@@ -108,20 +108,20 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
                 Destacado
               </Badge>
             ) : (item.vistas_semana ?? 0) >= 5 ? (
-              <Badge variant="secondary" className="gap-1 border-0 bg-white/90 text-cat-ink backdrop-blur shadow-sm text-[10px] font-semibold">
+              <Badge variant="secondary" className="gap-1 border-0 bg-white/90 text-cat-ink backdrop-blur shadow-sm text-xs font-semibold">
                 <Eye className="h-3 w-3" />
                 {item.vistas_semana} vieron
               </Badge>
             ) : null}
 
             {tieneAnchor && pctDescuento > 0 && (
-              <Badge className="gap-0.5 border-0 bg-green-100 text-green-800 text-[10px] font-bold shadow-sm">
+              <Badge className="gap-0.5 border-0 bg-green-100 text-green-800 text-xs font-bold shadow-sm">
                 -{pctDescuento}%
               </Badge>
             )}
 
             {stockBajo && !agotado && (
-              <Badge variant="secondary" className="gap-1 border-0 bg-orange-100 text-orange-800 text-[10px] font-semibold shadow-sm">
+              <Badge variant="secondary" className="gap-1 border-0 bg-orange-100 text-orange-800 text-xs font-semibold shadow-sm">
                 <Flame className="h-3 w-3" />
                 Últimas {item.stock_disponible}
               </Badge>
@@ -161,7 +161,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
             {item.nombre}
           </h3>
           {item.descripcion && (
-            <p className="text-[11px] text-cat-muted line-clamp-1 leading-tight">
+            <p className="text-xs text-cat-muted line-clamp-1 leading-tight">
               {item.descripcion}
             </p>
           )}

@@ -171,7 +171,7 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                   onChange={(e) => setDraft({ ...draft, whatsapp: e.target.value.replace(/\D/g, "") })}
                   placeholder="5491112345678"
                 />
-                <p className="text-[10px] text-muted-foreground">Sólo dígitos (10-15).</p>
+                <p className="text-xs text-muted-foreground">Sólo dígitos (10-15).</p>
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <Label>Email</Label>
@@ -221,7 +221,7 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold text-sm truncate">{c.nombre}</span>
                     {c.principal && (
-                      <Badge variant="default" className="text-[10px] gap-1">
+                      <Badge variant="default" className="text-xs gap-1">
                         <Star className="h-2.5 w-2.5 fill-current" /> Principal
                       </Badge>
                     )}

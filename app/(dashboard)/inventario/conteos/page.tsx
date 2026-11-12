@@ -175,12 +175,12 @@ export default function ConteosPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold truncate">{c.nombre}</span>
                         {estadoBadge(c.estado)}
-                        <Badge variant="secondary" className="text-[10px]">{c.tipo}</Badge>
+                        <Badge variant="secondary" className="text-xs">{c.tipo}</Badge>
                         {c.depositoNombre && (
-                          <Badge variant="outline" className="text-[10px]">{c.depositoNombre}</Badge>
+                          <Badge variant="outline" className="text-xs">{c.depositoNombre}</Badge>
                         )}
                         {!c.aplicarAjustes && (
-                          <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-600">
+                          <Badge variant="outline" className="text-xs border-amber-500/60 text-amber-600">
                             Solo reporte
                           </Badge>
                         )}

@@ -352,7 +352,7 @@ export function PosVentaExito({
             <div className="sticky bottom-0 -mx-4 border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:static md:col-start-2 md:row-start-3 md:mx-0 md:border-0 md:p-0">
               <Button onClick={onClose} className="h-14 w-full text-lg font-semibold">
                 Nueva venta
-                <kbd className="ml-3 hidden rounded border border-primary-foreground/30 px-1.5 py-0.5 font-mono text-[10px] font-normal opacity-80 md:inline">
+                <kbd className="ml-3 hidden rounded border border-primary-foreground/30 px-1.5 py-0.5 font-mono text-xs font-normal opacity-80 md:inline">
                   Enter
                 </kbd>
               </Button>

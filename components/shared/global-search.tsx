@@ -121,7 +121,7 @@ export function GlobalSearch() {
         >
           <Search className="h-4 w-4" />
           <span className="max-w-[160px] truncate">{PLACEHOLDER_EXAMPLES[placeholderIdx].replace("...", "")}</span>
-          <kbd className="ml-2 px-1.5 py-0.5 text-[10px] bg-background border rounded font-mono">
+          <kbd className="ml-2 px-1.5 py-0.5 text-xs bg-background border rounded font-mono">
             Ctrl+K
           </kbd>
         </button>
@@ -245,14 +245,14 @@ export function GlobalSearch() {
           {/* Footer */}
           <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-muted-foreground">
             <span>
-              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-[10px]">↑↓</kbd>
+              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-xs">↑↓</kbd>
               {" "}navegar
               {" "}
-              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-[10px]">Enter</kbd>
+              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-xs">Enter</kbd>
               {" "}seleccionar
             </span>
             <span>
-              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-[10px]">Esc</kbd>
+              <kbd className="px-1 py-0.5 bg-muted border rounded font-mono text-xs">Esc</kbd>
               {" "}cerrar
             </span>
           </div>

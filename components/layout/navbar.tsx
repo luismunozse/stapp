@@ -428,7 +428,7 @@ export function Navbar() {
                       <button
                         onClick={() => toggleSection(section.label)}
                         className={cn(
-                          "flex items-center justify-between w-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] rounded-md transition-colors",
+                          "flex items-center justify-between w-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] rounded-md transition-colors",
                           hasActiveChild
                             ? "text-primary/90"
                             : "text-sidebar-foreground/55 hover:text-sidebar-foreground/85"
@@ -632,7 +632,7 @@ export function Navbar() {
             {filteredSections.map((section) => (
               <div key={section.label || "_top"} className={section.label ? "mt-5 first:mt-0" : ""}>
                 {section.label && (
-                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+                  <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
                     {section.label}
                   </p>
                 )}
@@ -718,7 +718,7 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors",
                   "active:bg-accent/50 active:scale-95",
                   isActive
                     ? "text-primary"
@@ -736,7 +736,7 @@ export function Navbar() {
           <button
             onClick={() => setMobileMenuOpen(true)}
             className={cn(
-              "flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+              "flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors",
               "active:bg-accent/50 active:scale-95",
               isMoreActive
                 ? "text-primary"

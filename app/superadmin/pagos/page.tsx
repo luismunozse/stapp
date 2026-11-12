@@ -400,7 +400,7 @@ export default function PagosPage() {
                 }`}>
                   {stats?.webhookErrorRate ?? 0}%
                 </div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {stats?.webhookErrors ?? 0} / {stats?.webhookTotal ?? 0}
                 </div>
               </div>

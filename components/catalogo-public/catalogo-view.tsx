@@ -339,7 +339,7 @@ export function CatalogoView({
                   </h3>
                   <button
                     onClick={recientes.clear}
-                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Limpiar
                   </button>
@@ -366,7 +366,7 @@ export function CatalogoView({
                           )}
                         </div>
                         <div className="p-2">
-                          <p className="text-[11px] font-medium line-clamp-1">{it.nombre}</p>
+                          <p className="text-xs font-medium line-clamp-1">{it.nombre}</p>
                           <p className="text-xs font-bold leading-none mt-1" style={{ color: data.config.color_primary }}>
                             {it.precio != null ? formatPrecio(Number(it.precio)) : "Consultar"}
                           </p>

@@ -91,13 +91,13 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                   <p className="font-medium text-sm truncate">
                     {formatCurrency(payment.amount, payment.currency)}
                   </p>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
                     {formatDate(payment.paid_at)}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-                <Badge className={`text-[10px] sm:text-xs ${statusColors[payment.status]}`}>
+                <Badge className={`text-xs ${statusColors[payment.status]}`}>
                   {statusLabels[payment.status]}
                 </Badge>
                 {(payment.invoice_url || payment.receipt_url) && (

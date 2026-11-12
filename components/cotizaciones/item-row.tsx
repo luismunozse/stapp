@@ -474,14 +474,14 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             </div>
           )}
           {showCostInfo && (
-            <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">
+            <div className="text-xs text-muted-foreground mt-1 flex justify-between gap-2">
               <span>Costo {formatPrice(costoUnit)} · Total {formatPrice(costoTotal)}</span>
               {margenPct !== null && <span className="text-success-600">margen {margenPct}%</span>}
             </div>
           )}
           {mostrarCostos && !item.inventarioId && (
             <div className="mt-1 flex items-center gap-1">
-              <span className="text-[11px] text-muted-foreground shrink-0">Costo:</span>
+              <span className="text-xs text-muted-foreground shrink-0">Costo:</span>
               <Input
                 type="text"
                 inputMode="decimal"

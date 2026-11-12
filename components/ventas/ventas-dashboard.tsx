@@ -162,7 +162,7 @@ export function VentasDashboard() {
                           <span className="truncate">{p.descripcion}</span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          <Badge variant="secondary" className="text-[10px]">{p.cantidad} uds</Badge>
+                          <Badge variant="secondary" className="text-xs">{p.cantidad} uds</Badge>
                           <span className="font-medium text-right text-xs sm:text-sm">{formatPrice(p.totalVentas)}</span>
                         </div>
                       </div>
@@ -192,7 +192,7 @@ export function VentasDashboard() {
                           <span className="truncate">{v.nombre}</span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          <Badge variant="secondary" className="text-[10px]">{v.count} ventas</Badge>
+                          <Badge variant="secondary" className="text-xs">{v.count} ventas</Badge>
                           <span className="font-medium text-right text-xs sm:text-sm">{formatPrice(v.total)}</span>
                         </div>
                       </div>
@@ -220,7 +220,7 @@ export function VentasDashboard() {
                           <span>{METODO_LABELS[m.metodo] || m.metodo}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">{m.count}</Badge>
+                          <Badge variant="outline" className="text-xs">{m.count}</Badge>
                           <span className="font-medium">{formatPrice(m.total)}</span>
                         </div>
                       </div>

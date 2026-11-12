@@ -161,7 +161,7 @@ export default function PlanesPage() {
             }
           >
             {!plan.activo && (
-              <div className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-md bg-red-600 text-white text-[10px] font-bold tracking-widest uppercase shadow-sm">
+              <div className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-bold tracking-widest uppercase shadow-sm">
                 Inactivo
               </div>
             )}
@@ -255,12 +255,12 @@ export default function PlanesPage() {
                       .filter(([, v]) => v === true)
                       .slice(0, 5)
                       .map(([key]) => (
-                        <Badge key={key} variant="secondary" className="text-[10px] font-normal">
+                        <Badge key={key} variant="secondary" className="text-xs font-normal">
                           {key.replace(/_/g, " ")}
                         </Badge>
                       ))}
                     {Object.values(plan.feature_flags).filter(Boolean).length > 5 && (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-xs">
                         +{Object.values(plan.feature_flags).filter(Boolean).length - 5}
                       </Badge>
                     )}

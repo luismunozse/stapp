@@ -1332,7 +1332,7 @@ export function InventarioForm({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-1 text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                className="mt-1 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
                 <ImagePlus className="h-3 w-3" />
                 {imagenPreview ? "Cambiar" : "Subir foto"}
@@ -1926,7 +1926,7 @@ export function InventarioForm({
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
                   <div className="text-sm">Trackear lotes / vencimientos</div>
-                  <div className="text-[11px] text-muted-foreground">Cada entrada asocia un # de lote y fecha de vencimiento.</div>
+                  <div className="text-xs text-muted-foreground">Cada entrada asocia un # de lote y fecha de vencimiento.</div>
                 </div>
                 <input
                   type="checkbox"
@@ -1937,7 +1937,7 @@ export function InventarioForm({
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
                   <div className="text-sm">Trackear números de serie</div>
-                  <div className="text-[11px] text-muted-foreground">1 fila por unidad con S/N único. Útil para garantías.</div>
+                  <div className="text-xs text-muted-foreground">1 fila por unidad con S/N único. Útil para garantías.</div>
                 </div>
                 <input
                   type="checkbox"
@@ -1948,7 +1948,7 @@ export function InventarioForm({
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
                   <div className="text-sm">Es kit / combo</div>
-                  <div className="text-[11px] text-muted-foreground">Item compuesto por N componentes con cantidades.</div>
+                  <div className="text-xs text-muted-foreground">Item compuesto por N componentes con cantidades.</div>
                 </div>
                 <input
                   type="checkbox"

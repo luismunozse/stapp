@@ -317,13 +317,13 @@ function DepositoList({
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-medium truncate">{d.nombre}</span>
                 {d.principal && (
-                  <Badge variant="outline" className="text-[10px] gap-1 max-w-full border-amber-500/60 text-amber-600">
+                  <Badge variant="outline" className="text-xs gap-1 max-w-full border-amber-500/60 text-amber-600">
                     <Star className="h-2.5 w-2.5" /> Principal
                     {variasSucursales && d.sucursalNombre ? ` · ${d.sucursalNombre}` : ""}
                   </Badge>
                 )}
                 {d.codigo && (
-                  <Badge variant="secondary" className="text-[10px]">{d.codigo}</Badge>
+                  <Badge variant="secondary" className="text-xs">{d.codigo}</Badge>
                 )}
               </div>
               {(d.direccion || d.notas) && (

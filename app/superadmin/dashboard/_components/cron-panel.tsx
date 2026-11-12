@@ -107,7 +107,7 @@ export function CronPanel() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{job.name}</span>
-                    <Badge variant="outline" className="text-[10px] font-mono">
+                    <Badge variant="outline" className="text-xs font-mono">
                       {job.schedule}
                     </Badge>
                     {status === "success" && (

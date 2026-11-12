@@ -235,10 +235,10 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
               </Badge>
             )}
             {conteo.depositoNombre && (
-              <Badge variant="secondary" className="text-[10px]">{conteo.depositoNombre}</Badge>
+              <Badge variant="secondary" className="text-xs">{conteo.depositoNombre}</Badge>
             )}
             {!conteo.aplicarAjustes && (
-              <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-600">
+              <Badge variant="outline" className="text-xs border-amber-500/60 text-amber-600">
                 Solo reporte
               </Badge>
             )}
@@ -253,25 +253,25 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Items</div>
+            <div className="text-xs uppercase text-muted-foreground">Items</div>
             <div className="text-xl font-bold">{conteo.totalItems}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Contados</div>
+            <div className="text-xs uppercase text-muted-foreground">Contados</div>
             <div className="text-xl font-bold">{conteo.itemsContados} <span className="text-xs text-muted-foreground">({pct}%)</span></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">Con diferencia</div>
+            <div className="text-xs uppercase text-muted-foreground">Con diferencia</div>
             <div className="text-xl font-bold text-amber-600">{conteo.itemsDiferencia}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
-            <div className="text-[10px] uppercase text-muted-foreground">
+            <div className="text-xs uppercase text-muted-foreground">
               {conteo.estado === "FINALIZADO" ? "Ajustes aplicados" : "Pendientes"}
             </div>
             <div className="text-xl font-bold">
@@ -342,21 +342,21 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={inv.imagenUrl} alt={inv.nombre} className="h-full w-full object-cover" />
                       ) : (
-                        <span className="text-[9px] text-muted-foreground">{inv.codigo.slice(0, 3)}</span>
+                        <span className="text-xs text-muted-foreground">{inv.codigo.slice(0, 3)}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{inv.nombre}</div>
-                      <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
                         <span>{inv.codigo}</span>
                         {inv.barcode && <span className="font-mono">{inv.barcode}</span>}
                         {inv.ubicacion && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{inv.ubicacion}</Badge>
+                          <Badge variant="outline" className="text-xs leading-none px-1 py-0 h-4">{inv.ubicacion}</Badge>
                         )}
                       </div>
                     </div>
                     <div className="text-right text-xs text-muted-foreground shrink-0">
-                      <div className="text-[10px] uppercase">Sistema</div>
+                      <div className="text-xs uppercase">Sistema</div>
                       <div className="text-sm font-semibold text-foreground">{it.stockSistema}</div>
                     </div>
                     <div className="w-24 shrink-0">
@@ -390,7 +390,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                     <div className="w-14 text-right shrink-0">
                       {pending ? (
-                        <span className="text-[10px] text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       ) : (
                         <span className={`text-sm font-bold ${it.diferencia > 0 ? "text-emerald-600" : it.diferencia < 0 ? "text-destructive-text" : "text-muted-foreground"}`}>
                           {it.diferencia > 0 ? "+" : ""}{it.diferencia}

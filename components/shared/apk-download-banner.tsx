@@ -138,7 +138,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
         {editando ? "Cambiá tu correo de Google" : "Sumate a la beta de Android"}
       </p>
       {!editando && (
-        <p className="text-[11px] text-muted-foreground leading-snug">Probá la app antes que nadie</p>
+        <p className="text-xs text-muted-foreground leading-snug">Probá la app antes que nadie</p>
       )}
       <form onSubmit={enviar} noValidate className="space-y-1.5">
         <Input
@@ -153,11 +153,11 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
           className="h-8 text-xs"
         />
         {errorForm && (
-          <p role="alert" className="text-[11px] text-destructive-text leading-snug">
+          <p role="alert" className="text-xs text-destructive-text leading-snug">
             {errorForm}
           </p>
         )}
-        <p className="text-[11px] text-muted-foreground leading-snug">
+        <p className="text-xs text-muted-foreground leading-snug">
           Tiene que ser el mismo correo con el que entrás a Play Store en tu celular.
         </p>
         <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
             <button
               type="button"
               onClick={() => setEditando(false)}
-              className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
               Cancelar
             </button>
@@ -180,7 +180,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
   ) : inscripcion.estado === "AGREGADO" ? (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold text-foreground leading-tight">¡Ya estás adentro!</p>
-      <p className="text-[11px] text-muted-foreground leading-snug">
+      <p className="text-xs text-muted-foreground leading-snug">
         Aceptá la invitación y después instalá STApp desde Play Store.
       </p>
       <Button asChild size="sm" className="h-7 text-xs">
@@ -193,13 +193,13 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
   ) : (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold text-foreground leading-tight">Beta de Android</p>
-      <p className="text-[11px] text-muted-foreground leading-snug">
+      <p className="text-xs text-muted-foreground leading-snug">
         {`Te anotamos con ${inscripcion.email}. Te avisamos acá cuando esté lista tu invitación.`}
       </p>
       <button
         type="button"
         onClick={empezarEdicion}
-        className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
       >
         cambiar correo
       </button>

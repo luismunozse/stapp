@@ -432,7 +432,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                       setNuevoRepuesto({ ...nuevoRepuesto, precioUnitario: parseFloat(e.target.value) || 0 })
                     }}
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">Lo que pagaste</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Lo que pagaste</p>
                 </div>
                 <div>
                   <Label htmlFor="repuesto-manual-venta" className="text-xs">Precio de venta</Label>
@@ -451,7 +451,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                       })
                     }}
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">Lo que le cobrás</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Lo que le cobrás</p>
                 </div>
                 {margenManual !== null && (
                   <div className="sm:col-span-3">

@@ -192,7 +192,7 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
                       {a.nombre}
                     </a>
                     {a.descripcion && <div className="text-xs text-muted-foreground truncate">{a.descripcion}</div>}
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {fmtDate(a.createdAt, timezone)} · {fmtSize(a.sizeBytes)}
                     </div>
                   </div>

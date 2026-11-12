@@ -156,20 +156,20 @@ export default function KitsPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{k.nombre}</div>
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {k.codigo}
                     </div>
                     <div className="flex items-center gap-1 mt-1 flex-wrap">
                       {k.tipoKit === "ENSAMBLADO" ? (
-                        <Badge variant="outline" className="text-[10px] gap-1">
+                        <Badge variant="outline" className="text-xs gap-1">
                           <Hammer className="h-3 w-3" /> Ensamblado
                         </Badge>
                       ) : k.tipoKit === "VIRTUAL" ? (
-                        <Badge variant="outline" className="text-[10px] gap-1">
+                        <Badge variant="outline" className="text-xs gap-1">
                           <Layers className="h-3 w-3" /> Virtual
                         </Badge>
                       ) : null}
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge variant="secondary" className="text-xs">
                         Stock {k.stock}
                       </Badge>
                     </div>
@@ -183,14 +183,14 @@ export default function KitsPage() {
                   className={`grid ${k.costoCalculado !== null ? "grid-cols-2" : "grid-cols-1"} gap-2 text-xs`}
                 >
                   <div>
-                    <div className="text-[10px] uppercase text-muted-foreground">
+                    <div className="text-xs uppercase text-muted-foreground">
                       Componentes
                     </div>
                     <div className="font-semibold">{k.cantidadComponentes}</div>
                   </div>
                   {k.costoCalculado !== null && (
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">
+                      <div className="text-xs uppercase text-muted-foreground">
                         Costo receta
                       </div>
                       <div className="font-semibold">
@@ -396,7 +396,7 @@ function NuevoKitDialog({
             </div>
           </div>
           {error && <p className="text-sm text-destructive-text">{error}</p>}
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Se crea el item con stock 0. Después agregás los componentes en la
             receta y, si es ENSAMBLADO, ensamblás para generar stock.
           </p>

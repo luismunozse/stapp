@@ -309,24 +309,24 @@ export function LeadsContent() {
                       ) : (
                         <span className="font-medium italic text-muted-foreground">Sin nombre</span>
                       )}
-                      <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-semibold", scoreBadgeClass(lead.score))}>
+                      <Badge variant="outline" className={cn("text-xs px-1.5 py-0 font-semibold", scoreBadgeClass(lead.score))}>
                         <Sparkles className="w-2.5 h-2.5 mr-0.5" />
                         {lead.score}
                       </Badge>
                       {lead.urgencia && (
-                        <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", urgenciaColors[lead.urgencia])}>
+                        <Badge variant="outline" className={cn("text-xs px-1.5 py-0", urgenciaColors[lead.urgencia])}>
                           <Flame className="w-2.5 h-2.5 mr-0.5" />
                           {lead.urgencia}
                         </Badge>
                       )}
-                      <Badge variant="secondary" className={cn("text-[10px] px-1.5 py-0", estadoColors[lead.estado])}>
+                      <Badge variant="secondary" className={cn("text-xs px-1.5 py-0", estadoColors[lead.estado])}>
                         {lead.estado}
                       </Badge>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0">
                         {lead.origen}
                       </Badge>
                       {lead.plan_interes && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        <Badge variant="outline" className="text-xs px-1.5 py-0">
                           Interés: {lead.plan_interes}
                         </Badge>
                       )}
@@ -380,7 +380,7 @@ export function LeadsContent() {
                       })}
                     </span>
                     {lead.chatbot_conversaciones && lead.chatbot_conversaciones.length > 0 && (
-                      <Badge variant="outline" className="text-[10px] gap-1 border-violet-300 text-violet-700 dark:text-violet-400">
+                      <Badge variant="outline" className="text-xs gap-1 border-violet-300 text-violet-700 dark:text-violet-400">
                         <MessageSquare className="w-3 h-3" />
                         Chat
                       </Badge>

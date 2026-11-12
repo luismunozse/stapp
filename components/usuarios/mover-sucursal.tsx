@@ -324,7 +324,7 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
                   </option>
                 ))}
             </select>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               El cambio se aplica en unos segundos, sin que tenga que volver a iniciar sesión.
             </p>
           </div>

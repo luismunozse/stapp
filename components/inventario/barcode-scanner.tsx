@@ -264,7 +264,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = fals
           </div>
 
           {debug && (
-            <div className="rounded-md border bg-muted/30 p-2 max-h-48 overflow-auto font-mono text-[10px] space-y-0.5">
+            <div className="rounded-md border bg-muted/30 p-2 max-h-48 overflow-auto font-mono text-xs space-y-0.5">
               {debugLog.length === 0 ? (
                 <div className="text-muted-foreground italic">Escaneá ahora — voy a mostrar cada tecla recibida...</div>
               ) : (

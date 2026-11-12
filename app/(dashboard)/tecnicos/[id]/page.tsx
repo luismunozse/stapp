@@ -200,7 +200,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
                 {isSelf ? "Mi desempeño" : tecnico.nombre}
               </h1>
               {!tecnico.activo && (
-                <Badge variant="outline" className="bg-muted text-muted-foreground text-[10px]">
+                <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">
                   Inactivo
                 </Badge>
               )}
@@ -307,7 +307,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
                     <Badge
                       key={esp}
                       variant="secondary"
-                      className="text-[10px] font-normal"
+                      className="text-xs font-normal"
                     >
                       {esp}
                     </Badge>
@@ -317,13 +317,13 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             )}
             <div className="flex items-center justify-between pt-2 border-t">
               <span className="text-xs sm:text-sm text-muted-foreground">% Comisión</span>
-              <Badge variant="outline" className="text-[10px] sm:text-xs">
+              <Badge variant="outline" className="text-xs">
                 {Number(tecnico.porcentajeComision ?? 0).toFixed(2)}%
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs sm:text-sm text-muted-foreground">Costo/hora</span>
-              <Badge variant="outline" className="text-[10px] sm:text-xs">
+              <Badge variant="outline" className="text-xs">
                 ${Number(tecnico.costoHora ?? 0).toFixed(2)}
               </Badge>
             </div>

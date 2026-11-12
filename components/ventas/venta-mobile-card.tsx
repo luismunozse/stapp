@@ -50,7 +50,7 @@ export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
             <span className="font-mono font-medium text-primary text-sm">
               V{String(venta.numeroVenta).padStart(4, "0")}
             </span>
-            <VentaEstadoBadge estado={venta.estado} className="text-[10px]" />
+            <VentaEstadoBadge estado={venta.estado} className="text-xs" />
           </div>
           <PaymentStatusBadge status={venta.estadoPago} />
         </div>

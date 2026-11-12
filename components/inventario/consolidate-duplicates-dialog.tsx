@@ -120,7 +120,7 @@ export function ConsolidateDuplicatesDialog({
                     </div>
                   </div>
                   {selected && (
-                    <span className="text-[10px] font-medium text-primary shrink-0 uppercase tracking-wide">
+                    <span className="text-xs font-medium text-primary shrink-0 uppercase tracking-wide">
                       Destino
                     </span>
                   )}

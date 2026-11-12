@@ -211,7 +211,7 @@ export function ComisionesVendedoresView() {
   const kindBadge = (i: Item) => {
     const label = COMMISSION_KIND_LABEL[i.tipo]
     return label ? (
-      <Badge variant="secondary" className="text-[10px] shrink-0">
+      <Badge variant="secondary" className="text-xs shrink-0">
         {label}
       </Badge>
     ) : null
@@ -466,7 +466,7 @@ export function ComisionesVendedoresView() {
                       Total {formatPrice(i.total)}{i.fecha ? ` · ${formatDate(i.fecha)}` : ""}
                     </div>
                     <div className="text-right shrink-0">
-                      <Badge variant="outline" className="text-[10px] mb-1">
+                      <Badge variant="outline" className="text-xs mb-1">
                         <Percent className="h-3 w-3 mr-0.5" />
                         {i.porcentajeComision.toFixed(2)}
                       </Badge>

@@ -109,7 +109,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                         <span className="text-xs font-semibold">{config.label}</span>
                       </div>
                       <div className="text-lg font-bold">{seg.count}</div>
-                      <div className="text-[10px] opacity-75">{formatPrice(seg.totalGastado)}</div>
+                      <div className="text-xs opacity-75">{formatPrice(seg.totalGastado)}</div>
                     </CardContent>
                   </Card>
                 )
@@ -158,7 +158,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                     <Icon className="h-3.5 w-3.5" />
                     {tab.label}
                     {tab.id === "riesgo" && data.clientesEnRiesgo?.length > 0 && (
-                      <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 ml-1">
+                      <Badge variant="destructive" className="text-xs leading-none px-1 py-0 h-4 ml-1">
                         {data.clientesEnRiesgo.length}
                       </Badge>
                     )}
@@ -201,7 +201,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 text-right">{formatPrice(c.ticketPromedio)}</td>
                             <td className="py-2 text-right text-muted-foreground">
                               <div>{formatDate(c.ultimaCompra)}</div>
-                              <div className="text-[10px]">hace {c.diasDesdeUltimaCompra} días</div>
+                              <div className="text-xs">hace {c.diasDesdeUltimaCompra} días</div>
                             </td>
                           </tr>
                         ))}
@@ -243,7 +243,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 text-right">{c.totalCompras}</td>
                             <td className="py-2 pr-2 text-right">{formatPrice(c.totalGastado)}</td>
                             <td className="py-2 pr-2 text-right">
-                              <Badge variant={c.diasInactivo > 120 ? "destructive" : "secondary"} className="text-[10px]">
+                              <Badge variant={c.diasInactivo > 120 ? "destructive" : "secondary"} className="text-xs">
                                 {c.diasInactivo} días
                               </Badge>
                             </td>
@@ -284,7 +284,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                             className="h-full bg-primary/20 rounded-full flex items-center px-2"
                             style={{ width: `${Math.max(pct, 8)}%` }}
                           >
-                            <span className="text-[10px] font-medium">{m.count}</span>
+                            <span className="text-xs font-medium">{m.count}</span>
                           </div>
                         </div>
                       </div>
@@ -310,7 +310,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                             className="h-full bg-info-200 dark:bg-info-600 rounded-full flex items-center px-2"
                             style={{ width: `${Math.max(pct, 8)}%` }}
                           >
-                            <span className="text-[10px] font-medium">{f.count} clientes</span>
+                            <span className="text-xs font-medium">{f.count} clientes</span>
                           </div>
                         </div>
                       </div>

@@ -164,14 +164,14 @@ export function TecnicoHistorial({ tecnicoId }: { tecnicoId: string }) {
                       {formatPrice(orden.costoFinal)}
                     </span>
                   )}
-                  <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     {formatDate(orden.fechaIngreso)}
                   </span>
                   <OrderStatusBadge
                     status={orden.estado}
                     showIcon={false}
-                    className="text-[10px] sm:text-xs whitespace-nowrap"
+                    className="text-xs whitespace-nowrap"
                   />
                 </div>
               </Link>

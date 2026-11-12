@@ -173,7 +173,7 @@ export function MultiPagoInput({
                     updatePago(index, { metodo: value })
                   }}
                   className={cn(
-                    "flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 text-center transition-all text-[10px] leading-tight",
+                    "flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 text-center transition-all text-xs leading-tight",
                     pago.metodo === value
                       ? "border-primary bg-primary/5 text-primary font-medium"
                       : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
@@ -217,7 +217,7 @@ export function MultiPagoInput({
                   quinientos, 1500,50 = con centavos): se muestra cómo quedó
                   antes de cobrar. */}
               {/[.,]/.test(rawInputs[`${pago.id}:monto`] ?? "") && pago.monto > 0 && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Se registra {formatPrice(pago.monto)}
                 </p>
               )}

@@ -789,7 +789,7 @@ export function PosTerminal() {
               type="button"
               onClick={() => handleSetPrinterWidth(58)}
               className={cn(
-                "px-2 h-full text-[10px] font-medium transition-colors",
+                "px-2 h-full text-xs font-medium transition-colors",
                 printerWidth === 58
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-muted"
@@ -802,7 +802,7 @@ export function PosTerminal() {
               type="button"
               onClick={() => handleSetPrinterWidth(80)}
               className={cn(
-                "px-2 h-full text-[10px] font-medium transition-colors",
+                "px-2 h-full text-xs font-medium transition-colors",
                 printerWidth === 80
                   ? "bg-primary text-primary-foreground"
                   : "bg-background text-muted-foreground hover:bg-muted"
@@ -867,13 +867,13 @@ export function PosTerminal() {
       {/* Shortcuts bar - desktop only */}
       {showShortcuts && (
         <div className="hidden lg:flex bg-muted border-b px-3 py-2 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground shrink-0">
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F2</kbd> Nueva venta</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F4</kbd> Buscar producto</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F5</kbd> Apartar venta</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F6</kbd> Recuperar venta</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F7</kbd> Cliente</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F8</kbd> Cobrar</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">Scanner</kbd> Código de barras</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F2</kbd> Nueva venta</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F4</kbd> Buscar producto</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F5</kbd> Apartar venta</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F6</kbd> Recuperar venta</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F7</kbd> Cliente</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">F8</kbd> Cobrar</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-xs font-mono">Scanner</kbd> Código de barras</span>
         </div>
       )}
 
@@ -989,7 +989,7 @@ export function PosTerminal() {
               )}
             >
               <Package className="h-5 w-5" />
-              <span className="text-[10px] font-medium">Productos</span>
+              <span className="text-xs font-medium">Productos</span>
             </button>
             <button
               type="button"
@@ -1004,12 +1004,12 @@ export function PosTerminal() {
               <div className="relative">
                 <ShoppingCart className="h-5 w-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs leading-none font-bold px-1">
                     {cartCount}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">
+              <span className="max-w-full truncate px-1 text-xs font-medium">
                 {cartTotal > 0 ? formatPrice(cartTotal) : "Carrito"}
               </span>
             </button>
@@ -1028,7 +1028,7 @@ export function PosTerminal() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <ShoppingCart className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-primary-foreground text-primary text-[9px] font-bold px-0.5">
+                <span className="absolute -top-1 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-primary-foreground text-primary text-xs leading-none font-bold px-0.5">
                   {cartCount}
                 </span>
               </div>

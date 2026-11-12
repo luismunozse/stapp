@@ -138,7 +138,7 @@ export function DeadlineCalendar() {
       >
         <CalendarClock className={`h-5 w-5 ${hasVencidas ? "text-red-500" : ""}`} />
         {totalUrgentes > 0 && (
-          <span className={`absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full text-[10px] font-medium flex items-center justify-center ${
+          <span className={`absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full text-xs leading-none font-medium flex items-center justify-center ${
             hasVencidas
               ? "bg-red-500 text-white"
               : "bg-orange-500 text-white"
@@ -234,7 +234,7 @@ export function DeadlineCalendar() {
                             {dots.hasHoy && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
                             {dots.hasFuturo && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                             {dots.count > 1 && (
-                              <span className={`text-[8px] font-bold ml-0.5 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                              <span className={`text-xs leading-none font-bold ml-0.5 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
                                 {dots.count}
                               </span>
                             )}
@@ -248,7 +248,7 @@ export function DeadlineCalendar() {
 
               {/* Legend + vencidas previas button */}
               <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-red-500" />
                     Vencida
@@ -265,7 +265,7 @@ export function DeadlineCalendar() {
                 {vencidasPrevias.length > 0 && (
                   <button
                     onClick={() => setSelectedDate(new Date(0))}
-                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full transition-colors ${
                       selectedDate?.getTime() === 0
                         ? "bg-red-500 text-white"
                         : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900"
@@ -308,12 +308,12 @@ export function DeadlineCalendar() {
                             <span className="font-semibold text-xs text-primary">
                               {orden.codigoOrden || `#${orden.numeroOrden}`}
                             </span>
-                            <OrderStatusBadge status={orden.estado} className="text-[9px] px-1.5 py-0" />
+                            <OrderStatusBadge status={orden.estado} className="text-xs px-1.5 py-0" />
                           </div>
                           <p className="text-xs truncate">
                             {orden.dispositivo}{orden.marca ? ` - ${orden.marca}` : ""}
                           </p>
-                          <span className="text-[11px] text-muted-foreground truncate">
+                          <span className="text-xs text-muted-foreground truncate">
                             {orden.cliente?.nombre || "Sin cliente"}
                             {orden.tecnico ? ` · ${orden.tecnico.nombre}` : ""}
                           </span>

@@ -286,7 +286,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                 <ol className="px-4 pb-3 flex items-center gap-2 text-xs">
                   <li className="flex items-center gap-1.5 font-semibold" style={{ color: brandColor }}>
                     <span
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-white text-xs font-bold"
                       style={{ backgroundColor: brandColor }}
                     >
                       {step === "cart" ? "1" : <CheckCircle2 className="h-3 w-3" />}
@@ -304,7 +304,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     style={{ color: step === "checkout" ? brandColor : undefined }}
                   >
                     <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
                         step === "checkout" ? "text-white" : "bg-muted text-muted-foreground"
                       }`}
                       style={step === "checkout" ? { backgroundColor: brandColor } : undefined}
@@ -422,7 +422,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             >
                               <MessageSquare className="h-3.5 w-3.5" />
                               <span>Agregar comentario o foto</span>
-                              <span className="ml-auto text-[10px] opacity-60">opcional</span>
+                              <span className="ml-auto text-xs opacity-60">opcional</span>
                             </button>
                           ) : (
                             <div className="space-y-2 pt-2 border-t">
@@ -483,7 +483,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                 )}
                               </div>
                               {ex.adjuntos.length === 0 && (
-                                <p className="text-[10px] text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                   Hasta {MAX_ADJUNTOS_POR_ITEM} fotos · máx 4MB c/u
                                 </p>
                               )}

@@ -21,7 +21,7 @@ export function ProductShotFrame({ src, alt, url = "stapp.com.ar" }: ProductShot
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-500" />
           </div>
-          <div className="flex-1 truncate rounded bg-muted px-2 py-0.5 text-center text-[10px] text-muted-foreground">
+          <div className="flex-1 truncate rounded bg-muted px-2 py-0.5 text-center text-xs text-muted-foreground">
             {url}
           </div>
         </div>

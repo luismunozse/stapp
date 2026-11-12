@@ -92,7 +92,7 @@ export default function SeriesGlobalPage() {
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             <ScanLine className="h-3 w-3" />
             Compatible con lector de códigos de barras / QR
           </p>
@@ -142,7 +142,7 @@ export default function SeriesGlobalPage() {
                           >
                             <div className="font-medium">{s.inventario.nombre}</div>
                             {s.inventario.codigo && (
-                              <div className="text-[11px] text-muted-foreground">
+                              <div className="text-xs text-muted-foreground">
                                 {s.inventario.codigo}
                               </div>
                             )}
@@ -151,11 +151,11 @@ export default function SeriesGlobalPage() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="p-3 font-mono text-[11px] text-muted-foreground">
+                      <td className="p-3 font-mono text-xs text-muted-foreground">
                         {s.lote?.numero_lote ?? "—"}
                       </td>
                       <td className="p-3">
-                        <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-[10px]">
+                        <StatusPill tone={serieEstado(s.estado).tone} size="sm" className="text-xs">
                           {serieEstado(s.estado).label}
                         </StatusPill>
                       </td>

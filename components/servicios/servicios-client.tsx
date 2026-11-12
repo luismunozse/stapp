@@ -341,12 +341,12 @@ export function ServiciosClient() {
                   {servicio.nombre}
                   <span className="text-xs text-muted-foreground">{servicio.codigo}</span>
                   {servicio.categoria && (
-                    <Badge variant="secondary" className="text-[10px] font-normal">
+                    <Badge variant="secondary" className="text-xs font-normal">
                       {servicio.categoria}
                     </Badge>
                   )}
                   {!servicio.activo && (
-                    <Badge variant="outline" className="text-[10px] font-normal bg-muted">
+                    <Badge variant="outline" className="text-xs font-normal bg-muted">
                       Inactivo
                     </Badge>
                   )}

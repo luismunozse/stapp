@@ -295,7 +295,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 onChange={(e) => setPorcentajeComision(e.target.value)}
                 placeholder="0"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Sobre la base que elige el taller en Configuración › Comisiones (por defecto, la mano de obra: monto de la orden menos repuestos).
               </p>
             </div>
@@ -307,7 +307,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 value={fechaIngreso}
                 onChange={(e) => setFechaIngreso(e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Fecha de alta laboral (opcional).
               </p>
             </div>
@@ -325,7 +325,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               onChange={(e) => setPorcentajeRecepcion(e.target.value)}
               placeholder="Por defecto del taller"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Vacío: se usa el porcentaje por defecto del taller. Cada orden guarda el porcentaje vigente al recibir el equipo.
             </p>
           </div>
@@ -345,7 +345,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 El técnico solo verá las órdenes de su sucursal.
               </p>
             </div>
@@ -364,7 +364,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               onChange={(e) => setCostoHora(e.target.value)}
               placeholder="0"
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Costo interno por hora. Se usa para la mano de obra en rentabilidad.
             </p>
           </div>
@@ -396,7 +396,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 })}
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Se usan para priorizar asignaciones según el tipo de dispositivo.
             </p>
           </div>

@@ -280,7 +280,7 @@ export function UpgradeModal({
                     : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                <div className="absolute -top-2.5 -right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                <div className="absolute -top-2.5 -right-2 bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">
                   AHORRA {monthlySavings}%
                 </div>
                 <div className="text-xs font-medium text-muted-foreground mb-1">Anual</div>
@@ -367,7 +367,7 @@ export function UpgradeModal({
           </Button>
 
           {/* Footer de confianza */}
-          <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Shield className="h-3 w-3" />
               <span>Pago seguro</span>

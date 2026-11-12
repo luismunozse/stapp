@@ -121,7 +121,7 @@ function NotificationItem({
             {notification.body}
           </p>
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-[11px] text-muted-foreground/70">
+            <p className="text-xs text-muted-foreground/70">
               {timeAgo(notification.created_at, timezone)}
             </p>
             {(bodyIsLong || titleIsLong) && (
@@ -130,7 +130,7 @@ function NotificationItem({
                   e.stopPropagation()
                   setExpanded(!expanded)
                 }}
-                className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                className="text-xs text-primary hover:underline flex items-center gap-0.5"
               >
                 {expanded ? (
                   <>
@@ -199,7 +199,7 @@ export function NotificationPanel({
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm">Notificaciones</h3>
           {unreadCount > 0 && (
-            <span className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
               {unreadCount}
             </span>
           )}

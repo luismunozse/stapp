@@ -58,7 +58,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
               <div key={o.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div className="min-w-0">
                   <div className="font-medium text-sm">#{o.numeroOrden} · {o.dispositivo}</div>
-                  <PaymentStatusBadge status={o.estadoCobro} showIcon={false} className="text-[10px] mt-0.5" />
+                  <PaymentStatusBadge status={o.estadoCobro} showIcon={false} className="text-xs mt-0.5" />
                 </div>
                 <div className="font-semibold tabular-nums text-destructive-text">{formatPrice(o.pendiente)}</div>
               </div>
