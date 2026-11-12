@@ -145,7 +145,7 @@ export function AnalisisInventario() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          title="Total Items"
+          title="Total de ítems"
           value={String(data.resumen.totalItems)}
           description={`${data.resumen.totalUnidades} uds`}
           icon={Package}
@@ -156,7 +156,7 @@ export function AnalisisInventario() {
             inventario sin valor y no como un permiso faltante. */}
         {data.resumen.valorCompra !== null && (
           <StatCard
-            title="Valor Inventario"
+            title="Valor del inventario"
             value={formatPrice(data.resumen.valorCompra)}
             description="Costo compra"
             icon={DollarSign}
@@ -165,7 +165,7 @@ export function AnalisisInventario() {
         )}
         {data.resumen.margenPotencial !== null && (
           <StatCard
-            title="Margen Pot."
+            title="Margen pot."
             value={formatPrice(data.resumen.margenPotencial)}
             description="Si se vende todo"
             icon={TrendingUp}
@@ -173,7 +173,7 @@ export function AnalisisInventario() {
           />
         )}
         <StatCard
-          title="Stock Crítico"
+          title="Stock crítico"
           value={String(data.resumen.itemsStockCritico)}
           description={`${data.resumen.itemsSinStock} sin stock`}
           icon={AlertTriangle}
@@ -186,7 +186,7 @@ export function AnalisisInventario() {
         {chartData.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base sm:text-lg">Valor por Categoría</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Valor por categoría</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 Distribución del valor del inventario
               </CardDescription>
@@ -225,7 +225,7 @@ export function AnalisisInventario() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success-text" />
-              {valorPorItemOculto ? "Items con más stock" : "Items Más Valiosos"}
+              {valorPorItemOculto ? "Ítems con más stock" : "Ítems más valiosos"}
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               {valorPorItemOculto ? "Mayor cantidad de unidades" : "Mayor valor en stock"}
@@ -280,7 +280,7 @@ export function AnalisisInventario() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-warning-text" />
-            Stock Crítico
+            Stock crítico
           </CardTitle>
           <CardDescription>
             Items con menos de 5 unidades en stock
@@ -335,7 +335,7 @@ export function AnalisisInventario() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5 text-info-text" />
-            Resumen por Categoría
+            Resumen por categoría
           </CardTitle>
         </CardHeader>
         <CardContent>

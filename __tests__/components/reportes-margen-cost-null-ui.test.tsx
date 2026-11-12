@@ -102,7 +102,7 @@ describe("RentabilidadTecnicos — costo de repuestos nulo", () => {
     // Tarjetas de costo fuera del resumen, y el gráfico entero es ganancia.
     expect(screen.queryByText("Ganancia total")).not.toBeInTheDocument()
     expect(screen.queryByText("Margen promedio")).not.toBeInTheDocument()
-    expect(screen.queryByText("Ganancia por Técnico")).not.toBeInTheDocument()
+    expect(screen.queryByText("Ganancia por técnico")).not.toBeInTheDocument()
     // Nada de nulls pintados como cero.
     expect(screen.queryByText(ars(0))).not.toBeInTheDocument()
     expect(screen.queryByText("0%")).not.toBeInTheDocument()
@@ -134,7 +134,7 @@ describe("RentabilidadTecnicos — costo de repuestos nulo", () => {
     expect(screen.getByText("Repuestos")).toBeInTheDocument()
     expect(screen.getByText("Ganancia total")).toBeInTheDocument()
     expect(screen.getByText("Margen promedio")).toBeInTheDocument()
-    expect(screen.getByText("Ganancia por Técnico")).toBeInTheDocument()
+    expect(screen.getByText("Ganancia por técnico")).toBeInTheDocument()
     expect(screen.getByText(ars(1111))).toBeInTheDocument()
     expect(screen.getByText(ars(6666))).toBeInTheDocument()
   })
@@ -172,15 +172,15 @@ describe("RentabilidadChart — costos nulos", () => {
 
     expect(screen.queryByTestId("bar-Costos")).not.toBeInTheDocument()
     expect(screen.queryByTestId("bar-Margen")).not.toBeInTheDocument()
-    expect(screen.queryByText("Total Costos")).not.toBeInTheDocument()
-    expect(screen.queryByText("Margen Total")).not.toBeInTheDocument()
-    expect(screen.getByText("Total Ingresos")).toBeInTheDocument()
+    expect(screen.queryByText("Total de costos")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen total")).not.toBeInTheDocument()
+    expect(screen.getByText("Total de ingresos")).toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
   })
 
   // Un gráfico titulado "Rentabilidad" que solo tiene ingresos miente: el que
   // lo lee saca conclusiones de margen que la serie no tiene. Mismo criterio
-  // que "Items Más Valiosos" cuando la lista pasó a ordenarse por stock.
+  // que "Ítems más valiosos" cuando la lista pasó a ordenarse por stock.
   it("retitula el gráfico cuando no hay costos que mostrar", async () => {
     stubFetch(payload(true))
 
@@ -188,8 +188,8 @@ describe("RentabilidadChart — costos nulos", () => {
 
     await waitFor(() => expect(screen.getByTestId("bar-Ingresos")).toBeInTheDocument())
 
-    expect(screen.queryByText("Rentabilidad por Tipo de Dispositivo")).not.toBeInTheDocument()
-    expect(screen.getByText("Ingresos por Tipo de Dispositivo")).toBeInTheDocument()
+    expect(screen.queryByText("Rentabilidad por tipo de dispositivo")).not.toBeInTheDocument()
+    expect(screen.getByText("Ingresos por tipo de dispositivo")).toBeInTheDocument()
   })
 
   it("muestra costos y margen cuando el rol puede verlos", async () => {
@@ -201,9 +201,9 @@ describe("RentabilidadChart — costos nulos", () => {
 
     expect(screen.getByTestId("bar-Costos")).toBeInTheDocument()
     expect(screen.getByTestId("bar-Margen")).toBeInTheDocument()
-    expect(screen.getByText("Total Costos")).toBeInTheDocument()
-    expect(screen.getByText("Margen Total")).toBeInTheDocument()
-    expect(screen.getByText("Rentabilidad por Tipo de Dispositivo")).toBeInTheDocument()
+    expect(screen.getByText("Total de costos")).toBeInTheDocument()
+    expect(screen.getByText("Margen total")).toBeInTheDocument()
+    expect(screen.getByText("Rentabilidad por tipo de dispositivo")).toBeInTheDocument()
   })
 })
 

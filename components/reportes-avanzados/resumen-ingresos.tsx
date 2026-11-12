@@ -165,7 +165,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          title="Total Ingresos"
+          title="Total de ingresos"
           value={formatPrice(data.resumen.totalIngresos)}
           description={desde && hasta ? "En el período seleccionado" : `Últimos ${data.periodo.meses} meses`}
           icon={DollarSign}
@@ -197,7 +197,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
       {/* Monthly Chart - Stacked by source */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Ingresos por Mes</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Ingresos por mes</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             Desglose por reparaciones y ventas de productos
           </CardDescription>
@@ -245,7 +245,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle className="text-base sm:text-lg">Ingresos por Método de Pago</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Ingresos por método de pago</CardTitle>
                 <CardDescription className="text-xs sm:text-sm">
                   Cómo cobraste en el mes seleccionado
                 </CardDescription>
@@ -365,9 +365,9 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
         {fuenteData.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base sm:text-lg">Por Fuente de Ingreso</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Por fuente de ingreso</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Reparaciones vs Ventas de productos
+                Reparaciones vs. ventas de productos
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -401,7 +401,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
         {data.porDispositivo.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base sm:text-lg">Por Tipo de Dispositivo</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Por tipo de dispositivo</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 Ingresos por reparación según tipo de equipo
               </CardDescription>

@@ -46,7 +46,7 @@ export function PrediccionRepuestosChart() {
   const getUrgenciaBadge = (urgencia: string) => {
     switch (urgencia) {
       case "CRITICO":
-        return <Badge variant="destructive">Critico</Badge>
+        return <Badge variant="destructive">Crítico</Badge>
       case "BAJO":
         return <Badge className="bg-warning/15 text-warning-text dark:bg-warning/20">Bajo</Badge>
       case "SIN_USO":
@@ -59,9 +59,9 @@ export function PrediccionRepuestosChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prediccion de Demanda de Repuestos</CardTitle>
+        <CardTitle>Predicción de demanda de repuestos</CardTitle>
         <CardDescription>
-          Estimacion basada en uso historico. Items ordenados por urgencia.
+          Estimación basada en el uso histórico. Ítems ordenados por urgencia.
         </CardDescription>
       </CardHeader>
       <CardContent>
