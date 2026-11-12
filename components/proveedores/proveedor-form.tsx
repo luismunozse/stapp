@@ -115,7 +115,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormProps) {
-  const { showError } = useModal()
+  const { confirm, showError } = useModal()
   const { pais } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>(proveedor?.tags || [])
@@ -156,7 +156,13 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
 
   const handleLogoRemove = async () => {
     if (!proveedor) return
-    if (!confirm("¿Eliminar logo?")) return
+    const ok = await confirm({
+      title: "¿Eliminar el logo?",
+      description: "El proveedor queda sin logo hasta que subas otro.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedor.id}/logo`, { method: "DELETE" })
     if (res.ok) {
       setLogoUrl(null)

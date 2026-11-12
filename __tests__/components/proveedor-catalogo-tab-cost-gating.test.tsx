@@ -13,6 +13,10 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock("@/contexts/modal-context", () => ({
+  useModal: () => ({ confirm: vi.fn().mockResolvedValue(false) }),
+}))
+
 import { ProveedorCatalogoTab } from "@/components/proveedores/proveedor-catalogo-tab"
 
 /**

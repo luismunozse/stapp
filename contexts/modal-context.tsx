@@ -1,11 +1,10 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useRef, ReactNode } from "react"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { AlertDialogCustom } from "@/components/ui/alert-dialog-custom"
+import { ConfirmDialog, type ConfirmTone } from "@/components/ui/confirm-dialog"
 
-type ConfirmVariant = "danger" | "warning" | "info" | "success"
-type AlertVariant = "error" | "warning" | "info" | "success"
+type ConfirmVariant = ConfirmTone
+type AlertVariant = Exclude<ConfirmTone, "danger"> | "error"
 
 interface ConfirmOptions {
   title: string
@@ -172,13 +171,14 @@ export function ModalProvider({ children }: { children: ReactNode }) {
         onCancel={handleConfirmCancel}
       />
 
-      <AlertDialogCustom
+      <ConfirmDialog
+        mode="alert"
         open={alertOpen}
         onOpenChange={handleAlertClose}
         title={alertOptions.title}
         description={alertOptions.description}
-        buttonText={alertOptions.buttonText}
-        variant={alertOptions.variant}
+        confirmText={alertOptions.buttonText}
+        variant={alertOptions.variant ?? "info"}
       />
     </ModalContext.Provider>
   )

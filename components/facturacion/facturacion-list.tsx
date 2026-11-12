@@ -31,6 +31,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
 import { GenerarFacturaModal } from "./generar-factura-modal"
+import { toast } from "sonner"
 
 type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
@@ -91,7 +92,7 @@ export function FacturacionList() {
       mutate()
     } catch (error) {
       console.error("Error deleting factura:", error)
-      alert(error instanceof Error ? error.message : "Error al eliminar remito")
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el remito")
     } finally {
       setActionLoading(false)
     }
@@ -115,7 +116,7 @@ export function FacturacionList() {
       mutate()
     } catch (error) {
       console.error("Error voiding factura:", error)
-      alert(error instanceof Error ? error.message : "Error al anular remito")
+      toast.error(error instanceof Error ? error.message : "No se pudo anular el remito")
     } finally {
       setActionLoading(false)
     }

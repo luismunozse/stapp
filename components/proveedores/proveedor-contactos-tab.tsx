@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { EmptyState } from "@/components/ui/empty-state"
+import { useModal } from "@/contexts/modal-context"
 
 interface Contacto {
   id: string
@@ -45,6 +46,7 @@ const empty: Draft = {
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) {
+  const { confirm } = useModal()
   const { data: contactos = [], mutate } = useSWR<Contacto[]>(
     `/api/proveedores/${proveedorId}/contactos`,
     fetcher,
@@ -112,7 +114,13 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
   }
 
   const remove = async (id: string) => {
-    if (!confirm("¿Eliminar este contacto?")) return
+    const ok = await confirm({
+      title: "¿Eliminar este contacto?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedorId}/contactos/${id}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Contacto eliminado")
