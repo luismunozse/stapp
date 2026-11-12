@@ -2,8 +2,8 @@
  * "Orden creada" modal: the same per-print paper size as the order screen. This is the moment a
  * workshop prints the reception sheet, so the selector has to be here too.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react"
 import { OrdenCreadaModal } from "@/components/ordenes/orden-creada-modal"
 
 let orgDefault = "A4"
@@ -52,6 +52,15 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock)
   vi.stubGlobal("open", vi.fn(() => ({ addEventListener: vi.fn() })))
   window.URL.createObjectURL = vi.fn(() => "blob:test")
+})
+
+// Al desmontar, el FocusScope de Radix (dentro del Dialog) devuelve el foco en un
+// setTimeout(0). Si ese timer corre después del teardown de jsdom, el CustomEvent ya
+// es el de Node y dispatchEvent tira "parameter 1 is not of type 'Event'" como error
+// no manejado. Desmontamos acá y dejamos correr el timer mientras jsdom sigue vivo.
+afterEach(async () => {
+  cleanup()
+  await new Promise((resolve) => setTimeout(resolve, 0))
 })
 
 describe("OrdenCreadaModal: paper size of this print", () => {
