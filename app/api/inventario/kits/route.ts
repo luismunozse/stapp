@@ -99,14 +99,28 @@ export async function GET(request: Request) {
       const hayDivisa = [...lista.values()].some((cs) => cs.some((c) => c.moneda !== null))
       let config: ConfigMoneda | null = null
       let tc: ResultadoTipoCambio | null = null
+      // A failed config/rate read degrades like the stock valuation: kits with a foreign-currency
+      // component get no local cost (null) instead of failing the whole list.
+      let sinCotizacion = false
       if (canViewCost && hayDivisa) {
-        config = (await cargarConfigMoneda(organizationId!)).config
-        tc = await resolverTipoCambio(organizationId!)
-        monedaExtranjera = config.monedaExtranjera
+        try {
+          config = (await cargarConfigMoneda(organizationId!)).config
+          monedaExtranjera = config.monedaExtranjera
+          tc = await resolverTipoCambio(organizationId!)
+        } catch (err) {
+          console.error("Error resolviendo la cotización para el costo de los kits:", err)
+          tc = null
+          if (config === null) sinCotizacion = true
+        }
       }
       for (const [kitId, cs] of lista) {
         if (config === null) {
-          costoMap.set(kitId, cs.reduce((acc, c) => acc + c.cantidad * (c.precioCompra ?? 0), 0))
+          costoMap.set(
+            kitId,
+            sinCotizacion && cs.some((c) => c.moneda !== null)
+              ? null
+              : cs.reduce((acc, c) => acc + c.cantidad * (c.precioCompra ?? 0), 0)
+          )
         } else {
           costoMap.set(kitId, costoKitLocal(cs, config, tc))
         }

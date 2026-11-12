@@ -94,12 +94,19 @@ export async function GET(
     let pTipoCambio: number | null = null
     let pUnidad = 0
     if (necesitaCotizacion) {
-      const { config } = await cargarConfigMoneda(organizationId!)
-      const tc = await resolverTipoCambio(organizationId!)
-      monedaExtranjera = config.monedaExtranjera
-      pMoneda = config.monedaExtranjera
-      pTipoCambio = tc.disponible ? tc.valor : null
-      pUnidad = unidadRedondeo(config.redondeoConversion, config.monedaLocal)
+      // A failed config/rate read degrades like the stock valuation: no rate, so a kit with a
+      // foreign-currency component has no local cost (null), instead of failing the whole request.
+      try {
+        const { config } = await cargarConfigMoneda(organizationId!)
+        monedaExtranjera = config.monedaExtranjera
+        pMoneda = config.monedaExtranjera
+        pUnidad = unidadRedondeo(config.redondeoConversion, config.monedaLocal)
+        const tc = await resolverTipoCambio(organizationId!)
+        pTipoCambio = tc.disponible ? tc.valor : null
+      } catch (err) {
+        console.error("Error resolviendo la cotización para el costo del kit:", err)
+        pTipoCambio = null
+      }
     }
 
     // Costo calculado via RPC (autoritario); null = sin equivalente local

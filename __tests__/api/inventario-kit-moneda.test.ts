@@ -78,6 +78,39 @@ describe("GET /api/inventario/kits con componentes en divisa", () => {
     expect(body.data[0].costoNoDisponible).toBe(true)
   })
 
+  it("si falla la lectura de la config degrada: kit en divisa sin costo, kit local con su suma, 200", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(cargarConfigMoneda).mockRejectedValue(new Error("db down"))
+    mockSupabaseFrom({
+      inventario: createChainMock([kitRow, { ...kitRow, id: "kit-2", codigo: "K2" }], null, 2),
+      inventario_kit_items: createChainMock([
+        { kit_id: "kit-1", cantidad: 1, componente: { precio_compra: 10, moneda: "USD" } },
+        { kit_id: "kit-2", cantidad: 2, componente: { precio_compra: 500, moneda: null } },
+      ]),
+    })
+    const res = await getKitsList(createGetRequest())
+    expect(res.status).toBe(200)
+    const { body } = await parseResponse(res)
+    const k1 = body.data.find((k: any) => k.id === "kit-1")
+    const k2 = body.data.find((k: any) => k.id === "kit-2")
+    expect(k1.costoCalculado).toBeNull()
+    expect(k1.costoNoDisponible).toBe(true)
+    expect(k2.costoCalculado).toBe(1000)
+  })
+
+  it("si falla la cotización degrada a sin cotización (200, costo no disponible)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(resolverTipoCambio).mockRejectedValue(new Error("api down"))
+    wire([{ kit_id: "kit-1", cantidad: 1, componente: { precio_compra: 10, moneda: "USD" } }])
+    const res = await getKitsList(createGetRequest())
+    expect(res.status).toBe(200)
+    const { body } = await parseResponse(res)
+    expect(body.data[0].costoCalculado).toBeNull()
+    expect(body.data[0].costoNoDisponible).toBe(true)
+  })
+
   it("no resuelve la cotización si ningún componente está en divisa", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     wire([{ kit_id: "kit-1", cantidad: 2, componente: { precio_compra: 500, moneda: null } }])
@@ -132,6 +165,30 @@ describe("GET /api/inventario/[id]/kit con componentes en divisa", () => {
     expect(body.costoCalculado).toBeNull()
     expect(body.costoNoDisponible).toBe(true)
     expect(body.monedaExtranjera).toBe("USD")
+  })
+
+  it("si falla la lectura de la cotización degrada: p_tipo_cambio null, 200 y costo no disponible", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(resolverTipoCambio).mockRejectedValue(new Error("api down"))
+    wire([comp("a", 1, 10, "USD")], null)
+    const res = await getKitDetail(createGetRequest(), ctx())
+    expect(res.status).toBe(200)
+    const { body } = await parseResponse(res)
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls[0][1]).toMatchObject({ p_tipo_cambio: null })
+    expect(body.costoCalculado).toBeNull()
+    expect(body.costoNoDisponible).toBe(true)
+  })
+
+  it("si falla la lectura de la config degrada igual: sin moneda ni cotización, 200", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(cargarConfigMoneda).mockRejectedValue(new Error("db down"))
+    wire([comp("a", 1, 10, "USD")], null)
+    const res = await getKitDetail(createGetRequest(), ctx())
+    expect(res.status).toBe(200)
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls[0][1]).toMatchObject({ p_moneda: null, p_tipo_cambio: null })
+    expect((await parseResponse(res)).body.costoCalculado).toBeNull()
   })
 
   it("sin componentes en divisa no resuelve la cotización", async () => {
