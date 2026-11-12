@@ -6,8 +6,12 @@
  * La base guarda el mismo concepto con varios nombres según la tabla
  * (ventas: PAGADO / PAGADO_PARCIAL / PENDIENTE; órdenes: COBRADO / PARCIAL /
  * PENDIENTE). Acá se reducen a un solo juego de etiquetas, así el mostrador lee
- * "Pagado" o "Pago parcial" en todas las pantallas y no "Cobrado" en una y
+ * "Cobrado" o "Pago parcial" en todas las pantallas y no "Cobrado" en una y
  * "Pagado" en otra.
+ *
+ * Estas etiquetas son para la UI interna del taller. En superficies del cliente
+ * final (seguimiento, presupuesto público, emails y WhatsApp) el mismo estado se
+ * dice "Pagado": no reutilizar `ESTADO_PAGO_UI` ahí.
  */
 import { Ban, BookUser, CheckCircle2, CircleDashed, Clock, HandCoins, Wallet, type LucideIcon } from "lucide-react"
 import type { StatusTone } from "@/lib/status-tone"
@@ -26,7 +30,7 @@ export const ESTADO_PAGO_UI: Record<EstadoPagoNormalizado, EstadoPagoUi> = {
   // Orden sin precio final todavía, pero con plata a cuenta.
   SENA: { label: "Con seña", icon: Wallet, tone: "info" },
   PARCIAL: { label: "Pago parcial", icon: CircleDashed, tone: "info" },
-  PAGADO: { label: "Pagado", icon: CheckCircle2, tone: "success" },
+  PAGADO: { label: "Cobrado", icon: CheckCircle2, tone: "success" },
   SIN_CARGO: { label: "Sin cargo", icon: HandCoins, tone: "muted" },
   // Orden entregada con saldo: la deuda pasó a la cuenta corriente del cliente
   // y se cobra desde ahí, no desde la orden.

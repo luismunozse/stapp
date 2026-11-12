@@ -1,5 +1,5 @@
 /**
- * Lista de órdenes: la etiqueta de cobro ("Debe $X" / "Pagado") y la
+ * Lista de órdenes: la etiqueta de cobro ("Debe $X" / "Cobrado") y la
  * confirmación del cambio de estado masivo.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
@@ -92,10 +92,10 @@ async function cambiarSeleccionadaA(estado: string) {
 }
 
 describe("OrdenesList — cobro y cambio masivo", () => {
-  it("muestra Debe $X y Pagado", async () => {
+  it("muestra Debe $X y Cobrado", async () => {
     renderList()
     expect((await screen.findAllByText("Debe $10000")).length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Pagado").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Cobrado").length).toBeGreaterThan(0)
   })
 
   it("con el saldo en cuenta corriente muestra 'En cuenta corriente' y el monto, nunca 'Debe'", async () => {
