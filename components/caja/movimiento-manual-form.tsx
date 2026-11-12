@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Plus, Paperclip, X, FileText } from "lucide-react"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 
 const CONCEPTOS_INGRESO = [
   "Ingreso manual",
@@ -49,7 +49,7 @@ interface MovimientoManualFormProps {
 
 export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
   const [tipo, setTipo] = useState<"INGRESO" | "EGRESO">("EGRESO")
-  const [monto, setMonto] = useState("")
+  const [monto, setMonto] = useState<number | null>(null)
   const [metodoPago, setMetodoPago] = useState("EFECTIVO")
   const [concepto, setConcepto] = useState("")
   const [conceptoCustom, setConceptoCustom] = useState("")
@@ -112,9 +112,9 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
     e.preventDefault()
     setError("")
 
-    const montoNum = parseMoneyInput(monto)
-    if (!monto || isNaN(montoNum) || montoNum <= 0) {
-      setError("Ingrese un monto válido mayor a 0")
+    const montoNum = monto ?? 0
+    if (montoNum <= 0) {
+      setError("Ingresá un monto mayor a 0")
       return
     }
     if (!conceptoFinal) {
@@ -144,7 +144,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       }
 
       // Reset form
-      setMonto("")
+      setMonto(null)
       setConcepto("")
       setConceptoCustom("")
       setObservaciones("")
@@ -194,15 +194,11 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
 
             {/* Monto */}
             <div>
-              <label className="text-sm font-medium">Monto</label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
+              <label htmlFor="movimiento-monto" className="text-sm font-medium">Monto</label>
+              <MoneyInput
+                id="movimiento-monto"
                 value={monto}
-                onChange={(e) => setMonto(e.target.value)}
+                onValueChange={(v) => setMonto(v)}
                 className="mt-1"
               />
             </div>

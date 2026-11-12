@@ -13,7 +13,7 @@ describe("MultiPagoInput — monto del pago con coma decimal", () => {
       <MultiPagoInput montoPendiente={2000} pagos={[createPagoLine(0)]} onChange={onChange} />
     )
 
-    fireEvent.change(screen.getByPlaceholderText("0.00"), {
+    fireEvent.change(screen.getByPlaceholderText("0,00"), {
       target: { value: "1500,50" },
     })
 

@@ -13,9 +13,13 @@ vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, pais: "AR", timezone: "America/Argentina/Buenos_Aires" }),
 }))
 const showError = vi.fn().mockResolvedValue(undefined)
+const confirm = vi.fn()
 vi.mock("@/contexts/modal-context", () => ({
-  useModal: () => ({ confirm: vi.fn(), showSuccess: vi.fn(), showError }),
+  useModal: () => ({ confirm, showSuccess: vi.fn(), showError }),
 }))
+const toastError = vi.fn()
+vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }))
+const openManual = vi.fn()
 vi.mock("@/contexts/offline-context", () => ({
   useOffline: () => ({ isOnline: true }),
 }))
@@ -23,7 +27,7 @@ vi.mock("@/components/pos/pos-product-search", async () => {
   const { forwardRef, useImperativeHandle } = await import("react")
   return {
     PosProductSearch: forwardRef((_props: any, ref: any) => {
-      useImperativeHandle(ref, () => ({ focusSearch: () => {} }))
+      useImperativeHandle(ref, () => ({ focusSearch: () => {}, openManual }))
       return null
     }),
   }
@@ -39,11 +43,13 @@ vi.mock("@/components/pos/pos-devolucion-search", () => ({ PosDevolucionSearch: 
 vi.mock("@/components/ventas/devolucion-form", () => ({ DevolucionForm: () => null }))
 vi.mock("@/components/inventario/barcode-scanner", () => ({ BarcodeScanner: () => null }))
 
-function stubFetch(item: Record<string, unknown>) {
+function stubFetch(item: Record<string, unknown>, barcode: { ok: boolean; found?: boolean } = { ok: true, found: true }) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
-      if (url.startsWith("/api/inventario/barcode")) return { ok: true, json: async () => ({ found: true, item }) }
+      if (url.startsWith("/api/inventario/barcode")) {
+        return { ok: barcode.ok, json: async () => (barcode.found ? { found: true, item } : { found: false }) }
+      }
       return { ok: false, json: async () => ({}) }
     })
   )
@@ -61,7 +67,12 @@ function itemsDelCarrito(): any[] {
 }
 
 describe("PosTerminal — escaneo de código de barras", () => {
-  beforeEach(() => showError.mockClear())
+  beforeEach(() => {
+    showError.mockClear()
+    toastError.mockClear()
+    confirm.mockReset()
+    openManual.mockClear()
+  })
 
   it("un producto con número de serie entra con series y la garantía del producto", async () => {
     stubFetch({ id: "p1", codigo: "C1", nombre: "Celular", stock: 3, precioVenta: 1000, trackeaSeries: true, diasGarantiaDefault: 90 })
@@ -87,7 +98,7 @@ describe("PosTerminal — escaneo de código de barras", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   })
 
-  it("avisa cuando ya no hay más stock en vez de mostrar 'agregado'", async () => {
+  it("avisa con un toast (no un modal) cuando ya no hay más stock", async () => {
     stubFetch({ id: "p2", codigo: "C2", nombre: "Cable", stock: 1, precioVenta: 50 })
     render(<PosTerminal />)
 
@@ -95,8 +106,66 @@ describe("PosTerminal — escaneo de código de barras", () => {
     await waitFor(() => expect(itemsDelCarrito()[0]?.cantidad).toBe(1))
     escanear("779124")
 
-    await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringMatching(/No hay más stock de "Cable"/)))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/No hay más stock de "Cable"/), expect.anything()))
+    expect(showError).not.toHaveBeenCalled()
     expect(itemsDelCarrito()[0].cantidad).toBe(1)
+  })
+
+  it("un código desconocido avisa con un toast que ofrece venta manual", async () => {
+    stubFetch({}, { ok: true, found: false })
+    render(<PosTerminal />)
+
+    escanear("000111")
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    const [mensaje, opciones] = toastError.mock.calls[0]
+    expect(mensaje).toMatch(/000111 no está en el inventario/)
+    expect(showError).not.toHaveBeenCalled()
+    expect(opciones.action.label).toBe("Venta manual")
+    opciones.action.onClick()
+    expect(openManual).toHaveBeenCalled()
+  })
+
+  it("un error del servidor al buscar el código ya no se traga en silencio", async () => {
+    stubFetch({}, { ok: false })
+    render(<PosTerminal />)
+
+    escanear("000222")
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/No se pudo buscar el código 000222/), expect.anything()))
+    expect(showError).not.toHaveBeenCalled()
+  })
+
+  it("F2 con productos en el carrito pide confirmación y, si se cancela, no vacía", async () => {
+    stubFetch({ id: "p1", codigo: "C1", nombre: "Funda", stock: 3, precioVenta: 1000 })
+    confirm.mockResolvedValue(false)
+    render(<PosTerminal />)
+    escanear("779125")
+    await waitFor(() => expect(itemsDelCarrito()).toHaveLength(1))
+
+    fireEvent.keyDown(document.body, { key: "F2" })
+
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ variant: "danger" })))
+    expect(itemsDelCarrito()).toHaveLength(1)
+  })
+
+  it("F2 vacía el carrito si se confirma", async () => {
+    stubFetch({ id: "p1", codigo: "C1", nombre: "Funda", stock: 3, precioVenta: 1000 })
+    confirm.mockResolvedValue(true)
+    render(<PosTerminal />)
+    escanear("779126")
+    await waitFor(() => expect(itemsDelCarrito()).toHaveLength(1))
+
+    fireEvent.keyDown(document.body, { key: "F2" })
+
+    await waitFor(() => expect(itemsDelCarrito()).toHaveLength(0))
+  })
+
+  it("F2 con el carrito vacío no pregunta", () => {
+    stubFetch({})
+    render(<PosTerminal />)
+    fireEvent.keyDown(document.body, { key: "F2" })
+    expect(confirm).not.toHaveBeenCalled()
   })
 
   it("un vendedor no ve el botón de devolución (la API lo rechaza)", () => {

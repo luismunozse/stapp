@@ -51,7 +51,7 @@ function isBlankCell(cell: unknown): boolean {
  * Cells are kept as STRINGS on purpose (no Papa `dynamicTyping`): turning
  * "1.500" into 1.5, or "0111234567" into 111234567, happened before the
  * validators could see the original text. Number handling lives in
- * `lib/number-parse.ts`, applied by the validators.
+ * `lib/parse-money.ts` (`parseMonto`), applied by the validators.
  */
 export async function parseCSV(base64Data: string): Promise<ParseResult> {
   const empty = (errors: string[]): ParseResult => ({

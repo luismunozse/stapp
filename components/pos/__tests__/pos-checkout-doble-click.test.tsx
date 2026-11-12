@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -106,7 +107,7 @@ describe("PosCheckoutDialog — Confirmar venta no reentra", () => {
       />
     )
 
-    const boton = await screen.findByRole("button", { name: /confirmar venta/i })
+    const boton = await botonConfirmarListo()
     fireEvent.click(boton)
     fireEvent.click(boton)
 
@@ -124,7 +125,7 @@ describe("PosCheckoutDialog — Confirmar venta no reentra", () => {
       />
     )
 
-    const boton = await screen.findByRole("button", { name: /confirmar venta/i })
+    const boton = await botonConfirmarListo()
     fireEvent.click(boton)
 
     await waitFor(() => expect(boton).toBeDisabled())
@@ -145,7 +146,7 @@ describe("PosCheckoutDialog — Confirmar venta no reentra", () => {
       />
     )
 
-    const boton = await screen.findByRole("button", { name: /confirmar venta/i })
+    const boton = await botonConfirmarListo()
     fireEvent.click(boton)
 
     await waitFor(() => expect(showError).toHaveBeenCalledTimes(1))

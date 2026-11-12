@@ -9,7 +9,6 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -27,9 +26,11 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
@@ -77,19 +78,21 @@ export function PosCheckoutDialog({
   const [pagoParcial, setPagoParcial] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState<string>("")
   const [recargosMetodo, setRecargosMetodo] = useState<Record<string, number>>({})
+  // Si los recargos no cargan no se cobra: el servidor siempre aplica el
+  // recargo del método, así que un total calculado sin él o lo rechaza ("no
+  // coincide") o, con pago parcial, deja la diferencia como deuda del cliente
+  // sin que nadie la haya visto. Antes el error se tragaba y la venta con
+  // tarjeta se cobraba a precio de contado.
+  const [recargosEstado, setRecargosEstado] = useState<"cargando" | "ok" | "error">("cargando")
+  const [recargosIntento, setRecargosIntento] = useState(0)
   const [vendedores, setVendedores] = useState<Array<{ id: string; nombre: string }>>([])
   const [vendedorId, setVendedorId] = useState<string>("")
 
   // Item 7: line items breakdown toggle
   const [showItems, setShowItems] = useState(false)
 
-  // Cash change calculation. El texto crudo vive en su propio estado para que
-  // la coma decimal es-AR no se borre en cada tecleo (ver montoRecibido más
-  // abajo); parseMoneyInput normaliza "1.500,50" y similares, y devuelve NaN
-  // para vacío/inválido — que acá se colapsa al mismo estado "" que antes.
-  const [montoRecibidoTexto, setMontoRecibidoTexto] = useState("")
-  const montoRecibidoParsed = parseMoneyInput(montoRecibidoTexto)
-  const montoRecibido: number | "" = Number.isNaN(montoRecibidoParsed) ? "" : montoRecibidoParsed
+  // Cash change calculation. null = el cajero no ingresó cuánto le dieron.
+  const [montoRecibido, setMontoRecibido] = useState<number | null>(null)
 
   const isCashOnly = pagosLines.length === 1 && pagosLines[0].metodo === "EFECTIVO"
 
@@ -112,7 +115,7 @@ export function PosCheckoutDialog({
       : computeVentaTotals(items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor).total
 
   const vuelto = useMemo(() => {
-    if (!isCashOnly || montoRecibido === "") return 0
+    if (!isCashOnly || montoRecibido === null) return 0
     return Math.max(0, montoRecibido - totalEfectivo)
   }, [isCashOnly, montoRecibido, totalEfectivo])
 
@@ -128,7 +131,8 @@ export function PosCheckoutDialog({
     wasOpen.current = open
     if (!justOpened) return
     setPagosLines([createPagoLine(totalEfectivo)])
-    setMontoRecibidoTexto("")
+    setMontoRecibido(null)
+    setRecargosEstado("cargando")
     setObservaciones("")
     setPagoParcial(false)
     setIdempotencyKey(crypto.randomUUID())
@@ -170,21 +174,33 @@ export function PosCheckoutDialog({
     fetchSaldo()
   }, [cliente.id])
 
-  // Cargar mapa de recargos por método al abrir el diálogo
+  // Cargar mapa de recargos por método al abrir el diálogo (y al reintentar)
   useEffect(() => {
     if (!open) return
+    let cancelado = false
     fetch("/api/configuracion/recargos-metodo")
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data) => {
-        if (!data?.recargos) return
+        if (!Array.isArray(data?.recargos)) throw new Error("Respuesta sin recargos")
         const map: Record<string, number> = {}
         for (const { metodo, porcentaje } of data.recargos) {
           if (porcentaje > 0) map[metodo] = porcentaje
         }
+        if (cancelado) return
         setRecargosMetodo(map)
+        setRecargosEstado("ok")
       })
-      .catch(() => setRecargosMetodo({}))
-  }, [open])
+      .catch((err) => {
+        console.error("[pos] No se pudieron cargar los recargos por método:", err)
+        if (!cancelado) setRecargosEstado("error")
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [open, recargosIntento])
 
   // Cargar lista de vendedores y preseleccionar el usuario de sesión al abrir
   useEffect(() => {
@@ -210,7 +226,7 @@ export function PosCheckoutDialog({
   const submittingRef = useRef(false)
 
   const handleSubmit = async () => {
-    if (submittingRef.current) return
+    if (submittingRef.current || recargosEstado !== "ok") return
     submittingRef.current = true
     setLoading(true)
     try {
@@ -354,7 +370,7 @@ export function PosCheckoutDialog({
         !pagoParcial &&
         isCashOnly &&
         pagosLines[0].monto === totalEfectivo &&
-        montoRecibido !== "" &&
+        montoRecibido !== null &&
         montoRecibido >= totalEfectivo
           ? { montoRecibido, vuelto }
           : undefined
@@ -596,7 +612,7 @@ export function PosCheckoutDialog({
                     variant={montoRecibido === amount ? "default" : "outline"}
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => setMontoRecibidoTexto(String(amount))}
+                    onClick={() => setMontoRecibido(amount)}
                   >
                     {formatPrice(amount)}
                   </Button>
@@ -605,14 +621,11 @@ export function PosCheckoutDialog({
 
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
-                    value={montoRecibidoTexto}
-                    onChange={(e) => setMontoRecibidoTexto(e.target.value)}
+                  <MoneyInput
+                    value={montoRecibido}
+                    onValueChange={(v) => setMontoRecibido(v)}
                     placeholder="Monto recibido"
+                    aria-label="Monto recibido"
                     className="h-10 text-lg font-medium"
                     autoFocus
                   />
@@ -627,7 +640,7 @@ export function PosCheckoutDialog({
                 </div>
               </div>
 
-              {montoRecibido !== "" && montoRecibido < totalEfectivo && (
+              {montoRecibido !== null && montoRecibido < totalEfectivo && (
                 <p className="text-xs text-destructive-text">
                   Faltan {formatPrice(totalEfectivo - montoRecibido)}
                 </p>
@@ -669,6 +682,30 @@ export function PosCheckoutDialog({
           </div>
 
           {/* Submit */}
+          {recargosEstado === "error" && (
+            <div
+              role="alert"
+              className="flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm dark:bg-destructive/15 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span className="flex items-start gap-2 text-destructive-text">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                No se pudieron cargar los recargos por método de pago. Para no cobrar un total equivocado, reintentá antes de confirmar.
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setRecargosEstado("cargando")
+                  setRecargosIntento((n) => n + 1)
+                }}
+              >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                Reintentar
+              </Button>
+            </div>
+          )}
           {pendienteRequiereCliente && (
             <p className="text-xs text-destructive-text text-center">
               Seleccioná un cliente para dejar saldo pendiente / fiar
@@ -681,8 +718,8 @@ export function PosCheckoutDialog({
             <Button
               className="flex-1 h-12 text-base font-semibold"
               onClick={handleSubmit}
-              disabled={pendienteRequiereCliente}
-              loading={loading}
+              disabled={pendienteRequiereCliente || recargosEstado === "error"}
+              loading={loading || recargosEstado === "cargando"}
             >
               <CheckCircle2 className="mr-2 h-5 w-5" />
               Confirmar Venta

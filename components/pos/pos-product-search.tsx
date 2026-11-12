@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
-import { parseMoneyInput } from "@/lib/parse-money"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import {
@@ -60,6 +60,8 @@ function readVentaSucursalHeaders(res: Response): VentaSucursalInfo {
 
 export interface PosProductSearchRef {
   focusSearch: () => void
+  /** Abre el formulario de producto manual (sin inventario). */
+  openManual: () => void
 }
 
 // ─── Cross-sucursal stock popover ───────────────────────────────────────────
@@ -200,17 +202,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [showManualForm, setShowManualForm] = useState(false)
     const [grupoAbierto, setGrupoAbierto] = useState<GrupoAbierto | null>(null)
     const [manualNombre, setManualNombre] = useState("")
-    // Draft en string para permitir escribir decimales (coma es-AR) sin que el
-    // valor se colapse al parsear en cada tecla. Se parsea al agregar.
-    const [manualPrecio, setManualPrecio] = useState("")
-    const [manualCosto, setManualCosto] = useState("")
-
-    useImperativeHandle(ref, () => ({
-      focusSearch: () => {
-        inputRef.current?.focus()
-        inputRef.current?.select()
-      },
-    }))
+    const [manualPrecio, setManualPrecio] = useState<number | null>(null)
+    const [manualCosto, setManualCosto] = useState<number | null>(null)
 
     // Load initial/popular products. scope=venta keeps stock consistent with what
     // a sale can actually decrement (see app/api/inventario/search/route.ts);
@@ -367,17 +360,16 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
 
     const handleAddManual = useCallback(() => {
       const nombre = manualNombre.trim()
-      const precio = parseMoneyInput(manualPrecio)
+      const precio = manualPrecio ?? 0
       if (!nombre || !(precio > 0)) return
-      const costoNum = parseMoneyInput(manualCosto)
       onAddManualProduct({
         nombre,
         precioUnitario: precio,
-        costo: Number.isFinite(costoNum) ? costoNum : undefined,
+        costo: manualCosto ?? undefined,
       })
       setManualNombre("")
-      setManualPrecio("")
-      setManualCosto("")
+      setManualPrecio(null)
+      setManualCosto(null)
       setShowManualForm(false)
       setQuery("")
       setResults([])
@@ -387,10 +379,18 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const openManualForm = useCallback(() => {
       setShowManualForm(true)
       setManualNombre("")
-      setManualPrecio("")
-      setManualCosto("")
+      setManualPrecio(null)
+      setManualCosto(null)
       setTimeout(() => manualNameRef.current?.focus(), 100)
     }, [])
+
+    useImperativeHandle(ref, () => ({
+      focusSearch: () => {
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      },
+      openManual: openManualForm,
+    }), [openManualForm])
 
     // Handle barcode scan in the input itself (fast typing + Enter)
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -511,15 +511,12 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                   />
                 </div>
                 <div className="w-28">
-                  <Input
+                  <MoneyInput
                     ref={manualPriceRef}
-                    type="text"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
                     value={manualPrecio}
-                    onChange={(e) => setManualPrecio(e.target.value)}
+                    onValueChange={(v) => setManualPrecio(v)}
                     placeholder="Precio"
+                    aria-label="Precio"
                     className="h-11 text-base font-medium"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -530,14 +527,11 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                   />
                 </div>
                 <div className="w-24">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
+                  <MoneyInput
                     value={manualCosto}
-                    onChange={(e) => setManualCosto(e.target.value)}
+                    onValueChange={(v) => setManualCosto(v)}
                     placeholder="Costo"
+                    aria-label="Costo"
                     className="h-11 text-sm"
                     title="Costo (opcional) — para margen correcto en reportes"
                   />
@@ -545,7 +539,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 <Button
                   className="h-11 px-4"
                   onClick={handleAddManual}
-                  disabled={!manualNombre.trim() || !(parseMoneyInput(manualPrecio) > 0)}
+                  disabled={!manualNombre.trim() || !((manualPrecio ?? 0) > 0)}
                 >
                   <Plus className="h-4 w-4 sm:mr-1.5" />
                   <span className="hidden sm:inline">Agregar</span>

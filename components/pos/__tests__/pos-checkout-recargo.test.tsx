@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -25,8 +26,9 @@ function buildItem(extra: Partial<PosCartItem> = {}): PosCartItem {
   }
 }
 
-function stubFetch() {
+function stubFetch(recargos: "ok" | "falla" | "falla-una-vez" = "ok") {
   const calls: Array<{ url: string; body: any }> = []
+  let fallasRestantes = recargos === "falla" ? Infinity : recargos === "falla-una-vez" ? 1 : 0
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -35,6 +37,10 @@ function stubFetch() {
       if (url.includes("/check-stock")) return { ok: true, json: async () => ({ stock: { inv1: 10 } }) }
       if (url.includes("/cuenta-corriente")) return { ok: true, json: async () => ({ saldo: 0 }) }
       if (url.includes("/recargos-metodo")) {
+        if (fallasRestantes > 0) {
+          fallasRestantes--
+          return { ok: false, status: 500, json: async () => ({ error: "boom" }) }
+        }
         return { ok: true, json: async () => ({ recargos: [{ metodo: "TARJETA_CREDITO", porcentaje: 10 }] }) }
       }
       if (url.includes("/operadores")) return { ok: true, json: async () => [] }
@@ -47,7 +53,7 @@ function stubFetch() {
 const CLIENTE = { id: "c1", nombre: "Ana", telefono: "" }
 
 async function confirmarYLeerPayload(calls: Array<{ url: string; body: any }>) {
-  fireEvent.click(screen.getByRole("button", { name: /confirmar venta/i }))
+  fireEvent.click(await botonConfirmarListo())
   await waitFor(() => expect(calls.some((c) => c.url === "/api/ventas")).toBe(true))
   return calls.find((c) => c.url === "/api/ventas")!.body
 }
@@ -92,6 +98,46 @@ describe("PosCheckoutDialog — recargo del método igual que el servidor", () =
     const payload = await confirmarYLeerPayload(calls)
     expect(showError).not.toHaveBeenCalled()
     expect(payload.pagosParcial).toBe(false)
+    expect(payload.pagos).toEqual([{ metodo: "TARJETA_CREDITO", monto: 11000, cuotas: 1 }])
+  })
+})
+
+describe("PosCheckoutDialog — si los recargos no cargan no se cobra sin recargo", () => {
+  beforeEach(() => showError.mockClear())
+
+  it("bloquea Confirmar con un aviso y no manda la venta", async () => {
+    const calls = stubFetch("falla")
+    render(
+      <PosCheckoutDialog
+        open onClose={() => {}} items={[buildItem()]}
+        cliente={CLIENTE as any} onComplete={() => {}}
+      />
+    )
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no se pudieron cargar los recargos/i)
+    const confirmar = screen.getByRole("button", { name: /confirmar venta/i })
+    expect(confirmar).toBeDisabled()
+    fireEvent.click(confirmar)
+    expect(calls.some((c) => c.url === "/api/ventas")).toBe(false)
+  })
+
+  it("Reintentar vuelve a pedir los recargos y, si cargan, cobra con el recargo", async () => {
+    const calls = stubFetch("falla-una-vez")
+    render(
+      <PosCheckoutDialog
+        open onClose={() => {}} items={[buildItem()]}
+        cliente={CLIENTE as any} onComplete={() => {}}
+      />
+    )
+
+    fireEvent.click(await screen.findByRole("button", { name: /reintentar/i }))
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
+
+    fireEvent.click(await screen.findByRole("button", { name: /t\. crédito/i }))
+    expect(await screen.findByText("$11000")).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole("button", { name: /confirmar venta/i })).toBeEnabled())
+
+    const payload = await confirmarYLeerPayload(calls)
     expect(payload.pagos).toEqual([{ metodo: "TARJETA_CREDITO", monto: 11000, cuotas: 1 }])
   })
 })

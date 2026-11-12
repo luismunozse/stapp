@@ -21,7 +21,7 @@ describe("CierreDialog — arqueo con coma decimal (bug input es-AR)", () => {
     )
 
     // Cajero cuenta $1500,50 en efectivo (coma decimal del teclado es-AR).
-    fireEvent.change(screen.getByPlaceholderText("0.00"), {
+    fireEvent.change(screen.getByPlaceholderText("0,00"), {
       target: { value: "1500,50" },
     })
 
