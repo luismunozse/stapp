@@ -5,8 +5,12 @@ import { PageHeader } from "./page-header"
 interface PageShellProps {
   /** Page title — forwarded to PageHeader. Omit when passing a custom `header`. */
   title?: string
-  /** Supporting line under the title. */
-  description?: string
+  /** Supporting line under the title (inline content only). */
+  description?: React.ReactNode
+  /** Inline element next to the title (state badge…). */
+  titleAddon?: React.ReactNode
+  /** Extra line under the description (last update, active branch…). */
+  meta?: React.ReactNode
   /** Right-aligned action slot in the header. */
   actions?: React.ReactNode
   /** Optional leading icon chip in the header. */
@@ -33,6 +37,8 @@ interface PageShellProps {
 export function PageShell({
   title,
   description,
+  titleAddon,
+  meta,
   actions,
   icon,
   backHref,
@@ -48,6 +54,8 @@ export function PageShell({
           <PageHeader
             title={title}
             description={description}
+            titleAddon={titleAddon}
+            meta={meta}
             actions={actions}
             icon={icon}
             backHref={backHref}
