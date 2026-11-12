@@ -416,7 +416,7 @@ function LoginForm() {
               </div>
             )}
             {error && (
-              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive-text px-4 py-3 rounded">
                 <p>{error}</p>
                 {showResendOption && (
                   <div className="mt-2 space-y-1">

@@ -136,7 +136,7 @@ function Banner({
 }) {
   const styles =
     variant === "error"
-      ? "bg-destructive/10 text-destructive border-destructive/30"
+      ? "bg-destructive/10 text-destructive-text border-destructive/30"
       : variant === "warning"
         ? "bg-warning-50 text-warning-700 border-warning-200 dark:bg-warning-100 dark:text-warning-200"
         : "bg-success-50 text-success-700 border-success-200 dark:bg-success-100 dark:text-success-200"

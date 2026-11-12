@@ -115,7 +115,7 @@ export function DolarWidget({ variant = "card" }: { variant?: "card" | "header" 
 
   // Shared panel body — used by both the card and header variants
   const panelBody = error ? (
-    <p className="text-sm text-destructive">{error}</p>
+    <p className="text-sm text-destructive-text">{error}</p>
   ) : loading && !cotizacionActual ? (
     <div className="space-y-2">
       <div className="h-8 bg-muted animate-pulse rounded" />

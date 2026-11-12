@@ -366,15 +366,15 @@ export function RentabilidadTecnicos() {
                   <td className="py-2 pr-3 font-medium whitespace-nowrap">{t.nombre}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{t.ordenes}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{t.horasTrabajadas}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-success">
+                  <td className="py-2 pr-3 text-right tabular-nums text-success-text">
                     {formatCurrency(t.ingresos)}
                   </td>
                   {!costosOcultos && (
-                    <td className="py-2 pr-3 text-right tabular-nums text-destructive">
+                    <td className="py-2 pr-3 text-right tabular-nums text-destructive-text">
                       {formatCurrency(t.costoRepuestos ?? 0)}
                     </td>
                   )}
-                  <td className="py-2 pr-3 text-right tabular-nums text-destructive">
+                  <td className="py-2 pr-3 text-right tabular-nums text-destructive-text">
                     {formatCurrency(t.costoManoObra)}
                   </td>
                   {!costosOcultos && (
@@ -382,7 +382,7 @@ export function RentabilidadTecnicos() {
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {formatCurrency(t.comision ?? 0)}
                       </td>
-                      <td className="py-2 pr-3 text-right tabular-nums font-semibold text-success">
+                      <td className="py-2 pr-3 text-right tabular-nums font-semibold text-success-text">
                         {formatCurrency(t.ganancia ?? 0)}
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums">{t.margen}%</td>

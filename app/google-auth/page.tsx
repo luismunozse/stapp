@@ -103,7 +103,7 @@ function GoogleAuthContent() {
   if (!clientId) {
     return (
       <AuthSplitLayout>
-        <p className="text-center text-destructive">Google Login no está configurado.</p>
+        <p className="text-center text-destructive-text">Google Login no está configurado.</p>
       </AuthSplitLayout>
     )
   }
@@ -295,7 +295,7 @@ function GoogleAuthContent() {
         )}
 
         {error && (
-          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm space-y-3">
+          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive-text px-4 py-3 rounded-lg text-sm space-y-3">
             <p>{error}</p>
             {noAccount && (
               <Button asChild size="sm" variant="outline" className="border-destructive/30 bg-background">

@@ -104,7 +104,7 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
             <Label>Equipo *</Label>
             <Input {...props.register(`equipos.${props.index}.dispositivo`)} placeholder="Ej: iPhone 13" />
             {props.errors?.dispositivo && (
-              <p className="text-sm text-destructive mt-1">{props.errors.dispositivo.message}</p>
+              <p className="text-sm text-destructive-text mt-1">{props.errors.dispositivo.message}</p>
             )}
           </div>
           {cfg.showMarca && (
@@ -187,7 +187,7 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
           <Label>Falla reportada *</Label>
           <Textarea {...props.register(`equipos.${props.index}.problemaReportado`)} rows={2} />
           {props.errors?.problemaReportado && (
-            <p className="text-sm text-destructive mt-1">{props.errors.problemaReportado.message}</p>
+            <p className="text-sm text-destructive-text mt-1">{props.errors.problemaReportado.message}</p>
           )}
           {cfg.problemasComunes.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">

@@ -319,7 +319,7 @@ export function PosTicketShare({
           {ventaData.clienteTelefono ? (
             <Button
               variant="ghost"
-              className="h-11 w-full justify-start px-3 text-success"
+              className="h-11 w-full justify-start px-3 text-success-text"
               onClick={handleShareWhatsApp}
               disabled={generating}
             >
@@ -342,7 +342,7 @@ export function PosTicketShare({
                 </div>
                 <Button
                   variant="outline"
-                  className="h-11 w-full text-success"
+                  className="h-11 w-full text-success-text"
                   disabled={!manualPhone.trim()}
                   onClick={() => {
                     const phone = manualPhone.trim()

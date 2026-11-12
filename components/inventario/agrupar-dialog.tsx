@@ -355,7 +355,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                     </div>
                     {motivo ? (
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm text-destructive">{TEXTO_MOTIVO[motivo]}</p>
+                        <p className="text-sm text-destructive-text">{TEXTO_MOTIVO[motivo]}</p>
                         <Button
                           type="button"
                           variant="outline"
@@ -505,7 +505,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
             </ul>
           )}
           {error && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-destructive-text">
               {error}
             </p>
           )}

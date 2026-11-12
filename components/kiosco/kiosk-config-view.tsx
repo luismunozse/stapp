@@ -353,7 +353,7 @@ export function KioskConfigView() {
                         onClick={() => handleDelete(t.id, t.name)}
                         title="Eliminar"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-4 w-4 text-destructive-text" />
                       </Button>
                     </div>
                   </div>

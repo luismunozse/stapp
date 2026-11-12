@@ -476,7 +476,7 @@ export function CatalogoItemsTab() {
                           {item.inventario?.stock == null ? (
                             "—"
                           ) : item.inventario.stock === 0 ? (
-                            <span className="text-destructive">0</span>
+                            <span className="text-destructive-text">0</span>
                           ) : (
                             item.inventario.stock
                           )}
@@ -496,7 +496,7 @@ export function CatalogoItemsTab() {
                             v == null ? (
                               "—"
                             ) : v === 0 ? (
-                              <span className="text-destructive">0</span>
+                              <span className="text-destructive-text">0</span>
                             ) : (
                               v
                             )
@@ -530,8 +530,8 @@ export function CatalogoItemsTab() {
                               Duplicar
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setDeleteId(item.id)}>
-                              <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive" />
-                              <span className="text-destructive">Eliminar</span>
+                              <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive-text" />
+                              <span className="text-destructive-text">Eliminar</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -658,8 +658,8 @@ export function CatalogoItemsTab() {
                           Duplicar
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setDeleteId(item.id)}>
-                          <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive" />
-                          <span className="text-destructive">Eliminar</span>
+                          <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive-text" />
+                          <span className="text-destructive-text">Eliminar</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -750,7 +750,7 @@ export function CatalogoItemsTab() {
                 size="sm"
                 disabled={bulkLoading}
                 onClick={() => setBulkConfirm("borrar")}
-                className="gap-1.5 text-destructive hover:text-destructive"
+                className="gap-1.5 text-destructive-text hover:text-destructive-text"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Eliminar</span>

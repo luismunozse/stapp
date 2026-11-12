@@ -324,7 +324,7 @@ export default function GastosRecurrentesPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setDeleteId(g.id)}
-                        className="text-destructive hover:text-destructive"
+                        className="text-destructive-text hover:text-destructive-text"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

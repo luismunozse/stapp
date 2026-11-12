@@ -110,7 +110,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                   {m.tipo === "INGRESO" ? (
                     <TrendingUp className="h-4 w-4 mt-0.5 text-success-600" />
                   ) : (
-                    <TrendingDown className="h-4 w-4 mt-0.5 text-destructive" />
+                    <TrendingDown className="h-4 w-4 mt-0.5 text-destructive-text" />
                   )}
                   <div className="space-y-0.5">
                     <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
@@ -172,7 +172,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                         className={`text-xs ${
                           m.tipo === "INGRESO"
                             ? "text-success-600 border-success-200"
-                            : "text-destructive border-destructive/30"
+                            : "text-destructive-text border-destructive/30"
                         }`}
                       >
                         {m.tipo === "INGRESO" ? "Ingreso" : "Egreso"}
@@ -194,7 +194,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-sm font-bold ${
-                      m.tipo === "INGRESO" ? "text-success-600" : "text-destructive"
+                      m.tipo === "INGRESO" ? "text-success-600" : "text-destructive-text"
                     }`}
                   >
                     {m.tipo === "INGRESO" ? "+" : "-"}
@@ -205,7 +205,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                       variant="ghost"
                       size="sm"
                       onClick={() => setDeleteId(m.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive-text hover:text-destructive-text"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

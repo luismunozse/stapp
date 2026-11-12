@@ -327,7 +327,7 @@ function RegistroForm() {
         </div>
 
         {error && (
-          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm">
+          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive-text px-4 py-3 rounded-lg text-sm">
             {error}
           </div>
         )}
@@ -382,14 +382,14 @@ function RegistroForm() {
                 )}
                 {slugStatus === "available" && (
                   <>
-                    <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-                    <span className="text-success">Disponible</span>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-success-text" aria-hidden="true" />
+                    <span className="text-success-text">Disponible</span>
                   </>
                 )}
                 {slugBad && (
                   <>
-                    <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
-                    <span className="text-destructive">{slugError || "Este subdominio no está disponible"}</span>
+                    <AlertCircle className="h-3.5 w-3.5 text-destructive-text" aria-hidden="true" />
+                    <span className="text-destructive-text">{slugError || "Este subdominio no está disponible"}</span>
                   </>
                 )}
                 {slugStatus === "idle" && (

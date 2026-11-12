@@ -54,7 +54,7 @@ const TIPO_LABELS: Record<string, { label: string; icon: any; color: string }> =
   PAGO_VENTA: { label: "Venta", icon: ShoppingBag, color: "text-success-600" },
   DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-warning-600" },
   INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-success-600" },
-  EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-destructive" },
+  EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-destructive-text" },
 }
 
 interface CajaResumenProps {
@@ -113,7 +113,7 @@ export function CajaResumen({
       {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
         <div className="mt-2 p-2 bg-destructive/10 dark:bg-destructive/15 border border-destructive/25 rounded-lg inline-block">
           <div className="text-xs text-muted-foreground">Costo terminales</div>
-          <div className="text-sm font-medium text-destructive">-{formatPrice(data.totalCostosFinancieros)}</div>
+          <div className="text-sm font-medium text-destructive-text">-{formatPrice(data.totalCostosFinancieros)}</div>
           <div className="text-xs text-muted-foreground">
             Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
           </div>
@@ -136,7 +136,7 @@ export function CajaResumen({
                         {METODO_LABELS[metodo] || metodo}
                       </span>
                     </div>
-                    <div className={`text-lg font-bold ${total < 0 ? "text-destructive" : ""}`}>
+                    <div className={`text-lg font-bold ${total < 0 ? "text-destructive-text" : ""}`}>
                       {formatPrice(total)}
                     </div>
                   </CardContent>
@@ -168,7 +168,7 @@ export function CajaResumen({
                         <span className="text-sm">{tipoInfo.label}</span>
                         <Badge variant="outline" className="text-xs">{info.count}</Badge>
                       </div>
-                      <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-destructive" : ""}`}>
+                      <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-destructive-text" : ""}`}>
                         {tipo === "EGRESO_MANUAL" ? "-" : ""}{formatPrice(info.total)}
                       </span>
                     </div>
@@ -220,7 +220,7 @@ export function CajaResumen({
                     Orden #{String(o.numeroOrden).padStart(4, "0")}
                   </span>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-destructive">
+                    <div className="text-sm font-medium text-destructive-text">
                       {formatPrice(o.pendiente)}
                     </div>
                     {o.totalCobrado > 0 && (
@@ -315,12 +315,12 @@ export function CajaResumen({
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="text-right">
-                        <div className={`text-sm font-bold ${mov.esEgreso ? "text-destructive" : "text-success-600"}`}>
+                        <div className={`text-sm font-bold ${mov.esEgreso ? "text-destructive-text" : "text-success-600"}`}>
                           {mov.esEgreso ? "-" : "+"}
                           {formatPrice(mov.monto)}
                         </div>
                         {mov.costoFinancieroMonto > 0 && (
-                          <div className="text-xs text-destructive">
+                          <div className="text-xs text-destructive-text">
                             Terminal: -{formatPrice(mov.costoFinancieroMonto)}
                             <span className="text-muted-foreground ml-1">({mov.costoFinancieroPorcentaje}%)</span>
                           </div>

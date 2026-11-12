@@ -275,7 +275,7 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
                         {formatPrice(item.cantidadPedida * item.precioUnitario)}
                       </td>
                       <td className="px-1 py-2">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive-text" onClick={() => removeItem(idx)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </td>

@@ -68,7 +68,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 {chip && (
                   <span
                     className={`text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${
-                      chip.kind === "debe" ? "bg-destructive/10 text-destructive" : "bg-info-50 text-info-700"
+                      chip.kind === "debe" ? "bg-destructive/10 text-destructive-text" : "bg-info-50 text-info-700"
                     }`}
                   >
                     {chip.label} {formatPrice(chip.amount)}
@@ -151,7 +151,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     <div className="h-px bg-border my-1" />
                     <button
                       type="button"
-                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm rounded-md hover:bg-destructive/10 text-destructive-text transition-colors"
                       onClick={(e) => onDelete(e, cliente)}
                       disabled={deleting}
                     >

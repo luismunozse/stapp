@@ -284,7 +284,7 @@ export function FacturacionList() {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => handleDeleteClick(factura)}
-                                      className="text-destructive hover:text-destructive"
+                                      className="text-destructive-text hover:text-destructive-text"
                                     >
                                       <Trash2 className="h-4 w-4 mr-2" />
                                       Eliminar
@@ -339,7 +339,7 @@ export function FacturacionList() {
                                   size="sm"
                                   onClick={() => handleDeleteClick(factura)}
                                   title="Eliminar"
-                                  className="text-destructive hover:text-destructive"
+                                  className="text-destructive-text hover:text-destructive-text"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

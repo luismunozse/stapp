@@ -41,7 +41,7 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
   if (!tipo) {
     return (
       <div className="space-y-4">
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-text">
           Para practicar necesitás al menos un tipo de {minusculaInicial(equipo)} activo. Podés volver con Atrás o activar tus
           tipos más tarde en Configuración.
         </p>

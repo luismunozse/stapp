@@ -344,7 +344,7 @@ function PlantillaEditor({
                 className={cn(
                   "text-[10px] tabular-nums",
                   (value || plantilla.defaultText).length >= MAX_TEMPLATE_LENGTH
-                    ? "text-destructive font-medium"
+                    ? "text-destructive-text font-medium"
                     : "text-muted-foreground",
                 )}
               >
@@ -664,7 +664,7 @@ export function PlantillasWhatsappEditor() {
               "px-4 py-3 rounded-lg text-sm flex items-center gap-2 ease-snappy animate-in slide-in-from-top-2",
               message.type === "success"
                 ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive",
+                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive-text",
             )}
           >
             {message.type === "success" ? (

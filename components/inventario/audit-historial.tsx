@@ -54,7 +54,7 @@ function actionBadge(a: AuditLog["action"]) {
     case "UPDATE":
       return <Badge variant="outline" className="gap-1 border-blue-500/60 text-blue-600"><Pencil className="h-3 w-3" /> Editado</Badge>
     case "DELETE":
-      return <Badge variant="outline" className="gap-1 border-destructive text-destructive"><Trash2 className="h-3 w-3" /> Eliminado</Badge>
+      return <Badge variant="outline" className="gap-1 border-destructive text-destructive-text"><Trash2 className="h-3 w-3" /> Eliminado</Badge>
   }
 }
 

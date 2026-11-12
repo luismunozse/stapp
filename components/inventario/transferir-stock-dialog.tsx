@@ -240,7 +240,7 @@ export function TransferirStockDialog({
                 className="mt-1"
               />
               {excedeOrigen && (
-                <p className="text-[11px] text-destructive mt-1">
+                <p className="text-[11px] text-destructive-text mt-1">
                   Excede disponible en origen ({origenRow?.disponible})
                 </p>
               )}
@@ -257,7 +257,7 @@ export function TransferirStockDialog({
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-destructive-text">{error}</p>}
           </div>
         )}
 

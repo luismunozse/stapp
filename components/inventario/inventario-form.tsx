@@ -1346,7 +1346,7 @@ export function InventarioForm({
                 autoFocus
               />
               {errors.nombre && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.nombre.message}
                 </p>
               )}
@@ -1489,12 +1489,12 @@ export function InventarioForm({
                 </div>
               )}
               {errors.tipoDispositivo && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.tipoDispositivo.message}
                 </p>
               )}
               {tiposError && (
-                <p className="text-sm text-destructive mt-1 cursor-pointer" onClick={refetchTipos}>
+                <p className="text-sm text-destructive-text mt-1 cursor-pointer" onClick={refetchTipos}>
                   Error al cargar tipos. Toca para reintentar.
                 </p>
               )}
@@ -1570,7 +1570,7 @@ export function InventarioForm({
                 </div>
               )}
               {errors.categoria && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.categoria.message}
                 </p>
               )}
@@ -1595,7 +1595,7 @@ export function InventarioForm({
                     min={0}
                   />
                   {errors.stock && (
-                    <p className="text-sm text-destructive mt-1">
+                    <p className="text-sm text-destructive-text mt-1">
                       {errors.stock.message}
                     </p>
                   )}
@@ -1617,7 +1617,7 @@ export function InventarioForm({
                     placeholder="0.00"
                   />
                   {errors.precioCompra && (
-                    <p className="text-sm text-destructive mt-1">
+                    <p className="text-sm text-destructive-text mt-1">
                       {errors.precioCompra.message}
                     </p>
                   )}
@@ -1648,7 +1648,7 @@ export function InventarioForm({
                 placeholder="0.00"
               />
               {errors.precioVenta && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.precioVenta.message}
                 </p>
               )}
@@ -1829,7 +1829,7 @@ export function InventarioForm({
               Dónde está físicamente el repuesto en tu depósito.
             </p>
             {errors.ubicacion && (
-              <p className="text-sm text-destructive">{errors.ubicacion.message}</p>
+              <p className="text-sm text-destructive-text">{errors.ubicacion.message}</p>
             )}
           </div>}
 
