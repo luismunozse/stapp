@@ -123,7 +123,7 @@ export function CotizacionApproval({
       setShowApproval(false)
       onApproved?.()
     } catch {
-      setError("Error de conexion. Intenta de nuevo.")
+      setError("Error de conexión. Probá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -150,7 +150,7 @@ export function CotizacionApproval({
       setShowReject(false)
       onApproved?.()
     } catch {
-      setError("Error de conexion. Intenta de nuevo.")
+      setError("Error de conexión. Probá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -189,7 +189,7 @@ export function CotizacionApproval({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <FileText className="h-5 w-5 text-amber-600" />
-          Presupuesto detallado pendiente de aprobacion
+          Presupuesto detallado pendiente de aprobación
         </CardTitle>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{cotizacion.numeroCotizacion}</span>
@@ -222,7 +222,7 @@ export function CotizacionApproval({
         <div>
           {/* Header */}
           <div className="grid grid-cols-12 gap-1 text-xs font-medium text-muted-foreground pb-2 border-b uppercase tracking-wider">
-            <div className="col-span-5">Descripcion</div>
+            <div className="col-span-5">Descripción</div>
             <div className="col-span-1 text-center">Cant.</div>
             <div className="col-span-2 text-right">P. Unit.</div>
             <div className="col-span-1 text-center">Dto.</div>
@@ -307,7 +307,7 @@ export function CotizacionApproval({
         {/* Terminos */}
         {cotizacion.terminos && (
           <div className="text-sm">
-            <p className="text-muted-foreground text-xs font-medium mb-1">Terminos y condiciones</p>
+            <p className="text-muted-foreground text-xs font-medium mb-1">Términos y condiciones</p>
             <p className="whitespace-pre-wrap text-muted-foreground">{cotizacion.terminos}</p>
           </div>
         )}
@@ -315,8 +315,8 @@ export function CotizacionApproval({
         {/* Vencimiento */}
         {cotizacion.fechaVencimiento && (
           <div className="text-xs text-muted-foreground">
-            Valida hasta: {formatDate(cotizacion.fechaVencimiento)}
-            {isExpired && <span className="text-red-500 font-medium ml-1">(Vencida)</span>}
+            Válido hasta: {formatDate(cotizacion.fechaVencimiento)}
+            {isExpired && <span className="text-red-500 font-medium ml-1">(Vencido)</span>}
           </div>
         )}
 
@@ -325,9 +325,9 @@ export function CotizacionApproval({
           <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30">
             <CalendarClock className="h-5 w-5 text-amber-600 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Cotización vencida</p>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Presupuesto vencido</p>
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                Contactá al servicio técnico para una nueva cotización.
+                Contactá al servicio técnico para pedir un nuevo presupuesto.
               </p>
             </div>
           </div>
@@ -373,10 +373,10 @@ export function CotizacionApproval({
         {showReject && (
           <div className="border border-red-200 rounded-lg p-4 space-y-3 bg-red-50/50 dark:bg-red-950/20">
             <p className="text-sm font-medium text-red-800 dark:text-red-300">
-              ¿Estas seguro de rechazar el presupuesto?
+              ¿Estás seguro de rechazar el presupuesto?
             </p>
             <p className="text-xs text-muted-foreground">
-              El taller sera notificado y podra contactarte para ofrecer alternativas.
+              El taller será notificado y podrá contactarte para ofrecer alternativas.
             </p>
 
             <Textarea
@@ -424,12 +424,12 @@ export function CotizacionApproval({
         {showApproval && (
           <div className="border rounded-lg p-4 space-y-3 bg-background">
             <p className="text-sm text-muted-foreground">
-              Firma a continuacion para confirmar la aprobacion del presupuesto
+              Firmá a continuación para confirmar la aprobación del presupuesto
               por <strong>{fmt(cotizacion.total)}</strong>.
             </p>
 
             <SignaturePad
-              label="Firma de aprobacion"
+              label="Firma de aprobación"
               onSignatureChange={(sig, mime) => {
                 setFirma(sig)
                 setFirmaMime(mime)
@@ -463,7 +463,7 @@ export function CotizacionApproval({
                 ) : (
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                 )}
-                Confirmar aprobacion
+                Confirmar aprobación
               </Button>
             </div>
           </div>

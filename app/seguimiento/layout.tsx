@@ -2,8 +2,8 @@ import type { Metadata } from "next"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export const metadata: Metadata = {
-  title: "Seguimiento de Orden | STApp",
-  description: "Consulta el estado de tu orden de servicio",
+  title: "Seguimiento de orden | STApp",
+  description: "Consultá el estado de tu orden de servicio",
   robots: { index: false, follow: false },
 }
 
