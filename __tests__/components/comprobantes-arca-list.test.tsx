@@ -224,9 +224,11 @@ describe("ComprobantesArcaList", () => {
     it("una nota de credito pendiente es 'En proceso' y sin numero dice 'Sin número'", async () => {
       responder(pagina([notaCredito({ estado: "pendiente", numero: null, cae: null, pdfDisponible: false, verificable: true })]))
       render(<ComprobantesArcaList />)
-      expect(await screen.findByText("En proceso")).toBeInTheDocument()
-      expect(screen.getByText("Sin número")).toBeInTheDocument()
-      expect(screen.getByText("Nota de crédito B")).toBeInTheDocument()
+      // "En proceso" tambien es una opcion del filtro (visible desde el primer render):
+      // esperar la fila por un texto propio y buscar el estado dentro de ella.
+      const fila = (await screen.findByText("Sin número")).closest("tr")!
+      expect(within(fila).getByText("En proceso")).toBeInTheDocument()
+      expect(within(fila).getByText("Nota de crédito B")).toBeInTheDocument()
       expect(screen.queryByRole("link", { name: /Ver PDF/i })).not.toBeInTheDocument()
       // Sin emitir no hay PDF que "estar incompleto": solo una raya.
       expect(screen.queryByText(/datos incompletos/i)).not.toBeInTheDocument()
