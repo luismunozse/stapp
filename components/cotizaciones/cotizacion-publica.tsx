@@ -545,7 +545,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <div className="space-y-0">
             {/* Header */}
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground pb-2 border-b">
-              <div className="col-span-4">Descripcion</div>
+              <div className="col-span-4">Descripción</div>
               <div className="col-span-2 text-center">Cant.</div>
               <div className="col-span-2 text-right">P. Unit.</div>
               <div className="col-span-1 text-center">Dto.</div>
