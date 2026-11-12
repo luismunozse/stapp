@@ -180,7 +180,7 @@ export const caja = {
 
 /** Dashboard (app/(dashboard)/dashboard/page.tsx). */
 export const dashboard = {
-  heading: { role: "heading" as const, name: "Dashboard" },
+  heading: { role: "heading" as const, name: "Inicio" },
   kpi: {
     ordenesPendientes: /Órdenes Pendientes/i,
     clientes: /^Clientes$/i,

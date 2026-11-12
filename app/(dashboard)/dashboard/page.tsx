@@ -539,7 +539,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-headline">Dashboard</h1>
+          <h1 className="text-headline">Inicio</h1>
           <p className="text-muted-foreground">
             Bienvenido, {currentUserName}
           </p>

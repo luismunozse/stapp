@@ -805,7 +805,7 @@ export function ConfiguracionForm({
           <>
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Facturación / IVA</CardTitle>
+              <CardTitle className="text-base sm:text-lg">IVA</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 Configuración fiscal para el Punto de Venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
               </CardDescription>

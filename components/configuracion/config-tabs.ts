@@ -3,7 +3,7 @@
 export const CONFIG_TABS = [
   { value: "secciones", label: "Secciones" },
   { value: "empresa", label: "Empresa" },
-  { value: "facturacion", label: "Facturación" },
+  { value: "facturacion", label: "IVA y ARCA" },
   { value: "comprobantes", label: "Comprobantes" },
   { value: "moneda", label: "Moneda extranjera" },
   { value: "comisiones", label: "Comisiones" },

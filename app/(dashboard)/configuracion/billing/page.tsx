@@ -162,9 +162,9 @@ function BillingContent() {
           </IconButton>
         </Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Facturación</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Mi plan</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Gestiona tu suscripción y pagos
+            Tu suscripción a STApp y sus pagos
           </p>
         </div>
       </div>
