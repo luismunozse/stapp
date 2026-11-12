@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, puedeVerDeudaClientes, respuestaDeudaNoPermitida } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
@@ -12,6 +12,8 @@ export async function GET(
   try {
     const { error, organizationId, session, role } = await requireAuth()
     if (error) return error
+    // Solo deuda del cliente: un TECNICO sin `tecnicos_ven_deuda_clientes` no la ve.
+    if (!(await puedeVerDeudaClientes(role, organizationId!))) return respuestaDeudaNoPermitida()
 
     const { id: clienteId } = await params
 

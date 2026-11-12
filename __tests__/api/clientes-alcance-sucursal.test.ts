@@ -85,10 +85,34 @@ describe("customer account statement lines", () => {
   })
 
   it("list: non-admin without a branch matches nothing (unattributed lines stay hidden too)", async () => {
-    mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: null })
+    mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: null })
     await getCC(createGetRequest(), params())
     expect(cc.or).not.toHaveBeenCalled()
     expect(cc.eq).toHaveBeenCalledWith("sucursal_id", "00000000-0000-0000-0000-000000000000")
+  })
+
+  it("list: a TECNICO without tecnicos_ven_deuda_clientes gets no lines, only the credit (never the debt)", async () => {
+    mockSupabaseFrom({
+      cuenta_corriente: cc,
+      clientes: createChainMock({ id: "c1", nombre: "Ana", saldo_cuenta: "-300" }),
+      organizations: createChainMock({ tecnicos_ven_deuda_clientes: false }),
+    })
+    mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: S1 })
+    const { status, body } = await parseResponse(await getCC(createGetRequest(), params()))
+    expect(status).toBe(200)
+    expect(body).toMatchObject({ saldo: 0, movimientos: [], deudaOculta: true })
+    expect(cc.select).not.toHaveBeenCalled()
+  })
+
+  it("list: a TECNICO WITH tecnicos_ven_deuda_clientes reads the lines of his branch", async () => {
+    mockSupabaseFrom({
+      cuenta_corriente: cc,
+      clientes: createChainMock({ id: "c1", nombre: "Ana", saldo_cuenta: "100" }),
+      organizations: createChainMock({ tecnicos_ven_deuda_clientes: true }),
+    })
+    mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: S1 })
+    await getCC(createGetRequest(), params())
+    expect(cc.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
   })
 
   it("statement PDF: non-admin lines are branch-scoped (opening balance query too)", async () => {

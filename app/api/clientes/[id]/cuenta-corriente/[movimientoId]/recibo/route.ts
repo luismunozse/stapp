@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, puedeVerDeudaClientes, respuestaDeudaNoPermitida } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateReciboCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
@@ -33,6 +33,8 @@ export async function GET(
   try {
     const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
+    // Solo deuda del cliente: un TECNICO sin `tecnicos_ven_deuda_clientes` no la ve.
+    if (!(await puedeVerDeudaClientes(role, organizationId!))) return respuestaDeudaNoPermitida()
 
     const { id: clienteId, movimientoId } = await params
 

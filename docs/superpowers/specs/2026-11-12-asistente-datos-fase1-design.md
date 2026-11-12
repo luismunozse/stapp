@@ -166,7 +166,8 @@ Son estimaciones: se validan con los tokens reales registrados en `asistente_men
 - **Parte 2** (este PR, apilado sobre #682): `buscar_ordenes`, `resumen_cliente`, `resumen_ordenes`, links a `/clientes/<id>` y el permiso `tecnicos_ven_deuda_clientes` (migración 405) en Configuración → Roles.
   - Todas las herramientas que listan o cuentan órdenes usan el alcance de la LISTA de Órdenes (`alcance-lista.ts`): un técnico ve las asignadas a él (más las sin asignar de su sucursal si `tecnicos_toman_ordenes`), el resto según el filtro de sucursal de la lectura.
   - La deuda de un cliente sale de la misma RPC que la pantalla del cliente (`get_deuda_cliente_sucursal`).
-  - **Pendiente de decisión:** el permiso nuevo solo rige en el asistente. Hoy las pantallas de Clientes (lista con "Deuda", detalle, cuenta corriente) le muestran la deuda a un técnico. Si la regla tiene que valer en todo el sistema, es un cambio aparte.
+  - Migración 405 aplicada en producción el 2026-11-12.
+- **Regla en todo el sistema** (PR aparte, apilado sobre la parte 2; el usuario lo pidió el 2026-11-12): `puedeVerDeudaClientes(role, orgId)` en `lib/auth-utils.ts` decide para el asistente y para las pantallas de Clientes. Sin el permiso, un técnico no ve la columna Deuda, el total, el filtro "Solo con deuda" ni la cuenta corriente; un fiado (saldo negativo) se informa como 0 y el saldo a favor sigue visible para los cobros. Órdenes pendientes, deuda por sucursal, estado de cuenta y recibo responden 403 (`DEUDA_NO_PERMITIDA`).
 
 ## Decisiones tomadas (usuario, 2026-11-12)
 

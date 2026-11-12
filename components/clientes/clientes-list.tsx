@@ -122,6 +122,9 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
   const totalDeuda: number = data?.totalDeuda || 0
+  // Un TECNICO sin el permiso `tecnicos_ven_deuda_clientes` no ve deudas: lo decide el
+  // servidor y lo avisa en la respuesta, así la pantalla no adivina el permiso.
+  const deudaOculta: boolean = !!data?.deudaOculta
   const filtrosActivos = hasActiveFilters({ search, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta })
 
   const clearAllFilters = () => {
@@ -180,7 +183,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     }
   }
 
-  const columns: Column<Cliente>[] = [
+  const todasLasColumnas: Column<Cliente>[] = [
     {
       key: "nombre",
       header: "Cliente",
@@ -280,6 +283,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => {
         const saldo = cliente.saldoCuenta || 0
         if (saldo <= 0) return <span className="text-muted-foreground">-</span>
+        // Sin permiso de deuda se ve el crédito, pero no el historial de la cuenta corriente.
+        if (deudaOculta) return <span className="font-medium text-sm tabular-nums">{formatPrice(saldo)}</span>
         return (
           <button
             type="button"
@@ -385,14 +390,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                       Cobrar órdenes
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
-                  >
-                    <PiggyBank className="h-4 w-4 text-info-600" />
-                    Cuenta corriente
-                  </button>
+                  {!deudaOculta && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
+                    >
+                      <PiggyBank className="h-4 w-4 text-info-600" />
+                      Cuenta corriente
+                    </button>
+                  )}
                 </>
               )}
               {esAdmin && !cliente.esPractica && (
@@ -415,6 +422,9 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       ),
     },
   ]
+  const columns = deudaOculta
+    ? todasLasColumnas.filter((c) => c.key !== "deudaPendiente")
+    : todasLasColumnas
 
   return (
     <PullToRefresh onRefresh={() => mutate()}>
@@ -530,10 +540,12 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           aria-label="Fecha hasta"
         />
 
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={conDeuda} onCheckedChange={(v) => onFilterChange(() => setConDeuda(!!v))} />
-          Solo con deuda
-        </label>
+        {!deudaOculta && (
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={conDeuda} onCheckedChange={(v) => onFilterChange(() => setConDeuda(!!v))} />
+            Solo con deuda
+          </label>
+        )}
 
         {filtrosActivos && (
           <Button variant="ghost" size="sm" onClick={clearAllFilters}>
@@ -603,7 +615,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       )}
 
       {/* Total adeudado bar */}
-      {conDeuda && (
+      {conDeuda && !deudaOculta && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm">
           <span className="text-muted-foreground">Total adeudado:</span>
           <span className="font-semibold text-destructive-text tabular-nums">{formatPrice(totalDeuda)}</span>
@@ -676,7 +688,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   onEdit={handleEdit}
                   onDelete={esAdmin ? handleDelete : undefined}
                   onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
-                  onCuentaCorriente={(e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
+                  onCuentaCorriente={deudaOculta ? undefined : (e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
                   onCobrar={puedeCobrar ? (e, c) => { e.stopPropagation(); setCobrarCliente(c) } : undefined}
                   deleting={deleting === cliente.id}
                 />

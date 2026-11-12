@@ -92,9 +92,9 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
   {
     rol: "TECNICO",
     campo: "tecnicosVenDeudaClientes",
-    titulo: "Consultar la deuda de los clientes en el asistente",
+    titulo: "Ver la deuda de los clientes",
     detalle:
-      "Puede preguntarle al asistente de STApp cuánto debe un cliente (fiado y órdenes sin cobrar). Apagado, el asistente le muestra los datos del cliente y sus órdenes, pero no la deuda. El saldo de una orden puntual lo sigue viendo, igual que en la pantalla de la orden.",
+      "Ve cuánto debe cada cliente (fiado y órdenes sin cobrar) en la pantalla Clientes, en su cuenta corriente y en el asistente. Apagado, ve los datos del cliente y sus órdenes, pero no la deuda. El saldo de una orden puntual lo sigue viendo, igual que en la pantalla de la orden.",
   },
   {
     rol: "VENDEDOR",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
@@ -21,13 +21,16 @@ const clienteSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+    // Un TECNICO sin el permiso de la org no ve la deuda: ni la columna, ni el total,
+    // ni puede filtrar u ordenar por ella (ordenar también la revelaría).
+    const verDeuda = await puedeVerDeudaClientes(role, organizationId!)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const tipoCliente = searchParams.get("tipoCliente") || ""
-    const conDeuda = searchParams.get("conDeuda") === "true"
+    const conDeuda = verDeuda && searchParams.get("conDeuda") === "true"
     const fechaDesde = searchParams.get("fechaDesde") || ""
     const fechaHasta = searchParams.get("fechaHasta") || ""
     const aceptaWhatsappParam = searchParams.get("aceptaWhatsapp")
@@ -42,7 +45,7 @@ export async function GET(request: Request) {
       nombre: "nombre",
       telefono: "telefono",
       email: "email",
-      deudaPendiente: "deuda_pendiente",
+      ...(verDeuda && { deudaPendiente: "deuda_pendiente" }),
       ordenes: "ordenes_count",
       ultimaVisita: "ultima_visita",
     }
@@ -78,7 +81,7 @@ export async function GET(request: Request) {
 
     // Total adeudado del set filtrado (sin paginar)
     let totalDeuda = 0
-    try {
+    if (verDeuda) try {
       const { data: deudaRows } = await applyFilters(
         supabaseAdmin.from("v_clientes_resumen").select("deuda_pendiente")
       )
@@ -93,7 +96,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: (clientes || []).map((c: any) => ({
         ...formatCliente(c),
-        deudaPendiente: parseFloat(c.deuda_pendiente || "0"),
+        deudaPendiente: verDeuda ? parseFloat(c.deuda_pendiente || "0") : null,
+        saldoCuenta: verDeuda ? parseFloat(c.saldo_cuenta || "0") : Math.max(parseFloat(c.saldo_cuenta || "0"), 0),
         ordenesCount: c.ordenes_count ?? 0,
         ultimaVisita: c.ultima_visita ?? null,
       })),
@@ -101,7 +105,8 @@ export async function GET(request: Request) {
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
-      totalDeuda,
+      totalDeuda: verDeuda ? totalDeuda : null,
+      deudaOculta: !verDeuda,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

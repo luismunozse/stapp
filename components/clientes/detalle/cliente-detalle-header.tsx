@@ -27,13 +27,15 @@ interface ClienteDetalleHeaderProps {
   deudaError?: boolean
   // Debt is scoped to the active sucursal while the balance below is org-wide
   porSucursal?: boolean
+  /** Sin permiso para ver la deuda de clientes (TECNICO sin `tecnicos_ven_deuda_clientes`). */
+  deudaOculta?: boolean
   totalOrdenes: number
   onEdit: () => void
   onWhatsApp: () => void
 }
 
 export function ClienteDetalleHeader({
-  cliente, resumen, deudaError = false, porSucursal = false, totalOrdenes, onEdit, onWhatsApp,
+  cliente, resumen, deudaError = false, porSucursal = false, deudaOculta = false, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
   const { formatPrice, pais } = useCurrency()
   const router = useRouter()
@@ -103,8 +105,8 @@ export function ClienteDetalleHeader({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-1 lg:mt-4">
-        <Card><CardContent className="p-3 text-center">
+      <div className={`grid ${deudaOculta ? "grid-cols-2" : "grid-cols-3"} gap-2 sm:gap-3 mt-1 lg:mt-4`}>
+        {!deudaOculta && <Card><CardContent className="p-3 text-center">
           <div className="text-xs text-muted-foreground">Debe</div>
           {resumen.debe === null && deudaError ? (
             <div
@@ -121,7 +123,7 @@ export function ClienteDetalleHeader({
           {porSucursal && resumen.debe !== null && (
             <div className="text-xs text-muted-foreground">en esta sucursal</div>
           )}
-        </CardContent></Card>
+        </CardContent></Card>}
         <Card><CardContent className="p-3 text-center">
           <div className="text-xs text-muted-foreground">A favor</div>
           <div className={`text-base sm:text-lg font-bold tabular-nums ${TONE_CLASS[resumen.aFavorTone]}`}>

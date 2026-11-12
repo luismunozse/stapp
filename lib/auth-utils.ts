@@ -395,6 +395,24 @@ export async function resolveTecnicosVenDeudaClientes(organizationId: string): P
   }
 }
 
+// May this user see how much a client owes (fiado, unpaid orders, cuenta corriente
+// history)? ADMIN and VENDEDOR always; TECNICO only when the org enabled
+// `tecnicos_ven_deuda_clientes` (owner decision 2026-11-12); anyone else never.
+// The balance of ONE order the technician can open is not client debt and stays visible.
+export async function puedeVerDeudaClientes(role: string | null, organizationId: string): Promise<boolean> {
+  if (role === "ADMIN" || role === "VENDEDOR") return true
+  if (role === "TECNICO") return resolveTecnicosVenDeudaClientes(organizationId)
+  return false
+}
+
+// The 403 a debt-only endpoint answers when `puedeVerDeudaClientes` is false.
+export function respuestaDeudaNoPermitida() {
+  return NextResponse.json(
+    { error: "No tenés permiso para ver la deuda de los clientes", code: "DEUDA_NO_PERMITIDA" },
+    { status: 403 }
+  )
+}
+
 // Regla pura de acceso a los reportes de INGRESOS del taller. ADMIN siempre.
 // VENDEDOR salvo que la organización lo haya apagado.
 //
