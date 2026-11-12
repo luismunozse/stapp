@@ -55,7 +55,8 @@ describe("migration 406: multimoneda cotizaciones y recotizaciones", () => {
   })
 
   it("requires a reason for MANUAL mode and indexes by document", () => {
-    expect(CODE).toMatch(/CHECK \(modo <> 'MANUAL' OR length\(trim\(motivo\)\) > 0\)/)
+    // COALESCE: with a NULL motivo, `false OR NULL` is NULL and a CHECK lets NULL through.
+    expect(CODE).toMatch(/CHECK \(modo <> 'MANUAL' OR length\(btrim\(COALESCE\(motivo, ''\), E' \\t\\r\\n'\)\) > 0\)/)
     expect(CODE).toMatch(/CREATE INDEX IF NOT EXISTS \w+\s+ON recotizaciones\s*\(organization_id, documento_tipo, documento_id\)/)
   })
 
@@ -78,5 +79,8 @@ describe("migration 406: multimoneda cotizaciones y recotizaciones", () => {
     expect(pr).toMatch(/ROLLBACK;\s*$/)
     expect(pr).toMatch(/23514/)
     expect(pr).toMatch(/motivo/)
+    expect(pr).toMatch(/MANUAL without motivo \(NULL\)/)
+    expect(pr).toMatch(/MANUAL with an empty motivo/)
+    expect(pr).toMatch(/E''\\t\\n''/)
   })
 })

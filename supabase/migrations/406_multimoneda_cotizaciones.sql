@@ -45,8 +45,9 @@ CREATE TABLE IF NOT EXISTS recotizaciones (
   lineas_afectadas     INT NOT NULL DEFAULT 0 CHECK (lineas_afectadas >= 0),
   usuario_id           TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  -- A manual rate needs a written reason (REQ-6.4); "today" does not.
-  CONSTRAINT recotizaciones_motivo_chk CHECK (modo <> 'MANUAL' OR length(trim(motivo)) > 0)
+  -- A manual rate needs a written reason (REQ-6.4); "today" does not. COALESCE matters: with a
+  -- NULL motivo `false OR NULL` is NULL, and a CHECK accepts NULL. btrim also strips tab/CR/LF.
+  CONSTRAINT recotizaciones_motivo_chk CHECK (modo <> 'MANUAL' OR length(btrim(COALESCE(motivo, ''), E' \t\r\n')) > 0)
 );
 
 CREATE INDEX IF NOT EXISTS recotizaciones_documento_idx

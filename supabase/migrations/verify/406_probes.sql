@@ -36,10 +36,14 @@ INSERT INTO _r SELECT 2, 'cotizaciones.tipo_cambio was not converted (still unco
 
 -- 3-9: recotizaciones CHECKs. documento_id is free text, so no parent row is needed.
 DO $$ BEGIN
-  PERFORM pg_temp.probe(3, 'MANUAL without motivo is refused', '23514',
+  PERFORM pg_temp.probe(3, 'MANUAL without motivo (NULL) is refused', '23514',
     'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000 FROM organizations WHERE slug = ''probe-406-org''');
-  PERFORM pg_temp.probe(4, 'MANUAL with a blank motivo is refused', '23514',
+  PERFORM pg_temp.probe(4, 'MANUAL with a spaces-only motivo is refused', '23514',
     'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''   '' FROM organizations WHERE slug = ''probe-406-org''');
+  PERFORM pg_temp.probe(16, 'MANUAL with an empty motivo is refused', '23514',
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, '''' FROM organizations WHERE slug = ''probe-406-org''');
+  PERFORM pg_temp.probe(17, 'MANUAL with a tab/newline-only motivo is refused', '23514',
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, E''\t\n'' FROM organizations WHERE slug = ''probe-406-org''');
   PERFORM pg_temp.probe(5, 'MANUAL with a motivo is accepted', 'ok',
     'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''cliente acordo'' FROM organizations WHERE slug = ''probe-406-org''');
   PERFORM pg_temp.probe(6, 'HOY without motivo is accepted', 'ok',
