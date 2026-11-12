@@ -27,8 +27,16 @@ export interface MontosCobroOrden {
 export interface ResumenCobroOrden {
   /** `null`: orden en curso sin precio final ni plata a cuenta (no hay nada que mostrar). */
   estadoPago: EstadoPagoNormalizado | null
-  /** Lo que falta cobrar, redondeado a centavos y nunca negativo. */
+  /** Lo que falta cobrar en la orden, redondeado a centavos y nunca negativo. */
   saldoPendiente: number
+  /** Solo con estado CUENTA_CORRIENTE: lo que se cargó a la cuenta corriente del cliente. */
+  montoCuentaCorriente?: number
+}
+
+/** CARGO de cuenta corriente con referencia a la orden (referencia_tipo = 'ORDEN'). */
+export interface CargoCuentaCorrienteOrden {
+  monto: string | number | null
+  revertido_at: string | null
 }
 
 const redondear = (n: number) => Math.round(n * 100) / 100
@@ -57,6 +65,27 @@ export function resumenCobroOrden(m: MontosCobroOrden): ResumenCobroOrden {
   )
   if (saldo <= 0) return { estadoPago: "PAGADO", saldoPendiente: 0 }
   return { estadoPago: cubierto > 0 ? "PARCIAL" : "SIN_COBRAR", saldoPendiente: saldo }
+}
+
+/**
+ * Una orden entregada con saldo carga ese saldo a la cuenta corriente del
+ * cliente (CARGO, referencia_tipo ORDEN, ver POST /api/ordenes/[id]/entregar).
+ * Desde ahí la deuda se cobra en la cuenta corriente: mostrar "Debe $X" en la
+ * orden invitaría a cobrarla dos veces. Misma regla que
+ * get_deuda_cliente_sucursal (migraciones 318/319): con un CARGO, revertido o
+ * no, la orden ya no es deuda de la orden.
+ * - CARGO vigente → "En cuenta corriente" con el monto cargado.
+ * - Solo CARGOs revertidos → el cargo se anuló: no queda nada por cobrar.
+ */
+export function aplicarCargosCuentaCorriente(
+  resumen: ResumenCobroOrden,
+  cargos: ReadonlyArray<CargoCuentaCorrienteOrden> | undefined
+): ResumenCobroOrden {
+  if (!cargos?.length || resumen.saldoPendiente <= 0) return resumen
+  const vigentes = cargos.filter((c) => !c.revertido_at)
+  if (vigentes.length === 0) return { estadoPago: "SIN_CARGO", saldoPendiente: 0 }
+  const monto = redondear(vigentes.reduce((suma, c) => suma + num(c.monto), 0))
+  return { estadoPago: "CUENTA_CORRIENTE", saldoPendiente: 0, montoCuentaCorriente: monto }
 }
 
 const num = (v: unknown): number => {

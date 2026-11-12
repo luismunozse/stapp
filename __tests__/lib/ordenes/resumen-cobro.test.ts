@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resumenCobroOrden, resumenCobroDeFila } from "@/lib/ordenes/resumen-cobro"
+import { aplicarCargosCuentaCorriente, resumenCobroOrden, resumenCobroDeFila } from "@/lib/ordenes/resumen-cobro"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
 
 const base = { estado: "REPARADO", costoFinal: 1000, descuentoCobro: 0, totalCobrado: 0, aplicadoNotasCredito: 0 }
@@ -81,5 +81,40 @@ describe("resumenCobroDeFila", () => {
 
   it("costo_final null no se lee como 0", () => {
     expect(resumenCobroDeFila({ estado: "RECIBIDO", costo_final: null, total_cobrado: "0" }).estadoPago).toBeNull()
+  })
+})
+
+describe("aplicarCargosCuentaCorriente", () => {
+  const conSaldo = resumenCobroOrden({ ...base, estado: "ENTREGADO", totalCobrado: 200 })
+
+  it("con un CARGO vigente: en cuenta corriente, sin 'Debe' en la orden", () => {
+    expect(aplicarCargosCuentaCorriente(conSaldo, [{ monto: "800.00", revertido_at: null }])).toEqual({
+      estadoPago: "CUENTA_CORRIENTE",
+      saldoPendiente: 0,
+      montoCuentaCorriente: 800,
+    })
+  })
+
+  it("con el CARGO revertido: no queda nada por cobrar (misma regla que get_deuda_cliente_sucursal)", () => {
+    expect(aplicarCargosCuentaCorriente(conSaldo, [{ monto: 800, revertido_at: "2026-11-01T00:00:00Z" }])).toEqual({
+      estadoPago: "SIN_CARGO",
+      saldoPendiente: 0,
+    })
+  })
+
+  it("uno revertido y uno vigente: cuenta solo el vigente", () => {
+    expect(
+      aplicarCargosCuentaCorriente(conSaldo, [
+        { monto: 800, revertido_at: "2026-11-01T00:00:00Z" },
+        { monto: 750, revertido_at: null },
+      ])
+    ).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", montoCuentaCorriente: 750 })
+  })
+
+  it("sin cargos o sin saldo no cambia nada", () => {
+    expect(aplicarCargosCuentaCorriente(conSaldo, [])).toBe(conSaldo)
+    expect(aplicarCargosCuentaCorriente(conSaldo, undefined)).toBe(conSaldo)
+    const pagada = resumenCobroOrden({ ...base, totalCobrado: 1000 })
+    expect(aplicarCargosCuentaCorriente(pagada, [{ monto: 100, revertido_at: null }])).toBe(pagada)
   })
 })

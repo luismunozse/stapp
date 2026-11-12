@@ -9,10 +9,10 @@
  * "Pagado" o "Pago parcial" en todas las pantallas y no "Cobrado" en una y
  * "Pagado" en otra.
  */
-import { Ban, CheckCircle2, CircleDashed, Clock, HandCoins, Wallet, type LucideIcon } from "lucide-react"
+import { Ban, BookUser, CheckCircle2, CircleDashed, Clock, HandCoins, Wallet, type LucideIcon } from "lucide-react"
 import type { StatusTone } from "@/lib/status-tone"
 
-export const ESTADOS_PAGO = ["SIN_COBRAR", "SENA", "PARCIAL", "PAGADO", "SIN_CARGO", "ANULADA"] as const
+export const ESTADOS_PAGO = ["SIN_COBRAR", "SENA", "PARCIAL", "PAGADO", "SIN_CARGO", "CUENTA_CORRIENTE", "ANULADA"] as const
 export type EstadoPagoNormalizado = (typeof ESTADOS_PAGO)[number]
 
 export interface EstadoPagoUi {
@@ -28,6 +28,9 @@ export const ESTADO_PAGO_UI: Record<EstadoPagoNormalizado, EstadoPagoUi> = {
   PARCIAL: { label: "Pago parcial", icon: CircleDashed, tone: "info" },
   PAGADO: { label: "Pagado", icon: CheckCircle2, tone: "success" },
   SIN_CARGO: { label: "Sin cargo", icon: HandCoins, tone: "muted" },
+  // Orden entregada con saldo: la deuda pasó a la cuenta corriente del cliente
+  // y se cobra desde ahí, no desde la orden.
+  CUENTA_CORRIENTE: { label: "En cuenta corriente", icon: BookUser, tone: "info" },
   ANULADA: { label: "Anulada", icon: Ban, tone: "danger" },
 }
 
@@ -41,6 +44,7 @@ const SINONIMOS: Record<string, EstadoPagoNormalizado> = {
   PAGADO: "PAGADO",
   COBRADO: "PAGADO",
   SIN_CARGO: "SIN_CARGO",
+  CUENTA_CORRIENTE: "CUENTA_CORRIENTE",
   ANULADA: "ANULADA",
   ANULADO: "ANULADA",
 }

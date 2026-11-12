@@ -108,7 +108,7 @@ describe("GET /api/ordenes", () => {
     const chain = createChainMock(mockOrdenes, null, 1)
     chain.range = vi.fn().mockReturnValue(chain)
     chain.then = (resolve: any) => resolve({ data: mockOrdenes, error: null, count: 1 })
-    mockSupabaseFrom({ clientes: createChainMock([]), ordenes_servicio: chain })
+    mockSupabaseFrom({ clientes: createChainMock([]), ordenes_servicio: chain, cuenta_corriente: createChainMock([]) })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/ordenes"))
     const { status, body } = await parseResponse(response)

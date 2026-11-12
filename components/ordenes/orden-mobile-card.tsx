@@ -60,6 +60,7 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
             <CobroResumen
               estadoPago={orden.estadoPago}
               saldoPendiente={orden.saldoPendiente}
+              montoCuentaCorriente={orden.montoCuentaCorriente}
               layout="inline"
             />
           )}

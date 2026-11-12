@@ -644,7 +644,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       sortable: false,
       className: "min-w-[120px]",
       render: (orden) => (
-        <CobroResumen estadoPago={orden.estadoPago} saldoPendiente={orden.saldoPendiente} />
+        <CobroResumen estadoPago={orden.estadoPago} saldoPendiente={orden.saldoPendiente} montoCuentaCorriente={orden.montoCuentaCorriente} />
       ),
     },
     {

@@ -10,6 +10,8 @@ interface CobroResumenProps {
   estadoPago: string | null | undefined
   /** Lo que falta cobrar. Con 0 o sin valor no se muestra "Debe". */
   saldoPendiente?: number | null
+  /** Deuda que ya pasó a la cuenta corriente del cliente: se muestra sin "Debe" (se cobra desde ahí). */
+  montoCuentaCorriente?: number | null
   /** `stack`: píldora arriba y saldo abajo (tabla). `inline`: en una línea (tarjeta mobile). */
   layout?: "stack" | "inline"
   className?: string
@@ -19,7 +21,13 @@ interface CobroResumenProps {
  * Estado de cobro + saldo pendiente de una fila de lista (órdenes, ventas).
  * Sin estado no muestra nada: la celda queda con un guion.
  */
-export function CobroResumen({ estadoPago, saldoPendiente, layout = "stack", className }: CobroResumenProps) {
+export function CobroResumen({
+  estadoPago,
+  saldoPendiente,
+  montoCuentaCorriente,
+  layout = "stack",
+  className,
+}: CobroResumenProps) {
   const { formatPrice } = useCurrency()
 
   if (!estadoPago) {
@@ -28,6 +36,7 @@ export function CobroResumen({ estadoPago, saldoPendiente, layout = "stack", cla
 
   const ui = getEstadoPagoUi(estadoPago)
   const saldo = Number(saldoPendiente ?? 0)
+  const enCuentaCorriente = Number(montoCuentaCorriente ?? 0)
 
   return (
     <div
@@ -44,6 +53,9 @@ export function CobroResumen({ estadoPago, saldoPendiente, layout = "stack", cla
         <span className="text-xs font-semibold text-warning-text tabular-nums">
           Debe {formatPrice(saldo)}
         </span>
+      )}
+      {saldo <= 0 && enCuentaCorriente > 0 && (
+        <span className="text-xs text-muted-foreground tabular-nums">{formatPrice(enCuentaCorriente)}</span>
       )}
     </div>
   )

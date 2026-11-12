@@ -57,7 +57,7 @@ describe("GET /api/ordenes — estado de cobro y saldo por fila", () => {
       null,
       5
     )
-    mockSupabaseFrom({ ordenes_servicio: chain })
+    mockSupabaseFrom({ ordenes_servicio: chain, cuenta_corriente: createChainMock([]) })
 
     const { status, body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/ordenes")))
 
@@ -73,7 +73,7 @@ describe("GET /api/ordenes — estado de cobro y saldo por fila", () => {
   it("trae las NC en la misma query (sin N+1) y la acota a la organización", async () => {
     mockAuthSuccess({ organizationId: "org-2", role: "ADMIN" })
     const chain = createChainMock([fila({ id: "o1", estado: "REPARADO", costo_final: "100" })], null, 1)
-    mockSupabaseFrom({ ordenes_servicio: chain })
+    mockSupabaseFrom({ ordenes_servicio: chain, cuenta_corriente: createChainMock([]) })
 
     await GET(createGetRequest("http://localhost:3000/api/ordenes"))
 
@@ -87,6 +87,52 @@ describe("GET /api/ordenes — estado de cobro y saldo por fila", () => {
     expect(tablas.filter((t) => t === "ordenes_servicio")).toHaveLength(1)
     expect(tablas).not.toContain("notas_credito")
     expect(tablas).not.toContain("cobros_orden")
+  })
+
+  it("una orden con el saldo en cuenta corriente no muestra 'Debe': una sola lectura de CARGOs por página, acotada a la org", async () => {
+    mockAuthSuccess({ organizationId: "org-2", role: "ADMIN" })
+    const ordenesChain = createChainMock(
+      [
+        fila({ id: "o1", estado: "ENTREGADO", costo_final: "1000", total_cobrado: "200" }),
+        fila({ id: "o2", estado: "ENTREGADO", costo_final: "500" }),
+        fila({ id: "o3", estado: "ENTREGADO", costo_final: "300" }),
+        fila({ id: "o4", estado: "REPARADO", costo_final: "700", total_cobrado: "700" }),
+      ],
+      null,
+      4
+    )
+    const ccChain = createChainMock([
+      { referencia_id: "o1", monto: "800.00", revertido_at: null },
+      { referencia_id: "o3", monto: "300.00", revertido_at: "2026-11-01T00:00:00Z" },
+    ])
+    mockSupabaseFrom({ ordenes_servicio: ordenesChain, cuenta_corriente: ccChain })
+
+    const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/ordenes")))
+
+    const porId = Object.fromEntries(body.data.map((o: any) => [o.id, o]))
+    expect(porId.o1).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", saldoPendiente: 0, montoCuentaCorriente: 800 })
+    expect(porId.o2).toMatchObject({ estadoPago: "SIN_COBRAR", saldoPendiente: 500 })
+    expect(porId.o3).toMatchObject({ estadoPago: "SIN_CARGO", saldoPendiente: 0 })
+    expect(porId.o4).toMatchObject({ estadoPago: "PAGADO", saldoPendiente: 0 })
+
+    const tablas = vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0])
+    expect(tablas.filter((t) => t === "cuenta_corriente")).toHaveLength(1)
+    expect(ccChain.eq).toHaveBeenCalledWith("organization_id", "org-2")
+    expect(ccChain.eq).toHaveBeenCalledWith("tipo", "CARGO")
+    expect(ccChain.eq).toHaveBeenCalledWith("referencia_tipo", "ORDEN")
+    // Solo se consultan las órdenes que tienen saldo (la pagada no).
+    expect(ccChain.in).toHaveBeenCalledWith("referencia_id", ["o1", "o2", "o3"])
+  })
+
+  it("sin órdenes con saldo no lee cuenta_corriente", async () => {
+    mockAuthSuccess({ organizationId: "org-2", role: "ADMIN" })
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock([fila({ id: "o1", estado: "REPARADO", costo_final: "100", total_cobrado: "100" })], null, 1),
+    })
+
+    await GET(createGetRequest("http://localhost:3000/api/ordenes"))
+
+    expect(vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0])).not.toContain("cuenta_corriente")
   })
 
   it("cobroPendiente=true sigue aplicando sus filtros", async () => {

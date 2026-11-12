@@ -161,6 +161,8 @@ export interface OrdenServicio {
    */
   estadoPago?: EstadoPagoNormalizado | null
   saldoPendiente?: number
+  /** Solo con estadoPago CUENTA_CORRIENTE: lo que se cargó a la cuenta corriente del cliente. */
+  montoCuentaCorriente?: number
   fechaIngreso: Date
   fechaPrometida?: Date | null
   fechaCompletado?: Date | null
