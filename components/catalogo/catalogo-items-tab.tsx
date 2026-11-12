@@ -470,7 +470,7 @@ export function CatalogoItemsTab() {
                           className="text-xs text-muted-foreground"
                           title={
                             (item.inventario?.stock_reservado ?? 0) > 0
-                              ? `Stock gestionado desde Inventario. ${item.inventario?.stock_reservado} reservadas por cotizaciones sin cerrar`
+                              ? `Stock gestionado desde Inventario. ${item.inventario?.stock_reservado} reservadas por presupuestos sin cerrar`
                               : "Stock gestionado desde Inventario"
                           }
                         >
@@ -631,7 +631,7 @@ export function CatalogoItemsTab() {
                           className="text-xs"
                           title={
                             reservado > 0
-                              ? `${fisico} en stock, ${reservado} reservadas por cotizaciones sin cerrar`
+                              ? `${fisico} en stock, ${reservado} reservadas por presupuestos sin cerrar`
                               : undefined
                           }
                         >
