@@ -71,6 +71,8 @@ import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenAvances } from "@/components/ordenes/orden-avances"
+import { EstadoFisicoCard } from "@/components/ordenes/danos/estado-fisico-card"
+import { ESTADOS_SIN_NUEVOS_DANOS } from "@/lib/ordenes/danos"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
 import { accionPrincipalOrden } from "@/lib/ordenes/accion-principal"
@@ -1250,6 +1252,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Estado físico: daños al recibir (firmados) y detectados en diagnóstico */}
+          <EstadoFisicoCard
+            ordenId={ordenId}
+            puedeAgregar={
+              acciones.puedeCambiarEstado &&
+              !(ESTADOS_SIN_NUEVOS_DANOS as readonly string[]).includes(orden.estado)
+            }
+          />
 
           {/* Tabs: Repuestos, Fotos, Checklist, Cotizaciones, Historial */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
