@@ -112,7 +112,7 @@ export function VendedoresList() {
     // The API decides: with history (sales, orders or cash) it deactivates the
     // vendedor and keeps the history; without it, it deletes. Same as the detail page.
     const confirmed = await confirm({
-      title: "Eliminar Vendedor",
+      title: "Eliminar vendedor",
       description:
         "¿Estás seguro de eliminar este vendedor? Si tiene historial (ventas, órdenes o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
@@ -186,7 +186,7 @@ export function VendedoresList() {
         {isAdmin && (
           <Button onClick={() => setFormOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Nuevo Vendedor
+            Nuevo vendedor
           </Button>
         )}
       </div>

@@ -88,7 +88,7 @@ export function TecnicoHistorial({ tecnicoId }: { tecnicoId: string }) {
     <Card>
       <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <CardTitle className="text-base sm:text-lg">Historial de Órdenes</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Historial de órdenes</CardTitle>
           <div className="text-xs text-muted-foreground">
             {isLoading ? "…" : `${total} orden(es)`}
           </div>
