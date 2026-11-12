@@ -18,9 +18,22 @@ vi.mock("next/image", () => ({
   },
 }))
 
+// Sin este mock el import dinamico de Capacitor en openPaymentUrl puede
+// resolver despues del teardown bajo carga, y el setLoading(false) del finally
+// corre sin window ("window is not defined" en CI).
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => false } }))
+
 vi.mock("@/contexts/modal-context", () => ({
   useModal: () => ({ showError: vi.fn() }),
 }))
+
+// handleUpgrade sigue despues del fetch (abre la URL y apaga el loading):
+// esperar a que el boton vuelva para no dejar trabajo colgando al terminar.
+async function esperarFinDelPago() {
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: /continuar al pago/i })).not.toBeDisabled()
+  })
+}
 
 function fetchUrls() {
   return (global.fetch as any).mock.calls.map((call: any[]) => call[0])
@@ -45,6 +58,7 @@ describe("UpgradeModal — selector de modo de cobro (MercadoPago)", () => {
       expect(fetchUrls()).toContain("/api/mercadopago/preference")
     })
     expect(fetchUrls()).not.toContain("/api/mercadopago/preapproval")
+    await esperarFinDelPago()
   })
 
   it("al elegir debito automatico, el boton de pago pega a /api/mercadopago/preapproval", async () => {
@@ -57,5 +71,6 @@ describe("UpgradeModal — selector de modo de cobro (MercadoPago)", () => {
       expect(fetchUrls()).toContain("/api/mercadopago/preapproval")
     })
     expect(fetchUrls()).not.toContain("/api/mercadopago/preference")
+    await esperarFinDelPago()
   })
 })
