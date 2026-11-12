@@ -57,7 +57,7 @@ describe("migración 408: orden_danos", () => {
   })
 
   it("serializa por orden con FOR UPDATE y asigna numero en el trigger", () => {
-    expect(SQL).toMatch(/FOR UPDATE/)
+    expect(SQL).toMatch(/FROM public\.ordenes_servicio WHERE id = NEW\.orden_id FOR UPDATE;/)
     expect(SQL).toMatch(/NEW\.numero := COALESCE\(\(SELECT max\(numero\)/)
   })
 
@@ -68,5 +68,10 @@ describe("migración 408: orden_danos", () => {
   it("el UPDATE solo se permite para el SET NULL de created_by; la cascada de organización también pasa", () => {
     expect(SQL).toContain("(to_jsonb(NEW) - 'created_by') = (to_jsonb(OLD) - 'created_by')")
     expect(SQL).toMatch(/NOT EXISTS \(SELECT 1 FROM public\.organizations WHERE id = OLD\.organization_id\)/)
+  })
+
+  it("created_at lo fuerza el trigger y el pin debe ser de la organización de su orden", () => {
+    expect(SQL).toContain("NEW.created_at := now();")
+    expect(SQL).toMatch(/NEW\.organization_id IS DISTINCT FROM v_org/)
   })
 })

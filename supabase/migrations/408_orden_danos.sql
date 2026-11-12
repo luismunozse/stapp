@@ -63,13 +63,19 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   v_estado TEXT;
   v_sin_danos BOOLEAN;
+  v_org TEXT;
   v_total INT;
 BEGIN
   -- Serializa a quienes agregan pins a la misma orden (numero y límite sin carreras).
-  SELECT estado::text, recepcion_sin_danos INTO v_estado, v_sin_danos
+  SELECT estado::text, recepcion_sin_danos, organization_id INTO v_estado, v_sin_danos, v_org
     FROM public.ordenes_servicio WHERE id = NEW.orden_id FOR UPDATE;
   IF NOT FOUND THEN
     RETURN NEW; -- la FK a ordenes_servicio da el error
+  END IF;
+
+  -- Frontera de tenant: el pin pertenece a la organización de su orden.
+  IF NEW.organization_id IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'DANOS_ORDEN_NO_ENCONTRADA' USING ERRCODE = 'P0001';
   END IF;
 
   IF v_estado IN ('ENTREGADO', 'ENTREGADO_SIN_REPARACION', 'ENTREGADO_SIN_COBRO', 'CANCELADO') THEN
@@ -90,6 +96,8 @@ BEGIN
     END IF;
   END IF;
 
+  -- Nadie elige created_at: de él depende la ventana de 10 minutos para borrar diagnóstico.
+  NEW.created_at := now();
   NEW.numero := COALESCE((SELECT max(numero) FROM public.orden_danos WHERE orden_id = NEW.orden_id), 0) + 1;
   RETURN NEW;
 END $$;
