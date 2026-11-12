@@ -54,7 +54,9 @@ import { CotizacionApprovalDialog } from "@/components/cotizaciones/cotizacion-a
 import { ConvertirVentaDialog } from "@/components/cotizaciones/convertir-venta-dialog"
 import { OrdenSelector, type OrdenLite } from "@/components/cotizaciones/orden-selector"
 import { SignatureDisplay } from "@/components/firma/signature-display"
+import { GuardarPlantillaDialog } from "@/components/cotizaciones/guardar-plantilla-dialog"
 import { useModal } from "@/contexts/modal-context"
+import { toast } from "sonner"
 import { PageShell } from "@/components/ui/page-shell"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useHasFeature } from "@/hooks/use-subscription"
@@ -150,6 +152,8 @@ export default function CotizacionesPage() {
   const [convertingCotizacion, setConvertingCotizacion] = useState<Cotizacion | null>(null)
   const [linkingCotizacion, setLinkingCotizacion] = useState<Cotizacion | null>(null)
   const [linkOrdenId, setLinkOrdenId] = useState<string | null>(null)
+  const [plantillaDesde, setPlantillaDesde] = useState<Cotizacion | null>(null)
+  const [savingPlantilla, setSavingPlantilla] = useState(false)
   const [linkLoading, setLinkLoading] = useState(false)
   const formRef = useRef<HTMLDivElement | null>(null)
   const [search, setSearch] = useState("")
@@ -202,7 +206,7 @@ export default function CotizacionesPage() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("cotizaciones-view-mode", viewMode)
   }, [viewMode])
-  const { confirm, showError, showSuccess, showWarning } = useModal()
+  const { alert, confirm, showError, showSuccess, showWarning } = useModal()
 
   // Debounce search 300ms
   useEffect(() => {
@@ -388,7 +392,8 @@ export default function CotizacionesPage() {
       await navigator.clipboard.writeText(url)
       await showSuccess("Link copiado al portapapeles")
     } catch {
-      prompt("Copiar este link:", url)
+      // Sin permiso de portapapeles: mostramos el link para copiarlo a mano.
+      await alert({ title: "Copiá este link", description: url, variant: "info" })
     }
   }
 
@@ -514,9 +519,10 @@ export default function CotizacionesPage() {
     }
   }
 
-  const handleSaveAsTemplate = async (cotizacion: Cotizacion) => {
-    const nombre = window.prompt("Nombre de la plantilla:")
-    if (!nombre) return
+  const handleSaveAsTemplate = async (nombre: string): Promise<boolean> => {
+    const cotizacion = plantillaDesde
+    if (!cotizacion) return false
+    setSavingPlantilla(true)
     try {
       const res = await fetch("/api/cotizacion-templates", {
         method: "POST",
@@ -541,11 +547,15 @@ export default function CotizacionesPage() {
       if (!res.ok) {
         const err = await res.json()
         await showError(err.error || "Error al guardar plantilla")
-        return
+        return false
       }
-      await showSuccess(`Plantilla "${nombre}" guardada`)
+      toast.success(`Plantilla "${nombre}" guardada`)
+      return true
     } catch {
       await showError("Error al guardar plantilla")
+      return false
+    } finally {
+      setSavingPlantilla(false)
     }
   }
 
@@ -1193,7 +1203,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleSaveAsTemplate(cotizacion)}
+                          onClick={() => setPlantillaDesde(cotizacion)}
                         >
                           <BookmarkPlus className="mr-2 h-3 w-3" />
                           Plantilla
@@ -1307,6 +1317,13 @@ export default function CotizacionesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <GuardarPlantillaDialog
+        open={!!plantillaDesde}
+        onOpenChange={(open) => { if (!open) setPlantillaDesde(null) }}
+        saving={savingPlantilla}
+        onSubmit={handleSaveAsTemplate}
+      />
       </PageShell>
     </div>
   )

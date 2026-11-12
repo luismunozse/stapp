@@ -21,6 +21,8 @@ import {
 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
+import { toast } from "sonner"
 
 interface RepoItem {
   inventarioId: string
@@ -77,6 +79,7 @@ function prioridadBadge(p: RepoItem["prioridad"]) {
 export default function ReposicionPage() {
   const router = useRouter()
   const { formatPrice } = useCurrency()
+  const { confirm } = useModal()
   const [coberturaDias, setCoberturaDias] = useState(30)
   const [soloCriticos, setSoloCriticos] = useState(false)
 
@@ -135,7 +138,13 @@ export default function ReposicionPage() {
 
   const handleGenerar = async () => {
     if (seleccionados.length === 0) return
-    if (!confirm(`Generar ${seleccionados.length} OC en BORRADOR con ${itemsSeleccionados} items por ${formatPrice(totalSeleccionado)}?`)) return
+    const ok = await confirm({
+      title: "¿Generar órdenes de compra?",
+      description: `Se van a crear ${seleccionados.length} OC en borrador con ${itemsSeleccionados} ítems por ${formatPrice(totalSeleccionado)}.`,
+      confirmText: "Generar OC",
+      variant: "info",
+    })
+    if (!ok) return
     setGenerating(true)
     try {
       const body = {
@@ -157,13 +166,14 @@ export default function ReposicionPage() {
       })
       const json = await res.json()
       if (!res.ok && res.status !== 207) {
-        alert(json.error || "Error al generar OCs")
+        toast.error(json.error || "No se pudieron generar las OC")
         return
       }
-      const msg = json.errores > 0
-        ? `${json.creadas} OC creadas, ${json.errores} fallaron`
-        : `${json.creadas} OC creadas en BORRADOR`
-      alert(msg)
+      if (json.errores > 0) {
+        toast.warning(`${json.creadas} OC creadas, ${json.errores} fallaron`)
+      } else {
+        toast.success(`${json.creadas} OC creadas en borrador`)
+      }
       router.push("/ordenes-compra")
     } finally {
       setGenerating(false)

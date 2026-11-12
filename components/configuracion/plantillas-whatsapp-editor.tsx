@@ -39,6 +39,7 @@ import {
 import { StatusBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 type PlantillasMap = Record<string, string>
 
@@ -476,6 +477,7 @@ function SidebarItem({
 
 export function PlantillasWhatsappEditor() {
   const { timezone } = useCurrency()
+  const { confirm } = useModal()
   const [plantillas, setPlantillas] = useState<PlantillasMap>({})
   const [originalPlantillas, setOriginalPlantillas] = useState<PlantillasMap>({})
   const [organizationName, setOrganizationName] = useState<string>("")
@@ -627,8 +629,14 @@ export function PlantillasWhatsappEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasChanges, saving, plantillas])
 
-  const handleResetAll = () => {
-    if (!confirm("¿Restaurar TODAS las plantillas a sus valores predeterminados? Esta acción puede deshacerse con 'Descartar cambios'.")) return
+  const handleResetAll = async () => {
+    const ok = await confirm({
+      title: "¿Restaurar todas las plantillas?",
+      description: "Todas vuelven a sus valores predeterminados. Mientras no guardes, podés deshacerlo con “Descartar cambios”.",
+      confirmText: "Restaurar",
+      variant: "warning",
+    })
+    if (!ok) return
     setPlantillas({})
   }
 

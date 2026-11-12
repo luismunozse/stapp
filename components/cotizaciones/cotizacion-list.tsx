@@ -104,7 +104,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [revisingId, setRevisingId] = useState<string | null>(null)
-  const { confirm, showError, showSuccess, showWarning } = useModal()
+  const { alert, confirm, showError, showSuccess, showWarning } = useModal()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const canCrear = cotizacionesLoading || hasCotizaciones
 
@@ -261,8 +261,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         ? "Cotizacion enviada como presupuesto. Link copiado al portapapeles."
         : "Link copiado al portapapeles")
     } catch {
-      // Fallback
-      prompt("Copiar este link:", url)
+      // Sin permiso de portapapeles: mostramos el link para copiarlo a mano.
+      await alert({ title: "Copiá este link", description: url, variant: "info" })
     }
   }
 

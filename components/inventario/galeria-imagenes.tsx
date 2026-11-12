@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ImagePlus, Loader2, Star, Trash2, Package, ArrowUp, ArrowDown } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
+import { useModal } from "@/contexts/modal-context"
 
 interface Imagen {
   id: string
@@ -28,6 +29,7 @@ interface Props {
 const MAX_IMAGES = 10
 
 export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNombre, onChange }: Props) {
+  const { confirm } = useModal()
   const [imagenes, setImagenes] = useState<Imagen[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -124,7 +126,13 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
   }
 
   const eliminar = async (img: Imagen) => {
-    if (!confirm("¿Eliminar esta imagen?")) return
+    const ok = await confirm({
+      title: "¿Eliminar esta imagen?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     setBusyId(img.id)
     try {
       const res = await fetch(`/api/inventario/${inventarioId}/imagenes/${img.id}`, {

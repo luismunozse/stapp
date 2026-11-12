@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 interface Adjunto {
   id: string
@@ -60,6 +61,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
+  const { confirm } = useModal()
   const { timezone } = useCurrency()
   const { data: adjuntos = [], mutate } = useSWR<Adjunto[]>(
     `/api/proveedores/${proveedorId}/adjuntos`,
@@ -102,7 +104,13 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
   }
 
   const remove = async (a: Adjunto) => {
-    if (!confirm(`¿Eliminar "${a.nombre}"?`)) return
+    const ok = await confirm({
+      title: `¿Eliminar "${a.nombre}"?`,
+      description: "El archivo adjunto se borra y no se puede recuperar.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedorId}/adjuntos/${a.id}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Adjunto eliminado")

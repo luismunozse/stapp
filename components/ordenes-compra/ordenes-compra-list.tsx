@@ -43,7 +43,7 @@ export function OrdenesCompraList() {
   const [recibirOC, setRecibirOC] = useState<OrdenCompra | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const { formatPrice, formatDate } = useCurrency()
-  const { showError } = useModal()
+  const { confirm, showError } = useModal()
 
   // Check for draft from inventario "Generar OC" button
   useEffect(() => {
@@ -99,7 +99,13 @@ export function OrdenesCompraList() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta orden de compra?")) return
+    const ok = await confirm({
+      title: "¿Eliminar esta orden de compra?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/ordenes-compra/${id}`, { method: "DELETE" })
       if (!res.ok) {

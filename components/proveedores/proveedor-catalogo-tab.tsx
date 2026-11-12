@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
+import { useModal } from "@/contexts/modal-context"
 
 interface CatalogoItem {
   id: string
@@ -65,6 +66,7 @@ function daysSince(iso: string | null): number | null {
 }
 
 export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
+  const { confirm } = useModal()
   const { formatPrice, timezone } = useCurrency()
   const [search, setSearch] = useState("")
   const { data, mutate } = useSWR<CatalogoResponse>(
@@ -160,7 +162,13 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
   }
 
   const remove = async (i: CatalogoItem) => {
-    if (!confirm(`¿Eliminar "${i.nombre}"?`)) return
+    const ok = await confirm({
+      title: `¿Eliminar "${i.nombre}" del catálogo?`,
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     const res = await fetch(`/api/proveedores/${proveedorId}/catalogo/${i.id}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Item eliminado")

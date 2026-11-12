@@ -43,6 +43,7 @@ import {
   type LabelItem,
   type LabelTemplate as ZplLabelTemplate,
 } from "@/lib/labels/zpl"
+import { toast } from "sonner"
 
 type Formato = "ZPL" | "EPL" | "PDF"
 
@@ -135,7 +136,7 @@ export function LabelTemplatesManager() {
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        alert(j.error || "Error al guardar")
+        toast.error(j.error || "No se pudo guardar la plantilla")
         return
       }
       setEditorOpen(false)
@@ -152,7 +153,7 @@ export function LabelTemplatesManager() {
       const res = await fetch(`/api/label-templates/${t.id}`, { method: "DELETE" })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        alert(j.error || "Error al eliminar")
+        toast.error(j.error || "No se pudo eliminar la plantilla")
         return
       }
       setConfirmDelete(null)

@@ -181,7 +181,7 @@ function isFormInteraction(target: EventTarget | null, root: Element | null): bo
  * that branch must NOT accept is a surface that merely floats on top of this
  * form. Two of them are one click away on every intake screen: the close X that
  * DialogContent renders outside the nested <form> (components/ui/dialog.tsx)
- * and the button of a useModal alert (components/ui/alert-dialog-custom.tsx).
+ * and the button of a useModal alert (components/ui/confirm-dialog.tsx, mode="alert").
  * Neither belongs to any form, so both used to land here and latch the dirty
  * gate for the rest of the page's life -- dismissing "no se pudo cargar el
  * turno" was enough -- and every async default that resolved afterwards got

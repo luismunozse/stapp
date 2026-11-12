@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import type { OrganizationUser, UserRole } from "@/types/superadmin"
+import { useModal } from "@/contexts/modal-context"
 
 interface OrgUsersTabProps {
   users: OrganizationUser[]
@@ -23,6 +24,7 @@ interface OrgUsersTabProps {
 }
 
 export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps) {
+  const { confirm } = useModal()
   const [users, setUsers] = useState(initialUsers)
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   const [searchFilter, setSearchFilter] = useState("")
@@ -219,10 +221,14 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => {
-                              if (window.confirm(`¿Bloquear el acceso de ${user.nombre} (${user.email})? Se cierran sus sesiones abiertas.`)) {
-                                handleToggleActive(user.id, false)
-                              }
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: `¿Bloquear el acceso de ${user.nombre}?`,
+                                description: `${user.email} no va a poder entrar y se cierran sus sesiones abiertas.`,
+                                confirmText: "Bloquear acceso",
+                                variant: "danger",
+                              })
+                              if (ok) handleToggleActive(user.id, false)
                             }}
                             disabled={isLoading}
                             title="Bloquear acceso"
