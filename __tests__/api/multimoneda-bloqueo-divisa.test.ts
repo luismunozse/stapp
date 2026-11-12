@@ -14,7 +14,7 @@ vi.mock("@/lib/operadores", () => ({ resolveOperador: vi.fn().mockResolvedValue(
 vi.mock("@/lib/audit", () => ({ createAuditLogger: () => ({ create: vi.fn() }) }))
 vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn().mockResolvedValue(undefined) }))
 
-import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
+import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { POST as postVenta } from "@/app/api/ventas/route"
 import { PUT as putVenta } from "@/app/api/ventas/[id]/route"
 import { POST as postRepuesto } from "@/app/api/ordenes/[id]/repuestos/route"
@@ -70,6 +70,16 @@ describe("rechazarItemsEnDivisa", () => {
   it("otro error: lanza", async () => {
     mockSupabaseFrom({ inventario: createChainMock(null, { code: "XX000", message: "boom" }) })
     await expect(rechazarItemsEnDivisa({ organizationId: "org-1", inventarioIds: ["x-1"] })).rejects.toBeTruthy()
+  })
+})
+
+describe("idsConLineasNuevas", () => {
+  it("devuelve los ids con más líneas pedidas que guardadas", () => {
+    expect(idsConLineasNuevas(["a", "a", "b", "c", null, ""], ["a", "b", "b", null])).toEqual(["a", "c"])
+  })
+  it("sin líneas nuevas: vacío", () => {
+    expect(idsConLineasNuevas(["a", "b"], ["a", "b", "b"])).toEqual([])
+    expect(idsConLineasNuevas(undefined, ["a"])).toEqual([])
   })
 })
 
@@ -164,6 +174,18 @@ describe("PUT /api/cotizaciones/[id]: solo líneas nuevas", () => {
     expect(inv.in).not.toHaveBeenCalled()
   })
 
+  it("agregar una segunda línea de un ítem ya guardado que pasó a USD: 409", async () => {
+    const { inv } = montar()
+    const res = await putCotizacion(
+      createPostRequest({ items: [linea("x-1", { id: "it-1" }), linea("x-1", { descripcion: "Pantalla 2" })] }),
+      params
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(409)
+    expect(body.code).toBe("ITEM_EN_DIVISA")
+    expect(inv.in).toHaveBeenCalledWith("id", ["x-1"])
+  })
+
   it("agregar una línea nueva en USD: 409", async () => {
     montar()
     const res = await putCotizacion(
@@ -204,6 +226,16 @@ describe("PUT /api/ventas/[id]: solo ítems nuevos", () => {
     expect(res.status).not.toBe(409)
     expect(inv.in).not.toHaveBeenCalled()
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith("editar_venta_atomica", expect.anything())
+  })
+
+  it("agregar una segunda línea de un ítem guardado que pasó a USD: 409 y sin RPC", async () => {
+    const inv = montar()
+    const res = await put(body(["x-1", "x-1"]))
+    const { status, body: b } = await parseResponse(res)
+    expect(status).toBe(409)
+    expect(b.code).toBe("ITEM_EN_DIVISA")
+    expect(inv.in).toHaveBeenCalledWith("id", ["x-1"])
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it("agregar un ítem nuevo en USD: 409 y sin RPC", async () => {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { supabaseAdmin } from "@/lib/supabase"
-import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
+import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
@@ -355,13 +355,14 @@ export async function PUT(
       }
 
       // Solo los ítems nuevos: una línea ya guardada tiene su precio en local aunque el
-      // ítem haya pasado a divisa después.
-      const invGuardados = new Set(
-        ((venta.items_venta || []) as Array<{ inventario_id?: string | null }>).map((r) => r.inventario_id).filter(Boolean)
-      )
+      // ítem haya pasado a divisa después. Un id con más líneas en el pedido que en la venta
+      // guardada trae una línea nueva y se revisa.
       const enDivisa = await rechazarItemsEnDivisa({
         organizationId: organizationId!,
-        inventarioIds: data.items.map((i) => i.inventarioId).filter((x) => x && !invGuardados.has(x)),
+        inventarioIds: idsConLineasNuevas(
+          data.items.map((i) => i.inventarioId),
+          ((venta.items_venta || []) as Array<{ inventario_id?: string | null }>).map((r) => r.inventario_id)
+        ),
       })
       if (enDivisa) return enDivisa
 

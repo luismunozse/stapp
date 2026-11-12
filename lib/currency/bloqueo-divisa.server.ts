@@ -7,6 +7,21 @@ function unicos(ids: Ids): string[] {
   return [...new Set((ids ?? []).filter((x): x is string => typeof x === "string" && x !== ""))]
 }
 
+/**
+ * Ids of a document edit that bring NEW lines: those the request lists more times than the stored
+ * document has them. A stored line keeps its local price even if its item later switched to a
+ * foreign currency, but a second line of that same item is new and must be checked.
+ */
+export function idsConLineasNuevas(pedidos: Ids, guardados: Ids): string[] {
+  const contar = (ids: Ids) => {
+    const n = new Map<string, number>()
+    for (const id of ids ?? []) if (typeof id === "string" && id !== "") n.set(id, (n.get(id) ?? 0) + 1)
+    return n
+  }
+  const enGuardados = contar(guardados)
+  return [...contar(pedidos)].filter(([id, n]) => n > (enGuardados.get(id) ?? 0)).map(([id]) => id)
+}
+
 async function buscarEnDivisa(
   tabla: "inventario" | "servicios",
   ids: string[],

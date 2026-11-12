@@ -1,4 +1,4 @@
-import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
+import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { NextResponse } from "next/server"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -697,14 +697,19 @@ export async function PUT(
         .eq("cotizacion_id", id)
       if (existingItemsError) throw existingItemsError
 
-      // Only NEW catalog links are checked: a stored line already carries a local price,
-      // so editing a quote keeps working if its item later switched to a foreign currency.
-      const invGuardados = new Set((existingItemRows || []).map((r: any) => r.inventario_id).filter(Boolean))
-      const srvGuardados = new Set((existingItemRows || []).map((r: any) => r.servicio_id).filter(Boolean))
+      // Only NEW catalog lines are checked: a stored line already carries a local price,
+      // so editing a quote keeps working if its item later switched to a foreign currency. An id
+      // the request lists more times than the stored quote has it brings a new line: checked.
       const enDivisa = await rechazarItemsEnDivisa({
         organizationId: organizationId!,
-        inventarioIds: data.items.map((i) => i.inventarioId).filter((x) => x && !invGuardados.has(x)),
-        servicioIds: data.items.map((i) => i.servicioId).filter((x) => x && !srvGuardados.has(x)),
+        inventarioIds: idsConLineasNuevas(
+          data.items.map((i) => i.inventarioId),
+          (existingItemRows || []).map((r: any) => r.inventario_id)
+        ),
+        servicioIds: idsConLineasNuevas(
+          data.items.map((i) => i.servicioId),
+          (existingItemRows || []).map((r: any) => r.servicio_id)
+        ),
       })
       if (enDivisa) return enDivisa
 
