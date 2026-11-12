@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { PlantillasWhatsappEditor } from "@/components/configuracion/plantillas-whatsapp-editor"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default async function PlantillasWhatsappPage() {
   const session = await auth()
@@ -14,16 +15,18 @@ export default async function PlantillasWhatsappPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Plantillas de WhatsApp</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
+    <PageShell
+      title="Plantillas de WhatsApp"
+      description={
+        <>
           Personalizá los mensajes predeterminados que envía el sistema por WhatsApp. Usá variables entre llaves como{" "}
           <code className="text-xs">{"{cliente}"}</code> para insertar datos dinámicos.
-        </p>
-      </div>
-
+        </>
+      }
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+    >
       <PlantillasWhatsappEditor />
-    </div>
+    </PageShell>
   )
 }

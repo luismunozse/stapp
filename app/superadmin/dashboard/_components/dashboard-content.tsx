@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import {
   Building2,
   Users,
@@ -170,15 +171,11 @@ export function DashboardContent() {
     : []
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Panel SuperAdmin</h1>
-          <p className="text-muted-foreground">
-            Vista global del sistema
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <PageShell
+      title="Panel de superadmin"
+      description="Vista global del sistema"
+      actions={
+        <>
           <div
             className="flex items-center gap-1.5 text-xs text-muted-foreground"
             title={
@@ -207,8 +204,9 @@ export function DashboardContent() {
             )}
             {loading ? "Actualizando..." : "Actualizar"}
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Widget de anomalías de facturación. Se auto-oculta si no hay nada. */}
       <AnomaliesWidget />
@@ -399,6 +397,6 @@ export function DashboardContent() {
 
       {/* Cron Jobs Panel */}
       <CronPanel />
-    </div>
+    </PageShell>
   )
 }

@@ -7,9 +7,8 @@ import { UsageStats } from "@/components/billing/usage-stats"
 import { PaymentHistory } from "@/components/billing/payment-history"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import { Button } from "@/components/ui/button"
-import { IconButton } from "@/components/ui/icon-button"
-import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
+import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import type { SubscriptionInfo, UsageInfo } from "@/lib/subscriptions"
 import { getMpRejectionInfo, type MpRejectionInfo } from "@/lib/mp-status-detail"
@@ -153,22 +152,12 @@ function BillingContent() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        <Link href="/configuracion">
-          <IconButton label="Volver a configuración" variant="ghost" className="shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-          </IconButton>
-        </Link>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Mi plan</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Tu suscripción a STApp y sus pagos
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title="Mi plan"
+      description="Tu suscripción a STApp y sus pagos"
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+    >
       {/* Success/Error messages */}
       {(success || mpSuccess || lsSuccess || creemSuccess) && (
         <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-2">
@@ -243,7 +232,7 @@ function BillingContent() {
         modoCobroInicial={modalIntent.modo}
         {...(modalIntent.planSlug ? { planSlug: modalIntent.planSlug } : {})}
       />
-    </div>
+    </PageShell>
   )
 }
 

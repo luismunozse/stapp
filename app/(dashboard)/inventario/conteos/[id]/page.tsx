@@ -5,14 +5,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
-import { IconButton } from "@/components/ui/icon-button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
-  ArrowLeft,
   Loader2,
   Search,
   ScanLine,
@@ -209,16 +208,13 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
   const pendientes = conteo.totalItems - conteo.itemsContados
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Link href="/inventario/conteos">
-          <IconButton label="Volver a conteos" variant="ghost">
-            <ArrowLeft className="h-4 w-4" />
-          </IconButton>
-        </Link>
-        <div className="flex-1 min-w-0">
+    <PageShell
+      title={conteo.nombre}
+      backHref="/inventario/conteos"
+      backLabel="Volver a conteos"
+      meta={
+        <>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">{conteo.nombre}</h1>
             {conteo.estado === "EN_PROGRESO" && (
               <Badge variant="outline" className="gap-1 border-blue-500/60 text-blue-600">
                 <PlayCircle className="h-3 w-3" /> En progreso
@@ -247,8 +243,9 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
             Iniciado {new Date(conteo.iniciadoAt).toLocaleString("es-AR", { timeZone: timezone })}
             {conteo.finalizadoAt && ` · Finalizado ${new Date(conteo.finalizadoAt).toLocaleString("es-AR", { timeZone: timezone })}`}
           </p>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
@@ -450,6 +447,6 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

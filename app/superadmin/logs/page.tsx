@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -801,27 +802,21 @@ export default function LogsPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8" />
-              Auditoría del Sistema
-            </h1>
-            <p className="text-muted-foreground">
-              Registro completo de todas las acciones, eventos de seguridad y
-              operaciones del sistema
-            </p>
-            <LastUpdated
-              formattedLastUpdated={formattedLastUpdated}
-              onRefresh={() => {
-                fetchLogs()
-                fetchStats()
-              }}
-              loading={loading || statsLoading}
-            />
-          </div>
+      <PageShell
+        title="Auditoría del sistema"
+        description="Registro completo de todas las acciones, eventos de seguridad y operaciones del sistema"
+        icon={Shield}
+        meta={
+          <LastUpdated
+            formattedLastUpdated={formattedLastUpdated}
+            onRefresh={() => {
+              fetchLogs()
+              fetchStats()
+            }}
+            loading={loading || statsLoading}
+          />
+        }
+        actions={
           <Button
             variant="outline"
             size="sm"
@@ -831,7 +826,8 @@ export default function LogsPage() {
             <Sliders className="h-4 w-4" />
             Configurar alertas
           </Button>
-        </div>
+        }
+      >
 
         {/* ============================================================ */}
         {/* ALERTAS ACTIVAS                                              */}
@@ -1574,7 +1570,7 @@ export default function LogsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageShell>
     </TooltipProvider>
   )
 }

@@ -1,6 +1,7 @@
 import { sesionConSucursalVigente } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageShell } from "@/components/ui/page-shell"
 import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
@@ -536,17 +537,11 @@ export default async function DashboardPage() {
     : []
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-headline">Inicio</h1>
-          <p className="text-muted-foreground">
-            Bienvenido, {currentUserName}
-          </p>
-        </div>
-        {isAdmin && esArgentina && <DolarWidget variant="header" />}
-      </div>
-
+    <PageShell
+      title="Inicio"
+      description={`Bienvenido, ${currentUserName}`}
+      actions={isAdmin && esArgentina ? <DolarWidget variant="header" /> : undefined}
+    >
       {/* Setup checklist (oculto al 100%) — guía nuevos/inactivos a su primera orden */}
       {isAdmin && <SetupChecklist />}
 
@@ -736,6 +731,6 @@ export default async function DashboardPage() {
 
       {/* NPS Survey — se muestra cada 60 días */}
       <NpsSurvey />
-    </div>
+    </PageShell>
   )
 }

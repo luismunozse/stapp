@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -59,14 +60,14 @@ interface Lead {
 const urgenciaColors: Record<string, string> = {
   alta: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200",
   media: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200",
-  baja: "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-200",
+  baja: "bg-muted text-muted-foreground border-border",
 }
 
 function scoreBadgeClass(score: number): string {
   if (score >= 80) return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200"
   if (score >= 60) return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200"
   if (score >= 40) return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200"
-  return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-200"
+  return "bg-muted text-muted-foreground border-border"
 }
 
 interface LeadsResponse {
@@ -79,7 +80,7 @@ const estadoColors: Record<string, string> = {
   CONTACTADO: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
   CALIFICADO: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
   CONVERTIDO: "bg-green-500/10 text-green-700 dark:text-green-400",
-  DESCARTADO: "bg-gray-500/10 text-gray-700 dark:text-gray-400",
+  DESCARTADO: "bg-muted text-muted-foreground",
 }
 
 export function LeadsContent() {
@@ -118,20 +119,16 @@ export function LeadsContent() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-muted-foreground text-sm">
-            Potenciales clientes capturados desde el chatbot y formularios
-          </p>
-        </div>
+    <PageShell
+      title="Leads"
+      description="Potenciales clientes capturados desde el chatbot y formularios"
+      actions={
         <Button variant="outline" size="sm" onClick={loadLeads} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
           Actualizar
         </Button>
-      </div>
+      }
+    >
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -393,6 +390,6 @@ export function LeadsContent() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

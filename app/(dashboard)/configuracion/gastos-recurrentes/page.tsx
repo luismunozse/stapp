@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
-  ArrowLeft, Plus, Pencil, Trash2, Loader2, Repeat, PlayCircle,
+  Plus, Pencil, Trash2, Loader2, Repeat, PlayCircle,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -211,22 +211,13 @@ export default function GastosRecurrentesPage() {
   const hayVencidos = gastos.some((g) => g.activo && g.proximoVencimiento <= hoy)
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Gastos Recurrentes</h1>
-            <p className="text-sm text-muted-foreground">
-              Plantillas de gastos que se repiten todos los meses (alquiler, sueldos, servicios).
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell
+      title="Gastos recurrentes"
+      description="Plantillas de gastos que se repiten todos los meses (alquiler, sueldos, servicios)."
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+      actions={
+        <>
           <Button
             variant="outline"
             onClick={handleMaterializar}
@@ -242,8 +233,9 @@ export default function GastosRecurrentesPage() {
           <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-1" /> Nuevo
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {materializeMsg && (
         <div className="text-sm bg-muted/50 border rounded-lg p-3">{materializeMsg}</div>
@@ -264,7 +256,7 @@ export default function GastosRecurrentesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card variant="flat">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Configurados ({gastos.length})</CardTitle>
           </CardHeader>
@@ -457,6 +449,6 @@ export default function GastosRecurrentesPage() {
         loading={saving}
         onConfirm={handleDelete}
       />
-    </div>
+    </PageShell>
   )
 }

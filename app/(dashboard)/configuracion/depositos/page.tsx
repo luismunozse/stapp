@@ -1,16 +1,16 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
+import { SectionHeader } from "@/components/ui/section-header"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Warehouse, Star } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, Warehouse, Star } from "lucide-react"
 import { toast } from "sonner"
 
 interface Deposito {
@@ -144,27 +144,18 @@ export default function DepositosPage() {
     new Set(depositos.map((d) => d.sucursalNombre).filter(Boolean)).size > 1
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Warehouse className="h-6 w-6" /> Depósitos
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sucursales o locales físicos donde guardás stock. El stock se transfiere entre ellos sin afectar el total.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Depósitos"
+      description="Sucursales o locales físicos donde guardás stock. El stock se transfiere entre ellos sin afectar el total."
+      icon={Warehouse}
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+      actions={
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo
         </Button>
-      </div>
+      }
+    >
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -174,14 +165,10 @@ export default function DepositosPage() {
         <div className="space-y-4">
           <DepositoList items={activos} variasSucursales={variasSucursales} onEdit={openEdit} onArchive={(id) => setArchiveId(id)} />
           {inactivos.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-muted-foreground">Archivados</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DepositoList items={inactivos} variasSucursales={variasSucursales} onEdit={openEdit} onArchive={() => {}} muted />
-              </CardContent>
-            </Card>
+            <section className="space-y-3 pt-2">
+              <SectionHeader title="Archivados" className="text-muted-foreground" />
+              <DepositoList items={inactivos} variasSucursales={variasSucursales} onEdit={openEdit} onArchive={() => {}} muted />
+            </section>
           )}
         </div>
       )}
@@ -280,7 +267,7 @@ export default function DepositosPage() {
         loading={saving}
         onConfirm={handleArchive}
       />
-    </div>
+    </PageShell>
   )
 }
 

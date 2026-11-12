@@ -171,7 +171,7 @@ export function TicketsListSuperadmin() {
             <p className="text-xs text-muted-foreground">Resueltos</p>
           </Card>
           <Card
-            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-gray-400 ${filtroEstado === "" ? "ring-2 ring-gray-500" : ""}`}
+            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-border ${filtroEstado === "" ? "ring-2 ring-muted-foreground" : ""}`}
             onClick={() => { setFiltroEstado(""); setPage(1) }}
           >
             <p className="text-2xl font-bold">{stats.total}</p>

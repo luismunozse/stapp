@@ -4,11 +4,11 @@ import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
+import { PageShell } from "@/components/ui/page-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  ArrowLeft,
   TrendingUp,
   Mail,
   Calendar,
@@ -155,22 +155,14 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link href="/vendedores">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-3xl font-bold truncate">{vendedor.nombre}</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">Detalle del vendedor</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-2 pl-12 sm:pl-0">
+    <PageShell
+      title={vendedor.nombre}
+      description="Detalle del vendedor"
+      backHref="/vendedores"
+      backLabel="Volver a vendedores"
+      actions={
+        isAdmin && (
+          <>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Edit className="mr-1.5 h-4 w-4" />
               Editar
@@ -185,9 +177,10 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
               <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
             </Button>
-          </div>
-        )}
-      </div>
+          </>
+        )
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-3 sm:gap-6 grid-cols-2 lg:grid-cols-4">
@@ -382,6 +375,6 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
         vendedorNombre={vendedor.nombre}
         onLiquidated={fetchVendedor}
       />
-    </div>
+    </PageShell>
   )
 }

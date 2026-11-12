@@ -6,8 +6,12 @@ import { Button } from "./button"
 interface PageHeaderProps {
   /** Page title. Rendered with the system `text-headline` scale. */
   title: string
-  /** Optional supporting line under the title. */
-  description?: string
+  /** Optional supporting line under the title (inline content only: it renders inside a <p>). */
+  description?: React.ReactNode
+  /** Inline element next to the title (state badge, "Inactivo"…). */
+  titleAddon?: React.ReactNode
+  /** Extra line under the description (last update, active branch…). */
+  meta?: React.ReactNode
   /** Right-aligned action slot (buttons, filters). Wraps below the title on mobile. */
   actions?: React.ReactNode
   /** Optional leading icon chip, keyed to the page domain. */
@@ -28,6 +32,8 @@ interface PageHeaderProps {
 export function PageHeader({
   title,
   description,
+  titleAddon,
+  meta,
   actions,
   icon: Icon,
   backHref,
@@ -60,13 +66,15 @@ export function PageHeader({
               <Icon className="h-5 w-5" />
             </span>
           )}
-          <h1 className="text-headline text-balance">{title}</h1>
+          <h1 className="text-headline min-w-0 text-balance break-words">{title}</h1>
+          {titleAddon}
         </div>
         {description && (
           <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
             {description}
           </p>
         )}
+        {meta}
       </div>
       {actions && (
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">

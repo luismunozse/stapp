@@ -24,7 +24,7 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
       case "DISABLE":
         return <XCircle className="h-5 w-5 text-red-600" />
       default:
-        return <Edit className="h-5 w-5 text-gray-600" />
+        return <Edit className="h-5 w-5 text-muted-foreground" />
     }
   }
 
@@ -54,7 +54,7 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
       case "DISABLE":
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+        return "bg-muted text-foreground"
     }
   }
 
