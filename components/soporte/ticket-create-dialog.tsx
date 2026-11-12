@@ -119,7 +119,7 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Nuevo Ticket de Soporte</h2>
+          <h2 className="text-lg font-semibold">Nuevo ticket de soporte</h2>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
           </IconButton>
@@ -250,7 +250,7 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
                   Enviando...
                 </>
               ) : (
-                "Enviar Ticket"
+                "Enviar ticket"
               )}
             </Button>
           </div>

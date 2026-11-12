@@ -148,7 +148,7 @@ export function UsageWarningBanner() {
         )}
       >
         <span className="hidden sm:inline">Ver planes</span>
-        <span className="sm:hidden">Upgrade</span>
+        <span className="sm:hidden">Mejorar</span>
         <ArrowRight className="h-3 w-3" />
       </Link>
       <button

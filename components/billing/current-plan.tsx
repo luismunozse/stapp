@@ -41,7 +41,7 @@ export function CurrentPlan({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Plan Actual</CardTitle>
+          <CardTitle>Plan actual</CardTitle>
           <CardDescription>No hay suscripción activa</CardDescription>
         </CardHeader>
       </Card>

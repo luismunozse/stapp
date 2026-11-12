@@ -74,13 +74,13 @@ export function PolicyChangeModal({ daysRemaining }: PolicyChangeModalProps) {
           <p className="text-sm text-muted-foreground">
             Hemos actualizado nuestro modelo de servicio. A partir de ahora, todas las
             cuentas incluyen un <strong>período de prueba gratuito de 30 días</strong> con
-            acceso completo a todas las funcionalidades Premium.
+            acceso completo a todas las funciones del plan Profesional.
           </p>
 
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2 font-medium">
               <Sparkles className="h-5 w-5 text-blue-600" />
-              Durante tu prueba gratuita tienes:
+              Durante tu prueba gratuita tenés:
             </div>
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function PolicyChangeModal({ daysRemaining }: PolicyChangeModalProps) {
             <Clock className="h-4 w-4 text-muted-foreground" />
             <span>
               Te quedan <strong className="text-primary">{daysRemaining} días</strong> de
-              prueba gratuita. Después podrás suscribirte para continuar.
+              prueba gratuita. Después vas a poder suscribirte para continuar.
             </span>
           </div>
         </div>

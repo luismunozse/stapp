@@ -73,7 +73,7 @@ export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetail
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-3xl max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Detalle del Lead</DialogTitle>
+          <DialogTitle>Detalle del contacto</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -129,7 +129,7 @@ export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetail
               <textarea
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
-                placeholder="Agrega notas sobre este lead..."
+                placeholder="Agregá notas sobre este contacto..."
                 rows={4}
                 className="w-full px-3 py-2 rounded-md border border-input bg-background resize-none"
               />
