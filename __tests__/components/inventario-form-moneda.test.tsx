@@ -395,11 +395,7 @@ describe("InventarioForm: moneda del precio", () => {
       expect(within(dialogo).getByText("Hay variantes archivadas: restauralas o eliminalas para convertir")).toBeInTheDocument()
     })
 
-    it("si la moneda no se aplicó tras convertir, el aviso dice que los precios quedaron convertidos", async () => {
-      respuestaGrupoPut = () => ({
-        status: 200,
-        body: { guardado: true, relectura: false, grupoId: "g1", advertencia: "El grupo se guardó, pero no se pudo cambiar la moneda: error inesperado" },
-      })
+    it("convertir y guardar el grupo cierra el formulario sin aviso: la moneda se guarda con el grupo", async () => {
       renderForm({ item: itemAgrupado(), permiteVariantes: true })
       await screen.findAllByLabelText("Precio de Rojo")
       elegir("USD")
@@ -407,29 +403,9 @@ describe("InventarioForm: moneda del precio", () => {
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
       await waitFor(() => expect(guardar()).not.toBeDisabled())
       fireEvent.click(guardar())
-      await waitFor(() => expect(showWarningMock).toHaveBeenCalled())
-      expect(showWarningMock.mock.calls[0][0]).toContain("Los precios quedaron convertidos: volvé a guardar para aplicar la moneda.")
-      expect(onSuccess).not.toHaveBeenCalled()
-      // Guardar again re-sends the currency.
-      fireEvent.click(guardar())
-      await waitFor(() => expect(llamadas.filter((l) => l.method === "PUT" && l.url.startsWith("/api/inventario/grupos/"))).toHaveLength(2))
-      expect(llamadas.filter((l) => l.method === "PUT").at(-1)!.body.moneda).toBe("USD")
-    })
-
-    it("si el grupo se guardó pero la moneda no, avisa y no cierra", async () => {
-      respuestaGrupoPut = () => ({
-        status: 200,
-        body: { guardado: true, relectura: false, grupoId: "g1", advertencia: "El grupo se guardó, pero no se pudo cambiar la moneda: error inesperado" },
-      })
-      renderForm({ item: itemAgrupado(), permiteVariantes: true })
-      await screen.findAllByLabelText("Precio de Rojo")
-      elegir("USD")
-      fireEvent.click(await screen.findByRole("button", { name: "Mantener el número" }))
-      await waitFor(() => expect(guardar()).not.toBeDisabled())
-      fireEvent.click(guardar())
-      await waitFor(() => expect(showWarningMock).toHaveBeenCalled())
-      expect(showWarningMock.mock.calls[0][0]).toContain("no se pudo cambiar la moneda")
-      expect(onSuccess).not.toHaveBeenCalled()
+      await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+      expect(llamadas.filter((l) => l.method === "PUT" && l.url.startsWith("/api/inventario/grupos/"))).toHaveLength(1)
+      expect(showWarningMock).not.toHaveBeenCalled()
     })
   })
 })

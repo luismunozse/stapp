@@ -223,7 +223,7 @@ export function reasignarCodigosDuplicados(cuerpo: CuerpoGrupo, estado: Variante
 
 export type SalidaGuardado =
   /** Committed. `lectura` is the group as the server reads it now, or null when the server could not re-read it: GET, never re-send. */
-  | { tipo: "guardado"; lectura: GrupoLeido | null; advertencia?: string }
+  | { tipo: "guardado"; lectura: GrupoLeido | null }
   | { tipo: "codigo-duplicado"; codigos: string[]; mensaje: string }
   /** A member of the group was missing from the save (somebody changed it): reload the group. */
   | { tipo: "recargar"; mensaje: string }
@@ -244,9 +244,8 @@ export function interpretarGuardado(status: number, cuerpo: unknown): SalidaGuar
   if (status >= 200 && status < 300) {
     const esLectura = esObjeto(datos.grupo) && Array.isArray(datos.variantes) && Array.isArray(datos.archivadas)
     const lectura = esLectura ? (datos as unknown as GrupoLeido) : null
-    // Saved, but something after the save failed (the currency change): the form must say so.
-    const advertencia = typeof datos.advertencia === "string" && datos.advertencia !== "" ? datos.advertencia : undefined
-    return advertencia ? { tipo: "guardado", lectura, advertencia } : { tipo: "guardado", lectura }
+    // The currency change commits with the save (one RPC): a 2xx never means a half-applied save.
+    return { tipo: "guardado", lectura }
   }
   if (status === 503 || datos.code === "MIGRACION_PENDIENTE") {
     return { tipo: "pendiente", mensaje: typeof datos.error === "string" && datos.error !== "" ? datos.error : MENSAJE_PENDIENTE }

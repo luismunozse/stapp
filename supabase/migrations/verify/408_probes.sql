@@ -2,8 +2,9 @@
 --
 -- Run AFTER 408 is applied:  node scripts/db-run.mjs <this file>
 -- (no --apply: the file opens its own transaction and always ends in ROLLBACK).
--- Only data created: one scratch organization ('probe-408-org') with one variant group, a few items
--- and two kits, rolled back with everything. The rollback rehearsal at the end takes ACCESS
+-- Only data created: one scratch organization ('probe-408-org') with variant groups (one inserted
+-- directly, the others through guardar_grupo_variantes and the 408 wrapper), a few items and two
+-- kits, rolled back with everything. The rollback rehearsal at the end takes ACCESS
 -- EXCLUSIVE on inventario (DROP TRIGGER) until that ROLLBACK, so it runs last.
 -- Green = esperado equals obtenido, or obtenido starts with 'OK:' for probes run through
 -- pg_temp.probe (they expect an SQLSTATE, 'ok' = no error).
@@ -83,6 +84,11 @@ INSERT INTO _r SELECT 3, 'sync trigger is AFTER ... FOR EACH ROW and lists moned
 INSERT INTO _r SELECT 4, 'new trigger is BEFORE INSERT OR UPDATE OF grupo_id FOR EACH ROW', 'true',
   (SELECT (pg_get_triggerdef(t.oid) ~ '^CREATE TRIGGER inventario_moneda_grupo BEFORE INSERT OR UPDATE OF grupo_id ON public\.inventario FOR EACH ROW EXECUTE FUNCTION inventario_moneda_grupo\(\)$')::TEXT
      FROM pg_trigger t WHERE t.tgrelid = 'public.inventario'::regclass AND t.tgname = 'inventario_moneda_grupo');
+INSERT INTO _r SELECT 5, 'guardar_grupo_variantes_moneda exists, service_role only (as guardar_grupo_variantes)', 'true|true|false|false',
+  (to_regprocedure('public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)') IS NOT NULL)::TEXT || '|' ||
+  has_function_privilege('service_role', 'public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)', 'EXECUTE')::TEXT || '|' ||
+  has_function_privilege('authenticated', 'public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)', 'EXECUTE')::TEXT || '|' ||
+  has_function_privilege('anon', 'public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)', 'EXECUTE')::TEXT;
 
 -- 10-13: INSERT into a group takes the group's currency, whatever the INSERT said.
 INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, grupo_id, atributos)
@@ -174,6 +180,8 @@ INSERT INTO _r SELECT 49, 'an empty kit costs 0', '0',
 -- ROLLBACK:BEGIN
 SET LOCAL lock_timeout = '3s';
 
+DROP FUNCTION IF EXISTS guardar_grupo_variantes_moneda(TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, TEXT, TEXT);
+
 DROP TRIGGER IF EXISTS inventario_moneda_grupo ON inventario;
 DROP FUNCTION IF EXISTS inventario_moneda_grupo();
 
@@ -258,7 +266,11 @@ INSERT INTO _r SELECT 84, 'rehearsal: a currency change no longer fans out (only
   count(*) FILTER (WHERE i.moneda = 'USD')::TEXT
   FROM inventario i JOIN _s ON i.grupo_id = _s.g AND i.organization_id = _s.org;
 
-INSERT INTO _r SELECT 999, 'probe rows recorded (a missing row means a probe did not run)', '34', count(*)::TEXT FROM _r;
+INSERT INTO _r SELECT 85, 'rehearsal: guardar_grupo_variantes_moneda is gone, guardar_grupo_variantes stays', 'false|true',
+  (to_regprocedure('public.guardar_grupo_variantes_moneda(text,text,jsonb,jsonb,jsonb,jsonb,text,text)') IS NOT NULL)::TEXT || '|' ||
+  (to_regprocedure('public.guardar_grupo_variantes(text,text,jsonb,jsonb,jsonb,jsonb,text)') IS NOT NULL)::TEXT;
+
+INSERT INTO _r SELECT 999, 'probe rows recorded (a missing row means a probe did not run)', '36', count(*)::TEXT FROM _r;
 
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 

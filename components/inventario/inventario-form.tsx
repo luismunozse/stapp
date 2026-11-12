@@ -452,12 +452,9 @@ export function InventarioForm({
   const moneda: MonedaCatalogo = watch("moneda") ?? null
   /** The currency the server has: the item's, or the one a save in this session applied. */
   const monedaGuardada = useRef<MonedaCatalogo>(item?.moneda ?? null)
-  /** Prices were converted and that conversion has not been saved together with its currency yet. */
-  const preciosConvertidos = useRef(false)
   // Another item loaded into this form (opening a duplicate) starts from its own currency.
   useEffect(() => {
     monedaGuardada.current = item?.moneda ?? null
-    preciosConvertidos.current = false
   }, [item])
   const monedaDeVariante = !!item?.grupoId && !variantesActivo
   // An existing item (or group) whose cost this user cannot see: its stored cost would be relabeled
@@ -503,7 +500,6 @@ export function InventarioForm({
     setValue("precioVenta", convertir(Number(v.precioVenta)), { shouldDirty: true })
     if (costoCargado) setValue("precioCompra", convertir(Number(v.precioCompra)), { shouldDirty: true })
     fijarMoneda(monedaPedida.a)
-    preciosConvertidos.current = true
     setMonedaPedida(null)
   }
   const mantenerMoneda = () => {
@@ -1208,14 +1204,8 @@ export function InventarioForm({
     compartidosGuardados.current = compartidos
     const filas = filasEnOrden(variantes.estado)
     const { fallidas } = await fotos.subirTodas(filas.map((f) => ({ id: f.id, imagenUrl: f.imagenUrl, archivar: f.archivar })))
-    // Saved, but the currency did not change: the form stays open so "Guardar" can try it again.
-    const advertencia = salida.advertencia
-      ? `${salida.advertencia}.${preciosConvertidos.current ? " Los precios quedaron convertidos: volvé a guardar para aplicar la moneda." : ""}`
-      : undefined
-    if (!advertencia) {
-      monedaGuardada.current = data.moneda ?? null
-      preciosConvertidos.current = false
-    }
+    // The currency commits with the save (one transaction on the server).
+    monedaGuardada.current = data.moneda ?? null
     if (fallidas.length > 0) {
       // Los datos ya están guardados, así que el borrador no sirve más; el formulario sigue abierto para reintentar las fotos.
       clearDraft()
@@ -1224,12 +1214,7 @@ export function InventarioForm({
         await showError(`Se guardó el producto, pero ${textoDeFotos(fallidas.length).toLowerCase()} Además, no pudimos volver a leer las variantes: cerrá y volvé a abrir el producto.`)
         return
       }
-      await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}${advertencia ? ` ${advertencia}` : ""}`)
-      return
-    }
-    if (advertencia) {
-      clearDraft()
-      await showWarning(preciosConvertidos.current ? advertencia : `${advertencia} Revisá la moneda y volvé a guardar.`)
+      await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}`)
       return
     }
 

@@ -100,6 +100,25 @@ describe("migration 408: moneda del grupo de variantes y costo de kit", () => {
     )
   })
 
+  it("wrapper: saves the group and changes its currency in one function, service_role only", () => {
+    const SIG = "guardar_grupo_variantes_moneda(TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, TEXT, TEXT)"
+    expect(CODE).toMatch(
+      /CREATE OR REPLACE FUNCTION guardar_grupo_variantes_moneda\( p_org TEXT, p_user TEXT, p_grupo JSONB, p_compartidos JSONB, p_variantes JSONB, p_archivar JSONB, p_deposito_inicial TEXT, p_moneda TEXT\) RETURNS JSONB LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp/
+    )
+    const body = collapse(fnBody(SQL, "guardar_grupo_variantes_moneda"))
+    const llamada = body.indexOf(
+      "guardar_grupo_variantes(p_org, p_user, p_grupo, p_compartidos, p_variantes, p_archivar, p_deposito_inicial)"
+    )
+    const update = body.search(/UPDATE inventario SET moneda = p_moneda WHERE grupo_id = p_grupo ->> 'id' AND organization_id = p_org/)
+    expect(llamada).toBeGreaterThan(-1)
+    // the currency changes AFTER the save (see the ORDER comment in the migration)
+    expect(update).toBeGreaterThan(llamada)
+    expect(body).toMatch(/p_moneda NOT IN \('USD', 'EUR'\)/)
+    expect(CODE).toContain(`REVOKE EXECUTE ON FUNCTION ${SIG} FROM PUBLIC, anon, authenticated;`)
+    expect(CODE).toContain(`GRANT EXECUTE ON FUNCTION ${SIG} TO service_role;`)
+    expect(collapse(RB)).toContain(`DROP FUNCTION IF EXISTS ${SIG};`)
+  })
+
   it("rollback restores the 177 and 355 definitions and drops the new trigger and function", () => {
     const rb = collapse(RB)
     expect(rb).toMatch(/SET LOCAL lock_timeout = '3s';/)

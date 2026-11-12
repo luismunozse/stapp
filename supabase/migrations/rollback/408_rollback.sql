@@ -7,13 +7,16 @@
 -- currency is no longer synced, and a kit with foreign-currency components is costed again as a
 -- raw sum of precio_compra (mixing currencies).
 --
--- Run it only after the code that calls calcular_costo_kit with 5 arguments is reverted (the
--- 5-argument function is dropped; a 2-argument call keeps working).
+-- Run it only after the code that calls calcular_costo_kit with 5 arguments and
+-- guardar_grupo_variantes_moneda is reverted (both are dropped; a 2-argument calcular_costo_kit
+-- call and guardar_grupo_variantes keep working).
 -- LOCKS: DROP TRIGGER takes ACCESS EXCLUSIVE on inventario (blocks reads and writes) until the
 -- transaction ends; CREATE OR REPLACE TRIGGER takes SHARE ROW EXCLUSIVE. Run it off-peak.
 -- lock_timeout bounds the wait, not the hold; if it aborts, nothing was applied: re-run it.
 
 SET LOCAL lock_timeout = '3s';
+
+DROP FUNCTION IF EXISTS guardar_grupo_variantes_moneda(TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, TEXT, TEXT);
 
 DROP TRIGGER IF EXISTS inventario_moneda_grupo ON inventario;
 DROP FUNCTION IF EXISTS inventario_moneda_grupo();
