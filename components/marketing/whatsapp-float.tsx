@@ -3,16 +3,17 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { track } from "@/lib/analytics/track"
+import { whatsAppUrl } from "@/lib/contact"
 
 /**
- * Botón flotante de WhatsApp para páginas de marketing (landing, precios,
+ * Botón flotante de WhatsApp para páginas de marketing (precios,
  * casos-de-uso, empresa, ayuda).
  *
- * - Usa `NEXT_PUBLIC_WHATSAPP_NUMBER` (formato internacional sin "+", ej. "5491169625733").
- * - Si la env var no está definida, renderiza null (no se muestra nada).
+ * - El número sale de lib/contact (única fuente de los datos de contacto).
  * - Dispara evento `whatsapp_clicked` para GA4/Ads.
  *
- * No mostrar en `(dashboard)` ni en `(auth)`.
+ * No mostrar en `(dashboard)` ni en `(auth)`, ni junto al chatbot de la home:
+ * en mobile quedarían dos botones flotantes apilados.
  */
 export function WhatsAppFloat({
   message = "Hola, vengo de STApp",
@@ -22,11 +23,7 @@ export function WhatsAppFloat({
   className?: string
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
-  const number = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
-
-  if (!number) return null
-
-  const href = `https://wa.me/${number}?text=${encodeURIComponent(message)}`
+  const href = whatsAppUrl(message)
 
   const handleClick = () => {
     track("whatsapp_clicked", {

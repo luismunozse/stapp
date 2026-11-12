@@ -32,12 +32,12 @@ export default function SobreNosotrosPage() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <Link href="/">
-            <Button variant="ghost" className="gap-2">
+          <Button asChild variant="ghost" className="gap-2">
+            <Link href="/">
               <ArrowLeft className="h-4 w-4" />
               Volver al inicio
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </header>
 
@@ -76,9 +76,8 @@ export default function SobreNosotrosPage() {
                 también impulse el crecimiento de los negocios de nuestros clientes.
               </p>
               <p className="text-muted-foreground">
-                Hoy, STApp es utilizado por talleres de reparación en toda Latinoamérica,
-                ayudándoles a gestionar miles de órdenes de servicio, optimizar su inventario
-                y brindar un mejor servicio a sus clientes.
+                Hoy, STApp ayuda a talleres de reparación a gestionar sus órdenes de
+                servicio, ordenar su inventario y brindar un mejor servicio a sus clientes.
               </p>
             </div>
           </div>
@@ -159,11 +158,11 @@ export default function SobreNosotrosPage() {
               herramientas tecnológicas que simplifiquen su operación, mejoren la
               experiencia de sus clientes y les permitan crecer de manera sostenible.
             </p>
-            <Link href="/registro">
-              <Button size="lg" className="gap-2">
+            <Button asChild size="lg" className="gap-2">
+              <Link href="/registro">
                 Únete a STApp
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

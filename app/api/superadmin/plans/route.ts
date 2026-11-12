@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import type { PlanWithUsage } from "@/types/superadmin"
+import { invalidatePricesCache } from "@/lib/pricing"
 
 // Schema de validación para crear plan
 const createPlanSchema = z.object({
@@ -185,6 +186,7 @@ export async function POST(request: NextRequest) {
     }
 
     await intento.completar({ planId: newPlan.id })
+    invalidatePricesCache()
 
     return NextResponse.json(
       {

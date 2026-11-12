@@ -1,340 +1,123 @@
-"use client"
-
-import { Check, X, Minus } from "lucide-react"
-import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
+import { Check, Minus } from "lucide-react"
+import type { AllPlansPrices } from "@/lib/pricing"
+import { buildPlanComparison, type ComparisonRow, type ComparisonValue } from "@/lib/plan-copy"
 import { cn } from "@/lib/utils"
-import { revealHeader, revealPanel, revealStaggerFast, revealRow } from "./reveal"
-import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
-const rows = [
-  {
-    feature: "Órdenes de trabajo",
-    stapp: "Digitales con estados y seguimiento",
-    excel: "Planilla manual",
-    papel: "Anotaciones sueltas",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Control de inventario",
-    stapp: "Alertas automáticas de stock",
-    excel: "Actualización manual",
-    papel: "Imposible de controlar",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Historial de clientes",
-    stapp: "Completo y automático",
-    excel: "Búsqueda lenta",
-    papel: "Se pierde con el tiempo",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Cobros y facturación",
-    stapp: "Integrado con MercadoPago",
-    excel: "Cálculos manuales",
-    papel: "Sin registro confiable",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Seguimiento para clientes",
-    stapp: "Link público con estado actualizado",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Cotizaciones online",
-    stapp: "Aprobación/rechazo online",
-    excel: "PDF manual",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Punto de venta",
-    stapp: "Ventas con garantía y devoluciones",
-    excel: "Registro básico",
-    papel: "Anotaciones sueltas",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Reportes",
-    stapp: "Reportes avanzados",
-    excel: "Gráficos básicos",
-    papel: "No existen",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Acceso remoto",
-    stapp: "Cualquier dispositivo + offline",
-    excel: "Solo en tu PC",
-    papel: "Solo en el local",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Fotos y firma digital",
-    stapp: "Incluido",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Notificaciones WhatsApp",
-    stapp: "Con un click",
-    excel: "Manual",
-    papel: "Manual",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "partial",
-  },
-  {
-    feature: "Pantalla kiosco en local",
-    stapp: "Incluido y personalizable",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Caja diaria",
-    stapp: "Apertura/cierre con control total",
-    excel: "Planilla separada",
-    papel: "Cuaderno de caja",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "partial",
-  },
-  {
-    feature: "Control de gastos",
-    stapp: "Categorías y gastos recurrentes",
-    excel: "Registro manual",
-    papel: "Se pierden recibos",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Órdenes de compra",
-    stapp: "Vinculadas al inventario",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Dashboard analítico",
-    stapp: "KPIs actualizados",
-    excel: "Gráficos manuales",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Captación de leads",
-    stapp: "Seguimiento hasta conversión",
-    excel: "Lista manual",
-    papel: "Se olvidan",
-    stappLevel: "full",
-    excelLevel: "partial",
-    papelLevel: "none",
-  },
-  {
-    feature: "Asistente IA integrado",
-    stapp: "Santi, disponible 24/7",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Multi-sucursal",
-    stapp: "Varias sucursales y monedas",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Catálogo online",
-    stapp: "Tienda con MercadoPago",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-  {
-    feature: "Integraciones / API",
-    stapp: "Webhooks y API REST",
-    excel: "No disponible",
-    papel: "No disponible",
-    stappLevel: "full",
-    excelLevel: "none",
-    papelLevel: "none",
-  },
-] as const
+// Tabla de planes de /precios. Server component sin animaciones: cada celda
+// sale de la tabla `plans` (límites + feature_flags) vía buildPlanComparison,
+// la misma fuente que las cards y el FAQ.
 
-function LevelIcon({ level }: { level: "full" | "partial" | "none" }) {
-  if (level === "full") {
-    return <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+function Cell({ value }: { value: ComparisonValue }) {
+  if (value === true) {
+    return (
+      <>
+        <Check className="mx-auto h-4 w-4 text-success-600" aria-hidden="true" />
+        <span className="sr-only">Incluido</span>
+      </>
+    )
   }
-  if (level === "partial") {
-    return <Minus className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+  if (value === false) {
+    return (
+      <>
+        <Minus className="mx-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="sr-only">No incluido</span>
+      </>
+    )
   }
-  return <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+  return <span className="font-medium text-foreground">{value}</span>
 }
 
-export function Comparison() {
+function RowGroup({
+  title,
+  rows,
+  highlightIndex,
+}: {
+  title: string
+  rows: ComparisonRow[]
+  highlightIndex: number
+}) {
   return (
-    <LazyMotion features={domAnimation}>
-      <section id="comparacion" className="py-12 sm:py-16">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <m.div
-            className="text-center max-w-3xl mx-auto mb-10"
-            variants={revealHeader}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "0px" }}
-          >
-            <SectionEyebrow>Por qué STApp</SectionEyebrow>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
-              Por qué cambiar a STApp
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Compará cómo gestionás tu taller hoy vs cómo podrías hacerlo
-            </p>
-          </m.div>
+    <tbody>
+      <tr className="border-b bg-muted/40">
+        <th
+          scope="colgroup"
+          colSpan={rows[0]?.values.length ? rows[0].values.length + 1 : 1}
+          className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-4"
+        >
+          {title}
+        </th>
+      </tr>
+      {rows.map((row) => (
+        <tr key={row.label} className="border-b last:border-b-0">
+          <th scope="row" className="px-3 py-3 text-left font-normal text-foreground sm:px-4">
+            {row.label}
+          </th>
+          {row.values.map((value, i) => (
+            <td
+              key={i}
+              className={cn(
+                "px-3 py-3 text-center sm:px-4",
+                i === highlightIndex && "bg-primary/5"
+              )}
+            >
+              <Cell value={value} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </tbody>
+  )
+}
 
-          {/* Desktop table: panel estructurado, se asienta con scale */}
-          <m.div
-            className="hidden md:block max-w-4xl mx-auto"
-            variants={revealPanel}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "0px" }}
-          >
-            <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
-              {/* Table header */}
-              <div className="grid grid-cols-4 bg-muted/50 border-b">
-                <div className="p-4 font-semibold text-sm text-foreground">
-                  Funcionalidad
-                </div>
-                <div className="p-4 font-semibold text-sm text-primary text-center bg-primary/5 border-x border-primary/10">
-                  STApp
-                </div>
-                <div className="p-4 font-semibold text-sm text-muted-foreground text-center">
-                  Excel
-                </div>
-                <div className="p-4 font-semibold text-sm text-muted-foreground text-center">
-                  Papel
-                </div>
-              </div>
+export function PlanComparison({ allPlans }: { allPlans: AllPlansPrices }) {
+  const { plans, limitRows, featureRows } = buildPlanComparison(allPlans)
+  const highlightIndex = plans.findIndex((p) => p.slug === "profesional")
 
-              {/* Table rows */}
-              {rows.map((row, index) => (
-                <div
-                  key={row.feature}
-                  className={cn(
-                    "grid grid-cols-4",
-                    index < rows.length - 1 && "border-b"
-                  )}
-                >
-                  <div className="p-4 text-sm font-medium text-foreground">
-                    {row.feature}
-                  </div>
-                  <div className="p-4 text-sm text-center bg-primary/5 border-x border-primary/10">
-                    <div className="flex items-center justify-center gap-2">
-                      <LevelIcon level={row.stappLevel} />
-                      <span className="text-foreground">{row.stapp}</span>
-                    </div>
-                  </div>
-                  <div className="p-4 text-sm text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <LevelIcon level={row.excelLevel} />
-                      <span className="text-muted-foreground">{row.excel}</span>
-                    </div>
-                  </div>
-                  <div className="p-4 text-sm text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <LevelIcon level={row.papelLevel} />
-                      <span className="text-muted-foreground">{row.papel}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </m.div>
-
-          {/* Mobile cards: lista que se llena top-down vía stagger */}
-          <m.div
-            className="md:hidden space-y-3"
-            variants={revealStaggerFast}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "0px" }}
-          >
-            {rows.map((row) => (
-              <m.div
-                key={row.feature}
-                className="rounded-xl border bg-card p-4 shadow-sm"
-                variants={revealRow}
-              >
-                <h3 className="font-semibold text-sm text-foreground mb-3">
-                  {row.feature}
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2 bg-primary/5 rounded-lg px-3 py-2">
-                    <LevelIcon level={row.stappLevel} />
-                    <div>
-                      <span className="text-xs font-medium text-primary">STApp</span>
-                      <p className="text-sm text-foreground">{row.stapp}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 px-3 py-1.5">
-                    <LevelIcon level={row.excelLevel} />
-                    <div>
-                      <span className="text-xs font-medium text-muted-foreground">Excel</span>
-                      <p className="text-sm text-muted-foreground">{row.excel}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 px-3 py-1.5">
-                    <LevelIcon level={row.papelLevel} />
-                    <div>
-                      <span className="text-xs font-medium text-muted-foreground">Papel</span>
-                      <p className="text-sm text-muted-foreground">{row.papel}</p>
-                    </div>
-                  </div>
-                </div>
-              </m.div>
-            ))}
-          </m.div>
+  return (
+    <section id="comparacion" className="scroll-mt-24 py-10 sm:py-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-8 max-w-3xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl">
+            Qué incluye cada plan
+          </h2>
+          <p className="mt-3 text-lg text-muted-foreground">
+            Los mismos límites que aplica la app, sin letra chica.
+          </p>
         </div>
-      </section>
-    </LazyMotion>
+
+        <div className="mx-auto max-w-3xl overflow-hidden rounded-xl border bg-card shadow-sm">
+          <table className="w-full table-fixed text-sm">
+            <caption className="sr-only">Comparación de planes de STApp</caption>
+            <colgroup>
+              <col className="w-1/2" />
+              {plans.map((p) => (
+                <col key={p.slug} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr className="border-b">
+                <th scope="col" className="px-3 py-3 text-left font-semibold text-foreground sm:px-4">
+                  <span className="sr-only">Función</span>
+                </th>
+                {plans.map((p, i) => (
+                  <th
+                    key={p.slug}
+                    scope="col"
+                    className={cn(
+                      "px-3 py-3 text-center font-semibold sm:px-4",
+                      i === highlightIndex ? "bg-primary/5 text-primary" : "text-foreground"
+                    )}
+                  >
+                    {p.nombre}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <RowGroup title="Límites" rows={limitRows} highlightIndex={highlightIndex} />
+            <RowGroup title="Funciones" rows={featureRows} highlightIndex={highlightIndex} />
+          </table>
+        </div>
+      </div>
+    </section>
   )
 }

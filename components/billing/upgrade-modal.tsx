@@ -10,11 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Check, Loader2, Crown, Shield, Zap, Globe } from "lucide-react"
+import { Check, Loader2, Crown, Shield, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModal } from "@/contexts/modal-context"
-
-type PaymentMethod = "mercadopago" | "creem"
 
 interface UpgradeModalProps {
   open: boolean
@@ -38,7 +36,6 @@ export function UpgradeModal({
 }: UpgradeModalProps) {
   const { showError } = useModal()
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   // Pago único es el DEFAULT a proposito: el debito automatico es una
   // autorizacion permanente sobre el medio de pago del taller, y que venga
   // preseleccionada empuja a darla sin decidirlo. Ver spec §3.2.
@@ -46,7 +43,6 @@ export function UpgradeModal({
   const [loading, setLoading] = useState(false)
   const [planName, setPlanName] = useState("Profesional")
   const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 149999 })
-  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 107 })
 
   // El modal queda montado entre aperturas: sin este reseteo, el modo elegido
   // la vez anterior sigue puesto al reabrirlo y el default deliberado deja de
@@ -74,12 +70,6 @@ export function UpgradeModal({
             MONTHLY: Number(targetPlan.precio_mensual),
             YEARLY: Number(targetPlan.precio_anual),
           })
-          if (targetPlan.precio_mensual_usd) {
-            setPricesUsd({
-              MONTHLY: Number(targetPlan.precio_mensual_usd),
-              YEARLY: Number(targetPlan.precio_anual_usd),
-            })
-          }
         }
       })
       .catch(() => {})
@@ -89,17 +79,15 @@ export function UpgradeModal({
     return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
   }
 
-  const currentPrices = paymentMethod === "mercadopago" ? pricesArs : pricesUsd
-  const currencySymbol = paymentMethod === "mercadopago" ? "$" : "USD $"
+  // Solo MercadoPago en pesos: es el único medio de cobro de la suscripción.
+  const currentPrices = pricesArs
+  const currencySymbol = "$"
 
   const monthlySavings = Math.round(
     ((currentPrices.MONTHLY * 12 - currentPrices.YEARLY) / (currentPrices.MONTHLY * 12)) * 100
   )
 
-  const formatCurrentPrice = (price: number) => {
-    if (paymentMethod === "mercadopago") return formatPriceArs(price)
-    return price.toString()
-  }
+  const formatCurrentPrice = formatPriceArs
 
   const openPaymentUrl = async (url: string) => {
     try {
@@ -118,39 +106,23 @@ export function UpgradeModal({
   const handleUpgrade = async () => {
     setLoading(true)
     try {
-      if (paymentMethod === "mercadopago") {
-        const ruta =
-          modoCobro === "automatico"
-            ? "/api/mercadopago/preapproval"
-            : "/api/mercadopago/preference"
+      const ruta =
+        modoCobro === "automatico"
+          ? "/api/mercadopago/preapproval"
+          : "/api/mercadopago/preference"
 
-        const response = await fetch(ruta, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billingPeriod, planSlug }),
-        })
+      const response = await fetch(ruta, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billingPeriod, planSlug }),
+      })
 
-        const data = await response.json()
+      const data = await response.json()
 
-        if (data.initPoint) {
-          await openPaymentUrl(data.initPoint)
-        } else {
-          throw new Error(data.error || "No se pudo iniciar el pago")
-        }
+      if (data.initPoint) {
+        await openPaymentUrl(data.initPoint)
       } else {
-        const response = await fetch("/api/creem/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billingPeriod, planSlug }),
-        })
-
-        const data = await response.json()
-
-        if (data.checkoutUrl) {
-          await openPaymentUrl(data.checkoutUrl)
-        } else {
-          throw new Error(data.error || "No se pudo iniciar el pago")
-        }
+        throw new Error(data.error || "No se pudo iniciar el pago")
       }
     } catch (error) {
       console.error("Error starting checkout:", error)
@@ -193,59 +165,10 @@ export function UpgradeModal({
         </div>
 
         <div className="px-6 pb-6 space-y-5">
-          {/* Método de pago */}
-          <div className="space-y-2.5">
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Método de pago
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("mercadopago")}
-                className={cn(
-                  "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
-                  paymentMethod === "mercadopago"
-                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
-                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
-                )}
-              >
-                {paymentMethod === "mercadopago" && (
-                  <div className="absolute top-2 right-2">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                )}
-                <Image
-                  src="/Mercado_Pago.svg.png"
-                  alt="MercadoPago"
-                  width={80}
-                  height={22}
-                  className="mx-auto mb-2"
-                />
-                <div className="text-sm font-semibold">Argentina</div>
-                <div className="text-xs text-muted-foreground">Pesos (ARS)</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("creem")}
-                className={cn(
-                  "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
-                  paymentMethod === "creem"
-                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
-                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
-                )}
-              >
-                {paymentMethod === "creem" && (
-                  <div className="absolute top-2 right-2">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                )}
-                <div className="flex justify-center mb-2">
-                  <Globe className="h-6 w-6 text-blue-500" />
-                </div>
-                <div className="text-sm font-semibold">Internacional</div>
-                <div className="text-xs text-muted-foreground">Dólares (USD)</div>
-              </button>
-            </div>
+          {/* Medio de pago: único, MercadoPago en pesos */}
+          <div className="flex items-center gap-3 rounded-xl border p-3">
+            <Image src="/Mercado_Pago.svg.png" alt="MercadoPago" width={80} height={22} />
+            <span className="text-sm text-muted-foreground">Pagás con MercadoPago, en pesos argentinos.</span>
           </div>
 
           {/* Período de facturación */}
@@ -285,7 +208,7 @@ export function UpgradeModal({
                 </div>
                 <div className="text-xs font-medium text-muted-foreground mb-1">Anual</div>
                 <div className="text-2xl font-bold tracking-tight">
-                  {currencySymbol}{paymentMethod === "mercadopago" ? formatCurrentPrice(Math.round(currentPrices.YEARLY / 12)) : (currentPrices.YEARLY / 12).toFixed(1).replace(/\.0$/, "")}
+                  {currencySymbol}{formatCurrentPrice(Math.round(currentPrices.YEARLY / 12))}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   por mes <span className="text-muted-foreground/60">({currencySymbol}{formatCurrentPrice(currentPrices.YEARLY)}/año)</span>
@@ -306,44 +229,42 @@ export function UpgradeModal({
             </div>
           </div>
 
-          {/* Modo de cobro (solo MercadoPago: Creem ya tiene recurrencia propia) */}
-          {paymentMethod === "mercadopago" && (
-            <div className="space-y-2">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="modo-cobro"
-                  value="unico"
-                  checked={modoCobro === "unico"}
-                  onChange={() => setModoCobro("unico")}
-                  className="mt-1"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">Pago único</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Pagás este mes. Cuando venza, lo renovás vos.
-                  </span>
+          {/* Modo de cobro */}
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="modo-cobro"
+                value="unico"
+                checked={modoCobro === "unico"}
+                onChange={() => setModoCobro("unico")}
+                className="mt-1"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Pago único</span>
+                <span className="block text-xs text-muted-foreground">
+                  Pagás este mes. Cuando venza, lo renovás vos.
                 </span>
-              </label>
+              </span>
+            </label>
 
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="modo-cobro"
-                  value="automatico"
-                  checked={modoCobro === "automatico"}
-                  onChange={() => setModoCobro("automatico")}
-                  className="mt-1"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">Débito automático</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Se cobra solo todos los meses. Lo cancelás cuando quieras.
-                  </span>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="modo-cobro"
+                value="automatico"
+                checked={modoCobro === "automatico"}
+                onChange={() => setModoCobro("automatico")}
+                className="mt-1"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Débito automático</span>
+                <span className="block text-xs text-muted-foreground">
+                  Se cobra solo todos los meses. Lo cancelás cuando quieras.
                 </span>
-              </label>
-            </div>
-          )}
+              </span>
+            </label>
+          </div>
 
           {/* Botón de acción */}
           <Button

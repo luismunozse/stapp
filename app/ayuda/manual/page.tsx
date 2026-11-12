@@ -197,12 +197,12 @@ export default function ManualPage() {
                   <Menu className="h-5 w-5" />
                 )}
               </button>
-              <Link href="/ayuda">
-                <Button variant="ghost" size="sm" className="gap-2">
+              <Button asChild variant="ghost" size="sm" className="gap-2">
+                <Link href="/ayuda">
                   <ArrowLeft className="h-4 w-4" />
                   <span className="hidden sm:inline">Centro de Ayuda</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
               <div className="hidden sm:block h-6 w-px bg-border" />
               <h1 className="text-lg font-bold text-foreground">
                 Manual de Uso

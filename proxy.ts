@@ -9,6 +9,7 @@ import {
   extractPublicCatalogoSlug,
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
+import { getOrgSlugById } from "@/lib/org-slug-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
 import { escrituraPermitidaSinSuscripcion, getSuscripcionBloqueada } from "@/lib/suscripcion-edge"
 import { checkSuperadminLoginLimit, checkTenantLoginLimit } from "@/lib/superadmin-login-limit-edge"
@@ -175,6 +176,48 @@ function impersonationResponse(
 // Rutas de landing page (solo para dominio principal)
 function isLandingPath(pathname: string): boolean {
   return pathname === "/" || pathname.startsWith("/pricing")
+}
+
+// Páginas de marketing del dominio principal que, para un usuario logueado,
+// no tienen sentido: lo mandamos a su panel. Antes lo hacía cada página con
+// auth() + una consulta a Supabase en CADA request (incluidos los anónimos);
+// acá solo se paga para quien trae cookie de sesión válida, y la página queda
+// libre de auth().
+const LANDING_REDIRECT_PATHS = new Set(["/", "/precios"])
+
+async function redirectLoggedInFromLanding(
+  request: NextRequest,
+  pathname: string,
+): Promise<NextResponse | null> {
+  if (!LANDING_REDIRECT_PATHS.has(pathname)) return null
+  const method = request.method.toUpperCase()
+  if (method !== "GET" && method !== "HEAD") return null
+  // Sin cookie de sesión no hay nada que decodificar: el visitante anónimo
+  // (la mayoría del tráfico de la landing) sale sin costo. Auth.js parte el
+  // JWT en `<nombre>.0`, `<nombre>.1`... cuando es grande, así que se miran
+  // también los trozos.
+  const cookieName = sessionCookieName()
+  const hasSession = request.cookies
+    .getAll()
+    .some((c) => c.name === cookieName || c.name.startsWith(`${cookieName}.`))
+  if (!hasSession) return null
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName,
+  })
+  const organizationId = token?.organizationId
+  if (typeof organizationId !== "string" || !organizationId) return null
+
+  // Fail-open: si no se puede resolver el slug se muestra la landing, igual
+  // que hacía la página cuando la org no tenía slug.
+  const lookup = await getOrgSlugById(organizationId)
+  if (lookup.kind !== "ok" || !lookup.slug) return null
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
+  return NextResponse.redirect(`${protocol}://${lookup.slug}.${rootDomain}/dashboard`)
 }
 
 // Extraer subdomain del hostname
@@ -558,6 +601,10 @@ export async function proxy(request: NextRequest) {
       const apexSinSuscripcion = await suscripcionBloqueadaResponse(request, apexToken, pathname)
       if (apexSinSuscripcion) return apexSinSuscripcion
     }
+
+    // Usuario logueado entrando a la landing o a /precios → su panel.
+    const landingRedirect = await redirectLoggedInFromLanding(request, pathname)
+    if (landingRedirect) return landingRedirect
 
     // Landing page y rutas públicas permitidas
     return NextResponse.next({

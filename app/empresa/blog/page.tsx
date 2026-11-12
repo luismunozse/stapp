@@ -44,12 +44,12 @@ export default function BlogPage() {
         {/* Header */}
         <header className="border-b bg-card">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <Link href="/">
-              <Button variant="ghost" className="gap-2">
+            <Button asChild variant="ghost" className="gap-2">
+              <Link href="/">
                 <ArrowLeft className="h-4 w-4" />
                 Volver al inicio
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </header>
 
@@ -65,12 +65,12 @@ export default function BlogPage() {
                 de reparación de celulares y dispositivos electrónicos
               </p>
               <div className="mt-8">
-                <Link href="/registro?plan=profesional">
-                  <Button size="lg" className="group rounded-full px-8">
+                <Button asChild size="lg" className="group rounded-full px-8">
+                  <Link href="/registro?plan=profesional">
                     Probar STApp gratis
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
