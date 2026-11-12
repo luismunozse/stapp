@@ -21,11 +21,13 @@ import {
   saveAncho,
   anchoToPx,
   anchoLogoDots,
+  logoMaxDots,
   ANCHOS_TERMICOS,
   DEFAULT_ANCHO,
   type AnchoTermico,
 } from "@/lib/thermal-paper"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
@@ -121,7 +123,10 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null
     if (preview.logoUrl) {
-      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
+      logoRaster = await imageUrlToRaster(preview.logoUrl, {
+        ...logoMaxDots(ancho),
+        printerDots: anchoLogoDots(ancho),
+      })
     }
     return {
       numeroOrden: orden.numeroOrden,
@@ -343,6 +348,8 @@ ${styles}
               </Button>
             )}
           </div>
+
+          <AvisoImpresionNavegador />
         </DialogContent>
       </Dialog>
     </>

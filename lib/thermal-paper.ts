@@ -38,3 +38,13 @@ export function anchoToPx(a: AnchoTermico): number {
 export function anchoLogoDots(a: AnchoTermico): number {
   return a === 58 ? 384 : 576
 }
+
+/**
+ * Tope del logo impreso por USB, en puntos del cabezal (≈8 puntos/mm). Es el
+ * mismo tamaño que muestra la vista previa (200×100px a 96dpi ≈ 53×26mm), sin
+ * pasar del ancho del cabezal. Sin tope de alto, un logo cuadrado en 80mm
+ * ocupaba ~7cm de papel.
+ */
+export function logoMaxDots(a: AnchoTermico): { maxWidth: number; maxHeight: number } {
+  return { maxWidth: Math.min(anchoLogoDots(a), 424), maxHeight: 212 }
+}
