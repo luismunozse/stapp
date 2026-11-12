@@ -17,7 +17,7 @@ export interface AccionEstado {
 const SIGUIENTE: Partial<Record<EstadoOrden, AccionEstado>> = {
   RECIBIDO: { estado: "EN_DIAGNOSTICO", label: "Empezar diagnóstico" },
   EN_DIAGNOSTICO: { estado: "PRESUPUESTADO", label: "Pasar a presupuestado" },
-  PRESUPUESTADO: { estado: "APROBADO", label: "Marcar aprobado" },
+  PRESUPUESTADO: { estado: "APROBADO", label: "Registrar aprobación" },
   APROBADO: { estado: "EN_REPARACION", label: "Empezar reparación" },
   EN_REPARACION: { estado: "REPARADO", label: "Marcar reparado" },
   ESPERANDO_REPUESTO: { estado: "EN_REPARACION", label: "Seguir reparación" },

@@ -73,7 +73,7 @@ import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenAvances } from "@/components/ordenes/orden-avances"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
-import { siguienteEstado } from "@/lib/ordenes/siguiente-estado"
+import { accionPrincipalOrden } from "@/lib/ordenes/accion-principal"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
@@ -679,7 +679,23 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const estadoSinCobro = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
   // Mismas condiciones que el botón "Cobrar" de OrdenCostosCard.
   const mostrarCobrar = puedeCobrar && userRole !== "TECNICO" && costoFinalNum > 0 && saldoPendiente > 0 && !estadoSinCobro
-  const accionPrincipal = siguienteEstado(orden.estado)
+  // La acción que la ficha empuja según estado y rol: la usan la tarjeta Estado y la barra del celular.
+  const puedeTomarOrden = (orden as any).puedeTomar === true && !orden.tecnicoId
+  const acciones = accionPrincipalOrden({
+    estado: orden.estado,
+    rol: userRole,
+    asignadaAMi: !!orden.tecnicoId && orden.tecnicoId === session?.user?.id,
+    puedeTomar: puedeTomarOrden,
+    puedeCobrarSaldo: mostrarCobrar,
+  })
+  const accionPrincipal = acciones.principal
+  const accionEstadoPrincipal = accionPrincipal?.tipo === "estado" ? accionPrincipal : null
+  const ejecutarAccionPrincipal = () => {
+    if (!accionPrincipal) return
+    if (accionPrincipal.tipo === "estado") void handleUpdateEstado(accionPrincipal.estado)
+    else if (accionPrincipal.tipo === "tomar") void handleTomarOrden()
+    else setShowCobrarDialog(true)
+  }
 
   return (
     <div className="space-y-6">
@@ -1002,6 +1018,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onUpdateEstado={handleUpdateEstado}
           esRetiro={isRetiro}
           onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
+          accionPrincipal={accionEstadoPrincipal}
+          soloLectura={!acciones.puedeCambiarEstado}
         />
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
@@ -1011,7 +1029,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
           readOnly={tecnicoSoloLectura}
-          puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+          puedeTomar={puedeTomarOrden}
           onTomar={handleTomarOrden}
         />
         {(orden as any).recibidoPor && (
@@ -1302,6 +1320,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             onUpdateEstado={handleUpdateEstado}
             esRetiro={isRetiro}
             onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
+            accionPrincipal={accionEstadoPrincipal}
+            soloLectura={!acciones.puedeCambiarEstado}
           />
 
           {/* Link de Seguimiento */}
@@ -1342,7 +1362,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
             readOnly={tecnicoSoloLectura}
-            puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+            puedeTomar={puedeTomarOrden}
             onTomar={handleTomarOrden}
           />
           {(orden as any).recibidoPor && (
@@ -1543,24 +1563,27 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Mobile: la acción principal siempre a mano, sobre la barra de navegación */}
-      {(accionPrincipal || mostrarCobrar) && (
+      {accionPrincipal && (
         <FormActionBar alwaysSticky className="lg:hidden">
-          {mostrarCobrar && (
-            <Button
-              variant={accionPrincipal ? "outline" : "default"}
-              className="flex-1"
-              onClick={() => setShowCobrarDialog(true)}
-            >
+          {acciones.cobrarSecundario && (
+            <Button variant="outline" className="h-11 flex-1" onClick={() => setShowCobrarDialog(true)}>
               <DollarSign className="h-4 w-4 mr-2" />
               Cobrar {formatPrice(saldoPendiente)}
             </Button>
           )}
-          {accionPrincipal && (
-            <Button className="flex-1" onClick={() => handleUpdateEstado(accionPrincipal.estado)} disabled={updating}>
-              {accionPrincipal.label}
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          )}
+          <Button className="h-11 flex-1" onClick={ejecutarAccionPrincipal} loading={updating && accionPrincipal.tipo !== "cobrar"}>
+            {accionPrincipal.tipo === "cobrar" ? (
+              <>
+                <DollarSign className="h-4 w-4 mr-2" />
+                Cobrar {formatPrice(saldoPendiente)}
+              </>
+            ) : (
+              <>
+                {accionPrincipal.label}
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </>
+            )}
+          </Button>
         </FormActionBar>
       )}
     </div>
