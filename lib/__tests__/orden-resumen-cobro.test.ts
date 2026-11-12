@@ -5,6 +5,12 @@ import { pendienteOrden } from "@/lib/ordenes/pendiente"
 const base = { estado: "REPARADO", costoFinal: 1000, descuentoCobro: 0, totalCobrado: 0, aplicadoNotasCredito: 0 }
 
 describe("resumenCobroOrden", () => {
+  it("con costo final y saldo: debe el pendiente (descuento y NC restan)", () => {
+    expect(
+      resumenCobroOrden({ ...base, costoFinal: 10000, totalCobrado: 3000, descuentoCobro: 500, aplicadoNotasCredito: 1500 })
+    ).toEqual({ estadoPago: "PARCIAL", saldoPendiente: 5000 })
+  })
+
   it("sin nada cobrado: sin cobrar y debe el total", () => {
     expect(resumenCobroOrden(base)).toEqual({ estadoPago: "SIN_COBRAR", saldoPendiente: 1000 })
   })
@@ -28,7 +34,7 @@ describe("resumenCobroOrden", () => {
     expect(resumenCobroOrden({ ...base, totalCobrado: 1200 })).toEqual({ estadoPago: "PAGADO", saldoPendiente: 0 })
   })
 
-  it("redondea a centavos (sin residuos de coma flotante)", () => {
+  it("redondea a centavos: los residuos de coma flotante no dejan un Debe $0", () => {
     expect(resumenCobroOrden({ ...base, costoFinal: 0.3, totalCobrado: 0.1 + 0.2 })).toEqual({
       estadoPago: "PAGADO",
       saldoPendiente: 0,
@@ -36,10 +42,24 @@ describe("resumenCobroOrden", () => {
     expect(resumenCobroOrden({ ...base, costoFinal: 100.1, totalCobrado: 50.05 }).saldoPendiente).toBe(50.05)
   })
 
-  it("cancelada, sin reparación o entregada sin cobro: sin cargo, aunque tenga costo", () => {
-    for (const estado of ["CANCELADO", "SIN_REPARACION", "ENTREGADO_SIN_COBRO"]) {
-      expect(resumenCobroOrden({ ...base, estado })).toEqual({ estadoPago: "SIN_CARGO", saldoPendiente: 0 })
+  it("cancelada o sin reparación: nada que mostrar, aunque tenga costo", () => {
+    for (const estado of ["CANCELADO", "SIN_REPARACION"]) {
+      expect(resumenCobroOrden({ ...base, estado })).toEqual({ estadoPago: null, saldoPendiente: 0 })
     }
+  })
+
+  it("entregada sin cobro: sin cargo, aunque tenga costo", () => {
+    expect(resumenCobroOrden({ ...base, estado: "ENTREGADO_SIN_COBRO", costoFinal: 5000 })).toEqual({
+      estadoPago: "SIN_CARGO",
+      saldoPendiente: 0,
+    })
+  })
+
+  it("retirada sin reparación con costo (diagnóstico): se cobra como cualquier otra, igual que cobroPendiente=true y el detalle", () => {
+    expect(resumenCobroOrden({ ...base, estado: "ENTREGADO_SIN_REPARACION", costoFinal: 5000 })).toEqual({
+      estadoPago: "SIN_COBRAR",
+      saldoPendiente: 5000,
+    })
   })
 
   it("costo final 0 o descontado entero: sin cargo", () => {
@@ -51,6 +71,13 @@ describe("resumenCobroOrden", () => {
     expect(resumenCobroOrden({ ...base, estado: "EN_REPARACION", costoFinal: null, totalCobrado: 500 })).toEqual({
       estadoPago: "SENA",
       saldoPendiente: 0,
+      montoEstado: 500,
+    })
+    // Seña cargada en la orden pero todavía fuera de total_cobrado (órdenes viejas).
+    expect(resumenCobroOrden({ ...base, estado: "EN_REPARACION", costoFinal: null, sena: 2000 })).toEqual({
+      estadoPago: "SENA",
+      saldoPendiente: 0,
+      montoEstado: 2000,
     })
     expect(resumenCobroOrden({ ...base, estado: "RECIBIDO", costoFinal: null })).toEqual({
       estadoPago: null,
@@ -91,7 +118,7 @@ describe("aplicarCargosCuentaCorriente", () => {
     expect(aplicarCargosCuentaCorriente(conSaldo, [{ monto: "800.00", revertido_at: null }])).toEqual({
       estadoPago: "CUENTA_CORRIENTE",
       saldoPendiente: 0,
-      montoCuentaCorriente: 800,
+      montoEstado: 800,
     })
   })
 
@@ -108,7 +135,7 @@ describe("aplicarCargosCuentaCorriente", () => {
         { monto: 800, revertido_at: "2026-11-01T00:00:00Z" },
         { monto: 750, revertido_at: null },
       ])
-    ).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", montoCuentaCorriente: 750 })
+    ).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", montoEstado: 750 })
   })
 
   it("sin cargos o sin saldo no cambia nada", () => {

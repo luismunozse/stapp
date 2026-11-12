@@ -10,8 +10,9 @@ import { OrdenDetail } from "@/components/ordenes/orden-detail"
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
 }))
+let sessionUser: Record<string, unknown> = { id: "u-admin", role: "ADMIN", organizationId: "org-1", name: "Ana" }
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { role: "ADMIN", organizationId: "org-1", name: "Ana" } } }),
+  useSession: () => ({ data: { user: sessionUser } }),
 }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({
@@ -77,6 +78,7 @@ let orden: Record<string, unknown> = BASE
 beforeEach(() => {
   vi.clearAllMocks()
   orden = BASE
+  sessionUser = { id: "u-admin", role: "ADMIN", organizationId: "org-1", name: "Ana" }
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
@@ -113,5 +115,29 @@ describe("OrdenDetail: encabezado y barra de acción", () => {
     render(<OrdenDetail ordenId="ord-1" />)
     await screen.findByText("Pagado")
     expect(screen.queryByRole("button", { name: /^Entregar/ })).not.toBeInTheDocument()
+  })
+
+  it("una orden entregada con saldo ofrece Cobrar como acción principal", async () => {
+    orden = { ...BASE, estado: "ENTREGADO" }
+    render(<OrdenDetail ordenId="ord-1" />)
+    expect(await screen.findByRole("button", { name: /Cobrar \$10000/ })).toBeInTheDocument()
+  })
+
+  it("un técnico sin la orden asignada que puede tomarla ve 'Tomar orden' en la barra", async () => {
+    sessionUser = { id: "u-tec", role: "TECNICO", organizationId: "org-1", name: "Tito" }
+    orden = { ...BASE, estado: "RECIBIDO", tecnicoId: null, puedeTomar: true }
+    render(<OrdenDetail ordenId="ord-1" />)
+    expect(await screen.findByRole("button", { name: "Tomar orden" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Empezar diagnóstico/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Cobrar/ })).not.toBeInTheDocument()
+  })
+
+  it("al técnico asignado no se le empuja la entrega ni el cobro", async () => {
+    sessionUser = { id: "u-tec", role: "TECNICO", organizationId: "org-1", name: "Tito" }
+    orden = { ...BASE, tecnicoId: "u-tec" }
+    render(<OrdenDetail ordenId="ord-1" />)
+    await screen.findByText("Saldo $10000")
+    expect(screen.queryByRole("button", { name: /^Entregar/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Cobrar/ })).not.toBeInTheDocument()
   })
 })

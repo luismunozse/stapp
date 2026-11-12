@@ -43,6 +43,7 @@ const MANEJADORES_ESPERADOS = [
   "[id]/fotos#GET",
   "[id]/fotos#POST",
   "[id]/fotos/[fotoId]#GET",
+  "[id]/informe#GET",
   "[id]/notas-credito#GET",
   "[id]/pdf#GET",
   "[id]/reingreso#POST",

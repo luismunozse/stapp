@@ -10,8 +10,11 @@ interface CobroResumenProps {
   estadoPago: string | null | undefined
   /** Lo que falta cobrar. Con 0 o sin valor no se muestra "Debe". */
   saldoPendiente?: number | null
-  /** Deuda que ya pasó a la cuenta corriente del cliente: se muestra sin "Debe" (se cobra desde ahí). */
-  montoCuentaCorriente?: number | null
+  /**
+   * Monto que acompaña a la píldora cuando no hay "Debe": la seña, o la deuda
+   * que ya pasó a la cuenta corriente del cliente (se cobra desde ahí).
+   */
+  montoEstado?: number | null
   /** `stack`: píldora arriba y saldo abajo (tabla). `inline`: en una línea (tarjeta mobile). */
   layout?: "stack" | "inline"
   className?: string
@@ -24,7 +27,7 @@ interface CobroResumenProps {
 export function CobroResumen({
   estadoPago,
   saldoPendiente,
-  montoCuentaCorriente,
+  montoEstado,
   layout = "stack",
   className,
 }: CobroResumenProps) {
@@ -36,7 +39,7 @@ export function CobroResumen({
 
   const ui = getEstadoPagoUi(estadoPago)
   const saldo = Number(saldoPendiente ?? 0)
-  const enCuentaCorriente = Number(montoCuentaCorriente ?? 0)
+  const monto = Number(montoEstado ?? 0)
 
   return (
     <div
@@ -54,8 +57,8 @@ export function CobroResumen({
           Debe {formatPrice(saldo)}
         </span>
       )}
-      {saldo <= 0 && enCuentaCorriente > 0 && (
-        <span className="text-xs text-muted-foreground tabular-nums">{formatPrice(enCuentaCorriente)}</span>
+      {saldo <= 0 && monto > 0 && (
+        <span className="text-xs text-muted-foreground tabular-nums">{formatPrice(monto)}</span>
       )}
     </div>
   )

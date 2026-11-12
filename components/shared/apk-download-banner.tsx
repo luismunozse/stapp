@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { isNativePlatform } from "@/lib/capacitor"
 import { inscripcionSchema, type Inscripcion } from "@/lib/android-beta"
+import { useCapaPrioritaria } from "@/hooks/use-capa-prioritaria"
 
 // Clave nueva a propósito: quien cerró el viejo aviso de "Descargar APK" tiene
 // que ver este, que dice otra cosa.
@@ -40,6 +41,15 @@ function cerradoRecientemente(key: string): boolean {
   }
 }
 
+// Debajo de `lg` (1024px), donde se ve la variante "top".
+function esViewportMovil(): boolean {
+  try {
+    return window.matchMedia("(max-width: 1023.98px)").matches
+  } catch {
+    return false
+  }
+}
+
 // Banner de la beta de Android. Conserva el nombre del archivo y del
 // componente: lo montan el layout del panel (variant "top") y el navbar
 // (variant "sidebar"), y varios tests los mockean por esa ruta.
@@ -52,6 +62,8 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
   const [email, setEmail] = useState("")
   const [enviando, setEnviando] = useState(false)
   const [errorForm, setErrorForm] = useState<string | null>(null)
+  // La variante "top" es lg:hidden: en desktop no se ve, así que no compite.
+  const [esMovil, setEsMovil] = useState(false)
 
   useEffect(() => {
     // En la app nativa no se muestra ni se consulta. Fuera de ella se consulta
@@ -65,6 +77,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
       agregado: cerradoRecientemente(DISMISS_KEY_AGREGADO),
     })
     setHabilitado(true)
+    setEsMovil(esViewportMovil())
 
     let cancelado = false
     fetch(BETA_ENDPOINT)
@@ -81,14 +94,22 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
     }
   }, [])
 
-  if (!habilitado || lectura.status !== "ready") return null
-
   // DESCARTADO se trata como si nunca se hubiera anotado.
   const inscripcion =
-    lectura.inscripcion && lectura.inscripcion.estado !== "DESCARTADO" ? lectura.inscripcion : null
+    lectura.status === "ready" && lectura.inscripcion && lectura.inscripcion.estado !== "DESCARTADO"
+      ? lectura.inscripcion
+      : null
   const esAgregado = inscripcion?.estado === "AGREGADO"
+  const visible =
+    habilitado && lectura.status === "ready" && !(esAgregado ? cerrado.agregado : cerrado.general)
 
-  if (esAgregado ? cerrado.agregado : cerrado.general) return null
+  // El aviso flotante de arriba es una capa de primer ingreso: compite con el
+  // tour y los modales (auditoría UX §5.1). El del menú lateral es contenido
+  // fijo del sidebar y no compite.
+  const permitidoTop = useCapaPrioritaria("apk-beta", variant === "top" && visible && esMovil)
+
+  if (!visible) return null
+  if (variant === "top" && !permitidoTop) return null
 
   const handleDismiss = () => {
     try {

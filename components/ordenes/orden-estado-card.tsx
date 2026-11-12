@@ -10,7 +10,7 @@ import { Clock, AlertTriangle, Timer, Pencil, ArrowRight, ChevronDown } from "lu
 import { useCurrency } from "@/contexts/currency-context"
 import { todayInTimeZone } from "@/lib/timezone"
 import { getTransicionesPosibles, ESTADO_LABELS } from "@/lib/orden-state-machine"
-import { siguienteEstado } from "@/lib/ordenes/siguiente-estado"
+import { siguienteEstado, type AccionEstado } from "@/lib/ordenes/siguiente-estado"
 import type { EstadoOrden } from "@/types"
 
 interface OrdenEstadoCardProps {
@@ -23,6 +23,14 @@ interface OrdenEstadoCardProps {
   esRetiro?: boolean
   /** Persists the promised date (YYYY-MM-DD, or null to clear). Resolves true on success. */
   onUpdateFechaPrometida?: (fecha: string | null) => Promise<boolean>
+  /**
+   * El paso que la ficha empuja (sale de `accionPrincipalOrden`, según estado y
+   * rol). null: ninguno, todo queda en "Cambiar estado…". Sin pasarlo, el paso
+   * siguiente del estado.
+   */
+  accionPrincipal?: AccionEstado | null
+  /** Quien mira no puede cambiar el estado (técnico sin la orden asignada). */
+  soloLectura?: boolean
 }
 
 function ElapsedTime({ since }: { since: string | Date }) {
@@ -52,6 +60,8 @@ export function OrdenEstadoCard({
   onUpdateEstado,
   esRetiro = false,
   onUpdateFechaPrometida,
+  accionPrincipal: accionPrincipalProp,
+  soloLectura = false,
 }: OrdenEstadoCardProps) {
   const { formatDate, timezone } = useCurrency()
   const [editingFecha, setEditingFecha] = useState(false)
@@ -61,7 +71,7 @@ export function OrdenEstadoCard({
 
   const transicionesPosibles = getTransicionesPosibles(estado)
   const esTerminal = transicionesPosibles.length === 0
-  const accionPrincipal = siguienteEstado(estado)
+  const accionPrincipal = accionPrincipalProp === undefined ? siguienteEstado(estado) : accionPrincipalProp
   const otrasTransiciones = transicionesPosibles.filter((t) => t !== accionPrincipal?.estado)
 
   const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
@@ -95,7 +105,7 @@ export function OrdenEstadoCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {esTerminal ? (
+        {esTerminal || soloLectura ? (
           <div className={`text-sm font-medium text-center py-2 px-3 rounded-md ${esRetiro ? "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800" : "bg-muted"}`}>
             {esRetiro ? "Retirado sin reparación" : ESTADO_LABELS[estado]}
           </div>
@@ -105,6 +115,7 @@ export function OrdenEstadoCard({
               <Button
                 className="w-full"
                 size="lg"
+                loading={updating}
                 onClick={() => onUpdateEstado(accionPrincipal.estado)}
                 disabled={updating}
               >
@@ -115,7 +126,7 @@ export function OrdenEstadoCard({
             {otrasTransiciones.length > 0 && (
               <Popover open={menuAbierto} onOpenChange={setMenuAbierto}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-full" disabled={updating}>
+                  <Button variant="outline" className="w-full h-11" disabled={updating}>
                     {accionPrincipal ? "Más estados…" : "Cambiar estado…"}
                     <ChevronDown className="h-4 w-4 ml-2" />
                   </Button>

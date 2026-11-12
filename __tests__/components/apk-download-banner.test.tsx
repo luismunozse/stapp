@@ -3,6 +3,9 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 
 const native = vi.hoisted(() => ({ value: false }))
 vi.mock("@/lib/capacitor", () => ({ isNativePlatform: () => native.value }))
+// El orquestador de primer ingreso tiene sus propios tests; acá siempre le da
+// el turno al banner para probar solo su lógica.
+vi.mock("@/hooks/use-capa-prioritaria", () => ({ useCapaPrioritaria: () => true }))
 
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 

@@ -174,6 +174,16 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
 
   const handleBulkEstado = async (nuevoEstado: EstadoOrden) => {
     if (selectedIds.size === 0) return
+    // Un cambio masivo toca N órdenes de una y cada una puede avisarle a su
+    // cliente: se confirma antes, con la cantidad y el estado a la vista.
+    const n = selectedIds.size
+    const confirmado = await confirm({
+      title: `Cambiar ${n} ${n === 1 ? "orden" : "órdenes"} a ${getEstadoOrdenLabel(nuevoEstado)}`,
+      description: `Se va a cambiar el estado de ${n === 1 ? "la orden seleccionada" : `las ${n} órdenes seleccionadas`}. Si tenés los avisos automáticos activos, cada cliente recibe la notificación del cambio.`,
+      confirmText: "Cambiar estado",
+      cancelText: "Cancelar",
+    })
+    if (!confirmado) return
     setBulkUpdating(true)
     try {
       // El endpoint expone PUT, no PATCH: con PATCH todas las requests devolvían
@@ -642,9 +652,10 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       key: "cobro",
       header: "Cobro",
       sortable: false,
+      hideOnMobile: true,
       className: "min-w-[120px]",
       render: (orden) => (
-        <CobroResumen estadoPago={orden.estadoPago} saldoPendiente={orden.saldoPendiente} montoCuentaCorriente={orden.montoCuentaCorriente} />
+        <CobroResumen estadoPago={orden.estadoPago} saldoPendiente={orden.saldoPendiente} montoEstado={orden.montoEstado} />
       ),
     },
     {

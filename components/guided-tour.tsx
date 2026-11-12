@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useCallback, useRef } from "react"
+import { useEffect, useCallback, useRef, useState } from "react"
 import { driver } from "driver.js"
 import "driver.js/dist/driver.css"
 import { tourSteps, TOUR_STORAGE_KEY } from "@/lib/tour-config"
+import { useCapaPrioritaria } from "@/hooks/use-capa-prioritaria"
 
 export function GuidedTour() {
   const hasStarted = useRef(false)
@@ -32,24 +33,36 @@ export function GuidedTour() {
     driverObj.drive()
   }, [])
 
-  // Auto-iniciar el tour la primera vez
-  useEffect(() => {
-    if (hasStarted.current) return
-    hasStarted.current = true
+  // Se postula al orquestador recién cuando sabe que puede arrancar: no lo
+  // completó y el sidebar ya está en el DOM. Así no gana la sesión un tour
+  // que después no se puede mostrar.
+  const [listo, setListo] = useState(false)
+  // Una sola capa de primer ingreso por sesión (auditoría UX §5.1).
+  const permitido = useCapaPrioritaria("tour", listo)
 
-    const completed = localStorage.getItem(TOUR_STORAGE_KEY)
+  useEffect(() => {
+    let completed: string | null = null
+    try {
+      completed = localStorage.getItem(TOUR_STORAGE_KEY)
+    } catch {
+      // sin storage: se trata como no completado
+    }
     if (completed) return
 
     // Esperar a que el sidebar se renderice
     const timeout = setTimeout(() => {
-      const firstStep = document.querySelector("#nav-dashboard")
-      if (firstStep) {
-        startTour()
-      }
+      if (document.querySelector("#nav-dashboard")) setListo(true)
     }, 800)
 
     return () => clearTimeout(timeout)
-  }, [startTour])
+  }, [])
+
+  // Auto-iniciar el tour la primera vez, si el orquestador le dio el turno
+  useEffect(() => {
+    if (!permitido || hasStarted.current) return
+    hasStarted.current = true
+    startTour()
+  }, [permitido, startTour])
 
   // Escuchar evento custom para relanzar el tour desde el navbar
   useEffect(() => {

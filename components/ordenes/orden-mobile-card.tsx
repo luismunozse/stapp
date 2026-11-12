@@ -36,7 +36,17 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
             </span>
             {orden.esPractica && <PracticaBadge conAviso />}
           </div>
-          <OrderStatusBadge status={orden.estado} showIcon />
+          <div className="flex flex-col items-end gap-1">
+            <OrderStatusBadge status={orden.estado} showIcon />
+            {orden.estadoPago && (
+              <CobroResumen
+                estadoPago={orden.estadoPago}
+                saldoPendiente={orden.saldoPendiente}
+                montoEstado={orden.montoEstado}
+                className="items-end"
+              />
+            )}
+          </div>
         </div>
 
         {/* Info */}
@@ -55,15 +65,6 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
               {orden.marca && ` \u2022 ${orden.marca}`}
             </span>
           </div>
-
-          {orden.estadoPago && (
-            <CobroResumen
-              estadoPago={orden.estadoPago}
-              saldoPendiente={orden.saldoPendiente}
-              montoCuentaCorriente={orden.montoCuentaCorriente}
-              layout="inline"
-            />
-          )}
 
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
             <div className="flex items-center gap-1">

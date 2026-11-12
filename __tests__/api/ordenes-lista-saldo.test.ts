@@ -110,7 +110,7 @@ describe("GET /api/ordenes — estado de cobro y saldo por fila", () => {
     const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/ordenes")))
 
     const porId = Object.fromEntries(body.data.map((o: any) => [o.id, o]))
-    expect(porId.o1).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", saldoPendiente: 0, montoCuentaCorriente: 800 })
+    expect(porId.o1).toMatchObject({ estadoPago: "CUENTA_CORRIENTE", saldoPendiente: 0, montoEstado: 800 })
     expect(porId.o2).toMatchObject({ estadoPago: "SIN_COBRAR", saldoPendiente: 500 })
     expect(porId.o3).toMatchObject({ estadoPago: "SIN_CARGO", saldoPendiente: 0 })
     expect(porId.o4).toMatchObject({ estadoPago: "PAGADO", saldoPendiente: 0 })
