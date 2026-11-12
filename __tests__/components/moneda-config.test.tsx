@@ -121,9 +121,22 @@ describe("MonedaConfig", () => {
       habilitada: true,
       monedaExtranjera: "USD",
       fuente: "MANUAL",
-      tipoCambioManual: "1300,5",
+      tipoCambioManual: "1300.5",
       redondeoConversion: 10,
     })
+  })
+
+  it("re-saves an untouched manual rate in the format the server accepts", async () => {
+    setup({ fuente: "MANUAL", tipoCambioManual: 1250.5 }, null, { ...VIVO, fuente: "MANUAL" })
+    await renderScreen()
+    expect(await screen.findByLabelText("Cotización manual")).toHaveValue("1250,5")
+    fireEvent.change(screen.getByLabelText("Redondeo de la conversión"), { target: { value: "100" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    const body = JSON.parse(puts()[0][1].body)
+    expect(body.tipoCambioManual).toBe("1250.5")
+    expect(body.redondeoConversion).toBe(100)
   })
 
   it("shows the current rate as a chip", async () => {

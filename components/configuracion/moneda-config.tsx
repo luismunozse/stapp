@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useMoneda } from "@/hooks/use-moneda"
 import { formatCurrencyValue } from "@/lib/currency"
+import { normalizarNumeroAR } from "@/lib/currency/numero-ar"
 import { fuentesPara, type ConfigMoneda, type FuenteTipoCambio } from "@/lib/currency/config-moneda"
 import type { MonedaExtranjera } from "@/lib/currency/convert"
 import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
@@ -128,7 +129,10 @@ export function MonedaConfig({ allowEdit }: { allowEdit: boolean }) {
   }
 
   const disabled = !allowEdit || saving
-  const patch = (changes: Partial<Draft>) => setDraft({ ...draft, ...changes })
+  const patch = (changes: Partial<Draft>) => {
+    setError(null)
+    setDraft({ ...draft, ...changes })
+  }
   const opciones = opcionesDeFuente(config, draft.monedaExtranjera)
   const preciosEnDivisa = itemsEnDivisa ? itemsEnDivisa.inventario + itemsEnDivisa.servicios : 0
   const apagando = config.habilitada && !draft.habilitada && preciosEnDivisa > 0
@@ -151,7 +155,10 @@ export function MonedaConfig({ allowEdit }: { allowEdit: boolean }) {
           habilitada: draft.habilitada,
           monedaExtranjera: draft.monedaExtranjera,
           fuente: draft.fuente,
-          tipoCambioManual: draft.fuente === "MANUAL" && draft.tipoCambioManual.trim() !== "" ? draft.tipoCambioManual.trim() : null,
+          tipoCambioManual:
+            draft.fuente === "MANUAL" && draft.tipoCambioManual.trim() !== ""
+              ? normalizarNumeroAR(draft.tipoCambioManual)
+              : null,
           redondeoConversion: draft.redondeoConversion,
         }),
       })
