@@ -17,6 +17,7 @@ import { useModal } from "@/contexts/modal-context"
 import { MonedaConfig } from "@/components/configuracion/moneda-config"
 import { ComisionesConfig } from "@/components/configuracion/comisiones-config"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
+import { DanosConfig } from "@/components/configuracion/danos-config"
 import { GarantiasConfig, type GarantiasConfigValor } from "@/components/configuracion/garantias-config"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
@@ -104,6 +105,10 @@ export function ConfiguracionForm({
   // Lo último que confirmó el servidor (JSON). null = no se pudo leer: no se
   // guarda (pisaría lo guardado con los valores de arriba). Igual = sin cambios.
   const garantiasConfigGuardada = useRef<string | null>(null)
+  // Estado físico obligatorio al crear una orden (408): va a /api/configuracion/danos.
+  // Mismo criterio que garantías: null = no se pudo leer, no se guarda.
+  const [danosObligatorio, setDanosObligatorio] = useState(false)
+  const danosObligatorioGuardado = useRef<boolean | null>(null)
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
@@ -222,6 +227,39 @@ export function ConfiguracionForm({
     }
   }
 
+  const fetchDanosConfig = async () => {
+    try {
+      const res = await fetch("/api/configuracion/danos")
+      if (!res.ok) return
+      const data = await res.json()
+      const valor = data.obligatorio === true
+      setDanosObligatorio(valor)
+      danosObligatorioGuardado.current = valor
+    } catch (error) {
+      console.error("Error fetching daños config:", error)
+    }
+  }
+
+  /** Guarda "exigir estado físico". Devuelve el error para mostrar, o null. */
+  const saveDanosConfig = async (): Promise<string | null> => {
+    if (danosObligatorioGuardado.current === null) return null
+    if (danosObligatorioGuardado.current === danosObligatorio) return null
+    try {
+      const res = await fetch("/api/configuracion/danos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ obligatorio: danosObligatorio }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        return data?.error || "No se pudo guardar la configuración del estado físico"
+      }
+      return null
+    } catch {
+      return "No se pudo guardar la configuración del estado físico"
+    }
+  }
+
   useEffect(() => {
     fetchConfig()
   }, [])
@@ -230,6 +268,7 @@ export function ConfiguracionForm({
     const epochAlIniciar = facturacionEpoch.current
     // Términos, ventana y aviso de garantías: endpoint propio, en paralelo.
     void fetchGarantiasConfig()
+    void fetchDanosConfig()
     try {
       const res = await fetch("/api/configuracion")
       if (res.ok) {
@@ -432,8 +471,9 @@ export function ConfiguracionForm({
 
       if (res.ok) {
         const errorGarantias = await saveGarantiasConfig()
-        if (errorGarantias) {
-          setMessage({ type: "error", text: errorGarantias })
+        const errorDanos = await saveDanosConfig()
+        if (errorGarantias || errorDanos) {
+          setMessage({ type: "error", text: errorGarantias || errorDanos! })
         } else {
           setMessage({ type: "success", text: "Configuración guardada exitosamente" })
         }
@@ -1250,6 +1290,8 @@ export function ConfiguracionForm({
           </Card>
 
           <GarantiasConfig valor={garantiasConfig} onChange={setGarantiasConfig} allowEdit={allowEdit} />
+
+          <DanosConfig obligatorio={danosObligatorio} onChange={setDanosObligatorio} allowEdit={allowEdit} />
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
