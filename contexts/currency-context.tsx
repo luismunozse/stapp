@@ -25,6 +25,8 @@ interface CurrencyContextType {
   terminologia: Terminologia
   /** Hoja en la que la organización imprime las órdenes (A4 si el servidor no la informa). */
   ordenFormatoPapel: OrdenPapel
+  /** La organización exige marcar el estado físico al recibir un equipo (false si el servidor no lo informa). */
+  danosRecepcionObligatorio: boolean
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
@@ -39,6 +41,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   organizationName: "",
   terminologia: resolveTerminologia(null),
   ordenFormatoPapel: ORDEN_PAPEL_DEFAULT,
+  danosRecepcionObligatorio: false,
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
@@ -53,6 +56,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [organizationName, setOrganizationName] = useState<string>("")
   const [terminologia, setTerminologia] = useState<Terminologia>(resolveTerminologia(null))
   const [ordenFormatoPapel, setOrdenFormatoPapel] = useState<OrdenPapel>(ORDEN_PAPEL_DEFAULT)
+  const [danosRecepcionObligatorio, setDanosRecepcionObligatorio] = useState(false)
   const [configVersion, setConfigVersion] = useState(0)
   const refreshConfig = useCallback(() => setConfigVersion((v) => v + 1), [])
 
@@ -86,6 +90,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
           setTerminologia(data.terminologia as Terminologia)
         }
         setOrdenFormatoPapel(normalizeOrdenPapel(data.ordenFormatoPapel))
+        setDanosRecepcionObligatorio(data.danosRecepcionObligatorio === true)
       } catch (error) {
         if (controller.signal.aborted) return
         if (error instanceof SyntaxError) return
@@ -121,7 +126,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, ordenFormatoPapel, formatPrice, formatDate, formatDateTime, refreshConfig }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, ordenFormatoPapel, danosRecepcionObligatorio, formatPrice, formatDate, formatDateTime, refreshConfig }}>
       {children}
     </CurrencyContext.Provider>
   )
