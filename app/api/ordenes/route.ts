@@ -613,11 +613,18 @@ export async function POST(request: Request) {
         if (danosObligatorios) {
           // Compensación: se borra la orden (los hijos caen en cascada). Puede dejar un hueco
           // en la numeración, lo cual el spec acepta.
-          await supabaseAdmin
+          const { error: compensacionError } = await supabaseAdmin
             .from("ordenes_servicio")
             .delete()
             .eq("id", orden.id)
             .eq("organization_id", organizationId!)
+          if (compensacionError) {
+            console.error("Error borrando la orden tras fallar el estado físico:", {
+              ordenId: orden.id,
+              organizationId,
+              error: compensacionError,
+            })
+          }
           const { status, error: mensaje } = mensajeErrorDanos(danosError)
           return NextResponse.json({ error: mensaje }, { status })
         }

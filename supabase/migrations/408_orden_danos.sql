@@ -216,7 +216,7 @@ BEGIN
 
   INSERT INTO orden_danos (organization_id, orden_id, diagrama, vista, x, y, tipo, nota, momento, created_by)
   SELECT p_organization_id, p_orden_id, e.el->>'diagrama', e.el->>'vista', (e.el->>'x')::numeric, (e.el->>'y')::numeric,
-         e.el->>'tipo', e.el->>'nota', 'recepcion', p_user_id
+         e.el->>'tipo', NULLIF(btrim(e.el->>'nota'), ''), 'recepcion', p_user_id
     FROM jsonb_array_elements(v_danos) WITH ORDINALITY AS e(el, ord)
    ORDER BY e.ord;
   GET DIAGNOSTICS v_insertados = ROW_COUNT;

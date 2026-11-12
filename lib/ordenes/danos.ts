@@ -78,7 +78,10 @@ const ERRORES_DANOS: Array<[string, { status: 404 | 409 | 422; error: string }]>
   ["DANOS_LIMITE", { status: 422, error: `Máximo ${MAX_DANOS_POR_ORDEN} daños por orden` }],
 ]
 
-export function mensajeErrorDanos(err: unknown): { status: 404 | 409 | 422 | 500; error: string } {
+export function mensajeErrorDanos(
+  err: unknown,
+  accion: "guardar" | "quitar" = "guardar",
+): { status: 404 | 409 | 422 | 500; error: string } {
   const message =
     err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
       ? (err as { message: string }).message
@@ -86,5 +89,8 @@ export function mensajeErrorDanos(err: unknown): { status: 404 | 409 | 422 | 500
   for (const [token, res] of ERRORES_DANOS) {
     if (message.includes(token)) return res
   }
-  return { status: 500, error: "No se pudo guardar el estado físico" }
+  return {
+    status: 500,
+    error: accion === "quitar" ? "No pudimos quitar el daño. Probá de nuevo." : "No se pudo guardar el estado físico",
+  }
 }

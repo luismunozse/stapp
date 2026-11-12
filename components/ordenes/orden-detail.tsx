@@ -72,6 +72,7 @@ import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-pape
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenAvances } from "@/components/ordenes/orden-avances"
 import { EstadoFisicoCard } from "@/components/ordenes/danos/estado-fisico-card"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
 import { accionPrincipalOrden } from "@/lib/ordenes/accion-principal"
@@ -320,6 +321,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   useEffect(() => {
     fetchOrden()
   }, [ordenId, fetchOrden])
+
+  // Estado físico que la tarjeta ya cargó: lo usa el ticket térmico reimpreso desde aquí.
+  const [estadoFisicoTicket, setEstadoFisicoTicket] = useState<EstadoFisicoPDF | null>(null)
 
   // Who can be assigned is decided by the branch that handles the order (BM-4), not
   // by the viewer's, so the list waits for the order and follows its branch.
@@ -866,7 +870,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             orgDefault={ordenPapel.orgDefault}
             disabled={downloadingPdf || printingPdf}
           />
-          <ThermalPrintOrden orden={orden as any} />
+          <ThermalPrintOrden orden={{ ...(orden as any), estadoFisico: estadoFisicoTicket }} />
           <select
             value={etiquetaSize}
             onChange={(e) => {
@@ -1253,7 +1257,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           </Card>
 
           {/* Estado físico: daños al recibir (firmados) y detectados en diagnóstico */}
-          <EstadoFisicoCard ordenId={ordenId} estado={orden.estado} />
+          <EstadoFisicoCard ordenId={ordenId} estado={orden.estado} onCargado={setEstadoFisicoTicket} />
 
           {/* Tabs: Repuestos, Fotos, Checklist, Cotizaciones, Historial */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>

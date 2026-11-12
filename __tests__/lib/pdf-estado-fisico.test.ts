@@ -108,3 +108,32 @@ describe("generateOrdenPDF con estadoFisico", () => {
     expect(r.texto).toContain("Estado físico al ingreso")
   })
 })
+
+describe("generateOrdenPDF A5/A6 con estadoFisico (hoja de recepción)", () => {
+  const imprimirCompacto = async (paperSize: "A5" | "A6", extra: Record<string, unknown>) => {
+    const { generateOrdenPDF } = await import("@/lib/pdf")
+    const { buildOrdenFixture } = await import("./orden-fixture")
+    const { extractPdfText } = await import("./pdf-text-helper")
+    const buf = await generateOrdenPDF({ ...buildOrdenFixture(), paperSize, ...extra } as never)
+    return extractPdfText(buf)
+  }
+
+  for (const papel of ["A5", "A6"] as const) {
+    it(`${papel} con pins imprime la lista de recepción y la de diagnóstico`, async () => {
+      const texto = await imprimirCompacto(papel, { estadoFisico: base })
+      expect(texto.toLowerCase()).toContain("estado físico al ingreso")
+      expect(texto).toContain("Golpe (frente)")
+      expect(texto).toContain("Rayón (dorso)")
+      expect(texto).toContain("Detectados en diagnóstico")
+      expect(texto).toContain("Rotura (frente)")
+    })
+    it(`${papel} sin daños imprime la línea corta`, async () => {
+      const texto = await imprimirCompacto(papel, { estadoFisico: { diagrama: "celular@1", sinDanos: true, danos: [] } })
+      expect(texto).toContain("Sin daños visibles al ingreso")
+    })
+    it(`${papel} sin estadoFisico no cambia la salida`, async () => {
+      const texto = await imprimirCompacto(papel, {})
+      expect(texto.toLowerCase()).not.toContain("estado físico al ingreso")
+    })
+  }
+})

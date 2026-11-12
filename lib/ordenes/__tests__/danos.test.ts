@@ -61,4 +61,8 @@ describe("mensajeErrorDanos", () => {
     expect(mensajeErrorDanos(new Error("boom"))).toEqual({ status: 500, error: "No se pudo guardar el estado físico" })
     expect(mensajeErrorDanos(null).status).toBe(500)
   })
+  it("el 500 de borrar habla de quitar, no de guardar", () => {
+    expect(mensajeErrorDanos(new Error("boom"), "quitar")).toEqual({ status: 500, error: "No pudimos quitar el daño. Probá de nuevo." })
+    expect(mensajeErrorDanos(e("DANOS_ORDEN_CERRADA"), "quitar")).toEqual({ status: 409, error: "La orden ya está cerrada" })
+  })
 })

@@ -29,7 +29,7 @@ export async function DELETE(
       .select("id")
 
     if (deleteError) {
-      const { status, error: mensaje } = mensajeErrorDanos(deleteError)
+      const { status, error: mensaje } = mensajeErrorDanos(deleteError, "quitar")
       if (status === 500) console.error("Error deleting order damage:", deleteError)
       return NextResponse.json({ error: mensaje }, { status })
     }

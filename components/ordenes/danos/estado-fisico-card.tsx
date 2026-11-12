@@ -8,12 +8,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DiagramaDanos, type PinVista } from "@/components/ordenes/danos/diagrama-danos"
 import { ListaDanos } from "@/components/ordenes/danos/lista-danos"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { VENTANA_BORRADO_DIAGNOSTICO_MS, type DanoInput, type DanoOrden } from "@/lib/ordenes/danos"
 
 interface Props {
   ordenId: string
   /** Estado de la orden: al cambiar (p. ej. por el polling del detalle) se vuelve a cargar la lista. */
   estado?: string
+  /** Avisa con el estado físico cargado (mismo formato que usa el PDF/ticket), p. ej. para reimprimir el ticket. */
+  onCargado?: (e: EstadoFisicoPDF) => void
 }
 
 interface RespuestaDanos {
@@ -32,7 +35,7 @@ async function mensajeDeError(res: Response, porDefecto: string) {
   }
 }
 
-export function EstadoFisicoCard({ ordenId, estado }: Props) {
+export function EstadoFisicoCard({ ordenId, estado, onCargado }: Props) {
   const [datos, setDatos] = useState<RespuestaDanos | null>(null)
   const [error, setError] = useState(false)
   const [malformado, setMalformado] = useState(false)
@@ -51,16 +54,18 @@ export function EstadoFisicoCard({ ordenId, estado }: Props) {
         return
       }
       setMalformado(false)
+      const sinDanos = json.sinDanos === true
       setDatos({
         danos: json.danos,
-        sinDanos: json.sinDanos === true,
+        sinDanos,
         diagrama: json.diagrama,
         puedeAgregar: json.puedeAgregar === true,
       })
+      onCargado?.({ diagrama: json.diagrama, sinDanos, danos: json.danos })
     } catch {
       setError(true)
     }
-  }, [base])
+  }, [base, onCargado])
 
   useEffect(() => {
     void cargar()
@@ -116,6 +121,7 @@ export function EstadoFisicoCard({ ordenId, estado }: Props) {
   const deRecepcion = pins.filter((p) => p.momento === "recepcion")
   const deDiagnostico = pins.filter((p) => p.momento === "diagnostico")
   const puedeBorrar = (p: PinVista) =>
+    datos.puedeAgregar &&
     p.momento === "diagnostico" &&
     !!p.createdAt &&
     Date.now() - new Date(p.createdAt).getTime() < VENTANA_BORRADO_DIAGNOSTICO_MS

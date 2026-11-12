@@ -74,4 +74,8 @@ describe("migración 408: orden_danos", () => {
     expect(SQL).toContain("NEW.created_at := now();")
     expect(SQL).toMatch(/NEW\.organization_id IS DISTINCT FROM v_org/)
   })
+
+  it("la nota de recepción se recorta y queda NULL si viene vacía", () => {
+    expect(SQL).toContain("NULLIF(btrim(e.el->>'nota'), '')")
+  })
 })
