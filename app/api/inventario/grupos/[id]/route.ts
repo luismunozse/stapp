@@ -19,6 +19,8 @@ import {
   type ContextoEventos,
 } from "@/lib/inventario-eventos"
 import { imagenRespaldoDe } from "@/lib/variantes"
+import { validarMonedaEscritura, type MonedaCatalogo } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { argumentosGuardarGrupo, compartidosDeFila, validarGuardarGrupo } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
@@ -26,6 +28,14 @@ type Contexto = { params: Promise<{ id: string }> }
 type Fila = Record<string, any>
 
 const GRUPO_NO_ENCONTRADO = "Grupo no encontrado"
+
+// Migration 408 raises this when items of different currencies end up in one group.
+const MONEDA_GRUPO_MIXTA = "MONEDA_GRUPO_MIXTA"
+const MENSAJE_MONEDA_MIXTA = "No se pueden agrupar productos con monedas distintas"
+const esMonedaMixta = (e: unknown) =>
+  !!e && typeof e === "object" && String((e as { message?: unknown }).message ?? "").includes(MONEDA_GRUPO_MIXTA)
+const respuestaMonedaMixta = () =>
+  NextResponse.json({ error: MENSAJE_MONEDA_MIXTA, code: MONEDA_GRUPO_MIXTA }, { status: 400 })
 
 // A role without cost access gets NO precioCompra key (not even null): formatInventario
 // emits `precioCompra: null` for it, which this endpoint drops.
@@ -288,6 +298,23 @@ export async function PUT(request: Request, { params }: Contexto) {
       }
     }
 
+    // Currency of the group: validated BEFORE the save against the group's current currency (any
+    // member of the group in the snapshot). The config is read only when a currency is asked for.
+    let monedaGrupo: MonedaCatalogo | undefined
+    if (datos.moneda !== undefined) {
+      if (datos.moneda === null) {
+        monedaGrupo = null
+      } else {
+        const actual = [...antes.values()].find((f) => f.grupo_id === id)?.moneda ?? null
+        const { config } = await cargarConfigMoneda(organizationId!)
+        const validacion = validarMonedaEscritura(datos.moneda, actual, config)
+        if (!validacion.ok) {
+          return NextResponse.json({ error: validacion.error, code: "PAYLOAD_INVALIDO", campo: "moneda" }, { status: 400 })
+        }
+        monedaGrupo = validacion.moneda
+      }
+    }
+
     const args = argumentosGuardarGrupo({
       organizationId: organizationId!,
       userId: userId ?? null,
@@ -300,9 +327,24 @@ export async function PUT(request: Request, { params }: Contexto) {
       supabaseAdmin.rpc("guardar_grupo_variantes", args)
     )
     if (rpcError) {
+      if (esMonedaMixta(rpcError)) return respuestaMonedaMixta()
       const respuesta = respuestaDeError(rpcError)
       if (respuesta) return respuesta
       throw rpcError
+    }
+
+    // The currency applies to every member of the group (active and archived). A currency
+    // mismatch between members is refused by the database (migration 408).
+    if (monedaGrupo !== undefined) {
+      const { error: monedaError } = await supabaseAdmin
+        .from("inventario")
+        .update({ moneda: monedaGrupo })
+        .eq("grupo_id", id)
+        .eq("organization_id", organizationId!)
+      if (monedaError) {
+        if (esMonedaMixta(monedaError)) return respuestaMonedaMixta()
+        throw monedaError
+      }
     }
 
     // The save is committed: the catalog cache must not wait for what comes next. If the
