@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Sparkles, Zap, Wrench, Bug } from "lucide-react"
 import { APP_VERSION, getNewChanges, type ChangeType } from "@/lib/changelog"
+import { useCapaPrioritaria } from "@/hooks/use-capa-prioritaria"
 
 const changeTypeConfig: Record<
   ChangeType,
@@ -42,14 +43,16 @@ export function WhatsNewModal({ lastSeenVersion }: WhatsNewModalProps) {
   const [open, setOpen] = useState(false)
 
   const newChanges = getNewChanges(lastSeenVersion)
+  // Una sola capa de primer ingreso por sesión (auditoría UX §5.1).
+  const permitido = useCapaPrioritaria("novedades", newChanges.length > 0)
 
   useEffect(() => {
-    if (newChanges.length === 0) return
+    if (!permitido) return
 
     // Pequeño delay para mejor UX (igual que PolicyChangeModal)
     const timer = setTimeout(() => setOpen(true), 500)
     return () => clearTimeout(timer)
-  }, [newChanges.length])
+  }, [permitido])
 
   const handleClose = async () => {
     setOpen(false)
