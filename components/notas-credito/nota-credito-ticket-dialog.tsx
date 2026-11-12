@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { generateNotaCreditoTicketCommands } from "@/lib/escpos"
 import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import { ANCHOS_TERMICOS, anchoToPx, readAncho, saveAncho, type AnchoTermico } from "@/lib/thermal-paper"
 import { ticketDesdeDocumento } from "@/lib/notas-credito/ticket"
 import type { NotaCreditoDocumento } from "@/lib/notas-credito/documento"
@@ -98,7 +98,7 @@ export function NotaCreditoTicketDialog({ notaCreditoId, open, onOpenChange, anc
       } catch {
         /* sin fonts.ready se mide con lo que haya */
       }
-      fitPrintPageToContent(d, d.body, ancho)
+      ajustarPaginaImpresion(d, d.body, ancho)
       ventana.focus()
       ventana.print()
     }
