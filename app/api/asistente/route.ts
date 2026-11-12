@@ -6,10 +6,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { canUseAsistente } from "@/lib/asistente/access"
 import { checkAsistenteRateLimit } from "@/lib/asistente/rate-limit"
 import { buildAsistenteSystemPrompt } from "@/lib/asistente/system-prompt"
+import { ejecutarAsistente, ASISTENTE_MODEL } from "@/lib/asistente/loop"
+import { herramientasDisponibles } from "@/lib/asistente/herramientas"
+import { actorDeSesion } from "@/lib/ordenes/alcance"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
-const ASISTENTE_MODEL = "claude-haiku-4-5"
-const MAX_TOKENS = 1024
 const DAILY_LIMIT_PER_ORG = 50
 const HISTORY_TURNS = 6 // últimos 6 mensajes (3 idas y vueltas)
 
@@ -23,7 +24,8 @@ const anthropic = new Anthropic({ apiKey: process.env.STAPP_CHATBOT_API_KEY })
 export async function POST(request: Request) {
   const startTime = Date.now()
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId } = autenticado
     if (error) return error
 
     if (!(await canUseAsistente(organizationId!))) {
@@ -46,7 +48,7 @@ export async function POST(request: Request) {
     // Tope diario por org, con "día" en la tz de la org (convención del proyecto)
     const { data: orgTz } = await supabaseAdmin
       .from("organizations")
-      .select("zona_horaria")
+      .select("zona_horaria, moneda")
       .eq("id", organizationId!)
       .single()
     const tz = orgTz?.zona_horaria || DEFAULT_TIMEZONE
@@ -99,28 +101,29 @@ export async function POST(request: Request) {
     const ordered = (historial ?? []).slice().reverse()
 
     // Multi-turn real (no concatenación en un string): preserva la caché
-    // del system prompt entre turnos.
-    const messages: Anthropic.MessageParam[] = [
-      ...ordered.map((m) => ({
-        role: (m.tipo === "USER" ? "user" : "assistant") as "user" | "assistant",
-        content: m.contenido,
-      })),
-      { role: "user" as const, content: message },
-    ]
+    // del system prompt entre turnos. El historial guarda solo texto: los
+    // resultados de herramientas no se arrastran, se vuelven a consultar.
+    const historialParams: Anthropic.MessageParam[] = ordered.map((m) => ({
+      role: (m.tipo === "USER" ? "user" : "assistant") as "user" | "assistant",
+      content: m.contenido,
+    }))
 
-    let response: Anthropic.Message
+    // Herramientas de solo lectura con los permisos del usuario (sin permiso, ni se ofrecen).
+    const ctx = { actor: actorDeSesion(autenticado), moneda: orgTz?.moneda || "ARS" }
+    const herramientas = await herramientasDisponibles(ctx)
+
+    // La fecha va en el mensaje, nunca en el system prompt (rompería la caché).
+    const mensajeConContexto = `[Hoy es ${todayInTimeZone(tz)}]\n\n${message}`
+
+    let resultado: Awaited<ReturnType<typeof ejecutarAsistente>>
     try {
-      response = await anthropic.messages.create({
-        model: ASISTENTE_MODEL,
-        max_tokens: MAX_TOKENS,
-        system: [
-          {
-            type: "text",
-            text: buildAsistenteSystemPrompt(),
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        messages,
+      resultado = await ejecutarAsistente({
+        client: anthropic,
+        system: buildAsistenteSystemPrompt(),
+        historial: historialParams,
+        mensaje: mensajeConContexto,
+        herramientas,
+        ctx,
       })
     } catch (claudeError) {
       console.error("[Asistente] Claude API error:", claudeError)
@@ -133,11 +136,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const textBlock = response.content.find((b) => b.type === "text")
-    const assistantMessage =
-      textBlock && textBlock.type === "text" && textBlock.text
-        ? textBlock.text
-        : "Disculpá, tuve un problema para responder. Probá de nuevo en unos segundos."
+    const assistantMessage = resultado.texto
 
     await supabaseAdmin.from("asistente_mensajes").insert({
       conversacion_id: convId,
@@ -152,10 +151,12 @@ export async function POST(request: Request) {
       tipo: "ASSISTANT",
       contenido: assistantMessage,
       modelo: ASISTENTE_MODEL,
-      input_tokens: response.usage.input_tokens,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? null,
-      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? null,
-      output_tokens: response.usage.output_tokens,
+      // Suma de todas las rondas del bucle de herramientas.
+      input_tokens: resultado.uso.input_tokens,
+      cache_read_input_tokens: resultado.uso.cache_read_input_tokens,
+      cache_creation_input_tokens: resultado.uso.cache_creation_input_tokens,
+      output_tokens: resultado.uso.output_tokens,
+      herramientas: resultado.llamadas.length > 0 ? resultado.llamadas : null,
       tiempo_respuesta_ms: Date.now() - startTime,
     })
 
