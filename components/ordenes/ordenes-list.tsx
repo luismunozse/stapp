@@ -31,6 +31,7 @@ import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
+import { CobroOrdenBadge } from "./cobro-orden-badge"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { useBorrarPractica } from "@/components/onboarding/use-borrar-practica"
 import { Card, CardContent } from "@/components/ui/card"
@@ -173,6 +174,16 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
 
   const handleBulkEstado = async (nuevoEstado: EstadoOrden) => {
     if (selectedIds.size === 0) return
+    // Un cambio masivo toca N órdenes de una y cada una puede avisarle a su
+    // cliente: se confirma antes, con la cantidad y el estado a la vista.
+    const n = selectedIds.size
+    const confirmado = await confirm({
+      title: `Cambiar ${n} ${n === 1 ? "orden" : "órdenes"} a ${getEstadoOrdenLabel(nuevoEstado)}`,
+      description: `Se va a cambiar el estado de ${n === 1 ? "la orden seleccionada" : `las ${n} órdenes seleccionadas`}. Si tenés los avisos automáticos activos, cada cliente recibe la notificación del cambio.`,
+      confirmText: "Cambiar estado",
+      cancelText: "Cancelar",
+    })
+    if (!confirmado) return
     setBulkUpdating(true)
     try {
       // El endpoint expone PUT, no PATCH: con PATCH todas las requests devolvían
@@ -636,6 +647,23 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
+    },
+    {
+      key: "cobro",
+      header: "Cobro",
+      sortable: false,
+      hideOnMobile: true,
+      className: "min-w-[110px]",
+      render: (orden) => (
+        <CobroOrdenBadge
+          estado={orden.estado}
+          costoFinal={orden.costoFinal}
+          sena={orden.sena}
+          totalCobrado={orden.totalCobrado}
+          descuentoCobro={orden.descuentoCobro}
+          aplicadoNotasCredito={orden.aplicadoNotasCredito}
+        />
+      ),
     },
     {
       key: "actions",
