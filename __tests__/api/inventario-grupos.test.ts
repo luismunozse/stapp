@@ -276,6 +276,7 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
       eq: (col: string, val: unknown) => (c.filtros.push([col, val]), api),
       in: (col: string, vals: unknown[]) => ((en = [...(en ?? []), [col, vals]]), api),
       order: (col: string) => (orden.push(col), api),
+      limit: () => api,
       maybeSingle: async () => ejecutar("maybe"),
       single: async () => ejecutar("single"),
       then: (resolve: any, reject?: any) => Promise.resolve(ejecutar(null)).then(resolve, reject),
@@ -2184,20 +2185,47 @@ describe("PUT /api/inventario/grupos/[id]: moneda", () => {
     expect(consultas.filter((c) => c.op === "update")).toEqual([])
   })
 
-  it("the same error out of the currency update is also that 400", async () => {
-    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+  it("a MONEDA_GRUPO_MIXTA out of the currency update still saves: events, cache and re-read run, with a warning", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
     instalarBase({}, { fallaUpdate: { code: "P0001", message: "MONEDA_GRUPO_MIXTA" } })
 
-    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } })))
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 }, extra: { moneda: "USD" } })))
 
-    expect(status).toBe(400)
-    expect(body.error).toBe("No se pueden agrupar productos con monedas distintas")
+    expect(status).toBe(200)
+    expect(body.advertencia).toBe("El grupo se guardó, pero no se pudo cambiar la moneda: No se pueden agrupar productos con monedas distintas")
+    expect(body.grupo.id).toBe("g-1")
+    expect(revalidateTag).toHaveBeenCalledWith("catalogo", "max")
+    expect(eventos()).toEqual([["inventario.updated", "r1"]])
   })
 
-  it("another failure of the currency update is a 500", async () => {
-    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+  it("another failure of the currency update is the same 200 with a generic warning", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
     instalarBase({}, { fallaUpdate: { code: "XX000", message: "boom" } })
 
-    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } }))).status).toBe(500)
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 }, extra: { moneda: "USD" } })))
+
+    expect(status).toBe(200)
+    expect(body.advertencia).toBe("El grupo se guardó, pero no se pudo cambiar la moneda: error inesperado")
+    expect(revalidateTag).toHaveBeenCalledWith("catalogo", "max")
+    expect(eventos()).toEqual([["inventario.updated", "r1"]])
+  })
+
+  it("the current currency is read from the database: only new variants in the payload still keep it with the feature off", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue({
+      config: resolverConfigMoneda({ multimoneda_habilitada: false, moneda_extranjera: "USD" } as any, "AR"),
+      fila: null,
+    } as any)
+    const { tablas, log } = instalarBase()
+    for (const f of tablas.inventario) if (f.grupo_id === "g-1" && f.organization_id === "org-1") f.moneda = "USD"
+    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } }))).status).toBe(200)
+    // A dedicated read of the group's members (by grupo_id + organization), not the payload snapshot.
+    expect(
+      log.some(
+        (e) =>
+          e.tipo === "consulta" && e.tabla === "inventario" && e.columnas === "moneda" &&
+          JSON.stringify(e.filtros) === JSON.stringify([["grupo_id", "g-1"], ["organization_id", "org-1"]])
+      )
+    ).toBe(true)
   })
 })

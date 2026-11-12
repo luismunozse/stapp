@@ -305,7 +305,17 @@ export async function PUT(request: Request, { params }: Contexto) {
       if (datos.moneda === null) {
         monedaGrupo = null
       } else {
-        const actual = [...antes.values()].find((f) => f.grupo_id === id)?.moneda ?? null
+        // The group's current currency comes from the database (any member), not from the payload:
+        // a save that lists only new variants still has the existing members' currency to keep.
+        const { data: miembro, error: miembroError } = await supabaseAdmin
+          .from("inventario")
+          .select("moneda")
+          .eq("grupo_id", id)
+          .eq("organization_id", organizationId!)
+          .limit(1)
+          .maybeSingle()
+        if (miembroError) throw miembroError
+        const actual: MonedaCatalogo = miembro?.moneda === "USD" || miembro?.moneda === "EUR" ? miembro.moneda : null
         const { config } = await cargarConfigMoneda(organizationId!)
         const validacion = validarMonedaEscritura(datos.moneda, actual, config)
         if (!validacion.ok) {
@@ -333,8 +343,10 @@ export async function PUT(request: Request, { params }: Contexto) {
       throw rpcError
     }
 
-    // The currency applies to every member of the group (active and archived). A currency
-    // mismatch between members is refused by the database (migration 408).
+    // The currency applies to every member of the group (active and archived). The RPC already
+    // committed, so a failure here must not skip the cache bump, the re-read or the events: it is
+    // reported as a warning on the saved group. (A currency mismatch is refused by migration 408.)
+    let advertenciaMoneda: string | undefined
     if (monedaGrupo !== undefined) {
       const { error: monedaError } = await supabaseAdmin
         .from("inventario")
@@ -342,8 +354,9 @@ export async function PUT(request: Request, { params }: Contexto) {
         .eq("grupo_id", id)
         .eq("organization_id", organizationId!)
       if (monedaError) {
-        if (esMonedaMixta(monedaError)) return respuestaMonedaMixta()
-        throw monedaError
+        console.error("Error cambiando la moneda del grupo tras guardarlo:", monedaError)
+        const motivo = esMonedaMixta(monedaError) ? MENSAJE_MONEDA_MIXTA : "error inesperado"
+        advertenciaMoneda = `El grupo se guardó, pero no se pudo cambiar la moneda: ${motivo}`
       }
     }
 
@@ -377,13 +390,19 @@ export async function PUT(request: Request, { params }: Contexto) {
     }
     if (lectura?.tipo === "ok") {
       try {
-        return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+        const cuerpo = cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost)
+        return NextResponse.json(advertenciaMoneda ? { ...cuerpo, advertencia: advertenciaMoneda } : cuerpo)
       } catch (respuestaError) {
         console.error("Error armando la respuesta del grupo guardado:", respuestaError)
       }
     }
     // Saved, but the answer could not be built: the form re-hydrates with GET instead of re-sending.
-    return NextResponse.json({ guardado: true, relectura: false, grupoId: id })
+    return NextResponse.json({
+      guardado: true,
+      relectura: false,
+      grupoId: id,
+      ...(advertenciaMoneda ? { advertencia: advertenciaMoneda } : {}),
+    })
   } catch (error) {
     console.error("Error guardando grupo de variantes:", error)
     return NextResponse.json({ error: "Error al guardar las variantes" }, { status: 500 })
