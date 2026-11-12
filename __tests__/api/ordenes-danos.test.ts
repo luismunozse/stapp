@@ -4,6 +4,19 @@ import { mockAuthSuccess, mockSupabaseFrom, createChainMock, createPostRequest, 
 import { GET, POST } from "@/app/api/ordenes/[id]/danos/route"
 import { DELETE } from "@/app/api/ordenes/[id]/danos/[danoId]/route"
 
+const forzarReparar = vi.hoisted(() => ({ valor: null as boolean | null }))
+vi.mock("@/lib/ordenes/alcance", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/ordenes/alcance")>()
+  return {
+    ...real,
+    cargarOrdenEnAlcance: async (...args: Parameters<typeof real.cargarOrdenEnAlcance>) => {
+      const r = await real.cargarOrdenEnAlcance(...args)
+      if ("error" in r || forzarReparar.valor === null) return r
+      return { ...r, permisos: { ...r.permisos, reparar: forzarReparar.valor } }
+    },
+  }
+})
+
 const ctx = { params: Promise.resolve({ id: "o1" }) }
 const ctxDel = (danoId = "d1") => ({ params: Promise.resolve({ id: "o1", danoId }) })
 
@@ -13,6 +26,7 @@ const FILA = { id: "d1", numero: 2, diagrama: "celular@1", vista: "frente", x: 0
 
 beforeEach(() => {
   vi.clearAllMocks()
+  forzarReparar.valor = null
   mockAuthSuccess()
 })
 
@@ -41,6 +55,26 @@ describe("GET /api/ordenes/[id]/danos", () => {
     })
     const { body } = await parseResponse(await GET(createGetRequest(), ctx))
     expect(body.diagrama).toBe("celular@1")
+  })
+})
+
+describe("GET /api/ordenes/[id]/danos: puedeAgregar", () => {
+  const get = async (orden: object) => {
+    mockSupabaseFrom({ ordenes_servicio: createChainMock(orden), orden_danos: createChainMock([]) })
+    return (await parseResponse(await GET(createGetRequest(), ctx))).body
+  }
+
+  it("true para quien puede reparar una orden abierta", async () => {
+    expect((await get({ ...ORDEN, estado: "EN_REPARACION" })).puedeAgregar).toBe(true)
+  })
+
+  it("false si el actor no tiene el permiso reparar", async () => {
+    forzarReparar.valor = false
+    expect((await get({ ...ORDEN, estado: "EN_REPARACION" })).puedeAgregar).toBe(false)
+  })
+
+  it("false si la orden ya fue entregada", async () => {
+    expect((await get({ ...ORDEN, estado: "ENTREGADO" })).puedeAgregar).toBe(false)
   })
 })
 

@@ -12,13 +12,15 @@ import { VENTANA_BORRADO_DIAGNOSTICO_MS, type DanoInput, type DanoOrden } from "
 
 interface Props {
   ordenId: string
-  puedeAgregar: boolean
+  /** Estado de la orden: al cambiar (p. ej. por el polling del detalle) se vuelve a cargar la lista. */
+  estado?: string
 }
 
 interface RespuestaDanos {
   danos: DanoOrden[]
   sinDanos: boolean
   diagrama: string
+  puedeAgregar: boolean
 }
 
 async function mensajeDeError(res: Response, porDefecto: string) {
@@ -30,9 +32,10 @@ async function mensajeDeError(res: Response, porDefecto: string) {
   }
 }
 
-export function EstadoFisicoCard({ ordenId, puedeAgregar }: Props) {
+export function EstadoFisicoCard({ ordenId, estado }: Props) {
   const [datos, setDatos] = useState<RespuestaDanos | null>(null)
   const [error, setError] = useState(false)
+  const [malformado, setMalformado] = useState(false)
   const [agregando, setAgregando] = useState(false)
   const [resaltado, setResaltado] = useState<number | null>(null)
   const base = `/api/ordenes/${ordenId}/danos`
@@ -42,9 +45,18 @@ export function EstadoFisicoCard({ ordenId, puedeAgregar }: Props) {
       const res = await fetch(base)
       if (!res.ok) throw new Error()
       const json = (await res.json()) as Partial<RespuestaDanos>
-      if (!Array.isArray(json.danos) || typeof json.diagrama !== "string") throw new Error()
-      setDatos({ danos: json.danos, sinDanos: json.sinDanos === true, diagrama: json.diagrama })
       setError(false)
+      if (!Array.isArray(json.danos) || typeof json.diagrama !== "string") {
+        setMalformado(true)
+        return
+      }
+      setMalformado(false)
+      setDatos({
+        danos: json.danos,
+        sinDanos: json.sinDanos === true,
+        diagrama: json.diagrama,
+        puedeAgregar: json.puedeAgregar === true,
+      })
     } catch {
       setError(true)
     }
@@ -52,7 +64,7 @@ export function EstadoFisicoCard({ ordenId, puedeAgregar }: Props) {
 
   useEffect(() => {
     void cargar()
-  }, [cargar])
+  }, [cargar, estado])
 
   async function agregar(p: Omit<DanoInput, "diagrama">) {
     if (!datos) return
@@ -85,7 +97,19 @@ export function EstadoFisicoCard({ ordenId, puedeAgregar }: Props) {
     }
   }
 
-  if (error && !datos) return null
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4 sm:p-6">
+          <p className="text-sm text-muted-foreground">No se pudo cargar el estado físico</p>
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => void cargar()}>
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (malformado) return null
   if (!datos) return <Skeleton className="h-32 w-full rounded-xl" />
 
   const pins: PinVista[] = datos.danos
@@ -141,7 +165,7 @@ export function EstadoFisicoCard({ ordenId, puedeAgregar }: Props) {
           </section>
         )}
 
-        {puedeAgregar &&
+        {datos.puedeAgregar &&
           (agregando ? (
             <Button type="button" variant="outline" className="min-h-11" onClick={() => setAgregando(false)}>
               Listo

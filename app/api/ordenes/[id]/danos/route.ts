@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
-import { danoInputSchema, mensajeErrorDanos, type DanoOrden } from "@/lib/ordenes/danos"
+import { danoInputSchema, ESTADOS_SIN_NUEVOS_DANOS, mensajeErrorDanos, type DanoOrden } from "@/lib/ordenes/danos"
 import { listarDanosOrden, vistaExisteEnDiagrama } from "@/lib/ordenes/danos-server"
 
 // GET - Daños marcados en la orden
@@ -16,11 +16,13 @@ export async function GET(
     if (error) return error
 
     const { id: ordenId } = await params
-    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id" })
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id, estado" })
     if ("error" in cargada) return cargada.error
 
     const resultado = await listarDanosOrden(ordenId, organizationId!, { incluirAutor: true })
-    return NextResponse.json(resultado)
+    const puedeAgregar =
+      cargada.permisos.reparar && !(ESTADOS_SIN_NUEVOS_DANOS as readonly string[]).includes(cargada.orden.estado)
+    return NextResponse.json({ ...resultado, puedeAgregar })
   } catch (error) {
     console.error("Error fetching order damages:", error)
     return NextResponse.json({ error: "Error al obtener los daños" }, { status: 500 })

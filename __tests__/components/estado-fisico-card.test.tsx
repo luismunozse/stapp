@@ -36,11 +36,11 @@ function respuesta(body: unknown, status = 200) {
 function montar(get: { danos: DanoOrden[]; sinDanos?: boolean }, puedeAgregar = true) {
   fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
     if (!init || !init.method || init.method === "GET") {
-      return respuesta({ danos: get.danos, sinDanos: get.sinDanos ?? false, diagrama: "celular" })
+      return respuesta({ danos: get.danos, sinDanos: get.sinDanos ?? false, diagrama: "celular", puedeAgregar })
     }
     return respuesta({}, 201)
   })
-  return render(<EstadoFisicoCard ordenId="o1" puedeAgregar={puedeAgregar} />)
+  return render(<EstadoFisicoCard ordenId="o1" />)
 }
 
 beforeEach(() => {
@@ -86,7 +86,7 @@ describe("EstadoFisicoCard", () => {
     await screen.findByText("Al recibir")
     fetchMock.mockImplementation((_u: string, init?: RequestInit) =>
       !init?.method || init.method === "GET"
-        ? respuesta({ danos: [recepcion, diag({ createdByNombre: "Luis" })], sinDanos: false, diagrama: "celular" })
+        ? respuesta({ danos: [recepcion, diag({ createdByNombre: "Luis" })], sinDanos: false, diagrama: "celular", puedeAgregar: true })
         : respuesta({}, 201),
     )
     fireEvent.click(screen.getByRole("button", { name: "Agregar daño detectado" }))
@@ -122,11 +122,42 @@ describe("EstadoFisicoCard", () => {
     montar({ danos: [recepcion] })
     await screen.findByText("Al recibir")
     fetchMock.mockImplementation((_u: string, init?: RequestInit) =>
-      init?.method === "POST" ? respuesta({ error: "La orden ya está cerrada" }, 409) : respuesta({ danos: [recepcion], sinDanos: false, diagrama: "celular" }),
+      init?.method === "POST" ? respuesta({ error: "La orden ya está cerrada" }, 409) : respuesta({ danos: [recepcion], sinDanos: false, diagrama: "celular", puedeAgregar: true }),
     )
     fireEvent.click(screen.getByRole("button", { name: "Agregar daño detectado" }))
     fireEvent.click(screen.getByRole("button", { name: "Agregar daño" }))
     fireEvent.click(screen.getByRole("button", { name: "Rotura" }))
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("La orden ya está cerrada"))
+  })
+
+  it("un GET fallido muestra el error y Reintentar vuelve a pedir", async () => {
+    fetchMock.mockImplementation(() => respuesta({ error: "x" }, 500))
+    render(<EstadoFisicoCard ordenId="o1" />)
+    expect(await screen.findByText("No se pudo cargar el estado físico")).toBeInTheDocument()
+    fetchMock.mockImplementation(() => respuesta({ danos: [recepcion], sinDanos: false, diagrama: "celular", puedeAgregar: false }))
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
+    expect(await screen.findByText("Al recibir")).toBeInTheDocument()
+  })
+
+  it("un DELETE fallido muestra el error del servidor en un toast", async () => {
+    montar({ danos: [recepcion, diag()] })
+    await screen.findByText("Al recibir")
+    fetchMock.mockImplementation((_u: string, init?: RequestInit) =>
+      init?.method === "DELETE" ? respuesta({ error: "Pasaron más de 10 minutos; el daño ya no se puede borrar" }, 409) : respuesta({}),
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Quitar daño 2" }))
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Pasaron más de 10 minutos; el daño ya no se puede borrar"))
+  })
+
+  it("si el refetch tras agregar falla, muestra el error inline", async () => {
+    montar({ danos: [recepcion] })
+    await screen.findByText("Al recibir")
+    fetchMock.mockImplementation((_u: string, init?: RequestInit) =>
+      init?.method === "POST" ? respuesta({}, 201) : respuesta({ error: "x" }, 500),
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Agregar daño detectado" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar daño" }))
+    fireEvent.click(screen.getByRole("button", { name: "Golpe" }))
+    expect(await screen.findByText("No se pudo cargar el estado físico")).toBeInTheDocument()
   })
 })
