@@ -55,6 +55,8 @@ const TIPO_LABELS: Record<string, { label: string; icon: any; color: string }> =
   DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-warning-600" },
   INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-success-600" },
   EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-destructive-text" },
+  ANULACION_VENTA: { label: "Venta anulada", icon: ShoppingBag, color: "text-destructive-text" },
+  ANULACION_COBRO: { label: "Cobro anulado", icon: Wrench, color: "text-destructive-text" },
 }
 
 interface CajaResumenProps {
@@ -157,8 +159,8 @@ export function CajaResumen({
               {Object.entries(data.porTipo).map(([tipo, info]) => {
                 const tipoInfo = TIPO_LABELS[tipo] || { label: tipo, icon: DollarSign, color: "text-gray-600" }
                 const Icon = tipoInfo.icon
-                const linkBase = tipo === "COBRO_ORDEN" ? "/ordenes/" :
-                  tipo === "PAGO_VENTA" ? "/ventas/" :
+                const linkBase = tipo === "COBRO_ORDEN" || tipo === "ANULACION_COBRO" ? "/ordenes/" :
+                  tipo === "PAGO_VENTA" || tipo === "ANULACION_VENTA" ? "/ventas/" :
                   tipo === "PAGO_FACTURA" ? "/facturacion/" : null
                 return (
                   <div key={tipo} className="p-2 bg-muted/50 rounded space-y-1">
@@ -281,8 +283,8 @@ export function CajaResumen({
                 const tipoInfo = TIPO_LABELS[mov.tipo] || { label: mov.tipo, icon: DollarSign, color: "text-gray-600" }
                 const Icon = tipoInfo.icon
                 const MetodoIcon = METODO_ICONS[mov.metodoPago] || DollarSign
-                const movLink = mov.tipo === "COBRO_ORDEN" ? `/ordenes/${mov.referenciaId}` :
-                  mov.tipo === "PAGO_VENTA" ? `/ventas/${mov.referenciaId}` :
+                const movLink = mov.tipo === "COBRO_ORDEN" || mov.tipo === "ANULACION_COBRO" ? `/ordenes/${mov.referenciaId}` :
+                  mov.tipo === "PAGO_VENTA" || mov.tipo === "ANULACION_VENTA" ? `/ventas/${mov.referenciaId}` :
                   mov.tipo === "PAGO_FACTURA" ? `/facturacion/${mov.referenciaId}` : null
                 const displayName = mov.referenciaNumero
                   ? `${tipoInfo.label} · ${mov.referenciaNumero}`
@@ -326,7 +328,7 @@ export function CajaResumen({
                           </div>
                         )}
                       </div>
-                      {puedeEditar && mov.id && mov.metodoPago !== "CUENTA_CORRIENTE" && (
+                      {puedeEditar && mov.id && !mov.esAnulacion && mov.metodoPago !== "CUENTA_CORRIENTE" && (
                         <Button
                           variant="ghost"
                           size="icon"
