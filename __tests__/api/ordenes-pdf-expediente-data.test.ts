@@ -26,6 +26,10 @@ vi.mock("@/lib/pdf", () => ({
 vi.mock("@/lib/terminologia-server", () => ({
   getTerminologia: vi.fn().mockResolvedValue(null),
 }))
+// El estado físico lee ordenes_servicio por su cuenta: acá se aísla para contar las llamadas del expediente.
+vi.mock("@/lib/ordenes/danos-server", () => ({
+  listarDanosOrden: vi.fn().mockResolvedValue({ danos: [], sinDanos: false, diagrama: "generico@1" }),
+}))
 
 import { GET as GET_PDF } from "@/app/api/ordenes/[id]/pdf/route"
 import { GET as GET_PUBLIC_PDF } from "@/app/api/public/ordenes/[token]/pdf/route"
