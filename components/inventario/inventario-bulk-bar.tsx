@@ -25,6 +25,18 @@ interface InventarioBulkBarProps {
   onGenerateLabels?: () => void
   /** Opens the dialog that groups the selected products as variants. Offered with 2 or more selected. */
   onAgrupar?: () => void
+  /** Currency of each selected item (null = local). Lets the price-adjust confirmation flag a mixed selection. */
+  selectedMonedas?: Array<string | null>
+  /** Code of the organization's local currency, for naming the local items in that confirmation. */
+  monedaLocal?: string
+}
+
+/** "3 en ARS y 2 en USD" when the selection mixes currencies; null when it has one currency or none. */
+function resumenMonedas(monedas: Array<string | null>, monedaLocal: string): string | null {
+  const cuenta = new Map<string, number>()
+  for (const m of monedas) cuenta.set(m ?? monedaLocal, (cuenta.get(m ?? monedaLocal) ?? 0) + 1)
+  if (cuenta.size < 2) return null
+  return Array.from(cuenta, ([codigo, n]) => `${n} en ${codigo}`).join(" y ")
 }
 
 export function InventarioBulkBar({
@@ -36,6 +48,8 @@ export function InventarioBulkBar({
   onSuccess,
   onGenerateLabels,
   onAgrupar,
+  selectedMonedas,
+  monedaLocal = "moneda local",
 }: InventarioBulkBarProps) {
   const { confirm, showError, showSuccess } = useModal()
   const [pending, setPending] = useState(false)
@@ -192,9 +206,10 @@ export function InventarioBulkBar({
       await showError("Ingresá un porcentaje distinto de cero")
       return
     }
+    const mezcla = selectedMonedas ? resumenMonedas(selectedMonedas, monedaLocal) : null
     const ok = await confirm({
       title: "Ajustar precio",
-      description: `${num > 0 ? "Aumentar" : "Reducir"} el ${target === "precioVenta" ? "precio de venta" : "costo"} de ${selectedCount} item${selectedCount === 1 ? "" : "s"} en ${Math.abs(num)}%?`,
+      description: `${num > 0 ? "Aumentar" : "Reducir"} el ${target === "precioVenta" ? "precio de venta" : "costo"} de ${selectedCount} item${selectedCount === 1 ? "" : "s"} en ${Math.abs(num)}%?${mezcla ? ` ${mezcla}: el porcentaje se aplica en la moneda de cada uno.` : ""}`,
       confirmText: "Aplicar",
       cancelText: "Cancelar",
       variant: "info",

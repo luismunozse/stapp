@@ -1131,6 +1131,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         <InventarioBulkBar
           selectedCount={selectedKeys.length}
           selectedIds={selectedKeys}
+          selectedMonedas={items.filter((i) => selectedKeys.includes(i.id)).map((i) => i.moneda ?? null)}
+          monedaLocal={configMoneda?.monedaLocal}
           categoriasDisponibles={categoriasDisponibles}
           proveedores={proveedoresActivos}
           onClear={() => setSelectedKeys([])}

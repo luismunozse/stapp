@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       nombre: string
       precio_compra: string | number
       precio_venta: string | number
+      moneda: string | null
     }
     const found: Record<string, InventarioRow> = {}
     if (codigos.length > 0) {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
         const slice = codigos.slice(i, i + CHUNK)
         const { data, error: dbError } = await supabaseAdmin
           .from("inventario")
-          .select("id, codigo, nombre, precio_compra, precio_venta")
+          .select("id, codigo, nombre, precio_compra, precio_venta, moneda")
           .eq("organization_id", organizationId!)
           .is("deleted_at", null)
           .in("codigo", slice)
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
       precioVentaActual: number | null
       precioCompraNuevo: number | null
       precioVentaNuevo: number | null
+      /** Currency the item's prices are in: null = local. */
+      moneda: string | null
       cambia: boolean
     }> = []
     const unmatched: Array<{ rowIndex: number; codigo: string; nombre: string }> = []
@@ -119,6 +122,7 @@ export async function POST(request: Request) {
         precioVentaActual: actualVenta,
         precioCompraNuevo: cambiaCompra ? nuevoCompra : null,
         precioVentaNuevo: cambiaVenta ? nuevoVenta : null,
+        moneda: inv.moneda ?? null,
         cambia,
       })
     }
