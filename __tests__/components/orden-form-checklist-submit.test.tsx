@@ -130,27 +130,24 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     vi.unstubAllGlobals()
   })
 
-  it("no manda las respuestas restauradas bajo un template que todavia no resolvio", async () => {
-    // El guard de respuestas huerfanas (el efecto que compara
-    // `checklistDelBorrador` contra el template del tipo) solo limpia
-    // `checklistValores` DESPUES de que ese template llega. El submit no tenia
-    // el mismo freno: posteaba `checklistTemplate.id` con lo que hubiera en
-    // pantalla apenas los dos estados estuvieran cargados.
-    //
-    // Y en una terminal lenta esa ventana es real: el fetch del montaje sale
-    // antes de que resuelva la lista de tipos, asi que trae el template por
-    // defecto de la organizacion y nadie lo cancela; recien cuando la lista
-    // llega se pide el del tipo, y ese queda en vuelo. Un "Crear orden" ahi
-    // adentro guardaba las respuestas de CELULAR bajo el id del template por
-    // defecto: quedan indexadas por items que no son los suyos, invisibles en
-    // la ficha y contaminando un template ajeno. Es la misma corrupcion que el
-    // guard existe para evitar, por la otra puerta.
-    const templateDelTipo = new Promise<Response>(() => {
-      // Nunca resuelve: sigue en vuelo cuando el operador aprieta el boton.
-    })
-    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
+  /** fetch con el template del TIPO controlable desde el test: `pendiente`
+   *  (nunca resuelve hasta que se llama a `resolver`), o `falla`. */
+  function stubFetch(templateDelTipo: "pendiente" | "falla") {
+    let resolver: (template: unknown) => void = () => {}
+    let llamadasTipo = 0
+    const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init
       const url = String(input)
-      if (url.includes("by-device-type?tipoDispositivoId=")) return templateDelTipo
+      if (url.includes("by-device-type?tipoDispositivoId=")) {
+        llamadasTipo++
+        if (templateDelTipo === "falla") {
+          return Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)
+        }
+        return new Promise<Response>((resolve) => {
+          resolver = (template) =>
+            resolve({ ok: true, status: 200, json: async () => ({ template }) } as Response)
+        })
+      }
       if (url.includes("/api/checklist-templates/by-device-type")) {
         return Promise.resolve({
           ok: true,
@@ -174,80 +171,119 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
       return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
     })
     vi.stubGlobal("fetch", fetchSpy)
+    return {
+      fetchSpy,
+      resolver: (template: unknown) => resolver(template),
+      llamadasTipo: () => llamadasTipo,
+    }
+  }
+
+  const urls = (spy: ReturnType<typeof vi.fn>) => spy.mock.calls.map((call) => String(call[0]))
+
+  it("mientras el checklist del tipo carga, 'Crear orden' queda deshabilitado en todos los pasos", async () => {
+    // "Crear orden" esta desde el paso 1: si se pudiera apretar con el template
+    // del tipo en vuelo, los items obligatorios no se controlarian contra nada
+    // (y las respuestas restauradas irian bajo el template por defecto de la
+    // organizacion, que es el que quedo en pantalla en una terminal lenta).
+    const { fetchSpy } = stubFetch("pendiente")
     window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
 
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
-    await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
-    await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
-    await settle()
+    for (const avanzar of ["Agregar detalles", "Siguiente", null]) {
+      const crear = screen.getByRole("button", { name: "Crear orden" })
+      expect(crear).toBeDisabled()
+      expect(crear).toHaveAttribute("aria-describedby", "orden-checklist-cargando")
+      expect(screen.getByText("Cargando checklist…")).toBeInTheDocument()
+      fireEvent.click(crear)
+      await settle()
+      if (avanzar) {
+        fireEvent.click(screen.getByRole("button", { name: avanzar }))
+        await settle()
+      }
+    }
 
-    const urls = fetchSpy.mock.calls.map((call) => String(call[0]))
-    // El template en pantalla es el que abre la ventana: el por defecto de la
-    // organizacion, traido antes de que se supiera el tipo del borrador.
-    expect(urls).toContain("/api/checklist-templates/by-device-type")
-    // La orden si se crea. Lo unico que se retiene es el checklist.
-    expect(urls).toContain("/api/ordenes")
-    expect(urls.filter((url) => /^\/api\/ordenes\/.+\/checklist$/.test(url))).toEqual([])
+    expect(urls(fetchSpy)).not.toContain("/api/ordenes")
   })
 
-  it("avisa que el checklist quedo sin guardar en vez de tirarlo en silencio", async () => {
-    // El freno de arriba se combinaba con el `clearDraft()` que corre apenas la
-    // orden se crea, un renglon ANTES: la orden quedaba creada, la entrada del
-    // borrador borrada de localStorage y el POST del checklist salteado, sin una
-    // palabra en pantalla. El comentario del codigo decia que las respuestas "se
-    // retienen y se conservan en el borrador" -- no se conservaba nada.
-    //
-    // Conservar el borrador tampoco es una opcion: la orden ya existe, asi que
-    // la apertura siguiente restauraria una carga que ya se convirtio en orden,
-    // o sea una segunda orden del mismo equipo. Se pierde el checklist y se
-    // dice, que es la unica de las dos perdidas que el operador puede reparar.
-    const templateDelTipo = new Promise<Response>(() => {})
-    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url.includes("by-device-type?tipoDispositivoId=")) return templateDelTipo
-      if (url.includes("/api/checklist-templates/by-device-type")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            template: {
-              id: "tpl-default-org",
-              nombre: "Ingreso generico",
-              items: [{ id: "generico", label: "Generico", tipo: "BOOLEAN" }],
-            },
-          }),
-        } as Response)
-      }
-      if (url === "/api/ordenes") {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ id: "ord-1", numeroOrden: 1 }),
-        } as Response)
-      }
-      return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+  it("cuando el checklist llega, se habilita y los items obligatorios no se pueden saltear", async () => {
+    const { fetchSpy, resolver } = stubFetch("pendiente")
+    window.localStorage.setItem(DRAFT_KEY, draftEnvelope({}))
+
+    await renderForm()
+    await settle()
+    expect(screen.getByRole("button", { name: "Crear orden" })).toBeDisabled()
+
+    await act(async () => {
+      resolver({
+        id: "tpl-celular",
+        nombre: "Ingreso celular",
+        items: [{ id: "pantalla", label: "Pantalla sana", tipo: "BOOLEAN", orden: 1, requerido: true }],
+      })
     })
-    vi.stubGlobal("fetch", fetchSpy)
+    await settle()
+
+    expect(screen.queryByText("Cargando checklist…")).toBeNull()
+    const crear = screen.getByRole("button", { name: "Crear orden" })
+    expect(crear).toBeEnabled()
+    fireEvent.click(crear)
+    await settle()
+    // Lleva al checklist en vez de crear.
+    expect(urls(fetchSpy)).not.toContain("/api/ordenes")
+    expect(screen.getByText(/Paso 3\/3/)).toBeInTheDocument()
+
+    const pantalla = document.getElementById("checklist-item-pantalla")!
+    fireEvent.click(Array.from(pantalla.querySelectorAll("button")).find((b) => b.textContent === "Sí")!)
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
+    await settle()
+    expect(urls(fetchSpy)).toContain("/api/ordenes")
+    const checklistCall = fetchSpy.mock.calls.find((call) =>
+      /^\/api\/ordenes\/.+\/checklist$/.test(String(call[0])),
+    )
+    expect(JSON.parse(String(checklistCall![1]?.body))).toMatchObject({
+      templateId: "tpl-celular",
+      valores: { pantalla: true },
+    })
+  })
+
+  it("un tipo sin checklist no bloquea el alta", async () => {
+    const { fetchSpy, resolver } = stubFetch("pendiente")
+    window.localStorage.setItem(DRAFT_KEY, draftEnvelope({}))
+
+    await renderForm()
+    await settle()
+    await act(async () => { resolver(null) })
+    await settle()
+
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
+    await settle()
+    expect(urls(fetchSpy)).toContain("/api/ordenes")
+  })
+
+  it("si el checklist no carga, avisa, permite reintentar y no bloquea el alta para siempre", async () => {
+    // Decision: bloquear hasta que el endpoint vuelva dejaria el mostrador sin
+    // poder tomar ordenes. Se avisa, se ofrece reintentar y se deja crear; el
+    // checklist se completa despues desde la ficha.
+    const { fetchSpy, llamadasTipo } = stubFetch("falla")
     window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
 
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    expect(screen.getByText(/No se pudo cargar el checklist de ingreso/)).toBeInTheDocument()
+    expect(llamadasTipo()).toBe(1)
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
-    await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
-    await settle()
+    expect(llamadasTipo()).toBe(2)
 
-    expect(screen.getByText(/el checklist de ingreso no se guardó/i)).toBeInTheDocument()
-    // Y el borrador si se da de baja: la orden ya existe.
-    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
+    const crear = screen.getByRole("button", { name: "Crear orden" })
+    expect(crear).toBeEnabled()
+    fireEvent.click(crear)
+    await settle()
+    expect(urls(fetchSpy)).toContain("/api/ordenes")
+    // Sin template no hay contra que guardar las respuestas restauradas.
+    expect(urls(fetchSpy).filter((url) => /^\/api\/ordenes\/.+\/checklist$/.test(url))).toEqual([])
   })
 
   it("descarta las respuestas de items que el template ya no tiene, aunque el id no haya cambiado", async () => {
@@ -307,11 +343,11 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
     await settle()
 
     const checklistCall = fetchSpy.mock.calls.find((call) =>

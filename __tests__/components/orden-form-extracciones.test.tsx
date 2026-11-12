@@ -108,7 +108,7 @@ describe("OrdenForm — componentes extraidos se renderizan al avanzar el wizard
         target: { value: "No prende" },
       })
 
-      fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+      fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
 
       // Paso 2: AccesoriosPicker.
       expect(await screen.findByText("Accesorios Recibidos")).toBeInTheDocument()

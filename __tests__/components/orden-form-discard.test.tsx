@@ -199,7 +199,7 @@ describe("OrdenForm — descartar un borrador", () => {
   }
 
   async function irAlPaso3() {
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await screen.findByText(/Paso 2\/3/)
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await screen.findByText(/Paso 3\/3/)
@@ -265,7 +265,7 @@ describe("OrdenForm — descartar un borrador", () => {
     expect(screen.queryByAltText("Preview")).not.toBeInTheDocument()
 
     // ...ni subirse con la orden nueva.
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
 
     await waitFor(() => {
       expect(requests.some((r) => r.url.endsWith("/api/ordenes"))).toBe(true)

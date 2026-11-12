@@ -77,10 +77,10 @@ describe("OrdenForm: firma de recepción sin items del checklist", () => {
     const { OrdenForm } = await import("@/components/ordenes/orden-form")
     render(<ModalProvider><OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} /></ModalProvider>)
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" })); await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
     fireEvent.click(screen.getByRole("button", { name: "firmar" })); await settle(100)
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" })); await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" })); await settle()
 
     const llamada = fetchSpy.mock.calls.find((c) => String(c[0]) === "/api/ordenes/ord-1/checklist")
     expect(llamada).toBeDefined()
