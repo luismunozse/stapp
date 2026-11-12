@@ -222,13 +222,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Hasta que la conversión llegue a las ventas, un ítem con precio en divisa no entra.
-    const enDivisa = await rechazarItemsEnDivisa({
-      organizationId: organizationId!,
-      inventarioIds: data.items.map((i) => i.inventarioId),
-    })
-    if (enDivisa) return enDivisa
-
     // "Saldo a favor" (CUENTA_CORRIENTE) descuenta de la cuenta del cliente:
     // sin cliente la venta quedaba cobrada sin descontar nada de ningún lado.
     const usaSaldoAFavor =
@@ -342,6 +335,13 @@ export async function POST(request: Request) {
     )
 
     // Crear venta atómicamente
+    // Hasta que la conversión llegue a las ventas, un ítem con precio en divisa no entra.
+    const enDivisa = await rechazarItemsEnDivisa({
+      organizationId: organizationId!,
+      inventarioIds: data.items.map((i) => i.inventarioId),
+    })
+    if (enDivisa) return enDivisa
+
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
       p_vendedor_id: vendedorId,

@@ -44,7 +44,6 @@ function buildTableMocks() {
   const ventasChain = createChainMock({ id: "v1", numero_venta: 1, total: 1030 })
 
   mockSupabaseFrom({
-
     inventario: createChainMock([]), // sin ítems en divisa
     // EXENTO → no IVA branch, no extra ventas.update() for IVA snapshot
     organizations: createChainMock({ iva_regimen: "EXENTO" }),

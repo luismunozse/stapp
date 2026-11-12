@@ -16,6 +16,7 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn().mockReso
 
 import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { POST as postVenta } from "@/app/api/ventas/route"
+import { PUT as putVenta } from "@/app/api/ventas/[id]/route"
 import { POST as postRepuesto } from "@/app/api/ordenes/[id]/repuestos/route"
 import { POST as postServicio } from "@/app/api/ordenes/[id]/servicios/route"
 import { POST as postCotizacion } from "@/app/api/cotizaciones/route"
@@ -172,5 +173,45 @@ describe("PUT /api/cotizaciones/[id]: solo líneas nuevas", () => {
     const { status, body } = await parseResponse(res)
     expect(status).toBe(409)
     expect(body.code).toBe("ITEM_EN_DIVISA")
+  })
+})
+
+describe("PUT /api/ventas/[id]: solo ítems nuevos", () => {
+  const params = { params: Promise.resolve({ id: "v1" }) }
+  function montar() {
+    const inv = createChainMock([usd])
+    mockSupabaseFrom({
+      ventas: createChainMock({
+        id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100,
+        items_venta: [{ id: "l1", inventario_id: "x-1" }], pagos_venta: [],
+      }),
+      inventario: inv,
+    })
+    return inv
+  }
+  const body = (ids: string[]) => ({
+    action: "edit",
+    clienteNombre: "Cliente",
+    items: ids.map((inventarioId) => ({ inventarioId, descripcion: "Pantalla", cantidad: 1, precioUnitario: 100 })),
+    descuento: 0, tipoDescuento: "MONTO", porcentajeDescuento: 0, metodoPago: "EFECTIVO",
+  })
+  const put = (b: object) =>
+    putVenta(new Request("http://localhost/api/ventas/v1", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }), params)
+
+  it("mantener una línea guardada cuyo ítem pasó a USD no bloquea", async () => {
+    const inv = montar()
+    const res = await put(body(["x-1"]))
+    expect(res.status).not.toBe(409)
+    expect(inv.in).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("editar_venta_atomica", expect.anything())
+  })
+
+  it("agregar un ítem nuevo en USD: 409 y sin RPC", async () => {
+    montar()
+    const res = await put(body(["x-1", "x-9"]))
+    const { status, body: b } = await parseResponse(res)
+    expect(status).toBe(409)
+    expect(b.code).toBe("ITEM_EN_DIVISA")
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 })

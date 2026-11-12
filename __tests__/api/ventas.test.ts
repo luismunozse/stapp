@@ -628,7 +628,6 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1" })
     vi.mocked(depositoPermitido).mockResolvedValue(false)
     mockSupabaseFrom({
-      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -644,7 +643,6 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1", organizationId: "org-9" })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
-      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -664,7 +662,6 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
-      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -711,7 +708,6 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
   it("rechaza depositoId vacío con 400", async () => {
     mockAuthSuccess()
     mockSupabaseFrom({
-      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 

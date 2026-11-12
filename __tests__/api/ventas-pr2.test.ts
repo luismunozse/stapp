@@ -109,7 +109,6 @@ describe("POST /api/ventas — IVA snapshot error → 500", () => {
     depositosChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
 
     mockSupabaseFrom({
-
       inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
@@ -203,7 +202,6 @@ describe("GET /api/ventas/[id] — sucursal scope", () => {
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "ventas") return ventasChain as any
       if (table === "devoluciones_venta") return devolucionesChain as any
-      if (table === "inventario") return createChainMock([]) as any
       return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
@@ -231,7 +229,6 @@ describe("GET /api/ventas/[id] — sucursal scope", () => {
 
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "ventas") return ventasChain as any
-      if (table === "inventario") return createChainMock([]) as any
       return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
