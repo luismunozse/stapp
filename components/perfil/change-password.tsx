@@ -143,7 +143,7 @@ export function ChangePassword() {
               placeholder="Repite tu nueva contraseña"
             />
             {confirmPassword && !passwordsMatch && (
-              <p className="text-xs text-destructive">Las contraseñas no coinciden</p>
+              <p className="text-xs text-destructive-text">Las contraseñas no coinciden</p>
             )}
           </div>
 

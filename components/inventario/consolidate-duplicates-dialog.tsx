@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { AlertTriangle, ArrowRight, Package } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { toast } from "sonner"
 
 interface ConsolidateDuplicatesDialogProps {
   open: boolean
@@ -55,7 +56,7 @@ export function ConsolidateDuplicatesDialog({
       setTargetId(null)
     } catch (err) {
       console.error("Error consolidando:", err)
-      alert(err instanceof Error ? err.message : "Error al consolidar")
+      toast.error(err instanceof Error ? err.message : "No se pudieron consolidar los duplicados")
     } finally {
       setLoading(false)
       setProgress(null)

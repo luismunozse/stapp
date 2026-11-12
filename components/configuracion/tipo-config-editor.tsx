@@ -312,7 +312,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                     <button aria-label="Eliminar campo"
                       type="button"
                       onClick={() => removeCampoExtra(idx)}
-                      className="text-destructive hover:text-destructive/80"
+                      className="text-destructive-text hover:text-destructive-text/80"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -437,7 +437,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button aria-label="Quitar accesorio"
                   type="button"
                   onClick={() => setAccesorios((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -473,7 +473,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button aria-label="Quitar marca"
                   type="button"
                   onClick={() => setMarcas((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -509,7 +509,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button aria-label="Quitar problema"
                   type="button"
                   onClick={() => setProblemas((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -548,7 +548,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button aria-label="Quitar categoría"
                   type="button"
                   onClick={() => setCategoriasInventario((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>

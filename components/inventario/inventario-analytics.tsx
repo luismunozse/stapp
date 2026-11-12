@@ -246,7 +246,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             {!costosPorItemOcultos && (
                               <>
                                 <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
-                                <td className="py-2 text-right font-medium text-destructive">{formatPrice(item.capitalInmovilizado)}</td>
+                                <td className="py-2 text-right font-medium text-destructive-text">{formatPrice(item.capitalInmovilizado)}</td>
                               </>
                             )}
                           </tr>
@@ -292,7 +292,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 text-right">{item.promedioDiario}</td>
                             <td className="py-2 pr-2 text-right">
                               <span className={`font-medium ${
-                                item.diasHastaAgotamiento <= 7 ? "text-destructive" :
+                                item.diasHastaAgotamiento <= 7 ? "text-destructive-text" :
                                 item.diasHastaAgotamiento <= 14 ? "text-amber-600" : ""
                               }`}>
                                 {item.diasHastaAgotamiento} días

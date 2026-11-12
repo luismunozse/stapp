@@ -374,7 +374,7 @@ export function TiposDispositivoEditor() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(tipo)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="text-destructive-text hover:text-destructive-text hover:bg-destructive/10"
                         title={tipo.esBase ? "Desactivar tipo" : "Eliminar tipo"}
                       >
                         <Trash2 className="h-4 w-4" />

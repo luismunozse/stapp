@@ -151,13 +151,13 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
               {sena > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Seña</span>
-                  <span className="text-info">{formatPrice(sena)}</span>
+                  <span className="text-info-text">{formatPrice(sena)}</span>
                 </div>
               )}
               {cobrado > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ya cobrado</span>
-                  <span className="text-success">{formatPrice(cobrado)}</span>
+                  <span className="text-success-text">{formatPrice(cobrado)}</span>
                 </div>
               )}
             </div>

@@ -203,7 +203,7 @@ export function ChangelogContent() {
                         variant="ghost"
                         onClick={() => handleDelete(entry.id)}
                         disabled={mutating}
-                        className="text-destructive hover:text-destructive"
+                        className="text-destructive-text hover:text-destructive-text"
                       >
                         <Trash2 className="h-4 w-4" />
                       </IconButton>

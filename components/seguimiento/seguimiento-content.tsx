@@ -31,7 +31,6 @@ import {
   Zap,
   Snowflake,
   CheckCircle2,
-  Circle,
   Phone,
   MapPin,
   Wrench,
@@ -42,9 +41,7 @@ import {
   Package,
   ClipboardCheck,
   Search,
-  ThumbsUp,
   Settings,
-  Clock,
   Truck,
   Download,
   Timer,
@@ -55,6 +52,8 @@ import {
 } from "lucide-react"
 import type { TimelineEvent } from "./visual-timeline"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { ESTADO_ORDEN_UI, getEstadoOrdenUi } from "@/lib/estado-orden-ui"
+import { STATUS_TONE_CLASSES } from "@/components/ui/status-pill"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import {
@@ -114,22 +113,6 @@ function TimelineSkeleton() {
   )
 }
 
-const estadoLabels: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En reparación",
-  ESPERANDO_REPUESTO: "Esperando repuesto",
-  REPARADO: "Listo para retirar",
-  ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
-  ENTREGADO_SIN_COBRO: "Retirado sin cobro",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin reparación",
-  SIN_FALLA_DETECTADA: "Sin falla detectada",
-}
-
 function buildEstadoDescriptions(term: (key: string) => string): Record<string, string> {
   const equipo = term("equipo")
   const tecnico = term("tecnico")
@@ -151,40 +134,11 @@ function buildEstadoDescriptions(term: (key: string) => string): Record<string, 
   }
 }
 
-const estadoColors: Record<string, { text: string; bg: string; border: string }> = {
-  RECIBIDO: { text: "text-slate-600 dark:text-slate-400", bg: "bg-slate-100 dark:bg-slate-900/40", border: "border-slate-200 dark:border-slate-800" },
-  EN_DIAGNOSTICO: { text: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40", border: "border-blue-200 dark:border-blue-800" },
-  PRESUPUESTADO: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
-  APROBADO: { text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-200 dark:border-emerald-800" },
-  EN_REPARACION: { text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-950/40", border: "border-orange-200 dark:border-orange-800" },
-  ESPERANDO_REPUESTO: { text: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/40", border: "border-purple-200 dark:border-purple-800" },
-  REPARADO: { text: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-300 dark:border-green-800" },
-  ENTREGADO: { text: "text-green-700 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-200 dark:border-green-800" },
-  ENTREGADO_SIN_REPARACION: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
-  ENTREGADO_SIN_COBRO: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
-  CANCELADO: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
-  SIN_REPARACION: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
-  SIN_FALLA_DETECTADA: { text: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-950/40", border: "border-teal-200 dark:border-teal-800" },
-}
-
-const estadoIcons: Record<string, typeof Smartphone> = {
-  RECIBIDO: Package,
-  EN_DIAGNOSTICO: Search,
-  PRESUPUESTADO: ClipboardCheck,
-  APROBADO: ThumbsUp,
-  EN_REPARACION: Settings,
-  ESPERANDO_REPUESTO: Clock,
-  REPARADO: CheckCircle2,
-  ENTREGADO: Truck,
-  ENTREGADO_SIN_REPARACION: Truck,
-  ENTREGADO_SIN_COBRO: Truck,
-}
-
 const estadoFlow = ESTADO_FLOW
 
 const estadoShortLabels: Record<string, string> = {
   RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "Diagnostico",
+  EN_DIAGNOSTICO: "Diagnóstico",
   PRESUPUESTADO: "Presupuesto",
   APROBADO: "Aprobado",
   EN_REPARACION: "Reparando",
@@ -440,8 +394,9 @@ export function SeguimientoContent({ token }: { token: string }) {
     : undefined
   const showCotizacionApproval = data.estado === "PRESUPUESTADO" && !!activeCotizacion && !data.presupuestoAprobadoPortal
   const showBudgetApproval = data.estado === "PRESUPUESTADO" && data.presupuesto && !data.presupuestoAprobadoPortal && !activeCotizacion
-  const CurrentStateIcon = estadoIcons[data.estado] || Circle
-  const colors = estadoColors[data.estado] || estadoColors.RECIBIDO
+  const estadoUi = getEstadoOrdenUi(data.estado)
+  const CurrentStateIcon = estadoUi.icon
+  const colors = STATUS_TONE_CLASSES[estadoUi.tone]
 
   const timeRemaining = shouldShowTimeRemaining(estadoClass)
     ? computeTimeRemaining(data.fechaPrometida, new Date(), data.zonaHoraria)
@@ -529,17 +484,17 @@ export function SeguimientoContent({ token }: { token: string }) {
 
       {/* ══════════ STATUS CARD ══════════ */}
       {isRetiro ? (
-        <Card className="border border-amber-200 dark:border-amber-800">
+        <Card className={`border ${colors.border}`}>
           <CardContent className="p-5">
             <div className="flex items-center gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
-                <Package className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+              <div className={`h-14 w-14 rounded-2xl ${colors.bg} flex items-center justify-center shrink-0`}>
+                <CurrentStateIcon className={`h-7 w-7 ${colors.text}`} />
               </div>
               <div>
-                <p className="font-bold text-lg text-amber-700 dark:text-amber-400">
+                <p className={`font-bold text-lg ${colors.text}`}>
                   {data.estado === "ENTREGADO_SIN_COBRO"
                     ? getRetiroLabel(data.motivoSinCobro).title
-                    : estadoLabels[data.estado] || "Retirado sin reparación"}
+                    : estadoUi.labelCliente}
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {data.estado === "ENTREGADO_SIN_COBRO"
@@ -555,11 +510,11 @@ export function SeguimientoContent({ token }: { token: string }) {
           <CardContent className="p-5">
             <div className="flex items-center gap-4">
               <div className={`h-14 w-14 rounded-2xl ${colors.bg} flex items-center justify-center shrink-0`}>
-                <XCircle className={`h-7 w-7 ${colors.text}`} />
+                <CurrentStateIcon className={`h-7 w-7 ${colors.text}`} />
               </div>
               <div>
                 <p className={`font-bold text-lg ${colors.text}`}>
-                  {estadoLabels[data.estado]}
+                  {estadoUi.labelCliente}
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {estadoDescriptions[data.estado]}
@@ -578,7 +533,7 @@ export function SeguimientoContent({ token }: { token: string }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className={`font-bold text-lg ${colors.text}`}>
-                    {estadoLabels[data.estado]}
+                    {estadoUi.labelCliente}
                   </p>
                   {isReady && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 text-[10px] font-bold rounded-full uppercase tracking-wider">
@@ -699,7 +654,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 // Si la orden está completada, todos los pasos cuentan como past
                 const isPast = isCompleted ? true : index < currentIndex
                 const isCurrent = !isCompleted && index === currentIndex
-                const StepIcon = estadoIcons[estado] || Circle
+                const StepIcon = ESTADO_ORDEN_UI[estado].icon
 
                 return (
                   <div key={estado} className="flex flex-col items-center relative flex-1">

@@ -181,7 +181,7 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
               Se van a borrar las cuotas, el recargo y el costo de terminal del pago.
             </p>
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive-text">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

@@ -26,6 +26,7 @@ import { StatusBanner } from "@/components/ui/status-banner"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { ESTADO_LABELS } from "@/lib/turno-colors"
 import { TurnoEstadoBadge } from "@/components/agenda/turno-estado-badge"
+import { useModal } from "@/contexts/modal-context"
 
 const TIPO_LABELS: Record<TipoTurno, string> = {
   visita_diagnostico: "Visita de diagnóstico",
@@ -48,6 +49,7 @@ interface TurnoDetailSheetProps {
 }
 
 export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: TurnoDetailSheetProps) {
+  const { confirm } = useModal()
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,7 +85,13 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
 
   const handleEliminar = async () => {
     if (busy) return
-    if (!confirm("¿Eliminar turno? Esta acción no se puede deshacer.")) return
+    const ok = await confirm({
+      title: "¿Eliminar este turno?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     setError(null)
     setBusy(true)
     try {
@@ -273,7 +281,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
             {!tieneOrden && (
               <Button
                 variant="ghost"
-                className="text-destructive hover:text-destructive/80"
+                className="text-destructive-text hover:text-destructive-text/80"
                 onClick={handleEliminar}
                 disabled={busy}
               >

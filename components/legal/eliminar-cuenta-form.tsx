@@ -35,7 +35,7 @@ export function EliminarCuentaForm() {
         />
         <span className="text-sm text-muted-foreground whitespace-nowrap">.{ROOT_DOMAIN}</span>
       </div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
       <Button type="submit">Ir a mi cuenta</Button>
     </form>
   )

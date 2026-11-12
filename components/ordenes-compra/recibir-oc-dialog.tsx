@@ -41,7 +41,7 @@ function nuevoRequestId(): string {
 }
 
 export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, onReceived }: Props) {
-  const { showError } = useModal()
+  const { confirm, showError } = useModal()
   const [items, setItems] = useState<OCItem[]>([])
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [inventarioLinks, setInventarioLinks] = useState<Record<string, { id: string; codigo: string; nombre: string } | null>>({})
@@ -113,10 +113,14 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
     // Warn about unlinked items
     const unlinked = itemsToReceive.filter(i => !i.inventarioId)
     if (unlinked.length > 0) {
-      const confirm = window.confirm(
-        `${unlinked.length} ítem(s) no están vinculados a un producto del inventario. El stock no se actualizará para esos ítems. ¿Continuar?`
-      )
-      if (!confirm) return
+      const ok = await confirm({
+        title: "Hay ítems sin vincular",
+        description: `${unlinked.length} ítem(s) no están vinculados a un producto del inventario, así que su stock no se va a actualizar. ¿Querés recibir igual?`,
+        confirmText: "Recibir igual",
+        cancelText: "Volver",
+        variant: "warning",
+      })
+      if (!ok) return
     }
 
     setSubmitting(true)

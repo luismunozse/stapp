@@ -8,8 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import {
   ArrowLeft,
-  Bug,
-  Lightbulb,
   HelpCircle,
   Send,
   Loader2,
@@ -24,6 +22,7 @@ import {
 } from "lucide-react"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { TICKET_ESTADO, TICKET_PRIORIDAD, TICKET_TIPO } from "@/components/soporte/ticket-config"
 
 interface TicketData {
   id: string
@@ -39,24 +38,9 @@ interface TicketData {
   adjuntos: SupportTicketAttachment[]
 }
 
-const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
-  BUG: { label: "Bug / Error", icon: Bug, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  SUGERENCIA: { label: "Sugerencia", icon: Lightbulb, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  PREGUNTA: { label: "Pregunta", icon: HelpCircle, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-}
-
-const estadoConfig: Record<string, { label: string; color: string }> = {
-  ABIERTO: { label: "Abierto", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  EN_PROCESO: { label: "En proceso", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  RESUELTO: { label: "Resuelto", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  CERRADO: { label: "Cerrado", color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400" },
-}
-
-const prioridadConfig: Record<string, { label: string; color: string }> = {
-  BAJA: { label: "Baja", color: "bg-slate-100 text-slate-600" },
-  MEDIA: { label: "Media", color: "bg-yellow-100 text-yellow-700" },
-  ALTA: { label: "Alta", color: "bg-red-100 text-red-700" },
-}
+const tipoConfig = TICKET_TIPO
+const estadoConfig = TICKET_ESTADO
+const prioridadConfig = TICKET_PRIORIDAD
 
 export function TicketDetail({ ticketId }: { ticketId: string }) {
   const router = useRouter()

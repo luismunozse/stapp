@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { SucursalWhatsAppCard } from "@/components/configuracion/sucursal-whatsapp-card"
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Store, Star } from "lucide-react"
+import { toast } from "sonner"
 
 interface Sucursal {
   id: string
@@ -133,7 +134,7 @@ export default function SucursalesPage() {
       if (!res.ok) {
         const d = await res.json()
         // HAS_DATA (409): sugiere desactivar en vez de archivar.
-        alert(d.error || "Error al archivar")
+        toast.error(d.error || "No se pudo archivar la sucursal")
         return
       }
       setArchiveId(null)
@@ -351,7 +352,7 @@ function SucursalList({
                   label="Archivar sucursal"
                   variant="ghost"
                   onClick={() => onArchive(s.id)}
-                  className="text-destructive hover:text-destructive"
+                  className="text-destructive-text hover:text-destructive-text"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </IconButton>

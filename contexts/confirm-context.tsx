@@ -1,9 +1,9 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { ConfirmDialog, type ConfirmTone } from "@/components/ui/confirm-dialog"
 
-type ConfirmVariant = "danger" | "warning" | "info" | "success"
+type ConfirmVariant = ConfirmTone
 
 interface ConfirmOptions {
   title: string
@@ -90,6 +90,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={{ confirm, alert }}>
       {children}
       <ConfirmDialog
+        mode={state.isAlert ? "alert" : "confirm"}
         open={state.open}
         onOpenChange={handleOpenChange}
         title={state.title}

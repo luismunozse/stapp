@@ -99,7 +99,7 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-10 px-3 text-sm text-muted-foreground hover:text-destructive"
+                className="h-10 px-3 text-sm text-muted-foreground hover:text-destructive-text"
                 onClick={(e) => {
                   e.stopPropagation()
                   onBorrarPractica()
@@ -124,7 +124,7 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
                 <Button aria-label="Eliminar orden"
                   variant="ghost"
                   size="sm"
-                  className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                  className="h-10 w-10 text-muted-foreground hover:text-destructive-text"
                   onClick={(e) => onDelete(e, orden)}
                   disabled={deleting}
                 >

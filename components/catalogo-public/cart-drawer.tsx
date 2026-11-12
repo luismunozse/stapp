@@ -406,7 +406,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             <button
                               type="button"
                               onClick={() => cart.remove(k)}
-                              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition shrink-0"
+                              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive-text transition shrink-0"
                               aria-label="Quitar"
                               title="Quitar del carrito"
                             >
@@ -566,7 +566,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       </div>
                     )}
                     {cuponError && (
-                      <p className="text-xs text-destructive mt-1 inline-flex items-center gap-1">
+                      <p className="text-xs text-destructive-text mt-1 inline-flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {cuponError}
                       </p>
@@ -673,7 +673,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       </span>
                     </div>
                     {sinCanalDePedido && (
-                      <p className="text-xs text-destructive inline-flex items-start gap-1.5">
+                      <p className="text-xs text-destructive-text inline-flex items-start gap-1.5">
                         <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                         Este catálogo no está tomando pedidos online por el momento.
                       </p>

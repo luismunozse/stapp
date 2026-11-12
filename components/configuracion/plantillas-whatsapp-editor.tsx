@@ -39,6 +39,7 @@ import {
 import { StatusBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 type PlantillasMap = Record<string, string>
 
@@ -344,7 +345,7 @@ function PlantillaEditor({
                 className={cn(
                   "text-[10px] tabular-nums",
                   (value || plantilla.defaultText).length >= MAX_TEMPLATE_LENGTH
-                    ? "text-destructive font-medium"
+                    ? "text-destructive-text font-medium"
                     : "text-muted-foreground",
                 )}
               >
@@ -476,6 +477,7 @@ function SidebarItem({
 
 export function PlantillasWhatsappEditor() {
   const { timezone } = useCurrency()
+  const { confirm } = useModal()
   const [plantillas, setPlantillas] = useState<PlantillasMap>({})
   const [originalPlantillas, setOriginalPlantillas] = useState<PlantillasMap>({})
   const [organizationName, setOrganizationName] = useState<string>("")
@@ -627,8 +629,14 @@ export function PlantillasWhatsappEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasChanges, saving, plantillas])
 
-  const handleResetAll = () => {
-    if (!confirm("¿Restaurar TODAS las plantillas a sus valores predeterminados? Esta acción puede deshacerse con 'Descartar cambios'.")) return
+  const handleResetAll = async () => {
+    const ok = await confirm({
+      title: "¿Restaurar todas las plantillas?",
+      description: "Todas vuelven a sus valores predeterminados. Mientras no guardes, podés deshacerlo con “Descartar cambios”.",
+      confirmText: "Restaurar",
+      variant: "warning",
+    })
+    if (!ok) return
     setPlantillas({})
   }
 
@@ -664,7 +672,7 @@ export function PlantillasWhatsappEditor() {
               "px-4 py-3 rounded-lg text-sm flex items-center gap-2 ease-snappy animate-in slide-in-from-top-2",
               message.type === "success"
                 ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive",
+                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive-text",
             )}
           >
             {message.type === "success" ? (

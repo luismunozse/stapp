@@ -1,4 +1,5 @@
 import type { EstadoOrden } from "@/types"
+import { ESTADO_ORDEN_UI, ESTADOS_ORDEN } from "@/lib/estado-orden-ui"
 
 // ============================================
 // STATE MACHINE: Transiciones válidas de estado
@@ -180,18 +181,7 @@ export function resolverEstadoEntrega(estadoActual: EstadoOrden, sinCobro: boole
 // LABELS Y HELPERS DE UI
 // ============================================
 
-export const ESTADO_LABELS: Record<EstadoOrden, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
-  ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
-  ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
-  SIN_FALLA_DETECTADA: "Sin Falla Detectada",
-}
+/** Etiquetas de estado; la fuente única es lib/estado-orden-ui.ts. */
+export const ESTADO_LABELS: Record<EstadoOrden, string> = Object.fromEntries(
+  ESTADOS_ORDEN.map((estado) => [estado, ESTADO_ORDEN_UI[estado].label])
+) as Record<EstadoOrden, string>

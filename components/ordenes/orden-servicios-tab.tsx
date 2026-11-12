@@ -475,7 +475,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
                     {formatPrice(servicio.cantidad * servicio.precioUnitario)}
                   </span>
                   <IconButton label="Quitar servicio" variant="ghost" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveServicio(servicio.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive-text" />
                   </IconButton>
                 </div>
               </div>

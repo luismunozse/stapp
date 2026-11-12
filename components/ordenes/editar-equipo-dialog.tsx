@@ -251,7 +251,7 @@ function EditarEquipoForm({
                 aria-describedby={imeiError ? "editar-imei-error" : undefined}
               />
               {imeiError && (
-                <p id="editar-imei-error" className="text-sm text-destructive">
+                <p id="editar-imei-error" className="text-sm text-destructive-text">
                   {imeiError}
                 </p>
               )}

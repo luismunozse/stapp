@@ -108,7 +108,7 @@ export function CotizacionApprovalDialog({
           />
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-sm text-destructive-text">{error}</p>
           )}
 
           <div className="flex justify-end gap-2 pt-2">

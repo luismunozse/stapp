@@ -92,7 +92,7 @@ export function WipeInventarioDialog({ open, onOpenChange, onSuccess }: WipeInve
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <AlertTriangle className="h-6 w-6 text-destructive-text" />
           </div>
           <DialogTitle>Eliminar todo el inventario</DialogTitle>
           <DialogDescription>

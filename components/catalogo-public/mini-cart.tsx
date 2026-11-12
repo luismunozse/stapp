@@ -46,7 +46,7 @@ export function MiniCart({ cart, onOpen, formatPrecio, brandColor }: Props) {
                 </div>
                 <button
                   onClick={() => cart.remove(k)}
-                  className="h-7 w-7 rounded-md inline-flex items-center justify-center opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-muted hover:text-destructive transition"
+                  className="h-7 w-7 rounded-md inline-flex items-center justify-center opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-muted hover:text-destructive-text transition"
                   aria-label="Quitar"
                   title="Quitar del carrito"
                 >

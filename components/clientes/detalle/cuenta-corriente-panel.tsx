@@ -164,7 +164,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
             <div className="text-sm text-muted-foreground">{saldoView.label}</div>
             <div className={cn(
               "text-2xl font-bold tabular-nums mt-1",
-              saldoView.tone === "destructive" && "text-destructive",
+              saldoView.tone === "destructive" && "text-destructive-text",
               saldoView.tone === "info" && "text-info-600",
               saldoView.tone === "muted" && "text-muted-foreground"
             )}>
@@ -287,11 +287,11 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                   {mov.monto >= 0 ? (
                     <ArrowDownCircle className="h-4 w-4 text-success-600 mt-0.5 shrink-0" />
                   ) : (
-                    <ArrowUpCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <ArrowUpCircle className="h-4 w-4 text-destructive-text mt-0.5 shrink-0" />
                   )}
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className={cn("font-medium text-sm", mov.monto >= 0 ? "text-success-600" : "text-destructive")}>
+                      <span className={cn("font-medium text-sm", mov.monto >= 0 ? "text-success-600" : "text-destructive-text")}>
                         {mov.monto >= 0 ? "+" : ""}{formatPrice(Math.abs(mov.monto))}
                       </span>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -343,7 +343,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive-text"
                       title="Revertir cargo"
                       aria-label={`Revertir cargo por ${formatPrice(Math.abs(mov.monto))}`}
                       onClick={() => setRevertirTarget(mov)}

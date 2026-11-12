@@ -137,13 +137,13 @@ export function OrdenCostosCard({
             {sena > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Sena</span>
-                <span className="text-info font-medium">{formatPrice(sena)}</span>
+                <span className="text-info-text font-medium">{formatPrice(sena)}</span>
               </div>
             )}
             {totalCobrado > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Cobrado</span>
-                <span className="text-success font-medium">{formatPrice(totalCobrado)}</span>
+                <span className="text-success-text font-medium">{formatPrice(totalCobrado)}</span>
               </div>
             )}
             {descuentoCobro > 0 && (

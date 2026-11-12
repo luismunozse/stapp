@@ -143,7 +143,7 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
                 aria-label="Eliminar variante"
                 onClick={() => setDeletingId(v.id)}
               >
-                <Trash2 className="h-3 w-3 text-destructive" />
+                <Trash2 className="h-3 w-3 text-destructive-text" />
               </Button>
             </li>
           ))}
@@ -323,7 +323,7 @@ function VarianteForm({
               variant="ghost"
               size="sm"
               onClick={() => setImagenUrl(null)}
-              className="gap-1.5 text-destructive"
+              className="gap-1.5 text-destructive-text"
             >
               Quitar
             </Button>

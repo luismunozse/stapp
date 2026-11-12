@@ -388,7 +388,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                   </div>
                 )}
                 {excedeStock && (
-                  <p className="flex items-center gap-1.5 text-xs text-destructive">
+                  <p className="flex items-center gap-1.5 text-xs text-destructive-text">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     Solo hay {disponibleSeleccionado} disponible(s) de este repuesto.
                   </p>
@@ -457,7 +457,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                   <div className="sm:col-span-3">
                     <p className="text-xs text-muted-foreground">
                       Margen por unidad:{" "}
-                      <span className={margenManual < 0 ? "text-destructive font-medium" : "font-medium"}>
+                      <span className={margenManual < 0 ? "text-destructive-text font-medium" : "font-medium"}>
                         {formatPrice(margenManual)}
                       </span>
                       {margenManual < 0 && " — estarías vendiendo por debajo del costo"}
@@ -559,7 +559,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                       : formatPrice(cantidadDe(repuesto) * precioVenta)}
                   </span>
                   <IconButton label="Quitar repuesto" variant="ghost" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive-text" />
                   </IconButton>
                 </div>
               </div>
@@ -577,7 +577,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                   <span>Costo · margen</span>
                   <span>
                     {formatPrice(subtotalCosto)} ·{" "}
-                    <span className={subtotalRepuestos - subtotalCosto < 0 ? "text-destructive" : ""}>
+                    <span className={subtotalRepuestos - subtotalCosto < 0 ? "text-destructive-text" : ""}>
                       {formatPrice(subtotalRepuestos - subtotalCosto)}
                     </span>
                   </span>

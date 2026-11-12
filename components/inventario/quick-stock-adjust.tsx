@@ -80,7 +80,7 @@ export function QuickStockAdjust({
   }
 
   const stockClass = sinStock
-    ? "text-destructive"
+    ? "text-destructive-text"
     : esStockBajo
       ? "text-amber-600"
       : ""

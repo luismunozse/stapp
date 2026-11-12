@@ -125,7 +125,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
             className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-xs sm:text-sm ${
               message.type === "success"
                 ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive"
+                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive-text"
             }`}
           >
             {message.text}
@@ -185,7 +185,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
 
         <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-destructive mt-0.5 shrink-0" />
+            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-destructive-text mt-0.5 shrink-0" />
             <div className="min-w-0">
               <Label className="text-sm sm:text-base">Stock bajo</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">

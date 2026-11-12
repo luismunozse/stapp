@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill"
 import {
   Select,
   SelectContent,
@@ -57,17 +58,17 @@ interface Props {
 }
 
 function estadoBadge(estado: Lote["estado"]) {
-  const map: Record<Lote["estado"], { label: string; cls: string }> = {
-    ACTIVO: { label: "Activo", cls: "border-emerald-500/60 text-emerald-600" },
-    AGOTADO: { label: "Agotado", cls: "border-muted-foreground/40 text-muted-foreground" },
-    VENCIDO: { label: "Vencido", cls: "border-red-500/60 text-red-600" },
-    BLOQUEADO: { label: "Bloqueado", cls: "border-amber-500/60 text-amber-600" },
+  const map: Record<Lote["estado"], { label: string; tone: StatusTone }> = {
+    ACTIVO: { label: "Activo", tone: "success" },
+    AGOTADO: { label: "Agotado", tone: "muted" },
+    VENCIDO: { label: "Vencido", tone: "danger" },
+    BLOQUEADO: { label: "Bloqueado", tone: "warning" },
   }
   const m = map[estado]
   return (
-    <Badge variant="outline" className={`text-[10px] ${m.cls}`}>
+    <StatusPill tone={m.tone} size="sm" className="text-[10px]">
       {m.label}
-    </Badge>
+    </StatusPill>
   )
 }
 
@@ -279,7 +280,7 @@ export function LotesDialog({
                 maxLength={500}
               />
             </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-xs text-destructive-text">{error}</p>}
             {okMsg && <p className="text-xs text-emerald-600">{okMsg}</p>}
             <Button onClick={handleSubmit} className="w-full" loading={submitting}>
               Registrar entrada

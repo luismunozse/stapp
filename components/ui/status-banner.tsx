@@ -18,7 +18,7 @@ const TONE: Record<BannerTone, string> = {
     "bg-warning-50 border-warning/30 text-warning-700 dark:bg-warning-100/40 dark:border-warning/20 dark:text-warning-600",
   success:
     "bg-success-50 border-success/30 text-success-700 dark:bg-success-100/40 dark:border-success/20 dark:text-success-500",
-  danger: "bg-destructive/10 border-destructive/25 text-destructive",
+  danger: "bg-destructive/10 border-destructive/25 text-destructive-text",
 }
 
 export function StatusBanner({

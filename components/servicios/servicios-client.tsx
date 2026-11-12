@@ -377,7 +377,7 @@ export function ServiciosClient() {
                   disabled={deletingId === servicio.id}
                   onClick={() => handleDelete(servicio)}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  <Trash2 className="h-4 w-4 text-destructive-text" />
                 </IconButton>
               </div>
             </div>

@@ -108,7 +108,7 @@ export function PosHeldSales({
                   <IconButton
                     label="Descartar venta en espera"
                     variant="ghost"
-                    className="h-8 w-8 text-destructive"
+                    className="h-8 w-8 text-destructive-text"
                     onClick={() => onDelete(sale.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

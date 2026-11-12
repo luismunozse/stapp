@@ -237,7 +237,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
 
       {error && (
         <Card>
-          <CardContent className="py-6 text-center text-destructive">
+          <CardContent className="py-6 text-center text-destructive-text">
             Error al cargar el estado de resultados
           </CardContent>
         </Card>
@@ -436,7 +436,7 @@ function Row({
         className={
           highlight
             ? positive === false
-              ? "text-destructive"
+              ? "text-destructive-text"
               : "text-success-700"
             : muted
             ? "text-muted-foreground"

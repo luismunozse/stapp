@@ -1497,7 +1497,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               }}
             />
             {errors.clienteId && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.clienteId.message}
               </p>
             )}
@@ -1630,7 +1630,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 />
               )}
               {errors.dispositivo && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.dispositivo.message}
                 </p>
               )}
@@ -1675,7 +1675,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     inputMode={imeiEsImei ? "numeric" : undefined}
                   />
                   {errors.imei && (
-                    <p className="text-sm text-destructive mt-1">
+                    <p className="text-sm text-destructive-text mt-1">
                       {errors.imei.message}
                     </p>
                   )}
@@ -1722,7 +1722,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               rows={3}
             />
             {errors.problemaReportado && (
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 {errors.problemaReportado.message}
               </p>
             )}
@@ -1745,7 +1745,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 placeholder="0.00"
               />
               {errors.presupuesto && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   {errors.presupuesto.message}
                 </p>
               )}
@@ -2039,7 +2039,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                             const faltante =
                               checklistIntentoEnviar && item.requerido && checklistItemFaltante(item.tipo, value)
                             const avisoFaltante = faltante ? (
-                              <p className="text-sm text-destructive mt-1">{CHECKLIST_ITEM_REQUERIDO_MSG}</p>
+                              <p className="text-sm text-destructive-text mt-1">{CHECKLIST_ITEM_REQUERIDO_MSG}</p>
                             ) : null
                             if (item.tipo === "BOOLEAN") {
                               return (

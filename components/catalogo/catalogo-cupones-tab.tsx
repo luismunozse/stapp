@@ -188,7 +188,7 @@ export function CatalogoCuponesTab() {
                       Editar
                     </Button>
                     <Button aria-label="Eliminar cupón" variant="outline" size="sm" onClick={() => setDeleteId(c.id)}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
+                      <Trash2 className="h-3 w-3 text-destructive-text" />
                     </Button>
                   </div>
                 </CardContent>

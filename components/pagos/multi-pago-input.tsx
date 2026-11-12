@@ -146,7 +146,7 @@ export function MultiPagoInput({
                   label="Quitar pago"
                   type="button"
                   variant="ghost"
-                  className="h-6 w-6 text-destructive"
+                  className="h-6 w-6 text-destructive-text"
                   onClick={() => removePago(index)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

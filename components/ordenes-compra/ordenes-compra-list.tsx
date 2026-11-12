@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, type Column } from "@/components/ui/data-table"
@@ -43,7 +43,7 @@ export function OrdenesCompraList() {
   const [recibirOC, setRecibirOC] = useState<OrdenCompra | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const { formatPrice, formatDate } = useCurrency()
-  const { showError } = useModal()
+  const { confirm, showError } = useModal()
 
   // Check for draft from inventario "Generar OC" button
   useEffect(() => {
@@ -99,7 +99,13 @@ export function OrdenesCompraList() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta orden de compra?")) return
+    const ok = await confirm({
+      title: "¿Eliminar esta orden de compra?",
+      description: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      variant: "danger",
+    })
+    if (!ok) return
     try {
       const res = await fetch(`/api/ordenes-compra/${id}`, { method: "DELETE" })
       if (!res.ok) {
@@ -125,7 +131,7 @@ export function OrdenesCompraList() {
       header: "Estado",
       render: (oc) => {
         const badge = estadoBadge(oc.estado)
-        return <Badge variant={badge.variant}>{badge.label}</Badge>
+        return <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
       },
     },
     {
@@ -157,7 +163,7 @@ export function OrdenesCompraList() {
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleChangeEstado(oc, "ENVIADA")}>
                 <Send className="mr-1 h-3 w-3" /> Enviar
               </Button>
-              <Button aria-label="Eliminar orden de compra" variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleDelete(oc.id)}>
+              <Button aria-label="Eliminar orden de compra" variant="ghost" size="sm" className="h-7 text-xs text-destructive-text" onClick={() => handleDelete(oc.id)}>
                 <X className="h-3 w-3" />
               </Button>
             </>
@@ -168,7 +174,7 @@ export function OrdenesCompraList() {
             </Button>
           )}
           {(oc.estado === "ENVIADA" || oc.estado === "RECIBIDA_PARCIAL") && (
-            <Button aria-label="Cancelar orden de compra" variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleChangeEstado(oc, "CANCELADA")}>
+            <Button aria-label="Cancelar orden de compra" variant="ghost" size="sm" className="h-7 text-xs text-destructive-text" onClick={() => handleChangeEstado(oc, "CANCELADA")}>
               <X className="h-3 w-3" />
             </Button>
           )}

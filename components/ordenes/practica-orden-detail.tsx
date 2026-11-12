@@ -64,7 +64,7 @@ export function PracticaOrdenDetail({ orden, isAdmin }: PracticaOrdenDetailProps
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive-text"
               onClick={() => void borrar()}
               loading={borrando}
             >

@@ -567,13 +567,13 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Abonado</div>
-                    <div className="font-medium text-base sm:text-lg text-success">
+                    <div className="font-medium text-base sm:text-lg text-success-text">
                       {formatPrice(venta.montoAbonado || 0)}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Pendiente</div>
-                    <div className="font-medium text-base sm:text-lg text-destructive">
+                    <div className="font-medium text-base sm:text-lg text-destructive-text">
                       {formatPrice(saldoPendiente)}
                     </div>
                   </div>
@@ -581,7 +581,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 {totalCostoFinanciero > 0 && (
                   <div className="flex items-center justify-between p-2 bg-destructive/10 border border-destructive/25 rounded-lg text-sm">
                     <span className="text-muted-foreground">Costo terminales:</span>
-                    <span className="text-destructive font-medium">-{formatPrice(totalCostoFinanciero)}</span>
+                    <span className="text-destructive-text font-medium">-{formatPrice(totalCostoFinanciero)}</span>
                     <span className="text-muted-foreground">Ingreso real:</span>
                     <span className="font-bold">{formatPrice((venta.montoAbonado || 0) - totalCostoFinanciero)}</span>
                   </div>
@@ -595,7 +595,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
-                <div className="text-xl font-bold text-destructive">
+                <div className="text-xl font-bold text-destructive-text">
                   {formatPrice(saldoPendiente)}
                 </div>
               </div>
@@ -674,7 +674,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                       )}
                     </div>
                     {item.diasGarantia > 0 && (
-                      <Badge variant="outline" className="shrink-0 text-success">
+                      <Badge variant="outline" className="shrink-0 text-success-text">
                         {item.diasGarantia}d
                       </Badge>
                     )}
@@ -711,7 +711,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 <span>{formatPrice(venta.subtotal)}</span>
               </div>
               {venta.descuento > 0 && (
-                <div className="flex justify-between text-sm text-destructive">
+                <div className="flex justify-between text-sm text-destructive-text">
                   <span>Descuento:</span>
                   <span>-{formatPrice(venta.descuento)}</span>
                 </div>
@@ -755,7 +755,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         <td className="py-3 text-right font-medium">{formatPrice(item.subtotal)}</td>
                         <td className="py-3 text-center">
                           {item.diasGarantia > 0 ? (
-                            <Badge variant="outline" className="text-success">
+                            <Badge variant="outline" className="text-success-text">
                               {item.diasGarantia} días
                             </Badge>
                           ) : (
@@ -793,10 +793,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   </tr>
                   {venta.descuento > 0 && (
                     <tr>
-                      <td colSpan={3} className="py-1 text-right text-destructive">
+                      <td colSpan={3} className="py-1 text-right text-destructive-text">
                         Descuento:
                       </td>
-                      <td className="py-1 text-right text-destructive">
+                      <td className="py-1 text-right text-destructive-text">
                         -{formatPrice(venta.descuento)}
                       </td>
                       <td colSpan={2}></td>
@@ -847,7 +847,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         {dev.estado}
                       </Badge>
                     </div>
-                    <div className="font-bold text-destructive">
+                    <div className="font-bold text-destructive-text">
                       -{formatPrice(dev.montoDevolucion)}
                     </div>
                   </div>

@@ -52,7 +52,7 @@ export function TipoDispositivoPicker({
         </div>
       )}
       {error && (
-        <p className="text-sm text-destructive mt-1">
+        <p className="text-sm text-destructive-text mt-1">
           {error}
         </p>
       )}

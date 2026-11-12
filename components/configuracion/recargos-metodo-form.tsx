@@ -66,7 +66,7 @@ export function RecargosMetodoForm() {
           className={`px-4 py-3 rounded text-sm ${
             msg.type === "success"
               ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-              : "bg-destructive/10 border border-destructive/30 text-destructive"
+              : "bg-destructive/10 border border-destructive/30 text-destructive-text"
           }`}
         >
           {msg.text}

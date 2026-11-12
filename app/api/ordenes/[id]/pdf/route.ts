@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
 import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { headers } from "next/headers"
@@ -220,6 +221,9 @@ export async function GET(
       .map((t) => ({ estado: t.estado, fecha: new Date(t.inicio) }))
     const timeline = timelineAll.length > 0 ? timelineAll : null
 
+    // Avances que el taller marcó visibles para el cliente (solo se dibujan en la hoja de entrega).
+    const avances = await cargarAvancesVisibles(orden.id, organizationId!)
+
     // Preparar datos para el PDF - ensuring all values are primitives
     const pdfData: OrdenPDFData = {
       numeroOrden: orden.numero_orden,
@@ -299,6 +303,7 @@ export async function GET(
       garantia,
       cobros,
       timeline,
+      avances,
     }
 
     // Hoja de esta impresión: la que pide el request (?papel=) o, si no pide ninguna válida,

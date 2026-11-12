@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Warehouse, Star } from "lucide-react"
+import { toast } from "sonner"
 
 interface Deposito {
   id: string
@@ -126,7 +127,7 @@ export default function DepositosPage() {
       const res = await fetch(`/api/depositos/${archiveId}`, { method: "DELETE" })
       if (!res.ok) {
         const d = await res.json()
-        alert(d.error || "Error al archivar")
+        toast.error(d.error || "No se pudo archivar el depósito")
         return
       }
       setArchiveId(null)
@@ -341,7 +342,7 @@ function DepositoList({
                 label="Archivar depósito"
                 variant="ghost"
                 onClick={() => onArchive(d.id)}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive-text hover:text-destructive-text"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </IconButton>

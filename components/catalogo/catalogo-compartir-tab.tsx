@@ -267,7 +267,7 @@ export function CatalogoCompartirTab() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setBannerUrl(null)}
-                    className="gap-1.5 text-destructive"
+                    className="gap-1.5 text-destructive-text"
                   >
                     <Trash2 className="h-4 w-4" />
                     Quitar
@@ -386,7 +386,7 @@ export function CatalogoCompartirTab() {
                       onClick={() => setTrustBadges((prev) => prev.filter((_, j) => j !== i))}
                       aria-label="Quitar sello"
                     >
-                      <X className="h-4 w-4 text-destructive" />
+                      <X className="h-4 w-4 text-destructive-text" />
                     </Button>
                   </div>
                 )

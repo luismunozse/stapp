@@ -231,7 +231,7 @@ export function ComprobanteFiscalCard({
         )}
 
         {avisoVisible?.tono === "error" && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-sm text-destructive-text">
             {avisoVisible.texto}
           </p>
         )}
@@ -390,7 +390,7 @@ function FacturaBloque({ grupo, puedeAnular = false, onAnular, verificandoId = n
       )}
 
       {factura.estado === "rechazado" && factura.errorMsg && (
-        <p className="flex items-start gap-2 text-sm text-destructive">
+        <p className="flex items-start gap-2 text-sm text-destructive-text">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{factura.errorMsg}</span>
         </p>

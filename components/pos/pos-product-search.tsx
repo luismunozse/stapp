@@ -461,8 +461,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
           </div>
           {/* Item 5: scan feedback — brief green flash when barcode adds a product */}
           {scanSuccess && (
-            <div className="flex items-center gap-1.5 px-1 py-1 rounded-md bg-success/10 border border-success/20 text-success text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-150">
-              <span className="text-success">✓</span>
+            <div className="flex items-center gap-1.5 px-1 py-1 rounded-md bg-success/10 border border-success/20 text-success-text text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-150">
+              <span className="text-success-text">✓</span>
               <span className="truncate">{scanSuccess.nombre}</span>
             </div>
           )}
@@ -622,7 +622,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     </span>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                       product.stock <= 3
-                        ? "bg-destructive/10 text-destructive"
+                        ? "bg-destructive/10 text-destructive-text"
                         : "bg-muted text-muted-foreground"
                     }`}>
                       Stock: {product.stock}

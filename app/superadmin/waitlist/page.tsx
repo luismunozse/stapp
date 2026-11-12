@@ -268,7 +268,7 @@ export default function WaitlistPage() {
                             <IconButton
                               label="Eliminar de la lista de espera"
                               variant="ghost"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive-text"
                               onClick={() => setDeleteTarget(entry)}
                             >
                               <Trash2 className="h-4 w-4" />
