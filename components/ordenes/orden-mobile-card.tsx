@@ -7,6 +7,7 @@ import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
+import { CobroResumen } from "@/components/ui/cobro-resumen"
 import type { OrdenServicio } from "@/types"
 
 interface OrdenMobileCardProps {
@@ -54,6 +55,14 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
               {orden.marca && ` \u2022 ${orden.marca}`}
             </span>
           </div>
+
+          {orden.estadoPago && (
+            <CobroResumen
+              estadoPago={orden.estadoPago}
+              saldoPendiente={orden.saldoPendiente}
+              layout="inline"
+            />
+          )}
 
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
             <div className="flex items-center gap-1">

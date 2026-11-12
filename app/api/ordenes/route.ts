@@ -10,6 +10,8 @@ import {
   resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
+import { resumenCobroDeFila } from "@/lib/ordenes/resumen-cobro"
+import { NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -133,7 +135,8 @@ export async function GET(request: Request) {
         users:tecnico_id (
           id,
           nombre
-        )
+        ),
+        ${NOTAS_CREDITO_APLICADO_EMBED}
       `, { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
@@ -327,10 +330,14 @@ export async function GET(request: Request) {
     }
     const ordenesFormatted = ordenes?.map((o: any) => {
       const formatted = formatOrden(o, ordenOptions)
+      if (!formatted) return formatted
+      // Estado de cobro y saldo de la fila: mismo cálculo que el detalle, con
+      // los datos que ya trae esta query (sin un SELECT por orden).
+      const conCobro = { ...formatted, ...resumenCobroDeFila(o) }
       // Only a TECNICO gets the hint; the server re-checks everything on take.
-      return role === "TECNICO" && formatted
-        ? { ...formatted, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
-        : formatted
+      return role === "TECNICO"
+        ? { ...conCobro, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
+        : conCobro
     })
 
     // Retornar con información de paginación y cache headers
