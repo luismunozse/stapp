@@ -856,7 +856,7 @@ export function CotizacionForm({
                 disabled={loading}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Item
+                Agregar ítem
               </Button>
               {!isEditing && (
                 <Button
@@ -867,7 +867,7 @@ export function CotizacionForm({
                   disabled={loading}
                 >
                   <BookOpen className="mr-2 h-4 w-4" />
-                  Cargar Plantilla
+                  Cargar plantilla
                 </Button>
               )}
             </div>

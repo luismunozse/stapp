@@ -1133,7 +1133,7 @@ export default function CotizacionesPage() {
                           onClick={() => setConvertingCotizacion(cotizacion)}
                         >
                           <ShoppingCart className="mr-2 h-3 w-3" />
-                          Convertir a Venta
+                          Convertir a venta
                         </Button>
                       )}
                       {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && puedeConvertirAOrden && (
