@@ -151,7 +151,7 @@ export function ItemDetailDialog({
     return tieneVariantes ? base : item.precio_hasta != null ? `desde ${base}` : base
   })()
 
-  const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
+  const shareText = `¡Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -181,7 +181,7 @@ export function ItemDetailDialog({
 
   const whatsappLink = catalogoWhatsAppUrl(
     whatsapp,
-    `Hola! Me interesa "${item.nombre}" ${precioTexto}. Link: ${itemUrl}`
+    `¡Hola! Me interesa "${item.nombre}" ${precioTexto}. Link: ${itemUrl}`
   )
 
   const onTouchStart = (e: React.TouchEvent) => {
