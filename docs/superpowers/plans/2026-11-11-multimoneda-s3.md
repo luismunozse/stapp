@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** dejar en producción el esquema multimoneda (365 corregida + 406), la configuración de "Moneda extranjera" por organización y un endpoint de cotización confiable (vivo → referencia → sin cotización), sin cambiar nada de lo que ya funciona.
+**Goal:** dejar en producción el esquema multimoneda (365 corregida + 407), la configuración de "Moneda extranjera" por organización y un endpoint de cotización confiable (vivo → referencia → sin cotización), sin cambiar nada de lo que ya funciona.
 
-**Architecture:** la 365 nunca se aplicó (verificado en producción el 2026-11-11), así que se **corrige en el lugar** para admitir EUR y `moneda_extranjera`, en vez de crear CHECKs que otra migración borra enseguida. La 406 suma solo lo nuevo (columnas de cotización en `cotizaciones` + tabla `recotizaciones`). La lógica de decisión de la cotización es pura (`lib/currency/tipo-cambio.ts`); la I/O (dolarapi + Supabase) vive en `lib/currency/tipo-cambio.server.ts`. La UI es un componente que se guarda solo, en una pestaña nueva de /configuracion, con el mismo patrón que `ComisionesConfig`.
+**Architecture:** la 365 nunca se aplicó (verificado en producción el 2026-11-11), así que se **corrige en el lugar** para admitir EUR y `moneda_extranjera`, en vez de crear CHECKs que otra migración borra enseguida. La 407 suma solo lo nuevo (columnas de cotización en `cotizaciones` + tabla `recotizaciones`). La lógica de decisión de la cotización es pura (`lib/currency/tipo-cambio.ts`); la I/O (dolarapi + Supabase) vive en `lib/currency/tipo-cambio.server.ts`. La UI es un componente que se guarda solo, en una pestaña nueva de /configuracion, con el mismo patrón que `ComisionesConfig`.
 
 **Tech Stack:** Next.js 16 App Router, Supabase (supabaseAdmin), zod, SWR, vitest + Testing Library, SQL a mano con `scripts/db-run.mjs`.
 
@@ -33,23 +33,23 @@
 
 ---
 
-### Task 1: Migración 365 corregida + migración 406
+### Task 1: Migración 365 corregida + migración 407
 
 **Files:**
 - Modify: `supabase/migrations/365_multimoneda_foundation.sql`
 - Modify: `supabase/migrations/verify/365_probes.sql`, `supabase/migrations/rollback/365_rollback.sql` (solo si cambia algo que deshacer)
-- Create: `supabase/migrations/406_multimoneda_cotizaciones.sql`, `supabase/migrations/rollback/406_rollback.sql`, `supabase/migrations/verify/406_probes.sql`
+- Create: `supabase/migrations/407_multimoneda_cotizaciones.sql`, `supabase/migrations/rollback/407_rollback.sql`, `supabase/migrations/verify/407_probes.sql`
 - Modify: `__tests__/multimoneda-fundacion-migration.test.ts`
 - Create: `__tests__/multimoneda-cotizaciones-migration.test.ts`
 
 **Interfaces:**
 - Produces: `organizacion_moneda.moneda_extranjera CHAR(3) NOT NULL DEFAULT 'USD' CHECK (moneda_extranjera IN ('USD','EUR'))`; CHECKs `moneda IN ('USD','EUR')` (y `moneda_origen` ídem) en `inventario`, `servicios`, `items_venta`, `servicios_orden`, `repuestos_orden`, `items_cotizacion`; `cotizaciones.tipo_cambio_fuente TEXT`, `cotizaciones.tipo_cambio_en TIMESTAMPTZ`; tabla `recotizaciones` (columnas exactas del spec §4.4, `modo IN ('HOY','MANUAL')`, `documento_tipo IN ('ORDEN','COTIZACION')`, `motivo` obligatorio si `modo='MANUAL'` vía CHECK).
 
-- [ ] **Step 1: Tests que fallan.** En `multimoneda-fundacion-migration.test.ts` reemplazar las aserciones `= 'USD'` de las 6 tablas de catálogo/líneas por `IN ('USD', 'EUR')`, y agregar: `expect(CODE).toMatch(/moneda_extranjera\s+CHAR\(3\) NOT NULL DEFAULT 'USD' CHECK \(moneda_extranjera IN \('USD', 'EUR'\)\)/)`. Mantener que `pagos_venta`, `movimientos_caja`, `sesion_caja_saldos` y `vuelto_moneda_default` siguen solo `'USD'` (fase 2). En el test nuevo de la 406: aditiva (sin DROP/DELETE/UPDATE/TRUNCATE), `lock_timeout`, `ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT` y `tipo_cambio_en TIMESTAMPTZ` en `cotizaciones`, `CREATE TABLE IF NOT EXISTS recotizaciones`, RLS habilitada con las dos políticas de la forma 365 (`*_select` own-org para authenticated, `*_all_service`), `REVOKE ALL ... FROM PUBLIC, anon, authenticated`, CHECK `modo <> 'MANUAL' OR length(trim(motivo)) > 0`, e índice `(organization_id, documento_tipo, documento_id)`. Rollback y probes existen.
+- [ ] **Step 1: Tests que fallan.** En `multimoneda-fundacion-migration.test.ts` reemplazar las aserciones `= 'USD'` de las 6 tablas de catálogo/líneas por `IN ('USD', 'EUR')`, y agregar: `expect(CODE).toMatch(/moneda_extranjera\s+CHAR\(3\) NOT NULL DEFAULT 'USD' CHECK \(moneda_extranjera IN \('USD', 'EUR'\)\)/)`. Mantener que `pagos_venta`, `movimientos_caja`, `sesion_caja_saldos` y `vuelto_moneda_default` siguen solo `'USD'` (fase 2). En el test nuevo de la 407: aditiva (sin DROP/DELETE/UPDATE/TRUNCATE), `lock_timeout`, `ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT` y `tipo_cambio_en TIMESTAMPTZ` en `cotizaciones`, `CREATE TABLE IF NOT EXISTS recotizaciones`, RLS habilitada con las dos políticas de la forma 365 (`*_select` own-org para authenticated, `*_all_service`), `REVOKE ALL ... FROM PUBLIC, anon, authenticated`, CHECK `modo <> 'MANUAL' OR length(trim(motivo)) > 0`, e índice `(organization_id, documento_tipo, documento_id)`. Rollback y probes existen.
 - [ ] **Step 2:** `npx vitest run __tests__/multimoneda-fundacion-migration.test.ts __tests__/multimoneda-cotizaciones-migration.test.ts` → FAIL.
-- [ ] **Step 3: SQL.** Editar la 365 (el comentario de cabecera explica que se corrigió antes de aplicarse y por qué) y escribir la 406. **No** convertir `cotizaciones.tipo_cambio` a `NUMERIC(14,6)`: `ALTER TYPE` reescribe la tabla bajo ACCESS EXCLUSIVE; la validación queda en el código (se ajusta el spec §4.3 en el Step 5). Actualizar probes: los de la 365 que prueban "rechaza EUR" pasan a "rechaza 'BRL'" y suman "acepta EUR"; los de la 406 prueban el CHECK del motivo.
+- [ ] **Step 3: SQL.** Editar la 365 (el comentario de cabecera explica que se corrigió antes de aplicarse y por qué) y escribir la 407. **No** convertir `cotizaciones.tipo_cambio` a `NUMERIC(14,6)`: `ALTER TYPE` reescribe la tabla bajo ACCESS EXCLUSIVE; la validación queda en el código (se ajusta el spec §4.3 en el Step 5). Actualizar probes: los de la 365 que prueban "rechaza EUR" pasan a "rechaza 'BRL'" y suman "acepta EUR"; los de la 407 prueban el CHECK del motivo.
 - [ ] **Step 4:** mismos tests → PASS.
-- [ ] **Step 5:** corregir el spec §4.3 ("`tipo_cambio` existente no se convierte; se valida en código") y commit `feat(multimoneda): corrige la 365 (EUR, moneda_extranjera) y agrega la 406`.
+- [ ] **Step 5:** corregir el spec §4.3 ("`tipo_cambio` existente no se convierte; se valida en código") y commit `feat(multimoneda): corrige la 365 (EUR, moneda_extranjera) y agrega la 407`.
 
 ### Task 2: `config-moneda` con moneda extranjera
 
@@ -193,6 +193,6 @@
 
 - [ ] **Step 1:** `npx tsc --noEmit` → sin errores. `npx eslint lib/currency app/api/moneda app/api/configuracion/moneda components/configuracion hooks/use-moneda.ts` → sin errores.
 - [ ] **Step 2:** `npx vitest run` → todo en verde. Hay que comparar contra `main` y declarar cualquier test flaky que ya existía.
-- [ ] **Step 3:** dry-run contra producción, solo lectura con ROLLBACK: `node scripts/db-run.mjs supabase/migrations/365_multimoneda_foundation.sql`, después la `365b` y después la `406`. Esperado: "ROLLBACK — nada quedó aplicado" y ningún error.
-- [ ] **Step 4:** push de `feat/multimoneda-s3` y PR. La descripción incluye el orden de aplicación (365 → 365b → 406 → probes), la advertencia de "fuera de hora pico" y la nota de que `SUPABASE_DB_URL` apunta al pooler.
-- [ ] **Step 5 (requiere el OK explícito del usuario y un horario fuera de pico):** `--apply` de la 365, después la 365b, después la 406, y correr `verify/365_probes.sql` y `verify/406_probes.sql`. Recién después se mergea el PR. La función queda apagada para todas las orgs (`multimoneda_habilitada` es false por defecto).
+- [ ] **Step 3:** dry-run contra producción, solo lectura con ROLLBACK: `node scripts/db-run.mjs supabase/migrations/365_multimoneda_foundation.sql`, después la `365b` y después la `407`. Esperado: "ROLLBACK — nada quedó aplicado" y ningún error.
+- [ ] **Step 4:** push de `feat/multimoneda-s3` y PR. La descripción incluye el orden de aplicación (365 → 365b → 407 → probes), la advertencia de "fuera de hora pico" y la nota de que `SUPABASE_DB_URL` apunta al pooler.
+- [ ] **Step 5 (requiere el OK explícito del usuario y un horario fuera de pico):** `--apply` de la 365, después la 365b, después la 407, y correr `verify/365_probes.sql` y `verify/407_probes.sql`. Recién después se mergea el PR. La función queda apagada para todas las orgs (`multimoneda_habilitada` es false por defecto).

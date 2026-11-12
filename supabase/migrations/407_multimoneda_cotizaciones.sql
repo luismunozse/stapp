@@ -1,5 +1,5 @@
 -- ============================================================================
--- 406 (multimoneda S3): quote rate metadata + recotizaciones. Additive, re-runnable.
+-- 407 (multimoneda S3): quote rate metadata + recotizaciones. Additive, re-runnable.
 -- ============================================================================
 -- Prerequisite: 365 (as corrected for S3) and 365b are applied: this file does not create or
 -- change any EUR CHECK or organizacion_moneda.moneda_extranjera, those live in 365 now.
@@ -13,23 +13,18 @@
 --     it has no FK. usuario_id is nulled if the user is deleted (the trail outlives users).
 --
 -- No BEGIN/COMMIT: scripts/db-run.mjs wraps the file (dry-run by default).
--- LOCKS: ACCESS EXCLUSIVE on cotizaciones until the transaction ends; apply off-peak.
+-- LOCKS: recotizaciones is created first so the ALTER TABLE cotizaciones (ACCESS EXCLUSIVE until
+-- the transaction ends) is the LAST statement and is held as briefly as possible. The new FKs
+-- take SHARE ROW EXCLUSIVE on organizations and users (blocks writes there, not reads). Apply off-peak.
 -- lock_timeout bounds the WAIT, not the hold; if it aborts, nothing was applied: re-run it.
 --
--- Rollback: rollback/406_rollback.sql. Probes: verify/406_probes.sql.
+-- Rollback: rollback/407_rollback.sql. Probes: verify/407_probes.sql.
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';
 
 -- ----------------------------------------------------------------------------
--- 1. Quotes: rate source and time
--- ----------------------------------------------------------------------------
-ALTER TABLE cotizaciones
-  ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT,
-  ADD COLUMN IF NOT EXISTS tipo_cambio_en TIMESTAMPTZ;
-
--- ----------------------------------------------------------------------------
--- 2. Re-quote audit trail
+-- 1. Re-quote audit trail
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS recotizaciones (
   id                   TEXT PRIMARY KEY DEFAULT generate_cuid(),
@@ -65,3 +60,10 @@ CREATE POLICY recotizaciones_all_service ON recotizaciones
   USING (true) WITH CHECK (true);
 REVOKE ALL ON public.recotizaciones FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.recotizaciones TO authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 2. Quotes: rate source and time (last: shortest ACCESS EXCLUSIVE hold on cotizaciones)
+-- ----------------------------------------------------------------------------
+ALTER TABLE cotizaciones
+  ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT,
+  ADD COLUMN IF NOT EXISTS tipo_cambio_en TIMESTAMPTZ;

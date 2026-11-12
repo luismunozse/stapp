@@ -66,6 +66,9 @@ export async function resolverTipoCambio(
           .from("organizacion_moneda")
           .update({ tipo_cambio_referencia: vivo.valor, referencia_en: ahora.toISOString() })
           .eq("organization_id", organizationId)
+          // A concurrent PUT may have changed currency/source (and cleared the reference): don't overwrite it.
+          .eq("moneda_extranjera", config.monedaExtranjera)
+          .eq("tipo_cambio_fuente", config.fuente)
         if (error) console.error("[tipo-cambio] no se pudo guardar la referencia:", error.message)
       } catch (e) {
         console.error("[tipo-cambio] no se pudo guardar la referencia:", e)

@@ -69,7 +69,7 @@ INSERT INTO _r SELECT 14, 'real inventory exists (so probe 15 is not vacuous)', 
 INSERT INTO _r SELECT 15, 'no existing inventario row got a moneda', '0',
   (SELECT count(*) FROM inventario WHERE moneda IS NOT NULL)::TEXT;
 
--- 16-17: the CHECKs reject anything but NULL or USD. They run on scratch rows of the scratch
+-- 16-18: the CHECKs reject anything but NULL, USD or EUR. They run on scratch rows of the scratch
 -- organization (never "the first row of the table": that is empty on a fresh database).
 INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
   SELECT id, 'PRB-MM-INV', 'PROBE', 0, 'Probe MM producto', 0, 0, 0 FROM organizations WHERE slug = 'probe-mm-org';
@@ -103,7 +103,7 @@ DO $$ BEGIN
     'UPDATE organizacion_moneda SET vuelto_moneda_default = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
 END $$;
 DO $$ BEGIN
-  PERFORM pg_temp.probe(52, 'moneda_extranjera outside USD/EUR is refused', '23514',
+  PERFORM pg_temp.probe(51, 'moneda_extranjera outside USD/EUR is refused', '23514',
     'UPDATE organizacion_moneda SET moneda_extranjera = ''BRL'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
   PERFORM pg_temp.probe(50, 'moneda_extranjera accepts EUR', 'ok',
     'UPDATE organizacion_moneda SET moneda_extranjera = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');

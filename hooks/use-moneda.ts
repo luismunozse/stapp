@@ -19,7 +19,7 @@ interface RespuestaConfig {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+  const res = await fetch(url, { cache: "no-cache" })
   if (!res.ok) throw new Error(`${url}: ${res.status}`)
   return (await res.json()) as T
 }

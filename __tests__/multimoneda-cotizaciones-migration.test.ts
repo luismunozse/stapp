@@ -3,16 +3,16 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, existsSync } from "fs"
 import { join } from "path"
 
-// Migration 406 (multimoneda S3): quotes get the rate source/time, and recotizaciones records
+// Migration 407 (multimoneda S3): quotes get the rate source/time, and recotizaciones records
 // every "Cambiar cotizacion". Pinned by text: CI has no Postgres.
 const ROOT = process.cwd()
-const SQL_PATH = join(ROOT, "supabase/migrations/406_multimoneda_cotizaciones.sql")
-const ROLLBACK_PATH = join(ROOT, "supabase/migrations/rollback/406_rollback.sql")
-const PROBES_PATH = join(ROOT, "supabase/migrations/verify/406_probes.sql")
+const SQL_PATH = join(ROOT, "supabase/migrations/407_multimoneda_cotizaciones.sql")
+const ROLLBACK_PATH = join(ROOT, "supabase/migrations/rollback/407_rollback.sql")
+const PROBES_PATH = join(ROOT, "supabase/migrations/verify/407_probes.sql")
 const SQL = existsSync(SQL_PATH) ? readFileSync(SQL_PATH, "utf8") : ""
 const CODE = SQL.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")
 
-describe("migration 406: multimoneda cotizaciones y recotizaciones", () => {
+describe("migration 407: multimoneda cotizaciones y recotizaciones", () => {
   it("exists with rollback and probes", () => {
     expect(existsSync(SQL_PATH)).toBe(true)
     expect(existsSync(ROLLBACK_PATH)).toBe(true)
@@ -29,6 +29,13 @@ describe("migration 406: multimoneda cotizaciones y recotizaciones", () => {
 
   it("does not convert cotizaciones.tipo_cambio (ALTER TYPE rewrites the table)", () => {
     expect(CODE).not.toMatch(/ALTER COLUMN\s+tipo_cambio\s+(SET DATA )?TYPE/i)
+  })
+
+  it("alters cotizaciones last, after recotizaciones is fully set up (shortest ACCESS EXCLUSIVE hold)", () => {
+    const alter = CODE.indexOf("ALTER TABLE cotizaciones")
+    expect(alter).toBeGreaterThan(CODE.lastIndexOf("GRANT SELECT ON public.recotizaciones"))
+    expect(CODE.indexOf("CREATE TABLE IF NOT EXISTS recotizaciones")).toBeLessThan(alter)
+    expect(SQL).toMatch(/SHARE ROW EXCLUSIVE on organizations and users/)
   })
 
   it("bounds the lock wait", () => {

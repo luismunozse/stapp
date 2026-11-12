@@ -116,6 +116,23 @@ describe("/api/configuracion/moneda", () => {
       expect(status).toBe(400)
     })
 
+    it("deshabilitar con MANUAL y sin tipo de cambio es 200 (no se exige tasa si queda apagada)", async () => {
+      const { moneda } = setup({ org: orgCL })
+      const { status } = await parseResponse(
+        await put({ ...base, habilitada: false, fuente: "MANUAL", tipoCambioManual: null, redondeoConversion: 0 })
+      )
+      expect(status).toBe(200)
+      expect(moneda.upsert.mock.calls[0][0].tipo_cambio_manual).toBeNull()
+    })
+
+    it("deshabilitada pero con un valor inválido igual es 400", async () => {
+      setup({ org: orgCL })
+      const { status } = await parseResponse(
+        await put({ ...base, habilitada: false, fuente: "MANUAL", tipoCambioManual: 0, redondeoConversion: 0 })
+      )
+      expect(status).toBe(400)
+    })
+
     it("MANUAL con '1250.5' guarda 1250.5", async () => {
       const { moneda } = setup({ org: orgCL })
       const { status, body } = await parseResponse(await put({ ...base, fuente: "MANUAL", tipoCambioManual: "1250.5", redondeoConversion: 0 }))

@@ -1,8 +1,8 @@
--- Verification of 406 (multimoneda S3): quote rate metadata + recotizaciones.
+-- Verification of 407 (multimoneda S3): quote rate metadata + recotizaciones.
 --
--- Run AFTER 406 is applied:  node scripts/db-run.mjs <this file>
+-- Run AFTER 407 is applied:  node scripts/db-run.mjs <this file>
 -- (no --apply: the file opens its own transaction and always ends in ROLLBACK).
--- Only data created: one scratch organization ('probe-406-org'), rolled back with everything.
+-- Only data created: one scratch organization ('probe-407-org'), rolled back with everything.
 -- The rollback rehearsal at the end takes ACCESS EXCLUSIVE locks until that ROLLBACK, so it runs last.
 -- Green = esperado equals obtenido, or obtenido starts with 'OK:' for probes that expect an error.
 
@@ -23,7 +23,7 @@ BEGIN
     CASE WHEN v_got = p_esperado THEN 'OK: ' || v_got ELSE 'FALLO: ' || v_got || v_msg END);
 END $$;
 
-INSERT INTO organizations (nombre, slug) VALUES ('Probe 406 Org', 'probe-406-org');
+INSERT INTO organizations (nombre, slug) VALUES ('Probe 407 Org', 'probe-407-org');
 
 -- 1-2: shape.
 INSERT INTO _r SELECT 1, 'cotizaciones gained tipo_cambio_fuente and tipo_cambio_en', '2',
@@ -34,36 +34,36 @@ INSERT INTO _r SELECT 2, 'cotizaciones.tipo_cambio was not converted (still unco
   (SELECT data_type || '|' || COALESCE(numeric_precision::TEXT, '') FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'cotizaciones' AND column_name = 'tipo_cambio');
 
--- 3-9: recotizaciones CHECKs. documento_id is free text, so no parent row is needed.
+-- 3-9 and 16-17: recotizaciones CHECKs. documento_id is free text, so no parent row is needed.
 DO $$ BEGIN
   PERFORM pg_temp.probe(3, 'MANUAL without motivo (NULL) is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000 FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000 FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(4, 'MANUAL with a spaces-only motivo is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''   '' FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''   '' FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(16, 'MANUAL with an empty motivo is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, '''' FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, '''' FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(17, 'MANUAL with a tab/newline-only motivo is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, E''\t\n'' FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, E''\t\n'' FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(5, 'MANUAL with a motivo is accepted', 'ok',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''cliente acordo'' FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo, motivo) SELECT id, ''ORDEN'', ''x'', ''MANUAL'', 1000, ''cliente acordo'' FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(6, 'HOY without motivo is accepted', 'ok',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''COTIZACION'', ''y'', ''HOY'', 1250.123456 FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''COTIZACION'', ''y'', ''HOY'', 1250.123456 FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(7, 'documento_tipo outside ORDEN/COTIZACION is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''VENTA'', ''x'', ''HOY'', 1000 FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''VENTA'', ''x'', ''HOY'', 1000 FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(8, 'modo outside HOY/MANUAL is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''AUTO'', 1000 FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''AUTO'', 1000 FROM organizations WHERE slug = ''probe-407-org''');
   PERFORM pg_temp.probe(9, 'a zero new rate is refused', '23514',
-    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''HOY'', 0 FROM organizations WHERE slug = ''probe-406-org''');
+    'INSERT INTO recotizaciones (organization_id, documento_tipo, documento_id, modo, tipo_cambio_nuevo) SELECT id, ''ORDEN'', ''x'', ''HOY'', 0 FROM organizations WHERE slug = ''probe-407-org''');
 END $$;
 INSERT INTO _r SELECT 10, 'the two accepted rows were stored', '2',
-  (SELECT count(*) FROM recotizaciones r JOIN organizations o ON o.id = r.organization_id WHERE o.slug = 'probe-406-org')::TEXT;
+  (SELECT count(*) FROM recotizaciones r JOIN organizations o ON o.id = r.organization_id WHERE o.slug = 'probe-407-org')::TEXT;
 INSERT INTO _r SELECT 11, 'rate columns are NUMERIC(14,6)', '2',
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'recotizaciones'
       AND column_name IN ('tipo_cambio_anterior', 'tipo_cambio_nuevo')
       AND numeric_precision = 14 AND numeric_scale = 6)::TEXT;
 
--- 12-16: RLS shape and the lookup index.
+-- 12-15: RLS shape and the lookup index.
 INSERT INTO _r SELECT 12, 'RLS enabled', 'true',
   (SELECT c.relrowsecurity::TEXT FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relname = 'recotizaciones');

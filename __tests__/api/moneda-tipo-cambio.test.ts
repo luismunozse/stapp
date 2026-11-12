@@ -62,6 +62,9 @@ describe("GET /api/moneda/tipo-cambio", () => {
     expect(status).toBe(200)
     expect(body).toMatchObject({ disponible: true, estado: "vivo", valor: 1200 })
     expect(obtenerCotizacionMercado).toHaveBeenCalledWith("USD", "BLUE")
+    // The reference belongs to this currency/source: a concurrent PUT that changed them wins.
+    expect(moneda.eq).toHaveBeenCalledWith("moneda_extranjera", "USD")
+    expect(moneda.eq).toHaveBeenCalledWith("tipo_cambio_fuente", "BLUE")
     expect(moneda.update).toHaveBeenCalledWith(
       expect.objectContaining({ tipo_cambio_referencia: 1200, referencia_en: expect.any(String) })
     )
@@ -105,9 +108,11 @@ describe("GET /api/moneda/tipo-cambio", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(obtenerCotizacionMercado).mockResolvedValue({ valor: 1200, en: new Date().toISOString() })
     const moneda = createChainMock(fila())
-    moneda.update.mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }),
-    })
+    const cadena: any = {
+      eq: vi.fn(() => cadena),
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: { message: "boom" } }),
+    }
+    moneda.update.mockReturnValue(cadena)
     mockSupabaseFrom({ organizations: createChainMock(org), organizacion_moneda: moneda })
     const { status, body } = await parseResponse(await GET())
     expect(status).toBe(200)

@@ -1,4 +1,4 @@
--- Rollback of 406 (multimoneda S3): removes the re-quote audit trail and the quote rate metadata.
+-- Rollback of 407 (multimoneda S3): removes the re-quote audit trail and the quote rate metadata.
 --
 -- WHAT IS LOST: every recotizaciones row and the values in cotizaciones.tipo_cambio_fuente /
 -- tipo_cambio_en. cotizaciones.tipo_cambio (082) is never touched. Export first if used:

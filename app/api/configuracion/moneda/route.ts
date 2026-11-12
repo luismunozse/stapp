@@ -88,7 +88,7 @@ export async function PUT(request: Request) {
     }
 
     let tipoCambioManual: number | null = null
-    if (input.fuente === "MANUAL" || (input.tipoCambioManual !== undefined && input.tipoCambioManual !== null)) {
+    if ((input.habilitada && input.fuente === "MANUAL") || (input.tipoCambioManual !== undefined && input.tipoCambioManual !== null)) {
       const tc = validarTipoCambio(input.tipoCambioManual)
       if (!tc.ok) return NextResponse.json({ error: tc.error }, { status: 400 })
       tipoCambioManual = tc.valor

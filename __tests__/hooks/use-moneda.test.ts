@@ -36,6 +36,16 @@ describe("useMoneda", () => {
     expect(result.current.isLoading).toBe(false)
   })
 
+  it("fetches with cache no-cache so mutate() after saving never reads a 60 s HTTP-cached rate", async () => {
+    route(true)
+    const { useMoneda } = await import("@/hooks/use-moneda")
+    const { result } = renderHook(() => useMoneda(), { wrapper })
+
+    await waitFor(() => expect(result.current.tipoCambio).toEqual(TC))
+    expect(mockFetch).toHaveBeenCalledWith("/api/configuracion/moneda", { cache: "no-cache" })
+    expect(mockFetch).toHaveBeenCalledWith("/api/moneda/tipo-cambio", { cache: "no-cache" })
+  })
+
   it("does not ask for the rate while the feature is off", async () => {
     route(false)
     const { useMoneda } = await import("@/hooks/use-moneda")

@@ -30,7 +30,7 @@
 -- items_cotizacion) accept 'USD' and 'EUR' in moneda / moneda_origen, and organizacion_moneda
 -- gains moneda_extranjera. Cash and payment tables (pagos_venta, movimientos_caja,
 -- sesion_caja_saldos) and vuelto_moneda_default stay USD-only until phase 2.
--- If an environment DID apply the old version, 406 is not enough: drop and re-add the six
+-- If an environment DID apply the old version, 407 is not enough: drop and re-add the six
 -- *_moneda_chk / *_moneda_origen_chk constraints and add the column by hand.
 --
 -- No BEGIN/COMMIT: scripts/db-run.mjs wraps the file (dry-run by default).
