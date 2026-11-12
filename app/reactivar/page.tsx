@@ -89,7 +89,7 @@ export default function ReactivarPage() {
               </div>
               <h2 className="text-xl font-bold">Ya usaste tus extensiones</h2>
               <p className="text-muted-foreground">
-                Suscribite al plan Premium para seguir usando STApp sin límites.
+                Suscribite al plan Profesional para seguir usando STApp sin límites.
               </p>
               <Button size="lg" className="w-full mt-4" onClick={() => router.push("/suscripcion-requerida")}>
                 <CreditCard className="h-4 w-4 mr-2" />

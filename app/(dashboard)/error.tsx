@@ -44,7 +44,7 @@ export default function DashboardError({
         <h1 className="text-2xl font-bold mb-2">Error al cargar</h1>
 
         <p className="text-muted-foreground mb-6">
-          No se pudo cargar esta sección. Intenta de nuevo o vuelve al inicio.
+          No se pudo cargar esta sección. Intentá de nuevo o volvé al inicio.
         </p>
 
         {process.env.NODE_ENV === "development" && error.digest && (
@@ -61,7 +61,7 @@ export default function DashboardError({
 
           <Button variant="outline" onClick={handleGoHome}>
             <Home className="h-4 w-4 mr-2" />
-            Dashboard
+            Inicio
           </Button>
 
           <Button onClick={() => reset()}>

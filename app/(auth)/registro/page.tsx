@@ -166,7 +166,7 @@ function RegistroForm() {
       return false
     }
     if (slugStatus === "checking") {
-      setError("Espera mientras verificamos el subdominio")
+      setError("Esperá mientras verificamos el subdominio")
       return false
     }
     const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
@@ -184,7 +184,7 @@ function RegistroForm() {
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
-      setError("Ingresa un email válido")
+      setError("Ingresá un email válido")
       return false
     }
     if (!formData.password) {

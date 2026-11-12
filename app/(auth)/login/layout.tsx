@@ -2,17 +2,17 @@ import type { Metadata } from "next"
 import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
-  title: "Iniciar Sesión",
+  title: "Iniciar sesión",
   description:
-    "Accede a tu cuenta de STApp para gestionar tu taller de reparación. Administra órdenes, clientes e inventario.",
+    "Accedé a tu cuenta de STApp para gestionar tu taller de reparación. Administrá órdenes, clientes e inventario.",
   robots: {
     index: true,
     follow: true,
   },
   openGraph: {
     images: OG_IMAGES,
-    title: "Iniciar Sesión - STApp",
-    description: "Accede a tu cuenta de STApp para gestionar tu taller de reparación.",
+    title: "Iniciar sesión - STApp",
+    description: "Accedé a tu cuenta de STApp para gestionar tu taller de reparación.",
     url: "https://stapp.com.ar/login",
   },
   alternates: {

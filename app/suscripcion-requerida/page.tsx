@@ -7,7 +7,7 @@ import { SubscriptionRequiredView } from "@/components/subscription/subscription
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "Suscripcion requerida | STApp",
+  title: "Suscripción requerida | STApp",
   robots: { index: false, follow: false },
 }
 

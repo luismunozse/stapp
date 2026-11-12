@@ -46,7 +46,7 @@ export default function Error({
         <h1 className="text-2xl font-bold mb-2">Algo salió mal</h1>
 
         <p className="text-muted-foreground mb-6">
-          Ocurrió un error inesperado. Puedes intentar recargar la página o volver al inicio.
+          Ocurrió un error inesperado. Podés intentar recargar la página o volver al inicio.
         </p>
 
         {/* Mostrar digest en desarrollo */}

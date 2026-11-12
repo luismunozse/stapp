@@ -222,7 +222,7 @@ function LoginForm() {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Verificando..." : "Acceder al Panel"}
+              {loading ? "Verificando..." : "Acceder al panel"}
             </Button>
           </form>
         </CardContent>
