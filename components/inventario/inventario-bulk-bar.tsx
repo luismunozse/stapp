@@ -340,7 +340,7 @@ export function InventarioBulkBar({
         )}
 
         {/* Archivar */}
-        <Button size="sm" variant="outline" onClick={handleArchive} disabled={pending} className="text-destructive hover:text-destructive">
+        <Button size="sm" variant="outline" onClick={handleArchive} disabled={pending} className="text-destructive-text hover:text-destructive-text">
           <Archive className="mr-2 h-4 w-4" />
           Archivar
         </Button>

@@ -975,7 +975,7 @@ export function ConfiguracionForm({
                         className={`px-3 py-2 rounded text-sm ${
                           feMessage.type === "success"
                             ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                            : "bg-destructive/10 border border-destructive/30 text-destructive"
+                            : "bg-destructive/10 border border-destructive/30 text-destructive-text"
                         }`}
                       >
                         {feMessage.text}
@@ -1356,7 +1356,7 @@ export function ConfiguracionForm({
                 className={`min-w-0 flex-1 px-3 sm:px-4 py-2 rounded text-sm ${
                   message.type === "success"
                     ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                    : "bg-destructive/10 border border-destructive/30 text-destructive"
+                    : "bg-destructive/10 border border-destructive/30 text-destructive-text"
                 }`}
               >
                 {message.text}

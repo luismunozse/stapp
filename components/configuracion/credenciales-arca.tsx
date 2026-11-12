@@ -258,7 +258,7 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
           className={`px-3 py-2 rounded text-sm ${
             mensaje.type === "success"
               ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-              : "bg-destructive/10 border border-destructive/30 text-destructive"
+              : "bg-destructive/10 border border-destructive/30 text-destructive-text"
           }`}
         >
           {mensaje.text}
@@ -266,7 +266,7 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
       )}
 
       {certVencido && (
-        <div className="px-3 py-2 rounded text-sm bg-destructive/10 border border-destructive/30 text-destructive">
+        <div className="px-3 py-2 rounded text-sm bg-destructive/10 border border-destructive/30 text-destructive-text">
           El certificado está vencido: no se pueden emitir comprobantes hasta renovarlo en ARCA y
           volver a subirlo.
         </div>

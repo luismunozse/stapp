@@ -251,7 +251,7 @@ export function PosCart({
           </div>
           <div className="flex items-center gap-1">
             {items.length > 0 && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={onClearCart} title="Vaciar carrito">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive-text" onClick={onClearCart} title="Vaciar carrito">
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -270,7 +270,7 @@ export function PosCart({
             toma stock de toda la organización. Sin esto, la única explicación
             en pantalla sería el chip del selector, que dice lo contrario. */}
         {ventaAlcanceOrg && (
-          <p className="flex items-start gap-1.5 text-xs text-warning">
+          <p className="flex items-start gap-1.5 text-xs text-warning-text">
             <Store className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>
               Vendiendo desde <span className="font-medium">todas las sucursales</span>: la
@@ -391,7 +391,7 @@ export function PosCart({
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-medium truncate">{item.nombre}</span>
                         {item.diasGarantia > 0 && (
-                          <Shield className="h-3 w-3 text-success shrink-0" />
+                          <Shield className="h-3 w-3 text-success-text shrink-0" />
                         )}
                         {isExpanded ? (
                           <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -403,7 +403,7 @@ export function PosCart({
                         <span>{formatPrice(item.precioUnitario)} c/u</span>
                         {item.codigo && <span className="font-mono">{item.codigo}</span>}
                         {item.stockDisponible <= 3 && (
-                          <span className="text-destructive">Stock: {item.stockDisponible}</span>
+                          <span className="text-destructive-text">Stock: {item.stockDisponible}</span>
                         )}
                       </div>
                     </button>
@@ -479,7 +479,7 @@ export function PosCart({
                         return lineDesc > 0 ? (
                           <>
                             <div className="text-xs text-muted-foreground line-through">{formatPrice(gross)}</div>
-                            <span className="text-sm font-semibold text-success">{formatPrice(net)}</span>
+                            <span className="text-sm font-semibold text-success-text">{formatPrice(net)}</span>
                           </>
                         ) : (
                           <span className="text-sm font-semibold">{formatPrice(gross)}</span>
@@ -510,7 +510,7 @@ export function PosCart({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 sm:h-7 sm:w-7 text-destructive shrink-0"
+                      className="h-8 w-8 sm:h-7 sm:w-7 text-destructive-text shrink-0"
                       onClick={() => onRemoveItem(item.lineId)}
                     >
                       <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
@@ -604,7 +604,7 @@ export function PosCart({
                               Series ({item.serieIds.length}/{item.cantidad})
                             </span>
                             {item.serieIds.length !== item.cantidad && (
-                              <span className="text-destructive">
+                              <span className="text-destructive-text">
                                 Seleccioná {item.cantidad}
                               </span>
                             )}
@@ -637,7 +637,7 @@ export function PosCart({
                                 )
                               })}
                               {(seriesDisp[item.lineId] ?? []).length === 0 && (
-                                <span className="text-destructive col-span-2 text-xs px-2 py-2">Sin series disponibles</span>
+                                <span className="text-destructive-text col-span-2 text-xs px-2 py-2">Sin series disponibles</span>
                               )}
                             </div>
                           )}
@@ -761,7 +761,7 @@ export function PosCart({
             Cobrar (F8)
           </Button>
           {checkoutDisabledReason && (
-            <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-warning-700 dark:text-warning">
+            <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-warning-700 dark:text-warning-text">
               <WifiOff className="h-3.5 w-3.5 shrink-0" />
               {checkoutDisabledReason}
             </p>
@@ -781,7 +781,7 @@ export function PosCart({
               variant="outline"
               size="sm"
               onClick={onRecallSale}
-              className={cn("h-9", heldCount > 0 && "border-warning text-warning")}
+              className={cn("h-9", heldCount > 0 && "border-warning text-warning-text")}
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               Recuperar (F6)

@@ -68,7 +68,7 @@ function rotBadge(c: RotClass) {
     case "ALTA": return <Badge variant="outline" className="gap-1 border-emerald-500/60 text-emerald-600"><TrendingUp className="h-3 w-3" /> Alta</Badge>
     case "MEDIA": return <Badge variant="outline" className="gap-1 border-blue-500/60 text-blue-600">Media</Badge>
     case "BAJA": return <Badge variant="outline" className="gap-1 border-amber-500/60 text-amber-600"><TrendingDown className="h-3 w-3" /> Baja</Badge>
-    case "MUERTA": return <Badge variant="outline" className="gap-1 border-destructive text-destructive bg-destructive/10"><Skull className="h-3 w-3" /> Muerta</Badge>
+    case "MUERTA": return <Badge variant="outline" className="gap-1 border-destructive text-destructive-text bg-destructive/10"><Skull className="h-3 w-3" /> Muerta</Badge>
     case "NUEVA": return <Badge variant="outline" className="gap-1 border-purple-500/60 text-purple-600"><Sparkles className="h-3 w-3" /> Nueva</Badge>
   }
 }
@@ -179,7 +179,7 @@ export default function AnalisisAbcPage() {
               <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
                 <Skull className="h-3 w-3" /> Capital muerto
               </div>
-              <div className="text-lg font-bold text-destructive">{formatPrice(data.totales.capitalMuerto)}</div>
+              <div className="text-lg font-bold text-destructive-text">{formatPrice(data.totales.capitalMuerto)}</div>
             </CardContent></Card>
           </div>
 
@@ -315,7 +315,7 @@ export default function AnalisisAbcPage() {
                       <td className="p-2 text-right">{r.qtyVendida}</td>
                       <td className="p-2 text-right font-medium">{formatPrice(r.revenue)}</td>
                       <td className="p-2 text-right text-emerald-600">{formatPrice(r.margenTotal)}</td>
-                      <td className={`p-2 text-right ${muerta ? "text-destructive font-medium" : ""}`}>
+                      <td className={`p-2 text-right ${muerta ? "text-destructive-text font-medium" : ""}`}>
                         {formatPrice(r.capitalInmovilizado)}
                       </td>
                       <td className="p-2 text-right">{r.rotacion > 0 ? r.rotacion.toFixed(1) : "—"}</td>
@@ -323,7 +323,7 @@ export default function AnalisisAbcPage() {
                         {r.diasSinVenta === null ? (
                           <span className="text-muted-foreground">nunca</span>
                         ) : r.diasSinVenta > 90 ? (
-                          <span className="text-destructive font-medium">{r.diasSinVenta}d</span>
+                          <span className="text-destructive-text font-medium">{r.diasSinVenta}d</span>
                         ) : (
                           `${r.diasSinVenta}d`
                         )}

@@ -126,7 +126,7 @@ function VerificarContent() {
         )}
 
         {resendStatus === "error" && (
-          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-3 py-2 rounded-lg text-xs flex items-start gap-2">
+          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive-text px-3 py-2 rounded-lg text-xs flex items-start gap-2">
             <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
             <span>{resendMessage}</span>
           </div>

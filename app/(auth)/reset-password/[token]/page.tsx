@@ -91,7 +91,7 @@ export default function ResetPasswordPage({
         <AuthHeader title="Nueva contraseña" description="Elegí una contraseña nueva para tu cuenta" />
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm">
+            <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive-text px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}

@@ -922,7 +922,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-destructive-text focus:text-destructive-text"
                   onClick={handleDeleteOrden}
                   disabled={deleting}
                 >

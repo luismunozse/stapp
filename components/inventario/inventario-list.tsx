@@ -610,7 +610,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive-text"
               title="Eliminar"
               aria-label="Eliminar"
               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
@@ -1284,7 +1284,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-muted-foreground hover:text-destructive"
+                              className="text-muted-foreground hover:text-destructive-text"
                               title="Eliminar"
                               aria-label="Eliminar"
                               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
@@ -1320,7 +1320,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <div className="text-center">
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
                             <div className={`text-lg font-bold leading-none ${
-                              sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : "text-foreground"
+                              sinStock ? "text-destructive-text" : esStockBajo ? "text-amber-600" : "text-foreground"
                             }`}>
                               {item.stock}
                             </div>

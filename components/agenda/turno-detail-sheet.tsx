@@ -273,7 +273,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
             {!tieneOrden && (
               <Button
                 variant="ghost"
-                className="text-destructive hover:text-destructive/80"
+                className="text-destructive-text hover:text-destructive-text/80"
                 onClick={handleEliminar}
                 disabled={busy}
               >

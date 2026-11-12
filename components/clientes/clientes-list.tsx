@@ -300,7 +300,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => {
         const d = cliente.deudaPendiente || 0
         if (d <= 0) return <span className="text-muted-foreground">-</span>
-        return <span className="font-medium text-destructive tabular-nums">{formatPrice(d)}</span>
+        return <span className="font-medium text-destructive-text tabular-nums">{formatPrice(d)}</span>
       },
     },
     {
@@ -400,7 +400,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   <div className="h-px bg-border my-1" />
                   <button
                     type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive-text transition-colors"
                     onClick={(e) => handleDelete(e, cliente)}
                     disabled={deleting === cliente.id}
                   >
@@ -606,7 +606,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       {conDeuda && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm">
           <span className="text-muted-foreground">Total adeudado:</span>
-          <span className="font-semibold text-destructive tabular-nums">{formatPrice(totalDeuda)}</span>
+          <span className="font-semibold text-destructive-text tabular-nums">{formatPrice(totalDeuda)}</span>
         </div>
       )}
 

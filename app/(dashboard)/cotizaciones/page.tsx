@@ -132,7 +132,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
   ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
   ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
+  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive-text" },
 }
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -844,7 +844,7 @@ export default function CotizacionesPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-destructive hover:text-destructive/80"
+                                    className="text-destructive-text hover:text-destructive-text/80"
                                     onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                                     title="Rechazar"
                                   >
@@ -930,7 +930,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-destructive hover:text-destructive"
+                                  className="text-destructive-text hover:text-destructive-text"
                                   onClick={() => handleDelete(cotizacion.id)}
                                   title="Eliminar"
                                 >
@@ -1104,7 +1104,7 @@ export default function CotizacionesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-destructive hover:text-destructive/80"
+                            className="text-destructive-text hover:text-destructive-text/80"
                             onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                           >
                             <XCircle className="mr-2 h-3 w-3" />
@@ -1161,7 +1161,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive-text hover:text-destructive-text"
                           onClick={() => handleDelete(cotizacion.id)}
                         >
                           <Trash2 className="mr-2 h-3 w-3" />

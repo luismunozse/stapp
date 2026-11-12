@@ -404,7 +404,7 @@ export function DevolucionForm({
                 placeholder="Ej: Producto defectuoso, error en la venta..."
               />
               {errors.motivo && (
-                <p className="text-sm text-destructive">{errors.motivo.message}</p>
+                <p className="text-sm text-destructive-text">{errors.motivo.message}</p>
               )}
             </div>
 

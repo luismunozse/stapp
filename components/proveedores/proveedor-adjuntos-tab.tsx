@@ -29,7 +29,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 function fileIcon(mime: string | null) {
   if (!mime) return <FileIcon className="h-5 w-5" />
-  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-destructive" />
+  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-destructive-text" />
   if (mime.startsWith("image/")) return <FileImage className="h-5 w-5 text-info-500" />
   if (mime.includes("excel") || mime.includes("spreadsheet") || mime === "text/csv")
     return <FileSpreadsheet className="h-5 w-5 text-success-500" />
@@ -195,7 +195,7 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
                       </a>
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(a)} title="Eliminar">
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4 text-destructive-text" />
                     </Button>
                   </div>
                 </div>

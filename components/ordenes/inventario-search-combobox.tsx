@@ -256,7 +256,7 @@ export function InventarioSearchCombobox({
       {open && (
         <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-md">
           {error ? (
-            <div className="p-3 text-sm text-destructive">{error}</div>
+            <div className="p-3 text-sm text-destructive-text">{error}</div>
           ) : loading && !results.length ? (
             <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -308,7 +308,7 @@ export function InventarioSearchCombobox({
                         className={[
                           "text-xs",
                           sinStock
-                            ? "text-destructive"
+                            ? "text-destructive-text"
                             : disponible <= 3
                               ? "text-amber-600 dark:text-amber-500"
                               : "text-muted-foreground",

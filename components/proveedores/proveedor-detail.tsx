@@ -317,7 +317,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             {proveedor.activo ? "Archivar" : "Reactivar"}
           </Button>
           <Button variant="outline" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-2 text-destructive" />Eliminar
+            <Trash2 className="h-4 w-4 mr-2 text-destructive-text" />Eliminar
           </Button>
         </div>
       </div>
@@ -549,7 +549,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-sm">
-                          Stock: <span className={item.stock === 0 ? "text-destructive font-semibold" : "font-semibold"}>{item.stock}</span>
+                          Stock: <span className={item.stock === 0 ? "text-destructive-text font-semibold" : "font-semibold"}>{item.stock}</span>
                         </div>
                         {item.precioCompra != null && (
                           <div className="text-xs text-muted-foreground">{formatPrice(item.precioCompra)}</div>
@@ -693,7 +693,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                                 "—"
                               )}
                               {dif != null && dif > 0 && (
-                                <span className="ml-1 text-[10px] text-destructive">+{dif.toFixed(0)}%</span>
+                                <span className="ml-1 text-[10px] text-destructive-text">+{dif.toFixed(0)}%</span>
                               )}
                             </td>
                             <td className="px-3 py-2">

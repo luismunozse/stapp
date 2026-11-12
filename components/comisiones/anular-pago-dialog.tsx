@@ -127,7 +127,7 @@ export function AnularPagoDialog({
             <span className="text-muted-foreground">Cargando el pago…</span>
           )}
           {detalleEstado === "error" && (
-            <span className="text-destructive">No se pudo cargar el pago.</span>
+            <span className="text-destructive-text">No se pudo cargar el pago.</span>
           )}
           {detalleEstado === "ok" && detalle && (
             <span className="font-medium">

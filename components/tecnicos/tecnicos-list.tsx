@@ -506,7 +506,7 @@ export function TecnicosList() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
+                            className="h-7 w-7 sm:h-8 sm:w-8 text-destructive-text hover:text-destructive-text"
                             onClick={(e) =>
                               handleDelete(tecnico.id, tecnico.ordenesActivas, e)
                             }

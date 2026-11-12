@@ -31,7 +31,7 @@ const TONO: Record<EstadoGarantia, { caja: string; icono: string; icon: LucideIc
   VIGENTE: { caja: "border-success/30 bg-success-50 dark:bg-success/10", icono: "text-success-700 dark:text-success-400", icon: CheckCircle2, texto: "Tu garantía está vigente" },
   POR_VENCER: { caja: "border-warning/30 bg-warning-50 dark:bg-warning/10", icono: "text-warning-700 dark:text-warning-500", icon: AlertTriangle, texto: "Tu garantía está por vencer" },
   RECLAMADA: { caja: "border-info/30 bg-info-50 dark:bg-info/10", icono: "text-info-700 dark:text-info-400", icon: MessageSquareWarning, texto: "Tenés un reclamo de garantía en curso" },
-  VENCIDA: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive", icon: XCircle, texto: "Tu garantía venció" },
+  VENCIDA: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive-text", icon: XCircle, texto: "Tu garantía venció" },
   ANULADA: { caja: "border-border bg-muted", icono: "text-muted-foreground", icon: Ban, texto: "Esta garantía fue anulada" },
 }
 
@@ -39,7 +39,7 @@ const TONO_RECLAMO: Record<FaseReclamoPublica, { caja: string; icono: string; ic
   EN_REVISION: { caja: "border-info/30 bg-info-50 dark:bg-info/10", icono: "text-info-700 dark:text-info-400", icon: Clock },
   ACEPTADO: { caja: "border-success/30 bg-success-50 dark:bg-success/10", icono: "text-success-700 dark:text-success-400", icon: CheckCircle2 },
   RESUELTO: { caja: "border-border bg-muted", icono: "text-muted-foreground", icon: CheckCircle2 },
-  RECHAZADO: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive", icon: XCircle },
+  RECHAZADO: { caja: "border-destructive/30 bg-destructive/10", icono: "text-destructive-text", icon: XCircle },
 }
 
 export function WarrantyInfo({ garantia, timezone }: WarrantyInfoProps) {

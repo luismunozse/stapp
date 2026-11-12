@@ -92,7 +92,7 @@ export function AccesoriosPicker({
                 <button
                   type="button"
                   onClick={() => onToggle(acc)}
-                  className="hover:text-destructive"
+                  className="hover:text-destructive-text"
                 >
                   <X className="h-3 w-3" />
                 </button>

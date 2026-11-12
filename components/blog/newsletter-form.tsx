@@ -64,7 +64,7 @@ export function NewsletterForm() {
         {status === "loading" ? "Enviando..." : "Suscribirme"}
       </Button>
       {status === "error" && (
-        <div className="sm:absolute sm:mt-16 flex items-center gap-2 text-sm text-destructive">
+        <div className="sm:absolute sm:mt-16 flex items-center gap-2 text-sm text-destructive-text">
           <AlertCircle className="w-4 h-4" />
           <span>{errorMsg}</span>
         </div>

@@ -77,7 +77,7 @@ export function OrdenComisionCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (
-          <p className="text-sm text-destructive">No se pudo cargar la comisión.</p>
+          <p className="text-sm text-destructive-text">No se pudo cargar la comisión.</p>
         ) : !data && isLoading ? (
           <p className="text-sm text-muted-foreground">Cargando…</p>
         ) : (
@@ -150,7 +150,7 @@ export function OrdenComisionCard({
                       />
                     )}
                     {pctInvalido && !readOnly && !fila.pagado && esTecnico && (
-                      <p role="alert" className="mt-1 text-xs text-destructive">
+                      <p role="alert" className="mt-1 text-xs text-destructive-text">
                         Ingrese un porcentaje entre 0 y 100.
                       </p>
                     )}

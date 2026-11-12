@@ -128,7 +128,7 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
   if (!data || !draft) {
     return (
       <Card>
-        <CardContent className="p-4 sm:p-6 text-sm text-destructive" role="alert">
+        <CardContent className="p-4 sm:p-6 text-sm text-destructive-text" role="alert">
           No se pudieron cargar las reglas de comisiones.
         </CardContent>
       </Card>
@@ -243,7 +243,7 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
             <span className="text-sm text-muted-foreground">%</span>
           </div>
           {rateInvalid && (
-            <p id="comision-recepcion-error" className="text-xs text-destructive" role="alert">
+            <p id="comision-recepcion-error" className="text-xs text-destructive-text" role="alert">
               {RATE_ERROR}
             </p>
           )}

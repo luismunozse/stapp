@@ -36,8 +36,8 @@ const TONE: Record<
   danger: {
     box: "bg-destructive/10 border-destructive/25",
     hover: "hover:bg-destructive/15",
-    head: "text-destructive",
-    sub: "text-destructive/85",
+    head: "text-destructive-text",
+    sub: "text-destructive-text/85",
   },
   success: {
     box: "bg-success-50 border-success/30 dark:bg-success-100/40 dark:border-success/20",

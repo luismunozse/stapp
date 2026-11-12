@@ -110,8 +110,8 @@ const TONE_CHIP: Record<
   danger: {
     box: "bg-destructive/10 border-destructive/25",
     hover: "hover:bg-destructive/15 active:bg-destructive/20",
-    head: "text-destructive",
-    sub: "text-destructive/85",
+    head: "text-destructive-text",
+    sub: "text-destructive-text/85",
   },
   warning: {
     box: "bg-warning-50 border-warning/30 dark:bg-warning-100/40 dark:border-warning/20",
@@ -135,7 +135,7 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
   if (items.length === 0) {
     return (
       <Card className="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
-        <ShieldCheck className="h-4 w-4 shrink-0 text-success" aria-hidden />
+        <ShieldCheck className="h-4 w-4 shrink-0 text-success-text" aria-hidden />
         <span>Todo en orden — no hay nada urgente.</span>
       </Card>
     )
