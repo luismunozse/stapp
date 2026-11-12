@@ -18,6 +18,8 @@ import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
 
 /** Renglones que puede ocupar la sección de avances en la hoja de entrega A4. */
 const AVANCES_MAX_LINEAS_A4 = 6
+/** Renglones del diagnóstico técnico en la hoja de entrega A4 (es lo que el cliente viene a leer). */
+const DIAGNOSTICO_MAX_LINEAS_A4 = 5
 
 /** Corta con "…" para que el texto entre en maxWidth puntos. */
 function truncarAncho(font: PDFFont, text: string, size: number, maxWidth: number): string {
@@ -1200,6 +1202,17 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     return t2 + "…"
   }
 
+  // rxWrap + tope de renglones. Si el texto no entra, el último renglón
+  // termina en "…": un corte nunca pasa por texto completo.
+  const rxWrapClamp = (text: string, font: PDFFont, size: number, maxWidth: number, maxLines: number): string[] => {
+    const all = rxWrap(text, font, size, maxWidth)
+    if (all.length <= maxLines) return all
+    const kept = all.slice(0, maxLines)
+    const last = kept[maxLines - 1]
+    kept[maxLines - 1] = font.widthOfTextAtSize(`${last}…`, size) <= maxWidth ? `${last}…` : rxTruncate(last, font, size, maxWidth)
+    return kept
+  }
+
   const rxDrawRight = (pg: typeof page, text: string, xRight: number, y: number, size: number, font: PDFFont, color: RGB) => {
     const w = font.widthOfTextAtSize(text, size)
     pg.drawText(text, { x: xRight - w, y, size, font, color })
@@ -1507,12 +1520,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ey -= rowClienteEquipoEn
 
     // ---- Falla declarada | Diagnóstico técnico (lado a lado) ----
-    const fallaLinesEn: RxCellLine[] = rxWrap(problemaReportado, archivoRegular, 9, colGridWEn - rxCellPadX * 2)
-      .slice(0, 3)
+    const fallaLinesEn: RxCellLine[] = rxWrapClamp(problemaReportado, archivoRegular, 9, colGridWEn - rxCellPadX * 2, 3)
       .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
     const diagnosticoTextEn = safe(data.diagnostico)
     const diagnosticoLinesEn: RxCellLine[] = diagnosticoTextEn
-      ? rxWrap(diagnosticoTextEn, archivoRegular, 9, colGridWEn - rxCellPadX * 2).slice(0, 3).map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
+      ? rxWrapClamp(diagnosticoTextEn, archivoRegular, 9, colGridWEn - rxCellPadX * 2, DIAGNOSTICO_MAX_LINEAS_A4).map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
       : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
     const rowFallaDiagEn = rxDrawGridRow([
       { x: rxMargin, width: colGridWEn, label: "Falla declarada", lines: fallaLinesEn },
@@ -1525,7 +1537,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // Item 6: la columna "Fotos" (conteo de fotosIngreso) se quitó — las
     // fotos ya no imprimen en ningún documento, viven solo en seguimiento.
     const accesoriosLinesEn: RxCellLine[] = accesorios
-      ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
+      ? rxWrapClamp(accesorios, archivoRegular, 9, rxContentW - rxCellPadX * 2, 2).map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
       : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
     const rowAccFotosEn = rxDrawGridRow([
       { x: rxMargin, width: rxContentW, label: "Accesorios recibidos", lines: accesoriosLinesEn },
@@ -1553,6 +1565,58 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
     ey -= 8
 
+    // ---- Presupuesto de alto de la hoja ----
+    // La hoja es UNA página fija: el pie (firmas, QR, términos) se ancla al
+    // margen inferior y la garantía va justo arriba. Los dos se miden acá,
+    // antes de dibujar el mid split, para que trabajos, pagos y chequeo se
+    // ajusten al lugar que queda en vez de empujar el pie fuera de la hoja.
+    const garantiaEn = data.garantia ? (() => {
+      const g = data.garantia!
+      const garVencEn = formatDatePDF(g.fechaVencimiento)
+      const garHeadingEn = `GARANTÍA ${g.dias} DÍAS`
+      const garHeadingWEn = archivoCondensedBlack.widthOfTextAtSize(garHeadingEn, 15)
+      const garTextXEn = rxMargin + Math.max(garHeadingWEn + 20, 110)
+      const garNotasEn = [safe(g.notas), `Presentá este comprobante o el código ${codigoOrden || numeroOrdenPadded} para reclamos.`].filter(Boolean).join(" ")
+      const garLinesEn = rxWrapClamp(garNotasEn, archivoRegular, 8.5, rxContentW - (garTextXEn - rxMargin) - 10, 3)
+      const garHeightEn = 20 + 10 + garLinesEn.length * 10
+      return { garHeadingEn, garVencEn, garTextXEn, garLinesEn, garHeightEn }
+    })() : null
+    const attrPartsEn: Array<{ label: string; value: string }> = []
+    if (recibidoPorNombre) attrPartsEn.push({ label: "Recibió: ", value: recibidoPorNombre })
+    if (tecnicoNombre) attrPartsEn.push({ label: "Técnico: ", value: tecnicoNombre })
+    const entregadoPorEn = safe(data.entregadoPor)
+    if (entregadoPorEn) attrPartsEn.push({ label: "Entregó: ", value: entregadoPorEn })
+    const dateSummaryPartsEn = [
+      fechaIngreso ? `Ingreso ${fechaIngreso}` : "",
+      data.fechaCompletado ? `Completado ${formatDatePDF(data.fechaCompletado)}` : "",
+      data.fechaEntrega ? `Entrega ${formatDatePDF(data.fechaEntrega)}` : "",
+    ].filter(Boolean).join(" · ")
+
+    const notasEntregaEn = safe(data.notasEntrega)
+    const notasEntregaLinesEn = notasEntregaEn ? rxWrapClamp(notasEntregaEn, archivoRegular, 7.5, rxContentW, 2) : []
+
+    // ---- Términos (mismo criterio que la hoja RECEPCIÓN) — computados acá
+    // (no donde se dibujan, más abajo) porque su alto entra en la medición
+    // del pie que ancla todo el bloque al margen inferior.
+    const terminosListEn = parseRecepcionTerminos(data.recepcionTerminos)
+    const terminosFlatEn: string[] = []
+    for (const raw of terminosListEn) {
+      terminosFlatEn.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
+    }
+    const shownTerminosEn = terminosFlatEn.slice(0, 6)
+
+    // Alto total del pie, de su propia regla superior hasta el margen
+    // inferior de la página — misma cuenta que antes armaba `contentBottomEn`
+    // (12 regla->atribución + 20 fila de atribución + notas + 55 bloque QR/
+    // firmas + términos + 10 de respiro final), solo que ahora fija DÓNDE
+    // debe empezar el pie en vez de recortar la página a su tamaño real.
+    const notasBlockHEn = notasEntregaEn ? (9 + notasEntregaLinesEn.length * 9 + 3) : 0
+    const footerBodyHEn = 12 + 20 + notasBlockHEn + 55 + shownTerminosEn.length * 8 + 10
+    const footerTopTargetEn = rxMargin + footerBodyHEn
+    // Alto disponible para el mid split: hasta la garantía (4 + caja + 8) y
+    // el piso de 4pt antes de la regla del pie.
+    const midBudgetEn = ey - footerTopTargetEn - 4 - (garantiaEn ? garantiaEn.garHeightEn + 12 : 0)
+
     // ---- Mid split: TRABAJO REALIZADO + totales (58%) | Pagos + Chequeo (42%) ----
     const midGapEn = 8
     const midLeftWEn = (rxContentW - midGapEn) * 0.58
@@ -1574,8 +1638,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // (totales + SALDO) dentro del alto fijo de la hoja ENTREGA. El subtotal
     // sigue sumando TODOS los ítems, no solo los dibujados.
     const TRABAJOS_DRAW_CAP_EN = 12
-    const trabajosShownEn = trabajosPricedEn.slice(0, TRABAJOS_DRAW_CAP_EN)
-    const trabajosOverflowEn = Math.max(trabajosPricedEn.length - TRABAJOS_DRAW_CAP_EN, 0)
     const subtotalTrabajoEn = trabajosRawEn.reduce((sum, it) => sum + (Number(it.importe) || 0), 0)
     // Línea derivada "Mano de obra y otros" (fix final-review D3): solo
     // cuando costoFinal supera lo que ya suman los ítems con precio — evita
@@ -1583,6 +1645,46 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const manoDeObraEn = data.costoFinal != null && trabajosRawEn.length > 0 && data.costoFinal > subtotalTrabajoEn
       ? data.costoFinal - subtotalTrabajoEn
       : null
+    const totalFinalValueEn = data.costoFinal != null ? data.costoFinal : (data.presupuesto != null ? data.presupuesto : null)
+    const totalFinalLabelEn = data.costoFinal != null ? "TOTAL FINAL" : "PRESUPUESTO"
+    const totalsWEn = Math.min(midLeftWEn, 176)
+    const totalsXEn = midLeftXEn + midLeftWEn - totalsWEn
+
+    type TotalsRowEn = { label: string; value: string; big?: boolean; neg?: boolean }
+    const totalsRowsEn: TotalsRowEn[] = []
+    // Orden (fix final-review D3): Presupuesto estimado -> Subtotal trabajo
+    // -> Mano de obra y otros (derivada) -> TOTAL FINAL -> Descuento -> banda
+    // SALDO. El viejo orden ponía Descuento ANTES de TOTAL FINAL: el cliente
+    // restaba Subtotal - Descuento de cabeza y el TOTAL FINAL de abajo no
+    // coincidía con esa resta (el descuento no forma parte de esa suma).
+    // Ahora Subtotal + Mano de obra siempre cierra en TOTAL FINAL, y
+    // Descuento aparece después como el ajuste que lleva a la banda SALDO.
+    //
+    // "Presupuesto estimado" solo aporta cuando hay un costoFinal real que
+    // comparar contra — si no, sería la misma cifra que ya se muestra abajo
+    // como fallback "PRESUPUESTO" en negrita (fila duplicada, ver
+    // task-D4-report.md).
+    if (data.presupuesto != null && data.costoFinal != null) totalsRowsEn.push({ label: "Presupuesto estimado", value: formatCurrencyPDF(data.presupuesto) })
+    if (trabajosRawEn.length > 0) totalsRowsEn.push({ label: "Subtotal trabajo", value: formatCurrencyPDF(subtotalTrabajoEn) })
+    if (manoDeObraEn != null) totalsRowsEn.push({ label: "Mano de obra y otros", value: formatCurrencyPDF(manoDeObraEn) })
+    if (totalFinalValueEn != null) totalsRowsEn.push({ label: totalFinalLabelEn, value: formatCurrencyPDF(totalFinalValueEn), big: true })
+    if (data.descuentoCobro) totalsRowsEn.push({ label: "Descuento", value: `-${formatCurrencyPDF(data.descuentoCobro)}`, neg: true })
+    const showSaldoBandEn = totalFinalValueEn != null || !!data.motivoSinCobro
+    // Alto de la columna sin las filas de trabajos (misma cuenta que el dibujo
+    // de abajo): encabezado, cabecera DETALLE, avisos, totales y banda SALDO.
+    const leftFijoEn = 12
+      + (trabajosRawEn.length > 0 ? 15 + (omittedCountEn > 0 ? 10 : 0) : 12)
+      + 4 + totalsRowsEn.reduce((h, r) => h + (r.big ? 27 : 11), 0)
+      + (showSaldoBandEn ? 21 : 0)
+    const filasTrabajoQueEntranEn = (() => {
+      const todas = Math.min(TRABAJOS_DRAW_CAP_EN, trabajosPricedEn.length)
+      const avisoMas = trabajosPricedEn.length > todas ? 10 : 0
+      if (leftFijoEn + todas * 14 + avisoMas <= midBudgetEn) return todas
+      // No entran todas: el renglón "+N ítems más" pasa a ser obligatorio.
+      return Math.max(1, Math.min(todas, Math.floor((midBudgetEn - leftFijoEn - 10) / 14)))
+    })()
+    const trabajosShownEn = trabajosPricedEn.slice(0, filasTrabajoQueEntranEn)
+    const trabajosOverflowEn = Math.max(trabajosPricedEn.length - trabajosShownEn.length, 0)
     // El detalle ya no es solo repuestos: incluye las lineas de servicios_orden
     // (ver construirTrabajos). El encabezado se mantiene corto a proposito —
     // enumerar las tres clases desborda el ancho de la columna a 8.5pt.
@@ -1630,30 +1732,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       ly -= 12
     }
 
-    const totalFinalValueEn = data.costoFinal != null ? data.costoFinal : (data.presupuesto != null ? data.presupuesto : null)
-    const totalFinalLabelEn = data.costoFinal != null ? "TOTAL FINAL" : "PRESUPUESTO"
-    const totalsWEn = Math.min(midLeftWEn, 176)
-    const totalsXEn = midLeftXEn + midLeftWEn - totalsWEn
-
-    type TotalsRowEn = { label: string; value: string; big?: boolean; neg?: boolean }
-    const totalsRowsEn: TotalsRowEn[] = []
-    // Orden (fix final-review D3): Presupuesto estimado -> Subtotal trabajo
-    // -> Mano de obra y otros (derivada) -> TOTAL FINAL -> Descuento -> banda
-    // SALDO. El viejo orden ponía Descuento ANTES de TOTAL FINAL: el cliente
-    // restaba Subtotal - Descuento de cabeza y el TOTAL FINAL de abajo no
-    // coincidía con esa resta (el descuento no forma parte de esa suma).
-    // Ahora Subtotal + Mano de obra siempre cierra en TOTAL FINAL, y
-    // Descuento aparece después como el ajuste que lleva a la banda SALDO.
-    //
-    // "Presupuesto estimado" solo aporta cuando hay un costoFinal real que
-    // comparar contra — si no, sería la misma cifra que ya se muestra abajo
-    // como fallback "PRESUPUESTO" en negrita (fila duplicada, ver
-    // task-D4-report.md).
-    if (data.presupuesto != null && data.costoFinal != null) totalsRowsEn.push({ label: "Presupuesto estimado", value: formatCurrencyPDF(data.presupuesto) })
-    if (trabajosRawEn.length > 0) totalsRowsEn.push({ label: "Subtotal trabajo", value: formatCurrencyPDF(subtotalTrabajoEn) })
-    if (manoDeObraEn != null) totalsRowsEn.push({ label: "Mano de obra y otros", value: formatCurrencyPDF(manoDeObraEn) })
-    if (totalFinalValueEn != null) totalsRowsEn.push({ label: totalFinalLabelEn, value: formatCurrencyPDF(totalFinalValueEn), big: true })
-    if (data.descuentoCobro) totalsRowsEn.push({ label: "Descuento", value: `-${formatCurrencyPDF(data.descuentoCobro)}`, neg: true })
 
     ly -= 4
     for (const row of totalsRowsEn) {
@@ -1666,7 +1744,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       ly -= row.big ? 15 : 11
     }
 
-    const showSaldoBandEn = totalFinalValueEn != null || !!data.motivoSinCobro
     if (showSaldoBandEn) {
       const saldoBandHEn = 18
       // Fix final-review D4: "SALDO" implica algo ya adeudado con certeza;
@@ -1704,10 +1781,51 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       const { day, month } = getZonedParts(d, tz)
       return `${pad2(day)}/${pad2(month)}`
     }
-    const cobrosAllEn = Array.isArray(data.cobros) ? data.cobros.slice(0, 12) : []
+    const CATEGORIA_LABELS_EN: Record<string, string> = {
+      FUNCIONAL: "Funcional",
+      CONDICION_FISICA: "Condición física",
+      ACCESORIOS: "Accesorios",
+      OTRO: "Otro",
+      GENERAL: "General",
+    }
+    // Columna derecha dentro del mismo presupuesto de alto que la izquierda.
+    // Si no entra todo, primero el chequeo de recepción (dato del ingreso, el
+    // menos importante en la entrega) baja a un renglón por categoría, después
+    // se omite, y por último los pagos muestran los primeros y un "+N más".
+    const checklistParaPlanEn = Array.isArray(data.checklistItems) ? data.checklistItems : []
+    const gruposChequeoEn: Array<{ label: string; lineas: string[] }> = []
+    {
+      const porCat = new Map<string, typeof checklistParaPlanEn>()
+      for (const item of checklistParaPlanEn) {
+        const cat = safe(item.categoria).toUpperCase() || "GENERAL"
+        if (!porCat.has(cat)) porCat.set(cat, [])
+        porCat.get(cat)!.push(item)
+      }
+      for (const [cat, items] of porCat) {
+        const itemsText = items.map(it => {
+          const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
+          return `${it.label}: ${v}`
+        }).join(" · ")
+        gruposChequeoEn.push({ label: CATEGORIA_LABELS_EN[cat] || cat, lineas: rxWrap(itemsText, archivoRegular, 8.5, midRightWEn - 16) })
+      }
+    }
+    const chequeoHEn = (maxLineas: number) =>
+      gruposChequeoEn.length === 0 ? 0 : 30 + gruposChequeoEn.reduce((h, g) => h + 12 + 10 * Math.min(maxLineas, g.lineas.length), 0) + 8
+    const cobrosTodosEn = Array.isArray(data.cobros) ? data.cobros : []
+    const cobrosHEn = (n: number) => (n === 0 ? 0 : 24 + 11 * (n + (cobrosTodosEn.length > n ? 1 : 0)) + 8)
+    let chequeoMaxLineasEn = 3
+    let mostrarChequeoEn = gruposChequeoEn.length > 0
+    let cobrosNEn = Math.min(cobrosTodosEn.length, 12)
+    const derechaEntraEn = () => cobrosHEn(cobrosNEn) + (mostrarChequeoEn ? chequeoHEn(chequeoMaxLineasEn) : 0) <= midBudgetEn
+    if (!derechaEntraEn()) chequeoMaxLineasEn = 1
+    if (!derechaEntraEn()) mostrarChequeoEn = false
+    while (!derechaEntraEn() && cobrosNEn > 1) cobrosNEn--
+
+    const cobrosAllEn = cobrosTodosEn.slice(0, cobrosNEn)
+    const cobrosOcultosEn = cobrosTodosEn.length - cobrosAllEn.length
     if (cobrosAllEn.length > 0) {
       const padXEn = 8, padYEn = 6, rowHEn = 11
-      const panelHEn = padYEn * 2 + 12 + cobrosAllEn.length * rowHEn
+      const panelHEn = padYEn * 2 + 12 + (cobrosAllEn.length + (cobrosOcultosEn > 0 ? 1 : 0)) * rowHEn
       page.drawRectangle({ x: midRightXEn, y: ryCol - panelHEn, width: midRightWEn, height: panelHEn, color: MONO.totalBg })
       drawSectionLabel(page, archivoBold, "Pagos registrados", midRightXEn + padXEn, ryCol - padYEn - 6)
       let py = ryCol - padYEn - 6 - 12
@@ -1719,17 +1837,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         rxDrawRight(page, formatCurrencyPDF(c.monto), midRightXEn + midRightWEn - padXEn, py, 8.5, plexMonoRegular, MONO.ink)
         py -= rowHEn
       }
+      if (cobrosOcultosEn > 0) {
+        page.drawText(`+${cobrosOcultosEn} pago${cobrosOcultosEn === 1 ? "" : "s"} más`, { x: midRightXEn + padXEn, y: py, size: 6.5, font: archivoRegular, color: MONO.faint })
+      }
       ryCol -= panelHEn + 8
     }
 
-    const CATEGORIA_LABELS_EN: Record<string, string> = {
-      FUNCIONAL: "Funcional",
-      CONDICION_FISICA: "Condición física",
-      ACCESORIOS: "Accesorios",
-      OTRO: "Otro",
-      GENERAL: "General",
-    }
-    const checklistAllEn = Array.isArray(data.checklistItems) ? data.checklistItems : []
+    const checklistAllEn = mostrarChequeoEn ? checklistParaPlanEn : []
     if (checklistAllEn.length > 0) {
       const padXEn = 8, padYEn = 6
       const groupsEn = new Map<string, typeof checklistAllEn>()
@@ -1750,7 +1864,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
           return `${it.label}: ${v}`
         }).join(" · ")
-        const itemLinesEn = rxWrap(itemsText, archivoRegular, 8.5, midRightWEn - padXEn * 2).slice(0, 3)
+        const itemLinesEn = rxWrapClamp(itemsText, archivoRegular, 8.5, midRightWEn - padXEn * 2, chequeoMaxLineasEn)
         for (const l of itemLinesEn) {
           page.drawText(l, { x: midRightXEn + padXEn, y: cy, size: 8.5, font: archivoRegular, color: MONO.ink })
           cy -= 10
@@ -1765,15 +1879,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ey = Math.min(ly, ryCol)
 
     // ---- GARANTÍA (solo si hay garantía — bloque omitido si no) ----
-    if (data.garantia) {
-      const garDiasEn = data.garantia.dias
-      const garVencEn = formatDatePDF(data.garantia.fechaVencimiento)
-      const garHeadingEn = `GARANTÍA ${garDiasEn} DÍAS`
-      const garHeadingWEn = archivoCondensedBlack.widthOfTextAtSize(garHeadingEn, 15)
-      const garTextXEn = rxMargin + Math.max(garHeadingWEn + 20, 110)
-      const garNotasEn = [safe(data.garantia.notas), `Presentá este comprobante o el código ${codigoOrden || numeroOrdenPadded} para reclamos.`].filter(Boolean).join(" ")
-      const garLinesEn = rxWrap(garNotasEn, archivoRegular, 8.5, rxContentW - (garTextXEn - rxMargin) - 10).slice(0, 3)
-      const garHeightEn = 20 + 10 + garLinesEn.length * 10
+    if (garantiaEn) {
+      const { garHeadingEn, garVencEn, garTextXEn, garLinesEn, garHeightEn } = garantiaEn
       ey -= 4
       page.drawRectangle({ x: rxMargin, y: ey - garHeightEn, width: rxContentW, height: garHeightEn, borderColor: MONO.ink, borderWidth: 1.2 })
       page.drawText(garHeadingEn, { x: rxMargin + 10, y: ey - garHeightEn / 2 - 5, size: 15, font: archivoCondensedBlack, color: MONO.ink })
@@ -1797,38 +1904,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // vertical space the trimmed-down body left over. The drawing code
     // further down walks these exact same arrays, so the measured height
     // can never drift from what actually gets drawn.
-    const attrPartsEn: Array<{ label: string; value: string }> = []
-    if (recibidoPorNombre) attrPartsEn.push({ label: "Recibió: ", value: recibidoPorNombre })
-    if (tecnicoNombre) attrPartsEn.push({ label: "Técnico: ", value: tecnicoNombre })
-    const entregadoPorEn = safe(data.entregadoPor)
-    if (entregadoPorEn) attrPartsEn.push({ label: "Entregó: ", value: entregadoPorEn })
-    const dateSummaryPartsEn = [
-      fechaIngreso ? `Ingreso ${fechaIngreso}` : "",
-      data.fechaCompletado ? `Completado ${formatDatePDF(data.fechaCompletado)}` : "",
-      data.fechaEntrega ? `Entrega ${formatDatePDF(data.fechaEntrega)}` : "",
-    ].filter(Boolean).join(" · ")
-
-    const notasEntregaEn = safe(data.notasEntrega)
-    const notasEntregaLinesEn = notasEntregaEn ? rxWrap(notasEntregaEn, archivoRegular, 7.5, rxContentW).slice(0, 2) : []
-
-    // ---- Términos (mismo criterio que la hoja RECEPCIÓN) — computados acá
-    // (no donde se dibujan, más abajo) porque su alto entra en la medición
-    // del pie que ancla todo el bloque al margen inferior.
-    const terminosListEn = parseRecepcionTerminos(data.recepcionTerminos)
-    const terminosFlatEn: string[] = []
-    for (const raw of terminosListEn) {
-      terminosFlatEn.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
-    }
-    const shownTerminosEn = terminosFlatEn.slice(0, 6)
-
-    // Alto total del pie, de su propia regla superior hasta el margen
-    // inferior de la página — misma cuenta que antes armaba `contentBottomEn`
-    // (12 regla->atribución + 20 fila de atribución + notas + 55 bloque QR/
-    // firmas + términos + 10 de respiro final), solo que ahora fija DÓNDE
-    // debe empezar el pie en vez de recortar la página a su tamaño real.
-    const notasBlockHEn = notasEntregaEn ? (9 + notasEntregaLinesEn.length * 9 + 3) : 0
-    const footerBodyHEn = 12 + 20 + notasBlockHEn + 55 + shownTerminosEn.length * 8 + 10
-    const footerTopTargetEn = rxMargin + footerBodyHEn
+    // (medido antes del mid split: ver "Presupuesto de alto" más arriba)
     // El hueco entre la garantía (o el mid split) y la regla del pie es el
     // que absorbe el espacio sobrante — piso de 4pt (el gap fijo original)
     // para el caso con contenido largo, donde no sobra nada para repartir.
@@ -1977,13 +2053,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   })
   if (data.checklistNotas) chequeoParts.push(safe(data.checklistNotas))
   const chequeoText = chequeoParts.join(" · ") || "Sin chequeo registrado"
-  const chequeoLines = rxWrap(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2).slice(0, 4)
+  const chequeoLines = rxWrapClamp(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2, 4)
   const isPatternCode = !!codigoAccesoDispositivo && isPatternLockCode(codigoAccesoDispositivo)
   const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
 
   const notasMostrador = [problemaReportado.replace(/[.\s]+$/, ""), tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
-  const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
-    .slice(0, 3)
+  const notasLines: RxCellLine[] = rxWrapClamp(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2, 3)
     .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
   if (data.observaciones) {
     // Fix final-review D1: talón interno — línea compacta "OBS:", restaurada
@@ -2139,8 +2214,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   ry -= rowH1
 
   // ---- Falla declarada (fila completa) ----
-  const fallaLines: RxCellLine[] = rxWrap(problemaReportado, archivoRegular, 9, rxContentW - rxCellPadX * 2)
-    .slice(0, 3)
+  const fallaLines: RxCellLine[] = rxWrapClamp(problemaReportado, archivoRegular, 9, rxContentW - rxCellPadX * 2, 3)
     .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
   const rowH2 = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Falla declarada", lines: fallaLines }], ry)
   ry -= rowH2
@@ -2150,8 +2224,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // en el talón; Task D3 la había dejado afuera), acá con el mismo lenguaje
   // de grilla que el resto de esta hoja.
   if (data.observaciones) {
-    const obsLines: RxCellLine[] = rxWrap(safe(data.observaciones), archivoRegular, 8.5, rxContentW - rxCellPadX * 2)
-      .slice(0, 2)
+    const obsLines: RxCellLine[] = rxWrapClamp(safe(data.observaciones), archivoRegular, 8.5, rxContentW - rxCellPadX * 2, 2)
       .map(l => ({ text: l, font: archivoRegular, size: 8.5, color: MONO.ink }))
     const rowObs = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Observaciones", lines: obsLines }], ry)
     ry -= rowObs
@@ -2162,7 +2235,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // quitó — las fotos ya no imprimen en ningún documento, viven solo en
   // seguimiento.
   const accesoriosLines: RxCellLine[] = accesorios
-    ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
+    ? rxWrapClamp(accesorios, archivoRegular, 9, rxContentW - rxCellPadX * 2, 2).map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
     : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
   const rowH3 = rxDrawGridRow([
     { x: rxMargin, width: rxContentW, label: "Accesorios recibidos", lines: accesoriosLines },
