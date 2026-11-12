@@ -48,7 +48,7 @@ const clienteSchema = z.object({
   // Solo se renderizan/envían para ADMIN (ver design ADR-7) — el server
   // igual los rechaza con 403 si un no-ADMIN los manda igual.
   tipoPrecio: z.enum(["MINORISTA", "MAYORISTA"]).default("MINORISTA"),
-  descuentoPct: z.number().min(0, "Debe estar entre 0 y 100").max(100, "Debe estar entre 0 y 100").optional(),
+  descuentoPct: z.number().min(0, "Tiene que estar entre 0 y 100").max(100, "Tiene que estar entre 0 y 100").optional(),
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
@@ -378,7 +378,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
 
       if (res.status === 202) {
         clearDraft()
-        await showInfo("Cliente guardado offline. Se sincronizará automáticamente cuando vuelva la conexión. No podrá asignarse a la operación actual hasta entonces.")
+        await showInfo("Cliente guardado sin conexión. Se va a sincronizar automáticamente cuando vuelva la conexión. Hasta entonces no se puede asignar a la operación actual.")
         onSuccess(undefined, { queuedOffline: true })
         return
       }
@@ -409,7 +409,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
+          <DialogTitle>{cliente ? "Editar cliente" : "Nuevo cliente"}</DialogTitle>
         </DialogHeader>
         <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Primero el conflicto: el borrador se conserva, pero guardarlo
@@ -470,7 +470,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           {tipoCliente === "EMPRESA" && (
             <>
               <div>
-                <Label htmlFor="razonSocial">Razón Social</Label>
+                <Label htmlFor="razonSocial">Razón social</Label>
                 <Input
                   id="razonSocial"
                   {...register("razonSocial")}

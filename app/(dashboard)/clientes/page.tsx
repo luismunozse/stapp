@@ -13,7 +13,7 @@ export default function ClientesPage() {
   return (
     <PageShell
       title="Clientes"
-      description="Gestiona tus clientes y su información"
+      description="Gestioná tus clientes y su información"
       actions={
         <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="gap-1.5 w-full sm:w-auto">
           <PieChart className="h-4 w-4" />

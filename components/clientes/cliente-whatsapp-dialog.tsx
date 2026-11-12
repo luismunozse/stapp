@@ -219,7 +219,7 @@ export function ClienteWhatsAppDialog({
               }}
               rows={6}
               className="mt-2 font-mono text-sm"
-              placeholder="Selecciona una plantilla o escribe tu mensaje..."
+              placeholder="Seleccioná una plantilla o escribí tu mensaje..."
             />
           </div>
 

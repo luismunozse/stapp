@@ -172,7 +172,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const handleDelete = async (e: React.MouseEvent, cliente: Cliente) => {
     e.stopPropagation()
     const confirmed = await confirm({
-      title: "Eliminar Cliente",
+      title: "Eliminar cliente",
       description: `¿Estás seguro de eliminar a "${cliente.nombre}"? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -381,7 +381,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
                 >
                   <Receipt className="h-4 w-4" />
-                  Nueva cotización
+                  Nuevo presupuesto
                 </button>
               )}
               <div className="h-px bg-border my-1" />

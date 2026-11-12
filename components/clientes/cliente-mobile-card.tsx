@@ -131,7 +131,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
                   >
                     <Receipt className="h-4 w-4" />
-                    Nueva cotización
+                    Nuevo presupuesto
                   </button>
                 )}
                 {onCobrar && !cliente.esPractica && (
