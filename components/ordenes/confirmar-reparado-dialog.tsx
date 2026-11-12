@@ -132,7 +132,7 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">
             <Wrench className="h-5 w-5" />
-            Marcar como Reparado {ordenLabel}
+            Marcar como reparado {ordenLabel}
             {orden.clienteNombre && (
               <span className="text-sm font-normal text-muted-foreground">- {orden.clienteNombre}</span>
             )}
@@ -205,7 +205,7 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
             Cancelar
           </Button>
           <Button className="flex-1" onClick={handleConfirmar} disabled={costoNum <= 0} loading={loading}>
-            Marcar como Reparado
+            Marcar como reparado
           </Button>
         </div>
       </ResponsiveDialogContent>

@@ -30,10 +30,10 @@ import { RecepcionEquipoCard, equipoFormSchema, type EquipoFormValues } from "./
 import { RecepcionCreadaModal, type EquipoRecepcionEnviado } from "./recepcion-creada-modal"
 
 const recepcionFormSchema = z.object({
-  clienteId: z.string().min(1, "Elegi el cliente"),
+  clienteId: z.string().min(1, "Elegí el cliente"),
   telefonoContacto: z.string().optional(),
   observaciones: z.string().optional(),
-  equipos: z.array(equipoFormSchema).min(2, "Carga al menos 2 equipos"),
+  equipos: z.array(equipoFormSchema).min(2, "Cargá al menos 2 equipos"),
 })
 
 type RecepcionFormData = z.infer<typeof recepcionFormSchema>
@@ -544,8 +544,8 @@ export function RecepcionForm() {
       if (fallidas > 0) {
         await showError(
           fallidas === fileArray.length
-            ? "No se pudo procesar ninguna imagen. Verifica que sean archivos de imagen validos."
-            : `${fallidas} de ${fileArray.length} imagenes no se pudieron procesar.`
+            ? "No se pudo procesar ninguna imagen. Verificá que sean archivos de imagen válidos."
+            : `${fallidas} de ${fileArray.length} imágenes no se pudieron procesar.`
         )
       }
     } finally {
@@ -565,7 +565,7 @@ export function RecepcionForm() {
 
   const onSubmit = async (data: RecepcionFormData) => {
     if (!terminosAceptados) {
-      await showError("El cliente tiene que aceptar los terminos de recepcion")
+      await showError("El cliente tiene que aceptar los términos de recepción")
       return
     }
     setSubmitting(true)
@@ -593,7 +593,7 @@ export function RecepcionForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },
-        { store: STORES.ORDERS, description: `Recepcion de ${data.equipos.length} equipos` }
+        { store: STORES.ORDERS, description: `Recepción de ${data.equipos.length} equipos` }
       )
 
       if (res.status === 202) {
@@ -601,13 +601,13 @@ export function RecepcionForm() {
         // no tiene la forma de RecepcionCreadaResultado, asi que no hay nada
         // que mostrarle al modal de exito todavia (se sincroniza solo).
         clearDraft()
-        await showInfo("Recepcion guardada offline. Se sincronizara automaticamente cuando vuelva la conexion.")
+        await showInfo("Recepción guardada sin conexión. Se va a sincronizar automáticamente cuando vuelva la conexión.")
         return
       }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        await showError(err.error || "Error al crear la recepcion")
+        await showError(err.error || "Error al crear la recepción")
         return
       }
 
@@ -639,7 +639,7 @@ export function RecepcionForm() {
       setResultado(creada)
     } catch (error) {
       console.error("Error creando recepcion:", error)
-      await showError("Error al crear la recepcion")
+      await showError("Error al crear la recepción")
     } finally {
       setSubmitting(false)
     }
@@ -673,11 +673,11 @@ export function RecepcionForm() {
           </div>
 
           <div>
-            <Label htmlFor="telefonoContacto">Telefono de contacto</Label>
+            <Label htmlFor="telefonoContacto">Teléfono de contacto</Label>
             <Input
               id="telefonoContacto"
               {...register("telefonoContacto")}
-              placeholder={selectedCliente?.telefono || "Numero alternativo"}
+              placeholder={selectedCliente?.telefono || "Número alternativo"}
               type="tel"
               inputMode="tel"
               autoComplete="tel"
@@ -738,7 +738,7 @@ export function RecepcionForm() {
             <Textarea
               id="observaciones"
               {...register("observaciones")}
-              placeholder="Observaciones generales de la recepcion..."
+              placeholder="Observaciones generales de la recepción..."
               rows={2}
             />
           </div>
@@ -749,11 +749,11 @@ export function RecepcionForm() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Una sola firma cubre los {fields.length} equipos de esta recepcion.
+                Una sola firma cubre los {fields.length} equipos de esta recepción.
               </p>
               <SignaturePad
                 key={firmaResetKey}
-                label="Firma del cliente (conformidad de recepcion)"
+                label="Firma del cliente (conformidad de recepción)"
                 onSignatureChange={(data, mime) => {
                   setFirma(data)
                   setFirmaMime(mime)
@@ -767,7 +767,7 @@ export function RecepcionForm() {
                   onChange={(e) => setTerminosAceptados(e.target.checked)}
                   className="mt-0.5"
                 />
-                <span>El cliente acepta los terminos de recepcion</span>
+                <span>El cliente acepta los términos de recepción</span>
               </label>
             </CardContent>
           </Card>
@@ -807,8 +807,8 @@ export function RecepcionForm() {
                 {submitting
                   ? "Creando..."
                   : isMobile
-                    ? "Crear recepcion"
-                    : `Crear recepcion (${fields.length} equipos)`}
+                    ? "Crear recepción"
+                    : `Crear recepción (${fields.length} equipos)`}
               </Button>
             </FormActionBar>
           </div>

@@ -192,7 +192,7 @@ describe("OrdenComisionCard", () => {
     fireEvent.change(input, { target: { value: "" } })
     fireEvent.blur(input)
     expect(onUpdateField).not.toHaveBeenCalled()
-    expect(screen.getByText("Ingrese un porcentaje entre 0 y 100.")).toBeInTheDocument()
+    expect(screen.getByText("Ingresá un porcentaje entre 0 y 100.")).toBeInTheDocument()
   })
 
   it("a valid rate is still saved and clamped", () => {

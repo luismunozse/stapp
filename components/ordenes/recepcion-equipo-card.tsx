@@ -24,7 +24,7 @@ import type { CampoExtra, TipoDispositivoCustom } from "@/types"
  */
 export const equipoFormSchema = z.object({
   dispositivo: z.string().min(1, "Requerido"),
-  tipoDispositivo: z.string().min(1, "Elegi el tipo"),
+  tipoDispositivo: z.string().min(1, "Elegí el tipo"),
   marca: z.string().optional(),
   color: z.string().optional(),
   imei: z.string().optional(),
@@ -130,7 +130,7 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
           )}
           {cfg.showPassword && (
             <div>
-              <Label>Codigo de acceso</Label>
+              <Label>Código de acceso</Label>
               <div className="mt-2">
                 {props.codigoAcceso ? (
                   <div className="flex items-center gap-1">

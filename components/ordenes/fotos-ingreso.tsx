@@ -79,7 +79,7 @@ export function FotosIngreso({
         {comprimiendo && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Comprimiendo imagenes...
+            Comprimiendo imágenes...
           </div>
         )}
 
@@ -89,7 +89,7 @@ export function FotosIngreso({
               <div key={foto.id} className="relative group">
                 <img
                   src={foto.preview}
-                  alt="Preview"
+                  alt="Vista previa"
                   className="w-full h-24 object-cover rounded-lg border"
                 />
                 <button aria-label="Eliminar foto"
@@ -102,7 +102,7 @@ export function FotosIngreso({
                 <Input
                   value={foto.descripcion}
                   onChange={(e) => onDescripcionChange(foto.id, e.target.value)}
-                  placeholder="Descripcion..."
+                  placeholder="Descripción..."
                   className="mt-1 text-xs h-7"
                 />
               </div>

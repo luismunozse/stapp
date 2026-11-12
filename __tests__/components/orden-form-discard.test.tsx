@@ -220,10 +220,10 @@ describe("OrdenForm — descartar un borrador", () => {
     await descartarBorrador()
     fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
     fireEvent.click(screen.getByRole("button", { name: "Celular" }))
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G del cliente Y" },
     })
-    fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describí el problema del equipo..."), {
       target: { value: "Bateria" },
     })
     await irAlPaso3()
@@ -246,23 +246,23 @@ describe("OrdenForm — descartar un borrador", () => {
     fireEvent.change(fileInput, {
       target: { files: [new File(["equipo-x"], "equipo-x.png", { type: "image/png" })] },
     })
-    await screen.findByAltText("Preview")
+    await screen.findByAltText("Vista previa")
     fireEvent.click(screen.getByRole("button", { name: "Firmar" }))
 
     // Se descarta todo y arranca una orden de otro cliente.
     await descartarBorrador()
     fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
     fireEvent.click(screen.getByRole("button", { name: "Celular" }))
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G del cliente Y" },
     })
-    fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describí el problema del equipo..."), {
       target: { value: "Bateria" },
     })
     await irAlPaso3()
 
     // La foto del equipo anterior no puede seguir en pantalla...
-    expect(screen.queryByAltText("Preview")).not.toBeInTheDocument()
+    expect(screen.queryByAltText("Vista previa")).not.toBeInTheDocument()
 
     // ...ni subirse con la orden nueva.
     fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))

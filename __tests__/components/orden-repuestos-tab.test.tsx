@@ -342,7 +342,7 @@ describe("OrdenRepuestosTab — costo y margen visibles solo con mostrarCostos",
     expect(screen.queryByText(/costo/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/margen/i)).not.toBeInTheDocument()
     // El precio de venta sigue visible.
-    expect(screen.getByText("Subtotal Repuestos")).toBeInTheDocument()
+    expect(screen.getByText("Subtotal repuestos")).toBeInTheDocument()
   })
 
   it("muestra costo y margen cuando mostrarCostos esta activo (admin)", () => {
@@ -411,7 +411,7 @@ describe("OrdenRepuestosTab — repuesto sin precio visible (rol con costo ocult
     )
 
     expect(screen.queryByText(/\$0/)).not.toBeInTheDocument()
-    expect(screen.queryByText("Subtotal Repuestos")).not.toBeInTheDocument()
+    expect(screen.queryByText("Subtotal repuestos")).not.toBeInTheDocument()
     expect(screen.getAllByText(/Sin precio/i).length).toBeGreaterThan(0)
     // El resto de la fila sigue siendo util para el tecnico.
     expect(screen.getByText("Pantalla iPhone 12")).toBeInTheDocument()
@@ -430,7 +430,7 @@ describe("OrdenRepuestosTab — repuesto sin precio visible (rol con costo ocult
       </ModalProvider>,
     )
 
-    expect(screen.getByText("Subtotal Repuestos")).toBeInTheDocument()
+    expect(screen.getByText("Subtotal repuestos")).toBeInTheDocument()
     expect(screen.queryByText(/Sin precio/i)).not.toBeInTheDocument()
   })
 })
