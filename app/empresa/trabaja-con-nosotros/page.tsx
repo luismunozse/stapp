@@ -18,7 +18,7 @@ import { CONTACT_EMAIL } from "@/lib/contact"
 
 export const metadata = {
   title: "Trabaja con Nosotros - STApp",
-  description: "Únete a nuestro equipo y ayúdanos a transformar la gestión de talleres de reparación.",
+  description: "Sumate a nuestro equipo y ayudanos a transformar la gestión de talleres de reparación.",
   alternates: {
     canonical: "https://stapp.com.ar/empresa/trabaja-con-nosotros",
   },
@@ -39,7 +39,7 @@ const openPositions = [
     department: "Diseño",
     location: "Remoto (Latinoamérica)",
     type: "Tiempo completo",
-    description: "Únete a nuestro equipo de diseño para crear experiencias de usuario excepcionales que deleiten a nuestros clientes.",
+    description: "Sumate a nuestro equipo de diseño para crear experiencias de usuario excepcionales que deleiten a nuestros clientes.",
   },
   {
     id: 3,
@@ -47,39 +47,39 @@ const openPositions = [
     department: "Soporte",
     location: "Remoto (Argentina)",
     type: "Tiempo completo",
-    description: "Ayuda a nuestros clientes a tener éxito con STApp brindando soporte técnico y orientación de primera clase.",
+    description: "Ayudá a nuestros clientes a tener éxito con STApp brindando soporte técnico y orientación de primera clase.",
   },
 ]
 
 const benefits = [
   {
     icon: Rocket,
-    title: "Crecimiento Profesional",
+    title: "Crecimiento profesional",
     description: "Oportunidades de desarrollo y capacitación continua",
   },
   {
     icon: Users,
-    title: "Equipo Increíble",
-    description: "Trabaja con personas talentosas y apasionadas",
+    title: "Equipo increíble",
+    description: "Trabajá con personas talentosas y apasionadas",
   },
   {
     icon: Heart,
-    title: "Equilibrio Vida-Trabajo",
+    title: "Equilibrio vida-trabajo",
     description: "Horarios flexibles y trabajo 100% remoto",
   },
   {
     icon: Zap,
-    title: "Impacto Real",
+    title: "Impacto real",
     description: "Tu trabajo ayuda a negocios reales a crecer",
   },
   {
     icon: Coffee,
-    title: "Ambiente Relajado",
+    title: "Ambiente relajado",
     description: "Cultura empresarial positiva y colaborativa",
   },
   {
     icon: GraduationCap,
-    title: "Aprendizaje Continuo",
+    title: "Aprendizaje continuo",
     description: "Presupuesto para cursos y conferencias",
   },
 ]
@@ -104,11 +104,11 @@ export default function TrabajaConNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
-              Únete a Nuestro Equipo
+              Sumate a nuestro equipo
             </h1>
             <p className="text-xl text-muted-foreground mb-8">
               Estamos construyendo el futuro de la gestión de talleres de reparación.
-              ¿Quieres ser parte de esta misión?
+              ¿Querés ser parte de esta misión?
             </p>
             <Button size="lg" className="gap-2">
               <Briefcase className="h-5 w-5" />
@@ -126,7 +126,7 @@ export default function TrabajaConNosotrosPage() {
               ¿Por qué trabajar en STApp?
             </h2>
             <p className="text-lg text-muted-foreground mb-12 text-center max-w-2xl mx-auto">
-              Ofrecemos un ambiente de trabajo único donde puedes crecer profesionalmente
+              Ofrecemos un ambiente de trabajo único donde podés crecer profesionalmente
               mientras impactas positivamente en negocios reales.
             </p>
 
@@ -154,7 +154,7 @@ export default function TrabajaConNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-3xl font-bold text-foreground mb-12 text-center">
-              Posiciones Abiertas
+              Posiciones abiertas
             </h2>
 
             <div className="space-y-6">
@@ -211,7 +211,7 @@ export default function TrabajaConNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-3xl font-bold text-foreground mb-8 text-center">
-              Nuestra Cultura
+              Nuestra cultura
             </h2>
             <div className="prose prose-lg dark:prose-invert max-w-none">
               <p className="text-muted-foreground mb-6 text-center">
@@ -249,10 +249,10 @@ export default function TrabajaConNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-3xl font-bold text-foreground mb-4">
-              ¿No ves la posición perfecta para ti?
+              ¿No ves la posición perfecta para vos?
             </h2>
             <p className="text-muted-foreground mb-8">
-              Envíanos tu CV de todas formas. Siempre estamos buscando personas
+              Envianos tu CV de todas formas. Siempre estamos buscando personas
               talentosas y apasionadas.
             </p>
             <Button size="lg" variant="outline" asChild>

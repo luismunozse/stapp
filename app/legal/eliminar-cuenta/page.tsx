@@ -5,7 +5,7 @@ import { EliminarCuentaForm } from "@/components/legal/eliminar-cuenta-form"
 
 export const metadata: Metadata = {
   title: "Eliminar mi cuenta | STApp",
-  description: "Cómo eliminar su usuario o su taller de STApp, qué se borra y qué se conserva.",
+  description: "Cómo eliminar tu usuario o tu taller de STApp, qué se borra y qué se conserva.",
   // Explícito: Next hereda el canonical del layout raíz y lo apuntaría a la home.
   alternates: { canonical: "https://stapp.com.ar/legal/eliminar-cuenta" },
 }
@@ -18,9 +18,9 @@ export default function EliminarCuentaPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Cómo hacerlo</h2>
         <p className="text-gray-600 mb-4">
-          Ingrese el subdominio de su taller e inicie sesión: llegará a la sección “Zona de peligro” de su perfil.
-          Es el mismo camino que ofrece la aplicación. Por seguridad le pedimos su contraseña (o su email si usa Google) y,
-          si lo tiene activado, el código de verificación en dos pasos.
+          Ingresá el subdominio de tu taller e iniciá sesión: vas a llegar a la sección “Zona de peligro” de tu perfil.
+          Es el mismo camino que ofrece la aplicación. Por seguridad te pedimos tu contraseña (o tu email si usás Google) y,
+          si lo tenés activado, el código de verificación en dos pasos.
         </p>
         <EliminarCuentaForm />
       </section>
@@ -29,7 +29,7 @@ export default function EliminarCuentaPage() {
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Dos opciones</h2>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
           <li><strong>Eliminar mi usuario:</strong> cualquier usuario puede hacerlo. El taller sigue funcionando.</li>
-          <li><strong>Eliminar el taller:</strong> solo un administrador. Elimina la organización y sus datos, y cancela la suscripción. Antes puede descargar un respaldo.</li>
+          <li><strong>Eliminar el taller:</strong> solo un administrador. Elimina la organización y sus datos, y cancela la suscripción. Antes podés descargar un respaldo.</li>
         </ul>
         <p className="text-gray-600 mt-4">
           El último administrador de un taller no puede eliminar solo su usuario: debe eliminar el taller o transferir el rol de administrador a otra persona.
@@ -47,23 +47,23 @@ export default function EliminarCuentaPage() {
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
           <li>Se cancela la suscripción en el momento y el acceso se desactiva.</li>
           <li>Transcurrido el plazo se borran todos los datos del taller: clientes, órdenes, ventas, inventario, comprobantes y archivos.</li>
-          <li>La obligación de conservar la documentación fiscal emitida corresponde al taller: descargue el respaldo antes de confirmar. STApp no retiene nada pasado el plazo.</li>
+          <li>La obligación de conservar la documentación fiscal emitida corresponde al taller: descargá el respaldo antes de confirmar. STApp no retiene nada pasado el plazo.</li>
         </ul>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Plazos</h2>
         <p className="text-gray-600">
-          La desactivación es inmediata. Durante {GRACE_DAYS} días podemos revertir el pedido si cambia de opinión. Pasado ese plazo
+          La desactivación es inmediata. Durante {GRACE_DAYS} días podemos revertir el pedido si cambiás de opinión. Pasado ese plazo
           el borrado es definitivo y no se puede deshacer.
         </p>
       </section>
 
       <section className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">¿No puede ingresar?</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">¿No podés ingresar?</h2>
         <p className="text-gray-600">
-          Escríbanos a <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 hover:underline">{CONTACT_EMAIL}</a> desde el
-          email de su cuenta y le ayudaremos con el pedido.
+          Escribinos a <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 hover:underline">{CONTACT_EMAIL}</a> desde el
+          email de tu cuenta y te vamos a ayudar con el pedido.
         </p>
       </section>
     </article>

@@ -19,8 +19,8 @@ export default function TerminosPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Aceptación de los Términos</h2>
         <p className="text-gray-600 mb-4">
-          Al acceder y utilizar STApp ("el Servicio"), usted acepta estar sujeto a estos Términos de Servicio.
-          Si no está de acuerdo con alguna parte de estos términos, no podrá acceder al Servicio.
+          Al acceder y utilizar STApp ("el Servicio"), aceptás estar sujeto a estos Términos de Servicio.
+          Si no estás de acuerdo con alguna parte de estos términos, no podrás acceder al Servicio.
         </p>
       </section>
 
@@ -43,20 +43,20 @@ export default function TerminosPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">3. Registro y Cuenta</h2>
         <p className="text-gray-600 mb-4">
-          Para utilizar el Servicio, debe crear una cuenta proporcionando información precisa y completa.
-          Usted es responsable de:
+          Para utilizar el Servicio, debés crear una cuenta proporcionando información precisa y completa.
+          Sos responsable de:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li>Mantener la confidencialidad de su contraseña</li>
-          <li>Todas las actividades que ocurran bajo su cuenta</li>
-          <li>Notificar inmediatamente cualquier uso no autorizado de su cuenta</li>
+          <li>Mantener la confidencialidad de tu contraseña</li>
+          <li>Todas las actividades que ocurran bajo tu cuenta</li>
+          <li>Notificar inmediatamente cualquier uso no autorizado de tu cuenta</li>
         </ul>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">4. Planes y Pagos</h2>
         <p className="text-gray-600 mb-4">
-          STApp ofrece diferentes planes de suscripción. Al seleccionar un plan de pago, usted acepta:
+          STApp ofrece diferentes planes de suscripción. Al seleccionar un plan de pago, aceptás:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
           <li>Proporcionar información de pago válida y actualizada</li>
@@ -68,7 +68,7 @@ export default function TerminosPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">5. Uso Aceptable</h2>
         <p className="text-gray-600 mb-4">
-          Al usar el Servicio, usted se compromete a no:
+          Al usar el Servicio, te comprometés a no:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
           <li>Violar leyes o regulaciones aplicables</li>
@@ -87,7 +87,7 @@ export default function TerminosPage() {
           protegidos por leyes de derechos de autor, marcas registradas y otras leyes de propiedad intelectual.
         </p>
         <p className="text-gray-600 mb-4">
-          Usted conserva todos los derechos sobre los datos que ingresa en el Servicio.
+          Conservás todos los derechos sobre los datos que ingresás en el Servicio.
         </p>
       </section>
 
@@ -105,29 +105,29 @@ export default function TerminosPage() {
         <p className="text-gray-600 mb-4">
           En ningún caso STApp, sus directores, empleados o agentes serán responsables por daños
           indirectos, incidentales, especiales, consecuentes o punitivos, incluyendo pérdida de beneficios,
-          datos o uso, resultantes de su acceso o uso del Servicio.
+          datos o uso, resultantes de tu acceso o uso del Servicio.
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">9. Terminación</h2>
         <p className="text-gray-600 mb-4">
-          Podemos terminar o suspender su cuenta inmediatamente, sin previo aviso, si usted incumple
-          estos Términos de Servicio. Usted puede cancelar su cuenta en cualquier momento desde la
-          configuración de su cuenta.
+          Podemos terminar o suspender tu cuenta inmediatamente, sin previo aviso, si incumplís
+          estos Términos de Servicio. Podés cancelar tu cuenta en cualquier momento desde la
+          configuración de tu cuenta.
         </p>
         <p className="text-gray-600 mb-4">
-          Tras la terminación, su derecho a usar el Servicio cesará inmediatamente. Si desea exportar
-          sus datos, debe hacerlo antes de la cancelación.
+          Tras la terminación, tu derecho a usar el Servicio cesará inmediatamente. Si querés exportar
+          tus datos, debés hacerlo antes de la cancelación.
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">10. Modificaciones</h2>
         <p className="text-gray-600 mb-4">
-          Nos reservamos el derecho de modificar estos términos en cualquier momento. Le notificaremos
+          Nos reservamos el derecho de modificar estos términos en cualquier momento. Te notificaremos
           cualquier cambio publicando los nuevos términos en esta página y, si los cambios son significativos,
-          enviándole un correo electrónico.
+          enviándote un correo electrónico.
         </p>
       </section>
 

@@ -28,7 +28,7 @@ export const blogPosts: BlogPost[] = [
     slug: "mejorar-experiencia-cliente-taller-reparacion",
     title: "Cómo mejorar la experiencia del cliente en tu taller de reparación",
     excerpt:
-      "Descubre las mejores prácticas para brindar un servicio excepcional y fidelizar a tus clientes en tu taller de reparación de celulares.",
+      "Descubrí las mejores prácticas para brindar un servicio excepcional y fidelizar a tus clientes en tu taller de reparación de celulares.",
     content: `
 ## La importancia de la experiencia del cliente
 
@@ -36,7 +36,7 @@ En un mercado cada vez más competitivo, la experiencia del cliente se ha conver
 
 ## 1. Comunicación transparente desde el primer momento
 
-Desde que el cliente entra a tu taller, necesita saber exactamente qué sucederá con su dispositivo. Utiliza un software de gestión como STApp para generar órdenes de trabajo detalladas con:
+Desde que el cliente entra a tu taller, necesita saber exactamente qué sucederá con su dispositivo. Usá un software de gestión como STApp para generar órdenes de trabajo detalladas con:
 
 - Descripción clara del problema reportado
 - Fotos del estado inicial del equipo
@@ -84,25 +84,25 @@ La tecnología es tu aliada. Un sistema de gestión integral te permite automati
     slug: "estrategias-optimizar-inventario-repuestos",
     title: "5 estrategias para optimizar el inventario de repuestos",
     excerpt:
-      "Mantén un control eficiente de tu stock de repuestos y reduce costos innecesarios con estas técnicas probadas para talleres.",
+      "Mantené un control eficiente de tu stock de repuestos y reducí costos innecesarios con estas técnicas probadas para talleres.",
     content: `
 ## Por qué el inventario es crítico en tu taller
 
 El inventario de repuestos representa una de las mayores inversiones de un taller de reparación. Un mal manejo puede significar pérdidas por repuestos vencidos, falta de stock en momentos críticos o capital inmovilizado innecesariamente.
 
-## 1. Clasifica tus repuestos por rotación
+## 1. Clasificá tus repuestos por rotación
 
-No todos los repuestos tienen la misma demanda. Implementa el método ABC:
+No todos los repuestos tienen la misma demanda. Implementá el método ABC:
 
 - **A (Alta rotación)**: Pantallas, baterías de modelos populares
 - **B (Media rotación)**: Flex de carga, cámaras
 - **C (Baja rotación)**: Repuestos de modelos antiguos
 
-## 2. Establece puntos de reorden automáticos
+## 2. Establecé puntos de reorden automáticos
 
-Configura alertas cuando el stock alcance un mínimo. Con STApp podés definir cantidades mínimas por producto y recibir alertas antes de quedarte sin stock.
+Configurá alertas cuando el stock alcance un mínimo. Con STApp podés definir cantidades mínimas por producto y recibir alertas antes de quedarte sin stock.
 
-## 3. Registra cada movimiento
+## 3. Registrá cada movimiento
 
 Cada repuesto que entra o sale debe quedar registrado. Esto incluye:
 
@@ -111,13 +111,13 @@ Cada repuesto que entra o sale debe quedar registrado. Esto incluye:
 - Devoluciones
 - Pérdidas o daños
 
-## 4. Haz inventarios periódicos
+## 4. Hacé inventarios periódicos
 
-Programa conteos físicos mensuales o trimestrales para detectar diferencias entre el sistema y la realidad.
+Programá conteos físicos mensuales o trimestrales para detectar diferencias entre el sistema y la realidad.
 
-## 5. Analiza tendencias de consumo
+## 5. Analizá tendencias de consumo
 
-Revisa qué repuestos se usan más en cada temporada. Por ejemplo, las baterías se demandan más en verano por el calor.
+Revisá qué repuestos se usan más en cada temporada. Por ejemplo, las baterías se demandan más en verano por el calor.
 
 ## Conclusión
 
@@ -195,7 +195,7 @@ La digitalización no es un gasto, es una inversión que se traduce en más efic
     slug: "gestionar-garantias-reparacion",
     title: "Cómo gestionar las garantías de reparación de manera efectiva",
     excerpt:
-      "Aprende a establecer políticas claras de garantía que protejan tu negocio y generen confianza en tus clientes.",
+      "Aprendé a establecer políticas claras de garantía que protejan tu negocio y generen confianza en tus clientes.",
     content: `
 ## Por qué son importantes las garantías
 
@@ -218,7 +218,7 @@ Con un sistema de gestión podés:
 
 ## Políticas claras evitan conflictos
 
-Define claramente qué cubre y qué no cubre tu garantía. Comunicáselo al cliente al momento de la entrega.
+Definí claramente qué cubre y qué no cubre tu garantía. Comunicáselo al cliente al momento de la entrega.
 
 ## Conclusión
 
@@ -376,7 +376,7 @@ Buscá proveedores confiables que ofrezcan:
 - Garantía en repuestos
 - Precios mayoristas
 - Stock disponible
-- Envía rápido
+- Envío rápido
 
 ## 5. Sistema de gestión desde el día uno
 

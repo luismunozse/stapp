@@ -10,7 +10,7 @@ import { OG_IMAGES } from "@/lib/og/metadata"
 export const metadata = {
   title: "Blog - Consejos para Talleres de Reparación de Celulares",
   description:
-    "Consejos, novedades y mejores prácticas para talleres de reparación de celulares y dispositivos electrónicos. Aprende a gestionar mejor tu negocio de servicio técnico.",
+    "Consejos, novedades y mejores prácticas para talleres de reparación de celulares y dispositivos electrónicos. Aprendé a gestionar mejor tu negocio de servicio técnico.",
   keywords: [
     "blog servicio técnico",
     "consejos taller reparación",
@@ -83,10 +83,10 @@ export default function BlogPage() {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto text-center">
               <h2 className="text-3xl font-bold text-foreground mb-4">
-                Suscríbete a nuestro newsletter
+                Suscribite a nuestro newsletter
               </h2>
               <p className="text-muted-foreground mb-8">
-                Recibe los últimos artículos, consejos y novedades directamente en tu correo
+                Recibí los últimos artículos, consejos y novedades directamente en tu correo
               </p>
               <NewsletterForm />
             </div>

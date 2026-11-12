@@ -15,14 +15,14 @@ export function EliminarCuentaForm() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const clean = slug.trim().toLowerCase()
-    if (!clean) return setError("Ingrese el subdominio de su taller")
+    if (!clean) return setError("Ingresá el subdominio de tu taller")
     if (!isValidTenantSlug(clean)) return setError("Solo letras, números y guiones (sin espacios)")
     window.location.href = buildDeletionLoginUrl(clean, ROOT_DOMAIN)
   }
 
   return (
     <form onSubmit={submit} className="space-y-3 not-prose" noValidate>
-      <Label htmlFor="slug-eliminar">Subdominio de su taller</Label>
+      <Label htmlFor="slug-eliminar">Subdominio de tu taller</Label>
       <div className="flex items-center gap-2">
         <Input
           id="slug-eliminar"
