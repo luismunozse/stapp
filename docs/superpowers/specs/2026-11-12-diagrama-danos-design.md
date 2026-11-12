@@ -65,7 +65,7 @@ Que al recibir un equipo el vendedor marque **sobre un dibujo del equipo** dónd
 ### Reglas en la base (triggers)
 
 1. **Recepción inalterable.** Las filas con `momento = 'recepcion'` no admiten UPDATE ni DELETE, salvo el borrado en cascada de la orden.
-2. **La recepción se carga una sola vez, al crear la orden.** `POST /api/ordenes` hoy inserta la orden con un `insert` y después guarda fotos y eventos en llamadas separadas, sin transacción. Por eso la recepción se guarda con una función RPC atómica, `registrar_estado_fisico_recepcion(p_orden_id, p_danos jsonb, p_sin_danos boolean)`, que inserta todos los pins y la marca de sin daños juntos, o nada. La función rechaza la llamada si:
+2. **La recepción se carga una sola vez, al crear la orden.** `POST /api/ordenes` hoy inserta la orden con un `insert` y después guarda fotos y eventos en llamadas separadas, sin transacción. Por eso la recepción se guarda con una función RPC atómica, `registrar_estado_fisico_recepcion(p_orden_id, p_organization_id, p_danos jsonb, p_sin_danos boolean, p_user_id)`, que inserta todos los pins y la marca de sin daños juntos, o nada. La función rechaza la llamada si:
    - la orden ya tiene pins `recepcion` o ya tiene `recepcion_sin_danos = true` (la recepción se registra una sola vez);
    - la orden se creó hace más de 10 minutos;
    - la orden es de otra organización.
