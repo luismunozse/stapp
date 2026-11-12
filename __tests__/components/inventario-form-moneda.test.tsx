@@ -377,6 +377,24 @@ describe("InventarioForm: moneda del precio", () => {
       expect(grupoPut()!.body.moneda).toBe("USD")
     })
 
+    it("una variante restaurada con su precio sin tocar tampoco deja convertir", async () => {
+      respuestaGrupoGet = () => ({
+        status: 200,
+        body: { ...grupoGet(), archivadas: [{ id: "v1", atributos: [{ opcion: "Color", valor: "Verde" }], stock: 2 }] },
+      })
+      renderForm({ item: itemAgrupado(), permiteVariantes: true })
+      await screen.findAllByLabelText("Precio de Rojo")
+      // Adding the archived combination back restores that member.
+      const campo = await screen.findByLabelText("Agregar valor a Color")
+      fireEvent.change(campo, { target: { value: "Verde" } })
+      fireEvent.keyDown(campo, { key: "Enter" })
+      await screen.findAllByLabelText("Precio de Verde")
+      elegir("USD")
+      const dialogo = await screen.findByRole("dialog")
+      expect(within(dialogo).getByRole("button", { name: "Convertir con la cotización de hoy" })).toBeDisabled()
+      expect(within(dialogo).getByText("Hay variantes archivadas: restauralas o eliminalas para convertir")).toBeInTheDocument()
+    })
+
     it("si la moneda no se aplicó tras convertir, el aviso dice que los precios quedaron convertidos", async () => {
       respuestaGrupoPut = () => ({
         status: 200,

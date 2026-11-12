@@ -469,7 +469,8 @@ export function InventarioForm({
     variantesActivo &&
     (Object.keys(variantes.estado.archivadas).length > 0 ||
       archivadasSinCombinacion.current > 0 ||
-      Object.values(variantes.estado.filas).some((f) => f.archivar))
+      // A restored member whose price the client never saw is the same case.
+      Object.values(variantes.estado.filas).some((f) => f.archivar || (f.restaurada && !f.precioTocado)))
   /** The currency picked while the prices have amounts: it waits for convert / keep / cancel. */
   const [monedaPedida, setMonedaPedida] = useState<{ a: MonedaCatalogo } | null>(null)
   const cotizacionCambio =
