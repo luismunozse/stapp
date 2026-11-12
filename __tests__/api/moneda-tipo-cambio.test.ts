@@ -115,6 +115,53 @@ describe("GET /api/moneda/tipo-cambio", () => {
     expect(spy).toHaveBeenCalled()
   })
 
+  describe("escritura de la referencia", () => {
+    const AHORA = new Date("2026-11-12T12:00:00.000Z")
+    const haceDesdeAhora = (min: number) => new Date(AHORA.getTime() - min * 60_000).toISOString()
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(AHORA)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it("valor igual, referencia de hace 2 min y cotización de hace 6 h: no actualiza", async () => {
+      mockAuthSuccess()
+      vi.mocked(obtenerCotizacionMercado).mockResolvedValue({ valor: 1200, en: haceDesdeAhora(360) })
+      const moneda = createChainMock(fila({ tipo_cambio_referencia: 1200, referencia_en: haceDesdeAhora(2) }))
+      mockSupabaseFrom({ organizations: createChainMock(org), organizacion_moneda: moneda })
+      const { status } = await parseResponse(await GET())
+      expect(status).toBe(200)
+      expect(moneda.update).not.toHaveBeenCalled()
+    })
+
+    it("valor igual y referencia de hace 6 min: actualiza con la hora de consulta, no la del mercado", async () => {
+      mockAuthSuccess()
+      vi.mocked(obtenerCotizacionMercado).mockResolvedValue({ valor: 1200, en: haceDesdeAhora(360) })
+      const moneda = createChainMock(fila({ tipo_cambio_referencia: 1200, referencia_en: haceDesdeAhora(6) }))
+      mockSupabaseFrom({ organizations: createChainMock(org), organizacion_moneda: moneda })
+      const { body } = await parseResponse(await GET())
+      expect(moneda.update).toHaveBeenCalledWith({
+        tipo_cambio_referencia: 1200,
+        referencia_en: AHORA.toISOString(),
+      })
+      expect(body.en).toBe(haceDesdeAhora(360))
+    })
+  })
+
+  it("error de lectura de organizations (no PGRST116): 500", async () => {
+    mockAuthSuccess()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mockSupabaseFrom({
+      organizations: createChainMock(null, { code: "XX000", message: "boom" }),
+      organizacion_moneda: createChainMock(fila()),
+    })
+    const { status, body } = await parseResponse(await GET())
+    expect(status).toBe(500)
+    expect(body).toEqual({ error: "Error al obtener la cotización" })
+  })
+
   it("excepción inesperada: 500", async () => {
     mockAuthSuccess()
     vi.spyOn(console, "error").mockImplementation(() => {})

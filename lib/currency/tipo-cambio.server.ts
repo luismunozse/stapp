@@ -18,11 +18,15 @@ const ERRORES_MIGRACION_PENDIENTE = new Set(["42P01", "42703"])
 export async function cargarConfigMoneda(
   organizationId: string
 ): Promise<{ config: ConfigMoneda; fila: FilaConFechas | null }> {
-  const { data: org } = await supabaseAdmin
+  const { data: org, error: orgError } = await supabaseAdmin
     .from("organizations")
     .select("pais, moneda")
     .eq("id", organizationId)
     .single()
+  // PGRST116 = no row: tolerated (defaults). Anything else could silently mis-resolve the country.
+  if (orgError && orgError.code !== "PGRST116") {
+    throw new Error(`organizations: ${orgError.message}`)
+  }
 
   const { data, error } = await supabaseAdmin
     .from("organizacion_moneda")
@@ -60,7 +64,7 @@ export async function resolverTipoCambio(
       try {
         const { error } = await supabaseAdmin
           .from("organizacion_moneda")
-          .update({ tipo_cambio_referencia: vivo.valor, referencia_en: vivo.en })
+          .update({ tipo_cambio_referencia: vivo.valor, referencia_en: ahora.toISOString() })
           .eq("organization_id", organizationId)
         if (error) console.error("[tipo-cambio] no se pudo guardar la referencia:", error.message)
       } catch (e) {
