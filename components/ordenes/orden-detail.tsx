@@ -133,6 +133,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [editarEquipoOpen, setEditarEquipoOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [descargandoInforme, setDescargandoInforme] = useState(false)
   const [printingPdf, setPrintingPdf] = useState(false)
   // Hoja de esta impresión: arranca en la del taller y solo cambia lo que se le pide al server.
   const ordenPapel = useOrdenPapel()
@@ -564,6 +565,25 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
+  const handleInformeTecnico = async () => {
+    setDescargandoInforme(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/informe`)
+      if (!res.ok) throw new Error("Error al generar el informe")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, "_blank")
+    } catch {
+      await alert({
+        title: "Error",
+        description: "No se pudo generar el informe técnico",
+        variant: "error",
+      })
+    } finally {
+      setDescargandoInforme(false)
+    }
+  }
+
   const handlePrintPdf = async () => {
     setPrintingPdf(true)
     try {
@@ -828,6 +848,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <Button variant="outline" size="sm" onClick={handlePrintPdf} disabled={printingPdf}>
             <Printer className="h-4 w-4 mr-2" />
             {printingPdf ? "..." : "Imprimir"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleInformeTecnico}
+            disabled={descargandoInforme}
+            title="Informe técnico para el cliente: diagnóstico, avances, trabajo y fotos"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            {descargandoInforme ? "..." : "Informe técnico"}
           </Button>
           <OrdenPapelSelect
             value={ordenPapel.papel}
