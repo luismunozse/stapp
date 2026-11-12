@@ -110,20 +110,23 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     expect(status).toBe(200)
     expect(body.tecnicosCobranCotizaciones).toBe(false)
 
-    // Seis intentos: el escalón de arriba (técnicos toman órdenes, que falla
-    // primero porque en cualquier estado donde este flag falta esa columna más
-    // nueva también), el tamaño de hoja de la orden, M3 (variantes en el POS),
-    // 326 (ingresos) y este flag tienen cada uno su escalón y el sexto ya
-    // acierta. Más de seis significa que arrastró a otra migración con él. Se
-    // afirma QUÉ SELECT llevó cada intento, no solo cuántos hubo.
-    expect(chain.single).toHaveBeenCalledTimes(6)
+    // Siete intentos: los dos escalones de arriba (técnicos ven deuda, 405, y
+    // técnicos toman órdenes, 374, que fallan primero porque en cualquier estado
+    // donde este flag falta esas columnas más nuevas también), el tamaño de hoja
+    // de la orden, M3 (variantes en el POS), 326 (ingresos) y este flag tienen
+    // cada uno su escalón y el séptimo ya acierta. Más de siete significa que
+    // arrastró a otra migración con él. Se afirma QUÉ SELECT llevó cada intento,
+    // no solo cuántos hubo.
+    expect(chain.single).toHaveBeenCalledTimes(7)
     const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
-    expect(selects[0]).toContain("tecnicos_toman_ordenes")
-    expect(selects[1]).toContain("orden_formato_papel")
-    expect(selects.filter((s) => s.includes("orden_formato_papel"))).toHaveLength(2)
-    expect(selects[2]).toContain("pos_agrupa_variantes")
-    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(3)
-    expect(selects[5]).not.toContain("tecnicos_cobran_cotizaciones")
+    expect(selects[0]).toContain("tecnicos_ven_deuda_clientes")
+    expect(selects[1]).not.toContain("tecnicos_ven_deuda_clientes")
+    expect(selects[1]).toContain("tecnicos_toman_ordenes")
+    expect(selects[2]).toContain("orden_formato_papel")
+    expect(selects.filter((s) => s.includes("orden_formato_papel"))).toHaveLength(3)
+    expect(selects[3]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(4)
+    expect(selects[6]).not.toContain("tecnicos_cobran_cotizaciones")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)

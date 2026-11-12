@@ -90,6 +90,13 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
       "Puede ver las órdenes que todavía no tienen técnico y tomarlas para sí mismo, por ejemplo cuando no hay un administrador para asignarlas. Solo puede tomarlas para sí: no puede reasignar órdenes de otros técnicos ni asignar a otra persona. Una vez tomada, la orden es suya y se rige por las reglas habituales.",
   },
   {
+    rol: "TECNICO",
+    campo: "tecnicosVenDeudaClientes",
+    titulo: "Consultar la deuda de los clientes en el asistente",
+    detalle:
+      "Puede preguntarle al asistente de STApp cuánto debe un cliente (fiado y órdenes sin cobrar). Apagado, el asistente le muestra los datos del cliente y sus órdenes, pero no la deuda. El saldo de una orden puntual lo sigue viendo, igual que en la pantalla de la orden.",
+  },
+  {
     rol: "VENDEDOR",
     campo: "vendedoresAdministranInventario",
     titulo: "Administrar el inventario",

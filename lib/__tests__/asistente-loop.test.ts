@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest"
 import { ejecutarAsistente, MAX_RONDAS, RESPUESTA_RECHAZADA } from "@/lib/asistente/loop"
 import type { Herramienta } from "@/lib/asistente/herramientas"
 
-const ctx = { actor: { organizationId: "org-1", userId: "u-1", role: "ADMIN", sucursalId: null }, moneda: "ARS" }
+const ctx = {
+  actor: { organizationId: "org-1", userId: "u-1", role: "ADMIN", sucursalId: null },
+  moneda: "ARS",
+  zonaHoraria: "America/Argentina/Buenos_Aires",
+  filtroLectura: { verTodas: true, sucursalId: null },
+}
 const uso = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 0 }
 
 const texto = (t: string) => ({ content: [{ type: "text", text: t }], stop_reason: "end_turn", usage: uso })

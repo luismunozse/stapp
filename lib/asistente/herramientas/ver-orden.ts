@@ -19,7 +19,7 @@ const SELECT_ORDEN = `
   presupuesto, costo_final, total_cobrado, descuento_cobro, estado_cobro,
   clientes(nombre),
   users:tecnico_id(nombre),
-  ${NOTAS_CREDITO_APLICADO_EMBED}
+  ${NOTAS_CREDITO_APLICADO_EMBED.replace(/\s+\(/, "(")}
 `
 
 export const verOrden: Herramienta = {

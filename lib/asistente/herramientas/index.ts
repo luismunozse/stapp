@@ -1,6 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { ContextoHerramienta, Herramienta } from "./tipos"
 import { verOrden } from "./ver-orden"
+import { buscarOrdenes } from "./buscar-ordenes"
+import { resumenCliente } from "./resumen-cliente"
+import { resumenOrdenes } from "./resumen-ordenes"
 
 export type { ContextoHerramienta, Herramienta, LlamadaRegistrada, ResultadoHerramienta } from "./tipos"
 
@@ -8,7 +11,7 @@ export type { ContextoHerramienta, Herramienta, LlamadaRegistrada, ResultadoHerr
  * Todas las herramientas, en orden FIJO. El orden importa: la lista de herramientas va antes del
  * system prompt en el prefijo cacheado, así que cambiarlo entre requests invalida la caché.
  */
-export const HERRAMIENTAS: readonly Herramienta[] = [verOrden]
+export const HERRAMIENTAS: readonly Herramienta[] = [verOrden, buscarOrdenes, resumenCliente, resumenOrdenes]
 
 /**
  * Las herramientas que este actor puede usar, en el orden fijo de HERRAMIENTAS.

@@ -9,6 +9,7 @@ import { buildAsistenteSystemPrompt } from "@/lib/asistente/system-prompt"
 import { ejecutarAsistente, ASISTENTE_MODEL } from "@/lib/asistente/loop"
 import { herramientasDisponibles } from "@/lib/asistente/herramientas"
 import { actorDeSesion } from "@/lib/ordenes/alcance"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const DAILY_LIMIT_PER_ORG = 50
@@ -109,7 +110,13 @@ export async function POST(request: Request) {
     }))
 
     // Herramientas de solo lectura con los permisos del usuario (sin permiso, ni se ofrecen).
-    const ctx = { actor: actorDeSesion(autenticado), moneda: orgTz?.moneda || "ARS" }
+    const actor = actorDeSesion(autenticado)
+    const ctx = {
+      actor,
+      moneda: orgTz?.moneda || "ARS",
+      zonaHoraria: tz,
+      filtroLectura: await sucursalParaLectura({ role: actor.role, userSucursalId: actor.sucursalId }),
+    }
     const herramientas = await herramientasDisponibles(ctx)
 
     // La fecha va en el mensaje, nunca en el system prompt (rompería la caché).

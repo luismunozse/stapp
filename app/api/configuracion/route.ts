@@ -103,12 +103,24 @@ export async function GET() {
     // 42703 would knock down every step and the cascade would bottom out at the
     // minimal fallback, serving a gutted config.
     const tomanOrdenesSelect = `${ordenPapelSelect}, tecnicos_toman_ordenes`
+    // Technicians-see-client-debt permission (migration 405, asistente). Its own step on
+    // top of everything, for the same reason as the ones below.
+    const venDeudaSelect = `${tomanOrdenesSelect}, tecnicos_ven_deuda_clientes`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(tomanOrdenesSelect)
+      .select(venDeudaSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // Migration 405 not applied yet: retry without the flag, keeping everything else.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(tomanOrdenesSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // Migration 374 not applied yet: retry without the flag, keeping everything else.
@@ -269,6 +281,7 @@ export async function GET() {
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       tecnicosTomanOrdenes: !!organization.tecnicos_toman_ordenes,
+      tecnicosVenDeudaClientes: !!organization.tecnicos_ven_deuda_clientes,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
       ordenFormatoPapel: normalizeOrdenPapel(organization.orden_formato_papel),
@@ -311,7 +324,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, tecnicosTomanOrdenes, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades, posAgrupaVariantes, ordenFormatoPapel } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, tecnicosTomanOrdenes, tecnicosVenDeudaClientes, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades, posAgrupaVariantes, ordenFormatoPapel } = body
 
     const updateData: Record<string, any> = {}
 
@@ -468,6 +481,10 @@ export async function PUT(request: Request) {
       updateData.tecnicos_toman_ordenes = !!tecnicosTomanOrdenes
     }
 
+    if (tecnicosVenDeudaClientes !== undefined) {
+      updateData.tecnicos_ven_deuda_clientes = !!tecnicosVenDeudaClientes
+    }
+
     if (vendedoresVenIngresos !== undefined) {
       updateData.vendedores_ven_ingresos = !!vendedoresVenIngresos
     }
@@ -609,6 +626,8 @@ export async function PUT(request: Request) {
     const selectColsOrdenPapel = selectColsPosVariantes + ", orden_formato_papel"
     // Technicians-take-orders permission (migration 374). Its own step on top of everything, like the ones above.
     const selectColsTomanOrdenes = selectColsOrdenPapel + ", tecnicos_toman_ordenes"
+    // Technicians-see-client-debt permission (migration 405). Its own step on top of everything, like the ones above.
+    const selectColsVenDeuda = selectColsTomanOrdenes + ", tecnicos_ven_deuda_clientes"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -619,9 +638,17 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsTomanOrdenes)
+        .select(selectColsVenDeuda)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Migration 405 not applied: retry without the flag.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsTomanOrdenes)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // Migration 374 not applied: retry without the flag.
         ;({ data, error: selectError } = await supabaseAdmin
@@ -739,6 +766,7 @@ export async function PUT(request: Request) {
         vendedoresManejanCaja: !!org?.vendedores_manejan_caja,
         tecnicosCobranCotizaciones: !!org?.tecnicos_cobran_cotizaciones,
         tecnicosTomanOrdenes: !!org?.tecnicos_toman_ordenes,
+        tecnicosVenDeudaClientes: !!org?.tecnicos_ven_deuda_clientes,
         vendedoresVenIngresos: org?.vendedores_ven_ingresos !== false,
         posAgrupaVariantes: org?.pos_agrupa_variantes !== false,
         ordenFormatoPapel: normalizeOrdenPapel(org?.orden_formato_papel),
@@ -765,8 +793,19 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsTomanOrdenes)
+      .select(selectColsVenDeuda)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // Migration 405 not applied yet: retry without the flag, keeping the rest of updateData.
+      delete updateData.tecnicos_ven_deuda_clientes
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsTomanOrdenes)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // Migration 374 not applied yet: retry without the flag, keeping the rest
@@ -928,6 +967,8 @@ export async function PUT(request: Request) {
       delete updateData.pos_agrupa_variantes
       // Strip the technicians-take-orders flag (migration 374) in case it doesn't exist yet
       delete updateData.tecnicos_toman_ordenes
+      // Strip the technicians-see-client-debt flag (migration 405) in case it doesn't exist yet
+      delete updateData.tecnicos_ven_deuda_clientes
       // Strip the order paper size in case it doesn't exist yet
       delete updateData.orden_formato_papel
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
@@ -978,6 +1019,7 @@ export async function PUT(request: Request) {
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       tecnicosTomanOrdenes: !!organization.tecnicos_toman_ordenes,
+      tecnicosVenDeudaClientes: !!organization.tecnicos_ven_deuda_clientes,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
       ordenFormatoPapel: normalizeOrdenPapel(organization.orden_formato_papel),

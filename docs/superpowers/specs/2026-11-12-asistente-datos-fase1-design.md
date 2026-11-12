@@ -160,6 +160,14 @@ Son estimaciones: se validan con los tokens reales registrados en `asistente_men
 3. **Stock, ventas, caja y agenda:** el resto de las herramientas, con su matriz de permisos.
 4. **Evaluación y beta:** correr la evaluación, habilitar para 2–3 organizaciones y medir el costo real antes de abrirlo a todos.
 
+## Estado de la entrega
+
+- **Parte 1** (PR #682): bucle de herramientas, `ver_orden`, registro en `asistente_mensajes.herramientas` (migración 404, aplicada en producción el 2026-11-12).
+- **Parte 2** (este PR, apilado sobre #682): `buscar_ordenes`, `resumen_cliente`, `resumen_ordenes`, links a `/clientes/<id>` y el permiso `tecnicos_ven_deuda_clientes` (migración 405) en Configuración → Roles.
+  - Todas las herramientas que listan o cuentan órdenes usan el alcance de la LISTA de Órdenes (`alcance-lista.ts`): un técnico ve las asignadas a él (más las sin asignar de su sucursal si `tecnicos_toman_ordenes`), el resto según el filtro de sucursal de la lectura.
+  - La deuda de un cliente sale de la misma RPC que la pantalla del cliente (`get_deuda_cliente_sucursal`).
+  - **Pendiente de decisión:** el permiso nuevo solo rige en el asistente. Hoy las pantallas de Clientes (lista con "Deuda", detalle, cuenta corriente) le muestran la deuda a un técnico. Si la regla tiene que valer en todo el sistema, es un cambio aparte.
+
 ## Decisiones tomadas (usuario, 2026-11-12)
 
 1. **Modelo:** Claude Haiku 5.5 (`claude-haiku-5-5`), effort `medium`, `max_tokens` 4096 (el thinking cuenta dentro).

@@ -1,11 +1,16 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { ActorCarga } from "@/lib/ordenes/alcance"
+import type { ResultadoLectura } from "@/lib/sucursal"
 
 /** Quién pregunta y en qué organización. Sale de la sesión, nunca de lo que manda el modelo. */
 export interface ContextoHerramienta {
   actor: ActorCarga
   /** Código ISO de la moneda de la organización (los montos se devuelven como número + esta moneda). */
   moneda: string
+  /** Zona horaria de la organización: "hoy" y los rangos de fechas se cuentan en ella. */
+  zonaHoraria: string
+  /** Filtro de sucursal de las LISTAS para este request (`sucursalParaLectura`, con el selector del ADMIN). */
+  filtroLectura: ResultadoLectura
 }
 
 /** Lo que devuelve una herramienta: datos para el modelo y cuántas filas salieron (para auditoría). */

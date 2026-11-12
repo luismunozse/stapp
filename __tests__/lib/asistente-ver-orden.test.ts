@@ -40,6 +40,8 @@ const orden = (id: string, extra: Record<string, unknown> = {}) => ({
 const ctx = (role: string, sucursalId: string | null, userId: string) => ({
   actor: { organizationId: "org-1", userId, role, sucursalId },
   moneda: "ARS",
+  zonaHoraria: "America/Argentina/Buenos_Aires",
+  filtroLectura: { verTodas: role === "ADMIN", sucursalId: role === "ADMIN" ? null : sucursalId },
 })
 const admin = ctx("ADMIN", null, "adm")
 const vendedorA = ctx("VENDEDOR", A, "v-a")

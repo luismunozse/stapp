@@ -1,6 +1,6 @@
 // Parsea links internos [texto](/ruta) en las respuestas del asistente.
 // Solo rutas exactas en el allowlist de panelRoutes, o el detalle de un registro
-// (/ordenes/<id>) que devuelven las herramientas, se renderizan como link.
+// (/ordenes/<id>, /clientes/<id>) que devuelven las herramientas, se renderizan como link.
 // Cualquier otra ruta (alucinada, traversal, externa) queda como texto plano.
 // También parsea negrita **texto** como segmentos bold.
 
@@ -16,7 +16,7 @@ const BOLD_RE = /\*\*([^*\n]+)\*\*/g
 const RUTAS_VALIDAS = new Set(panelRoutes.map((r) => r.ruta))
 // Detalle de un registro: un solo segmento de id (cuid/uuid), sin query ni más segmentos.
 // La página destino vuelve a validar el permiso: el link no da acceso, solo navega.
-const RUTA_DETALLE_RE = /^\/ordenes\/[A-Za-z0-9-]{8,40}$/
+const RUTA_DETALLE_RE = /^\/(ordenes|clientes)\/[A-Za-z0-9-]{8,40}$/
 
 export function esRutaPermitida(href: string): boolean {
   return RUTAS_VALIDAS.has(href) || RUTA_DETALLE_RE.test(href)

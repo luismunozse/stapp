@@ -379,6 +379,22 @@ export async function resolveTecnicosTomanOrdenes(organizationId: string): Promi
   }
 }
 
+// Resolves the `tecnicos_ven_deuda_clientes` flag of the org (migration 405): may a
+// TECNICO see how much a client owes (asistente). Fail-closed like the others: a
+// missing column or a failed read is "off".
+export async function resolveTecnicosVenDeudaClientes(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("tecnicos_ven_deuda_clientes")
+      .eq("id", organizationId)
+      .single()
+    return data?.tecnicos_ven_deuda_clientes === true
+  } catch {
+    return false
+  }
+}
+
 // Regla pura de acceso a los reportes de INGRESOS del taller. ADMIN siempre.
 // VENDEDOR salvo que la organización lo haya apagado.
 //
