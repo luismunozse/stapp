@@ -173,8 +173,8 @@ aplicar fuera de hora pico). Incluye rollback y probes.
 2. `organizacion_moneda.moneda_extranjera CHAR(3) NOT NULL DEFAULT 'USD'`, con CHECK
    `IN ('USD','EUR')`.
 3. `cotizaciones.tipo_cambio_fuente TEXT` y `cotizaciones.tipo_cambio_en TIMESTAMPTZ`.
-   El `tipo_cambio DECIMAL` existente se convierte a `NUMERIC(14,6)` solo si no hay valores
-   fuera de rango; si no se puede, se deja como está y la validación queda en el código.
+   El `tipo_cambio DECIMAL` existente no se convierte (un `ALTER TYPE` reescribiría la tabla
+   bajo ACCESS EXCLUSIVE); la validación queda en el código.
 4. Una tabla nueva, `recotizaciones`:
    `id`, `organization_id`, `documento_tipo` (`ORDEN` | `COTIZACION`), `documento_id`,
    `modo` (`HOY` | `MANUAL`), `tipo_cambio_anterior`, `tipo_cambio_nuevo`, `motivo`,
