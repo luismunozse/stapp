@@ -683,6 +683,43 @@ export async function handlePreApprovalNotification(
     return { status: "SKIPPED", reason: `preapproval_status_${preApproval.status}`, organizationId }
   }
 
+  const { data: actual } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, status, mercadopago_preapproval_id, current_period_end, canceled_at")
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  // Una baja o pausa de OTRA adhesion (una vieja que el taller ya reemplazo)
+  // no toca la suscripcion vigente. La alta de una adhesion nueva si la pisa.
+  if (
+    status !== "ACTIVE" &&
+    actual?.mercadopago_preapproval_id &&
+    actual.mercadopago_preapproval_id !== preApprovalId
+  ) {
+    console.log(`[MP webhook] PreApproval ${preApprovalId} no es la vigente (${actual.mercadopago_preapproval_id}) - sin accion`)
+    return { status: "SKIPPED", reason: "preapproval_no_vigente", organizationId }
+  }
+
+  // La baja de la adhesion corta los cobros futuros, no lo ya pagado: con el
+  // periodo vigente la suscripcion sigue ACTIVE hasta su fin, marcada para
+  // cancelar (hasValidAccess la pasa a CANCELED al vencer).
+  if (
+    status === "CANCELED" &&
+    actual?.status === "ACTIVE" &&
+    actual.current_period_end &&
+    new Date(actual.current_period_end) > new Date()
+  ) {
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({
+        cancel_at_period_end: true,
+        canceled_at: actual.canceled_at ?? new Date().toISOString(),
+      })
+      .eq("id", actual.id)
+    console.log(`[MP webhook] PreApproval ${preApprovalId} cancelada: acceso hasta ${actual.current_period_end}`)
+    return { status: "PROCESSED", organizationId }
+  }
+
   // Se escribe el plan de la adhesion: sin esto la organizacion queda ACTIVE
   // sobre el plan que tuviera antes — adhiere al Profesional y sigue con los
   // limites del Free.
@@ -698,6 +735,8 @@ export async function handlePreApprovalNotification(
       billing_period: externalRef.billing_period ?? undefined,
       payment_provider: "MERCADOPAGO",
       mercadopago_preapproval_id: preApprovalId,
+      // Volver a adherir deja sin efecto una cancelacion pendiente.
+      ...(status === "ACTIVE" ? { cancel_at_period_end: false, canceled_at: null } : {}),
     })
     .eq("organization_id", organizationId)
 

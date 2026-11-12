@@ -90,4 +90,72 @@ describe("handlePreApprovalNotification", () => {
     expect(r).toMatchObject({ status: "SKIPPED", reason: "org_deleted_or_missing" })
     expect(subs.update).not.toHaveBeenCalled()
   })
+
+  describe("baja de la adhesion", () => {
+    const cancelada = () => {
+      global.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({ ...PREAPPROVAL, status: "cancelled" }), { status: 200 })
+      ) as never
+    }
+    const futuro = new Date(Date.now() + 10 * 86400_000).toISOString()
+    const pasado = new Date(Date.now() - 86400_000).toISOString()
+
+    it("con el periodo pago vigente sigue ACTIVE hasta el fin, marcada para cancelar", async () => {
+      cancelada()
+      const subs = createChainMock(
+        { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-1", current_period_end: futuro, canceled_at: null },
+        null,
+      )
+      mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+      const r = await handlePreApprovalNotification("pre-1")
+
+      expect(r.status).toBe("PROCESSED")
+      expect(subs.update).toHaveBeenCalledTimes(1)
+      const escrito = subs.update.mock.calls[0][0]
+      expect(escrito.cancel_at_period_end).toBe(true)
+      expect(escrito).not.toHaveProperty("status")
+    })
+
+    it("con el periodo vencido pasa a CANCELED", async () => {
+      cancelada()
+      const subs = createChainMock(
+        { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-1", current_period_end: pasado, canceled_at: null },
+        null,
+      )
+      mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+      await handlePreApprovalNotification("pre-1")
+
+      expect(subs.update).toHaveBeenCalledWith(expect.objectContaining({ status: "CANCELED" }))
+    })
+
+    it("la baja de una adhesion vieja no toca la vigente", async () => {
+      cancelada()
+      const subs = createChainMock(
+        { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-nueva", current_period_end: pasado, canceled_at: null },
+        null,
+      )
+      mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+      const r = await handlePreApprovalNotification("pre-1")
+
+      expect(r.status).toBe("SKIPPED")
+      expect(subs.update).not.toHaveBeenCalled()
+    })
+
+    it("volver a adherir limpia una cancelacion pendiente", async () => {
+      const subs = createChainMock(
+        { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-vieja", current_period_end: futuro, canceled_at: pasado },
+        null,
+      )
+      mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+      await handlePreApprovalNotification("pre-1")
+
+      expect(subs.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "ACTIVE", mercadopago_preapproval_id: "pre-1", cancel_at_period_end: false })
+      )
+    })
+  })
 })
