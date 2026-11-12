@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { estadoConfig } from "./estado-config"
+import { StatusPill } from "@/components/ui/status-pill"
 import {
   FileText,
   Plus,
@@ -494,7 +495,6 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         <div className="space-y-3">
           {cotizaciones.map((cotizacion) => {
             const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
-            const Icon = config.icon
             // Espeja la regla del servidor (app/api/cotizaciones/[id]/route.ts):
             // los items se pueden cambiar salvo con la cotizacion ACEPTADA o
             // RECHAZADA. En ACEPTADA hay firma del cliente y stock reservado
@@ -553,10 +553,9 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       <CardTitle className="text-base">
                         {cotizacion.numeroCotizacion}
                       </CardTitle>
-                      <Badge className={config.color}>
-                        <Icon className="mr-1 h-3 w-3" />
+                      <StatusPill tone={config.tone} icon={config.icon}>
                         {config.label}
-                      </Badge>
+                      </StatusPill>
                     </div>
                     <div className="text-lg font-bold">
                       {formatPrice(cotizacion.total)}

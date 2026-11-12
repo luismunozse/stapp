@@ -22,16 +22,11 @@ import {
   Save,
 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
+import { ESTADO_ORDEN_UI } from "@/lib/estado-orden-ui"
 
-const ESTADOS_DISPONIBLES = [
-  { value: "RECIBIDO", label: "Recibido" },
-  { value: "EN_DIAGNOSTICO", label: "En Diagnóstico" },
-  { value: "PRESUPUESTADO", label: "Presupuestado" },
-  { value: "APROBADO", label: "Aprobado" },
-  { value: "EN_REPARACION", label: "En Reparación" },
-  { value: "ESPERANDO_REPUESTO", label: "Esperando Repuesto" },
-  { value: "REPARADO", label: "Listo para Retirar" },
-]
+const ESTADOS_DISPONIBLES = (
+  ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"] as const
+).map((estado) => ({ value: estado, label: ESTADO_ORDEN_UI[estado].labelCliente }))
 
 interface KioskConfig {
   filter_estados: string[]

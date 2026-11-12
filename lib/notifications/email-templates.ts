@@ -3,6 +3,8 @@ import { formatDateValue } from "@/lib/timezone"
 import { EstadoOrden, NotificationContext, NotificationType } from "./types"
 import { resolveTerminologia, t } from "@/lib/terminologia"
 import { escapeHtml } from "@/lib/escape-html"
+import { getEstadoOrdenUi } from "@/lib/estado-orden-ui"
+import { STATUS_TONE_HEX } from "@/lib/status-tone"
 import { detalleGarantiaCliente, venceTextoCliente } from "@/lib/garantias/aviso-texto"
 
 const baseStyles = `
@@ -62,21 +64,9 @@ const estadoLabels: Record<EstadoOrden, string> = {
   SIN_FALLA_DETECTADA: "Sin falla detectada",
 }
 
-const estadoColors: Record<EstadoOrden, string> = {
-  RECIBIDO: "#64748b",
-  EN_DIAGNOSTICO: "#a855f7",
-  PRESUPUESTADO: "#f59e0b",
-  APROBADO: "#3b82f6",
-  EN_REPARACION: "#eab308",
-  ESPERANDO_REPUESTO: "#f97316",
-  REPARADO: "#06b6d4",
-  ENTREGADO: "#22c55e",
-  ENTREGADO_SIN_REPARACION: "#d97706",
-  ENTREGADO_SIN_COBRO: "#0ea5e9",
-  CANCELADO: "#6b7280",
-  SIN_REPARACION: "#ef4444",
-  SIN_FALLA_DETECTADA: "#14b8a6",
-}
+// Mismo tono que la píldora de la app (lib/estado-orden-ui.ts), en el par
+// fondo 50 / texto 700 que da ≥4,5:1.
+const estadoColors = (estado: EstadoOrden) => STATUS_TONE_HEX[getEstadoOrdenUi(estado).tone]
 
 export function generateCambioEstadoEmail(ctx: NotificationContext): {
   subject: string
@@ -84,7 +74,7 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
 } {
   const estado = ctx.orden!.estado
   const estadoLabel = estadoLabels[estado]
-  const estadoColor = estadoColors[estado]
+  const estadoColor = estadoColors(estado)
   const term = resolveTerminologia(ctx.terminologia ?? null)
   const tEquipo = t(term, "equipo")
 
@@ -119,7 +109,7 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
                 <tr>
                   <td style="padding: 8px 0; color: #6b7280;">Estado:</td>
                   <td style="padding: 8px 0;">
-                    <span style="background: ${estadoColor}20; color: ${estadoColor}; padding: 4px 12px; border-radius: 4px; font-weight: bold;">
+                    <span style="background: ${estadoColor.bg}; color: ${estadoColor.fg}; padding: 4px 12px; border-radius: 4px; font-weight: bold;">
                       ${estadoLabel}
                     </span>
                   </td>

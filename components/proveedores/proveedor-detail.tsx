@@ -7,6 +7,8 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
+import { estadoBadge } from "@/components/ordenes-compra/estado-badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -150,13 +152,6 @@ interface ComparativaItem {
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  BORRADOR: { label: "Borrador", variant: "outline" },
-  ENVIADA: { label: "Enviada", variant: "secondary" },
-  RECIBIDA_PARCIAL: { label: "Parcial", variant: "secondary" },
-  RECIBIDA: { label: "Recibida", variant: "default" },
-  CANCELADA: { label: "Cancelada", variant: "destructive" },
-}
 
 function formatDate(iso: string | null | undefined, timezone: string) {
   if (!iso) return "—"
@@ -590,7 +585,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               ) : (
                 <div className="divide-y">
                   {ordenes.map((oc) => {
-                    const badge = ESTADO_BADGE[oc.estado] || { label: oc.estado, variant: "outline" as const }
+                    const badge = estadoBadge(oc.estado)
                     return (
                       <div
                         key={oc.id}
@@ -599,7 +594,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">{oc.numeroOC}</span>
-                            <Badge variant={badge.variant} className="text-[10px]">{badge.label}</Badge>
+                            <StatusPill tone={badge.tone} size="sm" className="text-[10px]">{badge.label}</StatusPill>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Emisión: {formatDate(oc.fechaEmision, timezone)}

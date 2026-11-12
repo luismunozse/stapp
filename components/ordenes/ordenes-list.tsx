@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Badge, OrderStatusBadge } from "@/components/ui/badge"
+import { ESTADO_ORDEN_UI, ESTADOS_ORDEN, getEstadoOrdenLabel } from "@/lib/estado-orden-ui"
 import {
   Plus,
   Search,
@@ -65,37 +66,10 @@ function isProximaAVencer(orden: OrdenServicio): boolean {
 // Fetcher para SWR
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-const ESTADO_LABELS_MAP: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
-  ENTREGADO: "Entregado",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
-  SIN_FALLA_DETECTADA: "Sin Falla Detectada",
-  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
-  ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
-}
-
-const estadoOptions = [
-  { value: "RECIBIDO", label: "Recibido" },
-  { value: "EN_DIAGNOSTICO", label: "En Diagnóstico" },
-  { value: "PRESUPUESTADO", label: "Presupuestado" },
-  { value: "APROBADO", label: "Aprobado" },
-  { value: "EN_REPARACION", label: "En Reparación" },
-  { value: "ESPERANDO_REPUESTO", label: "Esperando Repuesto" },
-  { value: "REPARADO", label: "Reparado" },
-  { value: "ENTREGADO", label: "Entregado" },
-  { value: "CANCELADO", label: "Cancelado" },
-  { value: "SIN_REPARACION", label: "Sin Reparación" },
-  { value: "SIN_FALLA_DETECTADA", label: "Sin Falla Detectada" },
-  { value: "ENTREGADO_SIN_REPARACION", label: "Retirado sin Reparación" },
-  { value: "ENTREGADO_SIN_COBRO", label: "Entregado sin Cobro" },
-]
+const estadoOptions = ESTADOS_ORDEN.map((estado) => ({
+  value: estado as string,
+  label: ESTADO_ORDEN_UI[estado].label,
+}))
 
 // Estados fuera del cambio masivo porque cada uno necesita su propio paso desde el
 // detalle de la orden:
@@ -219,7 +193,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
 
       const exitosas = results.filter((r) => r.ok).length
       const fallidas = results.filter((r) => !r.ok)
-      const label = ESTADO_LABELS_MAP[nuevoEstado]
+      const label = getEstadoOrdenLabel(nuevoEstado)
       const detalle = fallidas.find((r) => r.error)?.error
 
       if (fallidas.length === 0) {

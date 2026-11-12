@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { StatusPill } from "@/components/ui/status-pill"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, type Column } from "@/components/ui/data-table"
@@ -125,7 +125,7 @@ export function OrdenesCompraList() {
       header: "Estado",
       render: (oc) => {
         const badge = estadoBadge(oc.estado)
-        return <Badge variant={badge.variant}>{badge.label}</Badge>
+        return <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
       },
     },
     {

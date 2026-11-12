@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ESTADO_ORDEN_UI, esEstadoOrden } from "@/lib/estado-orden-ui"
 
 /**
  * Evento tal como lo devuelve /api/public/ordenes/[token]/timeline. El
@@ -24,22 +25,6 @@ export interface TimelineEvent {
   url?: string
   fotoTipo?: string
   createdAt: string
-}
-
-const estadoLabels: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En reparación",
-  ESPERANDO_REPUESTO: "Esperando repuesto",
-  REPARADO: "Listo para retirar",
-  ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
-  ENTREGADO_SIN_COBRO: "Retirado sin cobro",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin reparación",
-  SIN_FALLA_DETECTADA: "Sin falla detectada",
 }
 
 /** Texto para el cliente al llegar a cada estado (en vez de "Estado cambiado de X a Y"). */
@@ -101,7 +86,9 @@ export function getEventDescription(event: TimelineEvent): string {
     case "CAMBIO_ESTADO": {
       const estado = event.estadoNuevo || ""
       if (estadoTextos[estado]) return estadoTextos[estado]
-      return estadoLabels[estado] ? `Nuevo estado: ${estadoLabels[estado]}` : "Actualizamos el estado de tu orden"
+      return esEstadoOrden(estado)
+        ? `Nuevo estado: ${ESTADO_ORDEN_UI[estado].labelCliente}`
+        : "Actualizamos el estado de tu orden"
     }
     case "FOTO_AGREGADA":
       return fotoTextos[event.fotoTipo || ""] || "Agregamos una foto"
