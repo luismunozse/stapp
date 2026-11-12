@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useRef, useState, type MouseEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { Plus } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { diagramaPorRef, type VistaId } from "@/components/ordenes/danos/diagramas"
 import { SelectorTipoDano } from "@/components/ordenes/danos/selector-tipo-dano"
@@ -26,6 +27,10 @@ export function DiagramaDanos({ diagrama, pins, editable, onAgregar, resaltado, 
   const def = useMemo(() => diagramaPorRef(diagrama), [diagrama])
   const [vistaId, setVistaId] = useState<VistaId>(def.vistas[0].id)
   const [pendiente, setPendiente] = useState<{ vista: VistaId; x: number; y: number } | null>(null)
+  useEffect(() => {
+    setVistaId(def.vistas[0].id)
+    setPendiente(null)
+  }, [def])
   const svgRef = useRef<SVGSVGElement>(null)
 
   const vista = def.vistas.find((v) => v.id === vistaId) ?? def.vistas[0]
@@ -132,7 +137,17 @@ export function DiagramaDanos({ diagrama, pins, editable, onAgregar, resaltado, 
       </div>
 
       {editable && (
-        <p className="text-center text-xs text-muted-foreground">Tocá el dibujo donde esté el daño.</p>
+        <div className="space-y-2 text-center">
+          <button
+            type="button"
+            onClick={() => setPendiente({ vista: vista.id, x: 0.5, y: 0.5 })}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Agregar daño
+          </button>
+          <p className="text-xs text-muted-foreground">O tocá el dibujo donde esté el daño.</p>
+        </div>
       )}
 
       <SelectorTipoDano open={pendiente !== null} onElegir={elegir} onCerrar={() => setPendiente(null)} />

@@ -64,6 +64,44 @@ describe("DiagramaDanos", () => {
     expect(screen.queryByText("¿Qué daño es?")).toBeNull()
   })
 
+  it("el botón Agregar daño agrega en el centro de la vista actual", () => {
+    const onAgregar = vi.fn()
+    render(<DiagramaDanos diagrama="celular@1" pins={[]} editable onAgregar={onAgregar} />)
+    fireEvent.click(screen.getByRole("button", { name: "Agregar daño" }))
+    fireEvent.click(screen.getByRole("button", { name: /Golpe/ }))
+    expect(onAgregar).toHaveBeenCalledWith({ vista: "frente", x: 0.5, y: 0.5, tipo: "golpe", nota: null })
+  })
+
+  it("agregar desde la pestaña Dorso envía vista dorso", () => {
+    mockRect()
+    const onAgregar = vi.fn()
+    render(<DiagramaDanos diagrama="celular@1" pins={[]} editable onAgregar={onAgregar} />)
+    fireEvent.click(screen.getByRole("tab", { name: "Dorso" }))
+    fireEvent.click(screen.getByTestId("diagrama-svg"), { clientX: 200, clientY: 300 })
+    fireEvent.click(screen.getByRole("button", { name: /Golpe/ }))
+    expect(onAgregar).toHaveBeenCalledWith(expect.objectContaining({ vista: "dorso" }))
+  })
+
+  it("clic en un pin no abre el selector", () => {
+    mockRect()
+    render(<DiagramaDanos diagrama="celular@1" pins={pinsBase} editable />)
+    fireEvent.click(screen.getByLabelText("Daño 1: rayón, frente"))
+    expect(screen.queryByText("¿Qué daño es?")).toBeNull()
+  })
+
+  it("al abrir el selector la nota no tiene el foco y se resetea al reabrir", () => {
+    render(<DiagramaDanos diagrama="celular@1" pins={[]} editable />)
+    const abrir = () => fireEvent.click(screen.getByRole("button", { name: "Agregar daño" }))
+    abrir()
+    const nota = screen.getByLabelText("Nota del daño") as HTMLTextAreaElement
+    expect(document.activeElement).not.toBe(nota)
+    fireEvent.change(nota, { target: { value: "algo" } })
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }))
+    expect(screen.queryByText("¿Qué daño es?")).toBeNull()
+    abrir()
+    expect((screen.getByLabelText("Nota del daño") as HTMLTextAreaElement).value).toBe("")
+  })
+
   it("los botones del selector tienen min-h-11", () => {
     mockRect()
     render(<DiagramaDanos diagrama="celular@1" pins={[]} editable />)
@@ -94,6 +132,7 @@ describe("ListaDanos", () => {
       />,
     )
     expect(screen.getByText(/Ana Pérez/)).toBeInTheDocument()
+    expect(screen.getByText(/2026/)).toBeInTheDocument()
   })
 
   it("los pins de recepción muestran candado y leyenda, sin botón de quitar", () => {

@@ -35,14 +35,6 @@ export function SelectorTipoDano({ open, onElegir, onCerrar }: Props) {
             Tocá el tipo para marcarlo. La nota es opcional.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
-        <Textarea
-          value={nota}
-          onChange={(e) => setNota(e.target.value)}
-          maxLength={200}
-          rows={2}
-          placeholder="Nota (opcional): ej. pantalla, esquina superior"
-          aria-label="Nota del daño"
-        />
         <div className="grid grid-cols-2 gap-2">
           {TIPOS_DANO.map((tipo) => {
             const { label, icon: Icon, colorClass } = TIPO_DANO_META[tipo]
@@ -59,6 +51,14 @@ export function SelectorTipoDano({ open, onElegir, onCerrar }: Props) {
             )
           })}
         </div>
+        <Textarea
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          maxLength={200}
+          rows={2}
+          placeholder="Nota (opcional): ej. pantalla, esquina superior"
+          aria-label="Nota del daño"
+        />
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   )
