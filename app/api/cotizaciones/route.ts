@@ -1,3 +1,4 @@
+import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { NextResponse } from "next/server"
 import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
@@ -453,6 +454,14 @@ export async function POST(request: Request) {
         )
       }
     }
+
+    // Until conversion reaches quotes, an item priced in a foreign currency can't be quoted.
+    const enDivisa = await rechazarItemsEnDivisa({
+      organizationId: organizationId!,
+      inventarioIds: data.items.map((i) => i.inventarioId),
+      servicioIds: data.items.map((i) => i.servicioId),
+    })
+    if (enDivisa) return enDivisa
 
     // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
     // have no cotizaciones nav access today, so losing cost entry here is
