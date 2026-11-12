@@ -3,7 +3,8 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ESTADO_ORDEN_UI, getEstadoOrdenUi } from "@/lib/estado-orden-ui"
-import { statusToneClasses } from "@/components/ui/status-pill"
+import { StatusPill, statusToneClasses } from "@/components/ui/status-pill"
+import { getEstadoPagoUi } from "@/lib/estado-pago-ui"
 
 const ordenVariant = (estado: keyof typeof ESTADO_ORDEN_UI) =>
   statusToneClasses(ESTADO_ORDEN_UI[estado].tone)
@@ -127,7 +128,9 @@ function OrderStatusBadge({ status, showIcon = true, ...props }: OrderStatusBadg
   )
 }
 
-// Payment status badge
+// Estado de pago/cobro (ventas, órdenes, facturas). Etiqueta, ícono y tono salen
+// de lib/estado-pago-ui.ts, que unifica los sinónimos de la base
+// (PAGADO/COBRADO, PAGADO_PARCIAL/PARCIAL, PENDIENTE).
 function PaymentStatusBadge({
   status,
   showIcon = true,
@@ -135,32 +138,12 @@ function PaymentStatusBadge({
 }: {
   status: string
   showIcon?: boolean
-} & Omit<BadgeProps, "variant">) {
-  const variantMap: Record<string, BadgeProps["variant"]> = {
-    PENDIENTE: "warningSoft",
-    PAGADO: "successSoft",
-    PAGADO_PARCIAL: "infoSoft",
-    PARCIAL: "infoSoft",
-    COBRADO: "successSoft",
-    ANULADA: "destructiveSoft",
-  }
-  const labelMap: Record<string, string> = {
-    PENDIENTE: "Pendiente",
-    PAGADO: "Pagado",
-    PAGADO_PARCIAL: "Pago parcial",
-    PARCIAL: "Cobro parcial",
-    COBRADO: "Cobrado",
-    ANULADA: "Anulada",
-  }
-
+} & Omit<React.HTMLAttributes<HTMLSpanElement>, "children">) {
+  const ui = getEstadoPagoUi(status)
   return (
-    <Badge
-      variant={variantMap[status] || "default"}
-      showIcon={showIcon}
-      {...props}
-    >
-      {labelMap[status] || status}
-    </Badge>
+    <StatusPill tone={ui.tone} icon={showIcon ? ui.icon : undefined} {...props}>
+      {ui.label}
+    </StatusPill>
   )
 }
 

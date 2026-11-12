@@ -3,11 +3,11 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
-import { CobroOrdenBadge } from "@/components/ordenes/cobro-orden-badge"
 import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
+import { CobroResumen } from "@/components/ui/cobro-resumen"
 import type { OrdenServicio } from "@/types"
 
 interface OrdenMobileCardProps {
@@ -38,14 +38,14 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
           </div>
           <div className="flex flex-col items-end gap-1">
             <OrderStatusBadge status={orden.estado} showIcon />
-            <CobroOrdenBadge
-              estado={orden.estado}
-              costoFinal={orden.costoFinal}
-              sena={orden.sena}
-              totalCobrado={orden.totalCobrado}
-              descuentoCobro={orden.descuentoCobro}
-              aplicadoNotasCredito={orden.aplicadoNotasCredito}
-            />
+            {orden.estadoPago && (
+              <CobroResumen
+                estadoPago={orden.estadoPago}
+                saldoPendiente={orden.saldoPendiente}
+                montoEstado={orden.montoEstado}
+                className="items-end"
+              />
+            )}
           </div>
         </div>
 

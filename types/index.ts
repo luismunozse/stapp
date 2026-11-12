@@ -1,3 +1,5 @@
+import type { EstadoPagoNormalizado } from "@/lib/estado-pago-ui"
+
 export type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 export type TipoDispositivoBase = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "ACCESORIOS" | "TODOS"
 // Acepta tipos base y tipos personalizados (cualquier string)
@@ -151,8 +153,16 @@ export interface OrdenServicio {
   totalCobrado?: number
   estadoCobro?: string
   descuentoCobro?: number
-  /** Lo que bajaron la deuda las notas de crédito activas. Solo en el detalle. */
+  /** Lo que bajaron la deuda las notas de crédito activas (detalle y lista). */
   aplicadoNotasCredito?: number
+  /**
+   * Solo en la lista (GET /api/ordenes): estado de cobro normalizado
+   * (lib/estado-pago-ui) y saldo pendiente, calculados en el servidor.
+   */
+  estadoPago?: EstadoPagoNormalizado | null
+  saldoPendiente?: number
+  /** Monto que acompaña a la píldora: la seña (SENA) o lo cargado a cuenta corriente (CUENTA_CORRIENTE). */
+  montoEstado?: number
   fechaIngreso: Date
   fechaPrometida?: Date | null
   fechaCompletado?: Date | null

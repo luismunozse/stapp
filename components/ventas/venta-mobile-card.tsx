@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PaymentStatusBadge } from "@/components/ui/badge"
+import { CobroResumen } from "@/components/ui/cobro-resumen"
 import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { Eye, FileText, Calendar, ShoppingCart } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
@@ -26,6 +26,8 @@ interface VentaListItem {
   items: Array<{ descripcion: string; cantidad: number }>
   total: number
   montoAbonado: number
+  /** Lo que falta cobrar (total − cobrado − lo que descontaron las devoluciones). */
+  saldoPendiente?: number
   estadoPago: string
   metodoPago: string
   estado: string
@@ -52,7 +54,6 @@ export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
             </span>
             <VentaEstadoBadge estado={venta.estado} className="text-xs" />
           </div>
-          <PaymentStatusBadge status={venta.estadoPago} />
         </div>
 
         {/* Info */}
@@ -74,6 +75,13 @@ export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
               {venta.items.length} producto{venta.items.length !== 1 ? "s" : ""}
             </div>
           </div>
+
+          <CobroResumen
+            estadoPago={venta.estadoPago}
+            saldoPendiente={venta.estado === "ANULADA" ? 0 : venta.saldoPendiente}
+            layout="inline"
+            className="pt-1"
+          />
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs text-muted-foreground">

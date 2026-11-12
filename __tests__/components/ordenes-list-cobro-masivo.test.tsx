@@ -45,8 +45,12 @@ const base = {
   esPractica: false,
   cliente: { id: "c", nombre: "Ana", telefono: "" },
 }
-const DEBE = { ...base, id: "o-1", codigoOrden: "CEL0001", costoFinal: 15000, totalCobrado: 5000, descuentoCobro: 0, aplicadoNotasCredito: 0 }
-const PAGA = { ...base, id: "o-2", codigoOrden: "CEL0002", estado: "ENTREGADO", costoFinal: 8000, totalCobrado: 8000, descuentoCobro: 0, aplicadoNotasCredito: 0 }
+// estadoPago/saldoPendiente los calcula GET /api/ordenes (lib/ordenes/resumen-cobro):
+// la lista solo los dibuja.
+const DEBE = { ...base, id: "o-1", codigoOrden: "CEL0001", costoFinal: 15000, totalCobrado: 5000, descuentoCobro: 0, aplicadoNotasCredito: 0, estadoPago: "PARCIAL", saldoPendiente: 10000 }
+const PAGA = { ...base, id: "o-2", codigoOrden: "CEL0002", estado: "ENTREGADO", costoFinal: 8000, totalCobrado: 8000, descuentoCobro: 0, aplicadoNotasCredito: 0, estadoPago: "PAGADO", saldoPendiente: 0 }
+
+const EN_CC = { ...base, id: "o-3", codigoOrden: "CEL0003", estado: "ENTREGADO", costoFinal: 800, totalCobrado: 0, descuentoCobro: 0, aplicadoNotasCredito: 0, estadoPago: "CUENTA_CORRIENTE", saldoPendiente: 0, montoEstado: 800 }
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -54,7 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   silenceSkeletonNoise()
   fetchMock = vi.fn(async (url: string) => {
-    if (String(url).startsWith("/api/ordenes?")) return { ok: true, status: 200, json: async () => ({ data: [DEBE, PAGA], total: 2 }) }
+    if (String(url).startsWith("/api/ordenes?")) return { ok: true, status: 200, json: async () => ({ data: [DEBE, PAGA, EN_CC], total: 3 }) }
     return { ok: true, status: 200, json: async () => ({}) }
   })
   vi.stubGlobal("fetch", fetchMock)
@@ -92,6 +96,13 @@ describe("OrdenesList — cobro y cambio masivo", () => {
     renderList()
     expect((await screen.findAllByText("Debe $10000")).length).toBeGreaterThan(0)
     expect(screen.getAllByText("Pagado").length).toBeGreaterThan(0)
+  })
+
+  it("con el saldo en cuenta corriente muestra 'En cuenta corriente' y el monto, nunca 'Debe'", async () => {
+    renderList()
+    expect((await screen.findAllByText("En cuenta corriente")).length).toBeGreaterThan(0)
+    expect(screen.getAllByText("$800").length).toBeGreaterThan(0)
+    expect(screen.queryByText("Debe $800")).not.toBeInTheDocument()
   })
 
   it("pide confirmación y, si se cancela, no cambia nada", async () => {

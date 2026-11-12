@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { PaymentStatusBadge } from "@/components/ui/badge"
+import { CobroResumen } from "@/components/ui/cobro-resumen"
 import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import {
@@ -38,6 +38,8 @@ interface VentaListItem {
   items: Array<{ descripcion: string; cantidad: number }>
   total: number
   montoAbonado: number
+  /** Lo que falta cobrar (total − cobrado − lo que descontaron las devoluciones). */
+  saldoPendiente?: number
   estadoPago: string
   metodoPago: string
   estado: string
@@ -182,9 +184,13 @@ export function VentasList() {
     },
     {
       key: "estadoPago",
-      header: "Estado Pago",
+      header: "Cobro",
       render: (venta) => (
-        <PaymentStatusBadge status={venta.estadoPago} />
+        <CobroResumen
+          estadoPago={venta.estadoPago}
+          // Una venta anulada no le debe nada a nadie.
+          saldoPendiente={venta.estado === "ANULADA" ? 0 : venta.saldoPendiente}
+        />
       ),
     },
     {

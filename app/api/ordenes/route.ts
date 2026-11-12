@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
@@ -11,6 +10,13 @@ import {
   resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
+import {
+  aplicarCargosCuentaCorriente,
+  resumenCobroDeFila,
+  type CargoCuentaCorrienteOrden,
+  type ResumenCobroOrden,
+} from "@/lib/ordenes/resumen-cobro"
+import { NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -236,6 +242,11 @@ export async function GET(request: Request) {
       query = query.in("estado", [...ESTADOS_ACTIVOS])
     }
 
+    // Misma definición que la tarjeta del dashboard (lib/dashboard/datos.ts).
+    // Una orden con el saldo ya cargado a cuenta corriente sigue entrando acá
+    // (la tarjeta también la cuenta) y en la fila se ve "En cuenta corriente",
+    // no "Debe". Sacarla del filtro paginado pediría un anti-join contra
+    // cuenta_corriente que PostgREST no expresa sin una vista o RPC.
     if (cobroPendiente) {
       query = query
         .in("estado_cobro", [...COBRO_PENDIENTE_ESTADOS_COBRO])
@@ -327,12 +338,45 @@ export async function GET(request: Request) {
       includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitados),
       includeCotizacionCost: canViewCotizacionCosts(role),
     }
+    // Estado de cobro y saldo de cada fila: mismo cálculo que el detalle, con
+    // los datos que ya trae la query de la lista (NC embebidas).
+    const resumenes = new Map<string, ResumenCobroOrden>(
+      (ordenes ?? []).map((o: any) => [o.id, resumenCobroDeFila(o)])
+    )
+    // Las órdenes con saldo pueden tenerlo cargado en la cuenta corriente del
+    // cliente (CARGO con referencia ORDEN). referencia_id es polimórfico y no
+    // tiene FK, así que no se puede embeber: una sola lectura para toda la
+    // página (nunca una por orden), acotada a la organización.
+    const idsConSaldo = [...resumenes].filter(([, r]) => r.saldoPendiente > 0).map(([id]) => id)
+    if (idsConSaldo.length > 0) {
+      const { data: cargos, error: cargosError } = await supabaseAdmin
+        .from("cuenta_corriente")
+        .select("referencia_id, monto, revertido_at")
+        .eq("organization_id", organizationId!)
+        .eq("tipo", "CARGO")
+        .eq("referencia_tipo", "ORDEN")
+        .in("referencia_id", idsConSaldo)
+      if (cargosError) throw cargosError
+      const cargosPorOrden = new Map<string, CargoCuentaCorrienteOrden[]>()
+      for (const c of cargos ?? []) {
+        const lista = cargosPorOrden.get(c.referencia_id) ?? []
+        lista.push(c)
+        cargosPorOrden.set(c.referencia_id, lista)
+      }
+      for (const [id, lista] of cargosPorOrden) {
+        const resumen = resumenes.get(id)
+        if (resumen) resumenes.set(id, aplicarCargosCuentaCorriente(resumen, lista))
+      }
+    }
+
     const ordenesFormatted = ordenes?.map((o: any) => {
       const formatted = formatOrden(o, ordenOptions)
+      if (!formatted) return formatted
+      const conCobro = { ...formatted, ...resumenes.get(o.id) }
       // Only a TECNICO gets the hint; the server re-checks everything on take.
-      return role === "TECNICO" && formatted
-        ? { ...formatted, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
-        : formatted
+      return role === "TECNICO"
+        ? { ...conCobro, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
+        : conCobro
     })
 
     // Retornar con información de paginación y cache headers

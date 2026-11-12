@@ -31,7 +31,7 @@ import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
-import { CobroOrdenBadge } from "./cobro-orden-badge"
+import { CobroResumen } from "@/components/ui/cobro-resumen"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { useBorrarPractica } from "@/components/onboarding/use-borrar-practica"
 import { Card, CardContent } from "@/components/ui/card"
@@ -653,16 +653,9 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       header: "Cobro",
       sortable: false,
       hideOnMobile: true,
-      className: "min-w-[110px]",
+      className: "min-w-[120px]",
       render: (orden) => (
-        <CobroOrdenBadge
-          estado={orden.estado}
-          costoFinal={orden.costoFinal}
-          sena={orden.sena}
-          totalCobrado={orden.totalCobrado}
-          descuentoCobro={orden.descuentoCobro}
-          aplicadoNotasCredito={orden.aplicadoNotasCredito}
-        />
+        <CobroResumen estadoPago={orden.estadoPago} saldoPendiente={orden.saldoPendiente} montoEstado={orden.montoEstado} />
       ),
     },
     {
