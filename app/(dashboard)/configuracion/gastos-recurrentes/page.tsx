@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -214,9 +215,9 @@ export default function GastosRecurrentesPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Link href="/configuracion">
-            <Button variant="ghost" size="icon">
+            <IconButton label="Volver a configuración" variant="ghost">
               <ArrowLeft className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </Link>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Gastos Recurrentes</h1>
@@ -317,17 +318,17 @@ export default function GastosRecurrentesPage() {
                         onCheckedChange={() => handleToggleActivo(g)}
                         className="mr-1"
                       />
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(g)}>
+                      <IconButton label="Editar gasto recurrente" variant="ghost" onClick={() => openEdit(g)}>
                         <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton
+                        label="Eliminar gasto recurrente"
                         variant="ghost"
-                        size="icon"
                         onClick={() => setDeleteId(g.id)}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
                 )

@@ -847,7 +847,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             </Button>
           </Link>
           <div className="flex items-center border rounded-md">
-            <Button
+            <Button aria-label="Vista de cuadrícula"
               variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
               className="h-8 w-8 p-0 rounded-r-none"
@@ -855,7 +855,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
-            <Button
+            <Button aria-label="Vista de lista"
               variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
               className="h-8 w-8 p-0 rounded-l-none"

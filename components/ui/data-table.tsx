@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
+import { IconButton } from "./icon-button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 import { DatePicker } from "./date-picker"
 import { SkeletonTable } from "./skeleton"
@@ -416,24 +417,24 @@ function DataTablePagination({
       </div>
 
       <div className="flex items-center gap-1">
-        <Button
+        <IconButton
+          label="Primera página"
           variant="outline"
-          size="icon"
           className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(1)}
           disabled={page === 1}
         >
           <ChevronsLeft className="h-4 w-4" />
-        </Button>
-        <Button
+        </IconButton>
+        <IconButton
+          label="Página anterior"
           variant="outline"
-          size="icon"
           className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
         >
           <ChevronLeft className="h-4 w-4" />
-        </Button>
+        </IconButton>
 
         <div className="flex items-center gap-1 mx-2">
           <span className="text-sm whitespace-nowrap">
@@ -441,24 +442,24 @@ function DataTablePagination({
           </span>
         </div>
 
-        <Button
+        <IconButton
+          label="Página siguiente"
           variant="outline"
-          size="icon"
           className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
         >
           <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button
+        </IconButton>
+        <IconButton
+          label="Última página"
           variant="outline"
-          size="icon"
           className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(totalPages)}
           disabled={page >= totalPages}
         >
           <ChevronsRight className="h-4 w-4" />
-        </Button>
+        </IconButton>
       </div>
     </div>
   )

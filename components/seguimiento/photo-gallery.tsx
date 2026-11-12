@@ -116,7 +116,7 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
           onClick={() => setLightboxPhoto(null)}
         >
-          <button
+          <button aria-label="Cerrar foto"
             className="absolute top-4 right-4 p-2 text-white hover:bg-white/20 rounded-full"
             onClick={() => setLightboxPhoto(null)}
           >

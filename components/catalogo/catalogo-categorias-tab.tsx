@@ -124,10 +124,10 @@ export function CatalogoCategoriasTab() {
                   )}
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={() => setEditing(cat)}>
+                  <Button aria-label="Editar categoría" variant="outline" size="sm" onClick={() => setEditing(cat)}>
                     <Pencil className="h-3 w-3" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDeleteId(cat.id)}>
+                  <Button aria-label="Eliminar categoría" variant="outline" size="sm" onClick={() => setDeleteId(cat.id)}>
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
                 </div>

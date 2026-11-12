@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
-import { Loader2 } from "lucide-react"
 
 interface MermaDialogProps {
   open: boolean
@@ -176,8 +175,7 @@ export function MermaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={pending}>
-            {pending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+          <Button onClick={handleSubmit} loading={pending}>
             Registrar
           </Button>
         </DialogFooter>

@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/select"
 import {
   CreditCard,
-  Loader2,
   Banknote,
   ArrowDownUp,
   CheckCircle2,
@@ -682,19 +681,11 @@ export function PosCheckoutDialog({
             <Button
               className="flex-1 h-12 text-base font-semibold"
               onClick={handleSubmit}
-              disabled={loading || pendienteRequiereCliente}
+              disabled={pendienteRequiereCliente}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Confirmar Venta
-                </>
-              )}
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              Confirmar Venta
             </Button>
           </div>
         </div>

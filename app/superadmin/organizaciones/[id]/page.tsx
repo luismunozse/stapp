@@ -3,6 +3,7 @@
 import { useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -155,9 +156,9 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
     <div className="space-y-6">
       {/* Back navigation */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+        <IconButton label="Volver" variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
-        </Button>
+        </IconButton>
         <span className="text-sm text-muted-foreground">Organizaciones</span>
       </div>
 

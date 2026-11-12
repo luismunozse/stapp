@@ -261,7 +261,7 @@ function PlantillaEditor({
       {/* Header */}
       <div className="border-b p-4 flex items-start gap-3">
         {onBack && (
-          <Button variant="ghost" size="sm" onClick={onBack} className="lg:hidden -ml-2 mt-0.5">
+          <Button aria-label="Volver a la lista" variant="ghost" size="sm" onClick={onBack} className="lg:hidden -ml-2 mt-0.5">
             <ChevronLeft className="h-4 w-4" />
           </Button>
         )}
@@ -730,7 +730,7 @@ export function PlantillasWhatsappEditor() {
                   className="pl-8 h-9 text-sm"
                 />
                 {search && (
-                  <button
+                  <button aria-label="Limpiar búsqueda"
                     type="button"
                     onClick={() => setSearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"

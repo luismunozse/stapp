@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Smartphone, Trash2, Download, Search, Mail, X, Loader2, Inbox } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
@@ -264,14 +265,14 @@ export default function WaitlistPage() {
                             {formatDateTime(entry.created_at)}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Button
+                            <IconButton
+                              label="Eliminar de la lista de espera"
                               variant="ghost"
-                              size="icon"
                               className="h-8 w-8 text-muted-foreground hover:text-destructive"
                               onClick={() => setDeleteTarget(entry)}
                             >
                               <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </IconButton>
                           </td>
                         </tr>
                       )

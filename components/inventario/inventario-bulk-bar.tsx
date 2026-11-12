@@ -351,7 +351,7 @@ export function InventarioBulkBar({
           Eliminar
         </Button>
 
-        <Button size="sm" variant="ghost" onClick={onClear} disabled={pending}>
+        <Button aria-label="Limpiar selección" size="sm" variant="ghost" onClick={onClear} disabled={pending}>
           <X className="h-4 w-4" />
         </Button>
       </div>

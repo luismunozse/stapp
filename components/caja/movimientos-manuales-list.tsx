@@ -201,7 +201,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                     {formatPrice(m.monto)}
                   </span>
                   {!ORIGENES_SISTEMA.has(m.origen) && (
-                    <Button
+                    <Button aria-label="Eliminar movimiento"
                       variant="ghost"
                       size="sm"
                       onClick={() => setDeleteId(m.id)}

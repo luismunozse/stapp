@@ -784,14 +784,10 @@ export function CotizacionPublica({ token }: { token: string }) {
               <Button
                 variant="destructive"
                 onClick={handleReject}
-                disabled={rejecting}
                 className="flex-1"
+                loading={rejecting}
               >
-                {rejecting ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Rechazando...</>
-                ) : (
-                  <><XCircle className="mr-2 h-4 w-4" />Confirmar rechazo</>
-                )}
+                <XCircle className="mr-2 h-4 w-4" />Confirmar rechazo
               </Button>
             </div>
           </CardContent>
@@ -843,19 +839,11 @@ export function CotizacionPublica({ token }: { token: string }) {
               <Button
                 className="flex-1"
                 onClick={handleApprove}
-                disabled={approving || (data.tipo !== "PRESUPUESTO" && !firma)}
+                disabled={data.tipo !== "PRESUPUESTO" && !firma}
+                loading={approving}
               >
-                {approving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Aprobando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Confirmar aprobación
-                  </>
-                )}
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Confirmar aprobación
               </Button>
             </div>
           </CardContent>

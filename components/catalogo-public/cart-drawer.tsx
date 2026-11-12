@@ -8,6 +8,7 @@ import {
   ImagePlus, MessageSquare, Camera, Ticket, AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -277,9 +278,9 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                   <ShoppingCart className="h-5 w-5" />
                   {step === "cart" ? "Tu solicitud" : "Tus datos"}
                 </h2>
-                <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10">
+                <IconButton label="Cerrar" variant="ghost" onClick={onClose} className="h-10 w-10">
                   <X className="h-4 w-4" />
-                </Button>
+                </IconButton>
               </div>
               {cart.items.length > 0 && (
                 <ol className="px-4 pb-3 flex items-center gap-2 text-xs">

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -1262,9 +1263,9 @@ export function InventarioForm({
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle>{item ? "Editar Item" : "Nuevo Item"}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={cerrar}>
+          <IconButton label="Cerrar" variant="ghost" onClick={cerrar}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -1435,26 +1436,27 @@ export function InventarioForm({
                     }}
                     disabled={savingTipo}
                   />
-                  <Button
+                  <IconButton
+                    label="Guardar tipo"
                     type="button"
-                    size="icon"
                     variant="ghost"
                     className="shrink-0 h-9 w-9"
                     onClick={handleAddTipo}
-                    disabled={!newTipo.trim() || savingTipo}
+                    loading={savingTipo}
+                    disabled={!newTipo.trim()}
                   >
-                    {savingTipo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  </Button>
-                  <Button
+                    <Check className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    label="Cancelar nuevo tipo"
                     type="button"
-                    size="icon"
                     variant="ghost"
                     className="shrink-0 h-9 w-9"
                     onClick={() => { setShowNewTipo(false); setNewTipo("") }}
                     disabled={savingTipo}
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </div>
               ) : (
                 <div className="flex gap-1.5">
@@ -1515,26 +1517,27 @@ export function InventarioForm({
                     }}
                     disabled={savingCategoria}
                   />
-                  <Button
+                  <IconButton
+                    label="Guardar categoría"
                     type="button"
-                    size="icon"
                     variant="ghost"
                     className="shrink-0 h-9 w-9"
                     onClick={handleAddCategoria}
-                    disabled={!newCategoria.trim() || savingCategoria}
+                    loading={savingCategoria}
+                    disabled={!newCategoria.trim()}
                   >
-                    {savingCategoria ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  </Button>
-                  <Button
+                    <Check className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    label="Cancelar nueva categoría"
                     type="button"
-                    size="icon"
                     variant="ghost"
                     className="shrink-0 h-9 w-9"
                     onClick={() => { setShowNewCategoria(false); setNewCategoria("") }}
                     disabled={savingCategoria}
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </div>
               ) : (
                 <div className="flex gap-1.5">

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
-import { X, Plus, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
@@ -1397,9 +1398,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Nueva {term("orden")}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -1536,15 +1537,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     }
                   }}
                 />
-                <Button
+                <IconButton
+                  label="Crear sector"
                   type="button"
                   variant="outline"
-                  size="icon"
-                  disabled={!nuevoSectorNombre.trim() || crearSectorLoading}
+                  loading={crearSectorLoading}
+                  disabled={!nuevoSectorNombre.trim()}
                   onClick={handleCrearSector}
                 >
-                  {crearSectorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </Button>
+                  <Plus className="h-4 w-4" />
+                </IconButton>
               </div>
               {clienteSeleccionadoObj.razonSocial && (
                 <p className="text-xs text-muted-foreground mt-1">

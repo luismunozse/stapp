@@ -9,6 +9,7 @@ import {
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ContactRow } from "./contact-row"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -223,12 +224,12 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePrincipal(c)} title={c.principal ? "Quitar como principal" : "Marcar principal"}>
                     <Star className={`h-3.5 w-3.5 ${c.principal ? "fill-yellow-400 text-yellow-400" : ""}`} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(c)}>
+                  <IconButton label="Editar contacto" variant="ghost" className="h-7 w-7" onClick={() => startEdit(c)}>
                     <Edit className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => remove(c.id)}>
+                  </IconButton>
+                  <IconButton label="Eliminar contacto" variant="ghost" className="h-7 w-7" onClick={() => remove(c.id)}>
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs pl-6">

@@ -198,7 +198,7 @@ export function EmailCompose() {
                 </span>
               )}
               <span className="text-muted-foreground text-sm">{destinatarioEmail}</span>
-              <Button variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0" onClick={limpiarDestinatario}>
+              <Button aria-label="Quitar destinatario" variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0" onClick={limpiarDestinatario}>
                 <X className="h-3 w-3" />
               </Button>
             </div>

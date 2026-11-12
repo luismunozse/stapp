@@ -81,6 +81,7 @@ export function ChangePassword() {
                 placeholder="Ingresa tu contraseña actual"
               />
               <Button
+                aria-label={showCurrent ? "Ocultar contraseña" : "Mostrar contraseña"}
                 type="button"
                 variant="ghost"
                 size="icon"
@@ -103,6 +104,7 @@ export function ChangePassword() {
                 placeholder="Ingresa tu nueva contraseña"
               />
               <Button
+                aria-label={showNew ? "Ocultar contraseña" : "Mostrar contraseña"}
                 type="button"
                 variant="ghost"
                 size="icon"

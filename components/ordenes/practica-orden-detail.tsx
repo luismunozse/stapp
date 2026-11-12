@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, GraduationCap, Loader2, Smartphone, Trash2, User, Wrench } from "lucide-react"
+import { ArrowLeft, GraduationCap, Smartphone, Trash2, User, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { OrderStatusBadge } from "@/components/ui/badge"
@@ -66,13 +66,9 @@ export function PracticaOrdenDetail({ orden, isAdmin }: PracticaOrdenDetailProps
               size="sm"
               className="text-muted-foreground hover:text-destructive"
               onClick={() => void borrar()}
-              disabled={borrando}
+              loading={borrando}
             >
-              {borrando ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Trash2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              )}
+              <Trash2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
               Borrar práctica
             </Button>
           )}

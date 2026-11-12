@@ -357,7 +357,7 @@ export function TicketsListSuperadmin() {
                 {Math.min((page - 1) * pageSize + 1, total)}-{Math.min(page * pageSize, total)} de {total} tickets
               </p>
               <div className="flex items-center gap-2">
-                <Button
+                <Button aria-label="Página anterior"
                   variant="outline"
                   size="sm"
                   onClick={() => setPage(p => p - 1)}
@@ -368,7 +368,7 @@ export function TicketsListSuperadmin() {
                 <span className="text-sm text-muted-foreground">
                   Pagina {page} de {Math.ceil(total / pageSize)}
                 </span>
-                <Button
+                <Button aria-label="Página siguiente"
                   variant="outline"
                   size="sm"
                   onClick={() => setPage(p => p + 1)}

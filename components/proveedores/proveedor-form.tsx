@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -244,9 +245,9 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{proveedor ? "Editar Proveedor" : "Nuevo Proveedor"}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>

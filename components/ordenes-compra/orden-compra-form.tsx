@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -172,9 +173,9 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
     <Card>
       <CardHeader>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Volver" variant="ghost" onClick={onClose}>
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </IconButton>
           <CardTitle>Nueva Orden de Compra</CardTitle>
         </div>
       </CardHeader>
@@ -275,9 +276,9 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
                         {formatPrice(item.cantidadPedida * item.precioUnitario)}
                       </td>
                       <td className="px-1 py-2">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
+                        <IconButton label="Quitar ítem" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </IconButton>
                       </td>
                     </tr>
                   ))}

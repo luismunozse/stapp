@@ -2,6 +2,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import { Spinner } from "./spinner"
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-[color,background-color,border-color,transform,filter] duration-150 ease-[transition-timing-function:var(--ease-out)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
@@ -40,18 +41,51 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  /**
+   * Muestra un spinner centrado, marca `aria-busy` y deshabilita el botón.
+   * El contenido queda oculto pero ocupando su lugar, así el ancho no salta.
+   * Se ignora con `asChild`.
+   */
+  loading?: boolean
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+    if (asChild) {
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          data-touch-icon={size === "icon" ? "" : undefined}
+          disabled={disabled}
+          {...props}
+        >
+          {children}
+        </Slot>
+      )
+    }
+
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+      <button
+        className={cn(buttonVariants({ variant, size, className }), loading && "relative")}
         ref={ref}
         data-touch-icon={size === "icon" ? "" : undefined}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
         {...props}
-      />
+      >
+        {loading ? (
+          <>
+            {/* `contents` conserva el layout (gap, íconos); `invisible` lo oculta sin cambiar el ancho. */}
+            <span className="contents invisible">{children}</span>
+            <span className="absolute inset-0 flex items-center justify-center">
+              <Spinner size={size === "lg" ? "md" : "sm"} />
+            </span>
+          </>
+        ) : (
+          children
+        )}
+      </button>
     )
   }
 )

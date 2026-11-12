@@ -202,6 +202,7 @@ function LoginForm() {
                   className="pr-10"
                 />
                 <Button
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   type="button"
                   variant="ghost"
                   size="icon"

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
-import { Plus, Trash2, Search, Loader2, X } from "lucide-react"
+import { Plus, Trash2, Search, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useDebouncedValue } from "@/components/catalogo/use-debounced-value"
 import {
@@ -643,15 +643,8 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || totalPorDebajoDeLoCobrado}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                "Guardar Cambios"
-              )}
+            <Button type="submit" disabled={totalPorDebajoDeLoCobrado} loading={loading}>
+              Guardar Cambios
             </Button>
           </div>
         </form>

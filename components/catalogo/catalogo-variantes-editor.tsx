@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -131,9 +132,9 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
                 </div>
               </div>
               <Switch checked={v.activo} onCheckedChange={() => toggleActivo(v)} />
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing(v)}>
+              <IconButton label="Editar variante" type="button" variant="ghost" className="h-7 w-7" onClick={() => setEditing(v)}>
                 <Pencil className="h-3 w-3" />
-              </Button>
+              </IconButton>
               <Button
                 type="button"
                 variant="ghost"
@@ -247,9 +248,9 @@ function VarianteForm({
     <div className="rounded-md border bg-muted/30 p-3 space-y-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">{variante ? "Editar variante" : "Nueva variante"}</Label>
-        <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+        <IconButton label="Cerrar" type="button" variant="ghost" className="h-6 w-6" onClick={onClose}>
           <X className="h-3 w-3" />
-        </Button>
+        </IconButton>
       </div>
 
       <div>

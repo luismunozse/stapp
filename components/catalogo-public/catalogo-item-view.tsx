@@ -7,6 +7,7 @@ import { brandCssVars } from "@/lib/catalogo/brand"
 import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import {
   Plus, Minus, ShoppingCart, Package, Wrench,
   Star, Share2, ChevronLeft, ChevronRight, ArrowLeft, Sparkles, Copy,
@@ -244,7 +245,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
             {galeria.length > 1 && (
               <div className="grid grid-cols-5 gap-2">
                 {galeria.map((src, i) => (
-                  <button
+                  <button aria-label={`Ver imagen ${i + 1}`}
                     key={i}
                     onClick={() => setImgIdx(i)}
                     className={`aspect-square rounded-md overflow-hidden border-2 transition ${
@@ -344,23 +345,23 @@ export function CatalogoItemView({ data }: { data: Data }) {
             {!sinPrecio && !agotado ? (
               <div className="flex items-center gap-3 pt-2">
                 <div className="flex items-center gap-1">
-                  <Button
+                  <IconButton
+                    label="Restar uno"
                     variant="outline"
-                    size="icon"
                     onClick={() => setCantidad((c) => Math.max(1, c - 1))}
                     disabled={cantidad <= 1}
                   >
                     <Minus className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                   <span className="w-12 text-center font-semibold">{cantidad}</span>
-                  <Button
+                  <IconButton
+                    label="Sumar uno"
                     variant="outline"
-                    size="icon"
                     onClick={() => setCantidad((c) => Math.min(stockMax, c + 1))}
                     disabled={cantidad >= stockMax}
                   >
                     <Plus className="h-4 w-4" />
-                  </Button>
+                  </IconButton>
                 </div>
                 <Button onClick={handleAdd} disabled={debeElegirVariante} className="flex-1 gap-2 h-11" style={{ backgroundColor: config.color_primary }}>
                   <ShoppingCart className="h-4 w-4" />

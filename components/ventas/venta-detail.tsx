@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useModal } from "@/contexts/modal-context"
@@ -301,9 +302,9 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
+        <IconButton label="Volver" variant="ghost" className="shrink-0" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
-        </Button>
+        </IconButton>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold sm:text-2xl">

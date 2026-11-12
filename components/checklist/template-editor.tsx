@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -463,24 +464,24 @@ export function TemplateEditor() {
                       className="flex items-center gap-2 p-3 border rounded-lg bg-background"
                     >
                       <div className="flex flex-col gap-1">
-                        <Button
+                        <IconButton
+                          label="Subir ítem"
                           variant="ghost"
-                          size="icon"
                           className="h-6 w-6"
                           onClick={() => handleMoveItem(item.id, "up")}
                           disabled={index === 0}
                         >
                           <ChevronUp className="h-4 w-4" />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton
+                          label="Bajar ítem"
                           variant="ghost"
-                          size="icon"
                           className="h-6 w-6"
                           onClick={() => handleMoveItem(item.id, "down")}
                           disabled={index === selectedTemplate.items.length - 1}
                         >
                           <ChevronDown className="h-4 w-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                       <div className="flex-1">
                         <div className="font-medium">{item.label}</div>
@@ -499,14 +500,14 @@ export function TemplateEditor() {
                           )}
                         </div>
                       </div>
-                      <Button
+                      <IconButton
+                        label="Eliminar ítem"
                         variant="ghost"
-                        size="icon"
                         onClick={() => handleDeleteItem(item.id)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                   ))}
               </div>

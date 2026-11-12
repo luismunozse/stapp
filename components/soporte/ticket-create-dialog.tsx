@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -119,9 +120,9 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
       <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">Nuevo Ticket de Soporte</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
-          </Button>
+          </IconButton>
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
@@ -206,7 +207,7 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
                       alt={`Adjunto ${i + 1}`}
                       className="h-20 w-20 object-cover rounded-lg border"
                     />
-                    <button
+                    <button aria-label="Quitar imagen"
                       type="button"
                       onClick={() => removeImage(i)}
                       className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"

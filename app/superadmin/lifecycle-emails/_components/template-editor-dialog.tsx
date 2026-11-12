@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -326,25 +327,25 @@ export function TemplateEditorDialog({ id, onClose }: Props) {
                         )}
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={refreshPreview} disabled={previewLoading}>
+                        <IconButton label="Actualizar vista previa" variant="ghost" className="h-8 w-8" onClick={refreshPreview} disabled={previewLoading}>
                           <RefreshCw className={cn("h-4 w-4", previewLoading && "animate-spin")} />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton
+                          label="Vista de escritorio"
                           variant={viewMode === "desktop" ? "default" : "ghost"}
-                          size="icon"
                           className="h-8 w-8"
                           onClick={() => setViewMode("desktop")}
                         >
                           <Monitor className="h-4 w-4" />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton
+                          label="Vista de celular"
                           variant={viewMode === "mobile" ? "default" : "ghost"}
-                          size="icon"
                           className="h-8 w-8"
                           onClick={() => setViewMode("mobile")}
                         >
                           <Smartphone className="h-4 w-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                     <div

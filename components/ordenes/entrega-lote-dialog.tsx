@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, PackageCheck } from "lucide-react"
+import { PackageCheck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { toast } from "sonner"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
@@ -306,18 +306,9 @@ export function EntregaLoteDialog({
             <Button variant="outline" onClick={handleClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button onClick={handleConfirmar} disabled={loading || !metodoPago}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Entregando...
-                </>
-              ) : (
-                <>
-                  <PackageCheck className="mr-2 h-4 w-4" />
-                  Confirmar entrega
-                </>
-              )}
+            <Button onClick={handleConfirmar} disabled={!metodoPago} loading={loading}>
+              <PackageCheck className="mr-2 h-4 w-4" />
+              Confirmar entrega
             </Button>
           </div>
         </div>

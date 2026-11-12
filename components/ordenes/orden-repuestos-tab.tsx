@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -557,9 +558,9 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                       ? "Sin precio"
                       : formatPrice(cantidadDe(repuesto) * precioVenta)}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
+                  <IconButton label="Quitar repuesto" variant="ghost" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
               )

@@ -3,7 +3,7 @@
 import { useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { ArrowLeft, Package } from "lucide-react"
 import { PlanForm } from "../_components/plan-form"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
@@ -43,9 +43,9 @@ export default function EditPlanPage({ params }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/superadmin/planes">
-          <Button variant="ghost" size="icon">
+          <IconButton label="Volver a planes" variant="ghost">
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </IconButton>
         </Link>
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">

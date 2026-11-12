@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Plus, Minus, AlertCircle } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
@@ -137,9 +138,9 @@ export function QuickStockAdjust({
 
         {mode === "delta" ? (
           <div className="flex items-center gap-1">
-            <Button
+            <IconButton
+              label="Restar uno"
               type="button"
-              size="icon"
               variant="outline"
               className="h-9 w-9 shrink-0"
               onClick={() => {
@@ -148,7 +149,7 @@ export function QuickStockAdjust({
               }}
             >
               <Minus className="h-4 w-4" />
-            </Button>
+            </IconButton>
             <Input
               type="number"
               placeholder="ej: 5 o -3"
@@ -157,9 +158,9 @@ export function QuickStockAdjust({
               className="text-center"
               autoFocus
             />
-            <Button
+            <IconButton
+              label="Sumar uno"
               type="button"
-              size="icon"
               variant="outline"
               className="h-9 w-9 shrink-0"
               onClick={() => {
@@ -168,7 +169,7 @@ export function QuickStockAdjust({
               }}
             >
               <Plus className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
         ) : (
           <Input

@@ -323,27 +323,20 @@ export function PosVentaExito({
               </ul>
 
               <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
-                <Button variant="outline" className="h-11" onClick={onPrint} disabled={printer.printing}>
-                  {printer.printing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Printer className="mr-2 h-4 w-4" />
-                  )}
-                  {printer.printing ? "Imprimiendo…" : printer.connected ? "Reimprimir" : "Imprimir"}
+                <Button variant="outline" className="h-11" onClick={onPrint} loading={printer.printing}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  {printer.connected ? "Reimprimir" : "Imprimir"}
                 </Button>
                 {facturacion.disponible && (
                   <Button
                     variant="outline"
                     className="h-11"
                     onClick={facturacion.onEmitir}
-                    disabled={facturacion.emitiendo || !!comprobante}
+                    disabled={!!comprobante}
+                    loading={facturacion.emitiendo}
                   >
-                    {facturacion.emitiendo ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileText className="mr-2 h-4 w-4" />
-                    )}
-                    {facturacion.emitiendo ? "Emitiendo…" : "Factura"}
+                    <FileText className="mr-2 h-4 w-4" />
+                    Factura
                   </Button>
                 )}
                 <PosTicketShare

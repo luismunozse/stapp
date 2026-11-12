@@ -178,7 +178,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             <div className="space-y-2 border rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">IMEI/Serial</span>
-                <button
+                <button aria-label="Mostrar IMEI/serial" aria-pressed={imeiVisible}
                   type="button"
                   onClick={() => setImeiVisible(!imeiVisible)}
                   className="text-muted-foreground hover:text-foreground"
@@ -216,7 +216,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             {/* Password */}
             <div className="flex items-center justify-between border rounded-lg p-3">
               <span className="text-sm font-medium">Contrasena</span>
-              <button
+              <button aria-label="Mostrar contraseña" aria-pressed={passwordVisible}
                 type="button"
                 onClick={() => setPasswordVisible(!passwordVisible)}
                 className="text-muted-foreground hover:text-foreground"
@@ -228,7 +228,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             {/* Color */}
             <div className="flex items-center justify-between border rounded-lg p-3">
               <span className="text-sm font-medium">Color</span>
-              <button
+              <button aria-label="Mostrar color" aria-pressed={colorVisible}
                 type="button"
                 onClick={() => setColorVisible(!colorVisible)}
                 className="text-muted-foreground hover:text-foreground"
@@ -240,7 +240,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
             {/* Marca */}
             <div className="flex items-center justify-between border rounded-lg p-3">
               <span className="text-sm font-medium">Marca</span>
-              <button
+              <button aria-label="Mostrar marca" aria-pressed={marcaVisible}
                 type="button"
                 onClick={() => setMarcaVisible(!marcaVisible)}
                 className="text-muted-foreground hover:text-foreground"
@@ -265,7 +265,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <div key={idx} className="border rounded-lg p-3 space-y-2 bg-muted/30">
                   <div className="flex items-center gap-2">
                     <div className="flex flex-col gap-0.5">
-                      <button
+                      <button aria-label="Subir campo"
                         type="button"
                         onClick={() => moveCampoExtra(idx, "up")}
                         disabled={idx === 0}
@@ -273,7 +273,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                       >
                         <ChevronUp className="h-3 w-3" />
                       </button>
-                      <button
+                      <button aria-label="Bajar campo"
                         type="button"
                         onClick={() => moveCampoExtra(idx, "down")}
                         disabled={idx === camposExtra.length - 1}
@@ -309,7 +309,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                         </SelectContent>
                       </Select>
                     </div>
-                    <button
+                    <button aria-label="Eliminar campo"
                       type="button"
                       onClick={() => removeCampoExtra(idx)}
                       className="text-destructive hover:text-destructive/80"
@@ -434,7 +434,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
               >
                 {acc.label}
-                <button
+                <button aria-label="Quitar accesorio"
                   type="button"
                   onClick={() => setAccesorios((prev) => prev.filter((_, j) => j !== i))}
                   className="text-muted-foreground hover:text-destructive"
@@ -452,7 +452,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAccesorio() } }}
             />
-            <Button size="sm" variant="outline" onClick={addAccesorio} className="h-8">
+            <Button aria-label="Agregar accesorio" size="sm" variant="outline" onClick={addAccesorio} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
           </div>
@@ -470,7 +470,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
               >
                 {m}
-                <button
+                <button aria-label="Quitar marca"
                   type="button"
                   onClick={() => setMarcas((prev) => prev.filter((_, j) => j !== i))}
                   className="text-muted-foreground hover:text-destructive"
@@ -488,7 +488,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addMarca() } }}
             />
-            <Button size="sm" variant="outline" onClick={addMarca} className="h-8">
+            <Button aria-label="Agregar marca" size="sm" variant="outline" onClick={addMarca} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
           </div>
@@ -506,7 +506,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
               >
                 {p}
-                <button
+                <button aria-label="Quitar problema"
                   type="button"
                   onClick={() => setProblemas((prev) => prev.filter((_, j) => j !== i))}
                   className="text-muted-foreground hover:text-destructive"
@@ -524,7 +524,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addProblema() } }}
             />
-            <Button size="sm" variant="outline" onClick={addProblema} className="h-8">
+            <Button aria-label="Agregar problema" size="sm" variant="outline" onClick={addProblema} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
           </div>
@@ -545,7 +545,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
               >
                 {c}
-                <button
+                <button aria-label="Quitar categoría"
                   type="button"
                   onClick={() => setCategoriasInventario((prev) => prev.filter((_, j) => j !== i))}
                   className="text-muted-foreground hover:text-destructive"
@@ -563,7 +563,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
               className="h-8 text-xs flex-1"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategoria() } }}
             />
-            <Button size="sm" variant="outline" onClick={addCategoria} className="h-8">
+            <Button aria-label="Agregar categoría" size="sm" variant="outline" onClick={addCategoria} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
           </div>

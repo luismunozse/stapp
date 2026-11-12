@@ -167,7 +167,7 @@ export function EmailHistory() {
                   Página {page + 1} de {totalPages}
                 </p>
                 <div className="flex gap-2">
-                  <Button
+                  <Button aria-label="Página anterior"
                     variant="outline"
                     size="sm"
                     onClick={() => setPage(page - 1)}
@@ -175,7 +175,7 @@ export function EmailHistory() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Button
+                  <Button aria-label="Página siguiente"
                     variant="outline"
                     size="sm"
                     onClick={() => setPage(page + 1)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { Download, Share, X, Plus } from "lucide-react"
 import { isNativePlatform } from "@/lib/capacitor"
 
@@ -109,14 +110,14 @@ export function PWAInstaller() {
                 </div>
               </div>
             </div>
-            <Button
+            <IconButton
+              label="Cerrar"
               variant="ghost"
-              size="icon"
               className="h-8 w-8 -mr-2 -mt-2"
               onClick={handleDismiss}
             >
               <X className="h-4 w-4" />
-            </Button>
+            </IconButton>
           </div>
 
           <div className="space-y-3 text-sm">
@@ -168,14 +169,14 @@ export function PWAInstaller() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
+            <IconButton
+              label="Cerrar"
               variant="ghost"
-              size="icon"
               className="h-8 w-8"
               onClick={handleDismiss}
             >
               <X className="h-4 w-4" />
-            </Button>
+            </IconButton>
             <Button
               size="sm"
               onClick={handleInstall}

@@ -227,7 +227,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = fals
               onKeyDown={handleKeyDown}
               className="font-mono"
             />
-            <Button onClick={handleSearch} disabled={loading || !code.trim()}>
+            <Button aria-label="Buscar código" onClick={handleSearch} disabled={loading || !code.trim()}>
               <Search className="h-4 w-4" />
             </Button>
           </div>

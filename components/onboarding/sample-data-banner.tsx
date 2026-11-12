@@ -49,7 +49,7 @@ export function SampleDataBanner() {
             )}
             Limpiar datos de ejemplo
           </Button>
-          <button
+          <button aria-label="Cerrar aviso"
             onClick={() => setVisible(false)}
             className="p-1 hover:bg-amber-100 dark:hover:bg-amber-900 rounded"
           >

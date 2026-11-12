@@ -267,17 +267,14 @@ export function TransferirStockDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={
-              submitting ||
-              loading ||
+            disabled={loading ||
               data.length < 2 ||
               !origen ||
               !destino ||
               cantInvalida ||
-              excedeOrigen
-            }
+              excedeOrigen}
+            loading={submitting}
           >
-            {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
             Transferir
           </Button>
         </DialogFooter>

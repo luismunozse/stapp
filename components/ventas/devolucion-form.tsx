@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
-import { RotateCcw, Package, Loader2 } from "lucide-react"
+import { RotateCcw, Package } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal } from "@/lib/devolucion-refund"
 
@@ -491,19 +491,11 @@ export function DevolucionForm({
             </Button>
             <Button
               type="submit"
-              disabled={loading || selectedItems.length === 0}
+              disabled={selectedItems.length === 0}
+              loading={loading}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Registrar Devolución
-                </>
-              )}
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Registrar Devolución
             </Button>
           </div>
         </form>

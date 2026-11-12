@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Loader2, AlertTriangle, ArrowRight, Package } from "lucide-react"
+import { AlertTriangle, ArrowRight, Package } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -146,10 +146,10 @@ export function ConsolidateDuplicatesDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!targetId || sources.length === 0 || loading}
+            disabled={!targetId || sources.length === 0}
             className="gap-1.5"
+            loading={loading}
           >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {loading && progress
               ? `Consolidando ${progress.done}/${progress.total}…`
               : "Consolidar"}

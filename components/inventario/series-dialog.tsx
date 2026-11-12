@@ -374,10 +374,10 @@ export function SeriesDialog({
 
             <Button
               onClick={handleSubmit}
-              disabled={submitting || candidatos.length === 0}
+              disabled={candidatos.length === 0}
               className="w-full"
+              loading={submitting}
             >
-              {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               Registrar {candidatos.length > 0 ? `(${candidatos.length})` : ""}
             </Button>
           </div>

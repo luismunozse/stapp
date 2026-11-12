@@ -228,8 +228,8 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setShowDeposito(false)}>Cancelar</Button>
-            <Button size="sm" onClick={handleDeposito} disabled={depositoLoading}>
-              {depositoLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registrando...</>) : "Registrar Depósito"}
+            <Button size="sm" onClick={handleDeposito} loading={depositoLoading}>
+              Registrar Depósito
             </Button>
           </div>
         </div>
