@@ -36,7 +36,7 @@ vi.mock("@/hooks/use-tipos-dispositivo", () => ({
 }))
 
 // El pad real dibuja sobre un canvas, que jsdom no implementa. Aca solo hace
-// falta que el paso 3 se pueda montar para llegar a "Crear Orden".
+// falta que el paso 3 se pueda montar para llegar a "Crear orden".
 vi.mock("@/components/firma/signature-pad", () => ({
   SignaturePad: () => <div>Firma del Cliente</div>,
 }))
@@ -167,7 +167,7 @@ describe("OrdenForm — el origen cambia sin remontar el formulario", () => {
   }
 
   async function irAlPaso3() {
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await screen.findByText(/Paso 2\/3/)
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await screen.findByText(/Paso 3\/3/)
@@ -210,7 +210,7 @@ describe("OrdenForm — el origen cambia sin remontar el formulario", () => {
       target: { value: "Bateria" },
     })
     await irAlPaso3()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
 
     await waitFor(() => {
       expect(requests.some((r) => r.url.endsWith("/api/ordenes"))).toBe(true)

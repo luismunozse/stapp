@@ -179,11 +179,11 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
     await settle()
 
     const urls = fetchSpy.mock.calls.map((call) => String(call[0]))
@@ -238,11 +238,11 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
     await settle()
 
     expect(screen.getByText(/el checklist de ingreso no se guardó/i)).toBeInTheDocument()
@@ -307,11 +307,11 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     await renderForm()
     await settle()
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
     await settle()
 
     const checklistCall = fetchSpy.mock.calls.find((call) =>

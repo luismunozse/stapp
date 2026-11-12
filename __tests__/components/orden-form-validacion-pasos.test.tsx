@@ -1,7 +1,7 @@
 /**
  * Validaciones del wizard de OrdenForm que antes quedaban en silencio:
  *  - el IMEI vive en el paso 1 pero solo se validaba en el submit (paso 3), asi
- *    que "Crear Orden" no hacia nada visible;
+ *    que "Crear orden" no hacia nada visible;
  *  - los items `requerido` del checklist mostraban "*" pero nunca se validaban.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
@@ -101,12 +101,16 @@ async function abrir({
 const posteos = (spy: ReturnType<typeof vi.fn>) =>
   spy.mock.calls.filter((c) => String(c[0]) === "/api/ordenes")
 
+/** Avanza un paso: en el 1 el boton se llama "Agregar detalles". */
 const siguiente = async () => {
-  fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+  fireEvent.click(
+    screen.queryByRole("button", { name: "Agregar detalles" }) ??
+      screen.getByRole("button", { name: "Siguiente" }),
+  )
   await settle()
 }
 const crear = async () => {
-  fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+  fireEvent.click(screen.getByRole("button", { name: "Crear orden" }))
   await settle()
 }
 
@@ -119,7 +123,7 @@ describe("OrdenForm: validacion por paso", () => {
   })
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
-  it("un IMEI invalido frena el 'Siguiente' del paso 1 con el error en el campo", async () => {
+  it("un IMEI invalido frena el 'Agregar detalles' del paso 1 con el error en el campo", async () => {
     const { fetchSpy } = await abrir({ extra: { imei: "12345" } })
     await siguiente()
     expect(screen.getByText("El IMEI debe tener exactamente 15 dígitos")).toBeInTheDocument()
@@ -192,5 +196,83 @@ describe("OrdenForm: validacion por paso", () => {
     await crear()
     expect(toast.error).not.toHaveBeenCalled()
     expect(posteos(fetchSpy)).toHaveLength(1)
+  })
+  describe("crear desde el paso 1", () => {
+    it("con los obligatorios validos crea la orden sin pasar por los pasos 2 y 3", async () => {
+      const { fetchSpy } = await abrir({ extra: { imei: "123456789012345" } })
+      expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+      // Telefono y PIN viven en el paso 1: se cargan con el cliente delante.
+      fireEvent.change(screen.getByLabelText("Teléfono de contacto"), { target: { value: "1199887766" } })
+      fireEvent.change(screen.getByPlaceholderText("PIN o contraseña para las pruebas"), {
+        target: { value: "4321" },
+      })
+      await crear()
+      expect(posteos(fetchSpy)).toHaveLength(1)
+      const body = JSON.parse(String(posteos(fetchSpy)[0][1]?.body))
+      expect(body).toMatchObject({
+        clienteId: "cli-1",
+        dispositivo: "iPhone 13",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "No enciende",
+        imei: "123456789012345",
+        telefonoContacto: "1199887766",
+        codigoAccesoDispositivo: "4321",
+      })
+    })
+
+    it("sin el problema reportado no crea y muestra el error en el paso 1", async () => {
+      const { fetchSpy } = await abrir({ extra: { problemaReportado: "" } })
+      await crear()
+      expect(posteos(fetchSpy)).toHaveLength(0)
+      expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+      expect(screen.getAllByText("El problema es requerido").length).toBeGreaterThan(0)
+    })
+
+    it("un IMEI invalido frena el 'Crear orden' del paso 1 y enfoca el campo", async () => {
+      const { fetchSpy } = await abrir({ extra: { imei: "12345" } })
+      await crear()
+      expect(posteos(fetchSpy)).toHaveLength(0)
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("15 dígitos"))
+      expect(screen.getByText("El IMEI debe tener exactamente 15 dígitos")).toBeInTheDocument()
+      expect(document.activeElement?.id).toBe("imei")
+    })
+
+    it("con items requeridos del checklist sin responder avisa desde el paso 1 y lleva al checklist", async () => {
+      const { fetchSpy } = await abrir({
+        checklistItems: [{ id: "pantalla", label: "Pantalla sana", tipo: "BOOLEAN", orden: 1, requerido: true }],
+      })
+      expect(
+        screen.getByText("El checklist de ingreso tiene 1 ítem obligatorio sin completar (paso 3)."),
+      ).toBeInTheDocument()
+      await crear()
+      expect(posteos(fetchSpy)).toHaveLength(0)
+      expect(toast.error).toHaveBeenCalledWith("Completá el ítem obligatorio del checklist: Pantalla sana")
+      expect(screen.getByText(/Paso 3\/3/)).toBeInTheDocument()
+      expect(document.getElementById("checklist-item-pantalla")?.contains(document.activeElement)).toBe(true)
+
+      const pantalla = document.getElementById("checklist-item-pantalla")!
+      fireEvent.click(Array.from(pantalla.querySelectorAll("button")).find((b) => b.textContent === "Sí")!)
+      await settle()
+      await crear()
+      expect(posteos(fetchSpy)).toHaveLength(1)
+    })
+
+    it("los pasos 2 y 3 siguen accesibles desde el indicador", async () => {
+      await abrir()
+      fireEvent.click(screen.getByRole("button", { name: "Paso 3: Fotos y checklist (opcional)" }))
+      await settle()
+      expect(screen.getByText(/Paso 3\/3/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", { name: "Paso 2: Detalles (opcional)" }))
+      await settle()
+      expect(screen.getByText(/Paso 2\/3/)).toBeInTheDocument()
+    })
+
+    it("saltar hacia adelante desde el indicador valida el paso 1", async () => {
+      await abrir({ extra: { dispositivo: "" } })
+      fireEvent.click(screen.getByRole("button", { name: "Paso 3: Fotos y checklist (opcional)" }))
+      await settle()
+      expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+      expect(screen.getAllByText("El dispositivo es requerido").length).toBeGreaterThan(0)
+    })
   })
 })

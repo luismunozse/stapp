@@ -27,7 +27,7 @@ describe("OrdenForm — el error de 'dispositivo' y 'problema reportado' se limp
       </ModalProvider>,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
 
     expect(await screen.findByText("El dispositivo es requerido")).toBeInTheDocument()
     expect(await screen.findByText("El problema es requerido")).toBeInTheDocument()

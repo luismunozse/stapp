@@ -64,18 +64,28 @@ describe("OrdenForm: presupuesto", () => {
 
   it("con presupuesto 0 la orden se crea (antes el botón no reaccionaba)", async () => {
     const fetchSpy = await abrirConBorrador({ presupuesto: 0 })
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" })); await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
-    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" })); await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" })); await settle()
     expect(llamadas(fetchSpy)).toContain("/api/ordenes")
   })
 
   it("un presupuesto negativo muestra el error en vez de quedar en silencio", async () => {
     const fetchSpy = await abrirConBorrador({ presupuesto: -5 })
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" })); await settle()
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" })); await settle()
     expect(screen.getByText("El presupuesto no puede ser negativo")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Crear Orden" })).toBeNull()
+    // "Siguiente" no avanza: se queda en el paso 2 con el error a la vista.
+    expect(screen.getByText(/Paso 2\/3/)).toBeInTheDocument()
+    expect(llamadas(fetchSpy)).not.toContain("/api/ordenes")
+  })
+
+  it("un presupuesto negativo frena el 'Crear orden' del paso 1 y lleva al paso 2", async () => {
+    const fetchSpy = await abrirConBorrador({ presupuesto: -5 })
+    expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Crear orden" })); await settle()
+    expect(screen.getByText(/Paso 2\/3/)).toBeInTheDocument()
+    expect(screen.getAllByText("El presupuesto no puede ser negativo").length).toBeGreaterThan(0)
     expect(llamadas(fetchSpy)).not.toContain("/api/ordenes")
   })
 })

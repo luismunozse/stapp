@@ -277,12 +277,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
    *  "Firma capturada" de una conformidad que la orden ya no lleva. */
   const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [checklistOpen, setChecklistOpen] = useState(true)
-  /** Se prende al primer "Crear Orden" con items requeridos sin responder:
+  /** Se prende al primer "Crear orden" con items requeridos sin responder:
    *  desde ahi cada item requerido vacio muestra su aviso debajo. */
   const [checklistIntentoEnviar, setChecklistIntentoEnviar] = useState(false)
   /** Campo a enfocar cuando el paso que lo contiene ya este en pantalla. El
-   *  IMEI vive en el paso 1 y se valida tambien desde el submit (paso 3): sin
-   *  esperar al render, el input todavia no existe y el foco se pierde. */
+   *  IMEI vive en el paso 1 y se valida tambien desde el submit (que puede salir
+   *  de cualquier paso): sin esperar al render, el input todavia no existe y el
+   *  foco se pierde. Lo mismo el checklist, que vive en el paso 3. */
   const [enfocarPendiente, setEnfocarPendiente] = useState<
     { tipo: "imei" } | { tipo: "checklist"; itemId: string } | null
   >(null)
@@ -1122,6 +1123,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (faltantes.length > 0) {
       setChecklistIntentoEnviar(true)
       setChecklistOpen(true)
+      // "Crear orden" esta disponible desde el paso 1: el checklist vive en el
+      // 3, asi que hay que llevar al operador hasta el item que falta.
+      setCurrentStep(totalSteps)
       setEnfocarPendiente({ tipo: "checklist", itemId: faltantes[0].id })
       toast.error(
         faltantes.length === 1
@@ -1393,6 +1397,35 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setCurrentStep((prev) => Math.max(prev - 1, 1))
   }
 
+  /** Los pasos 2 y 3 son opcionales, pero se puede saltar a cualquiera desde
+   *  el indicador: hacia atras sin condiciones, hacia adelante validando cada
+   *  paso que se saltea (el mismo filtro que "Siguiente"). */
+  const irAPaso = async (destino: number) => {
+    if (destino === currentStep) return
+    if (destino < currentStep) {
+      setCurrentStep(destino)
+      return
+    }
+    for (let paso = currentStep; paso < destino; paso++) {
+      if (!(await validateStep(paso))) {
+        setCurrentStep(paso)
+        return
+      }
+    }
+    setCurrentStep(destino)
+  }
+
+  /** Items obligatorios del checklist que todavia faltan. Se avisa antes de
+   *  llegar al paso 3: "Crear orden" esta desde el paso 1 y, si faltan, lleva
+   *  al operador hasta el checklist en vez de crear. */
+  const checklistRequeridosPendientes = checklistItemsRequeridosFaltantes().length
+
+  const pasos = [
+    { step: 1, label: `Cliente y ${term("equipo")}` },
+    { step: 2, label: "Detalles (opcional)" },
+    { step: 3, label: "Fotos y checklist (opcional)" },
+  ]
+
   return (
     <Card>
       <CardHeader>
@@ -1438,12 +1471,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {/* Step indicator */}
           {(() => {
-            const stepsForLabel = [
-              { step: 1, label: `Cliente y ${term("equipo")}` },
-              { step: 2, label: "Detalles" },
-              { step: 3, label: "Fotos y Checklist" },
-            ]
-            const current = stepsForLabel.find((s) => s.step === currentStep)
+            const current = pasos.find((s) => s.step === currentStep)
             return (
               <p className="text-xs text-center text-muted-foreground sm:hidden mb-2">
                 Paso {currentStep}/{totalSteps}{current ? ` · ${current.label}` : ""}
@@ -1451,21 +1479,19 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             )
           })()}
           <div className="flex items-center gap-2 mb-6">
-            {[
-              { step: 1, label: `Cliente y ${term("equipo")}` },
-              { step: 2, label: "Detalles" },
-              { step: 3, label: "Fotos y Checklist" },
-            ].map(({ step, label }, index) => (
+            {pasos.map(({ step, label }, index) => (
               <div key={step} className="flex items-center gap-2 flex-1">
                 <button
                   type="button"
-                  onClick={() => step < currentStep && setCurrentStep(step)}
+                  onClick={() => void irAPaso(step)}
+                  aria-current={step === currentStep ? "step" : undefined}
+                  aria-label={`Paso ${step}: ${label}`}
                   className={`flex items-center gap-2 w-full p-2 rounded-lg text-sm font-medium transition-colors ${
                     step === currentStep
                       ? "bg-primary text-primary-foreground"
                       : step < currentStep
                       ? "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
-                      : "bg-muted text-muted-foreground"
+                      : "bg-muted text-muted-foreground cursor-pointer hover:bg-muted/70"
                   }`}
                 >
                   <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 ${
@@ -1727,6 +1753,82 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </p>
             )}
           </div>
+
+          {/* Contacto y acceso al equipo: se piden con el cliente delante, asi
+              que viven en el paso 1 y no detras del presupuesto. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <div>
+              <Label htmlFor="telefonoContacto">Teléfono de contacto</Label>
+              <Input
+                id="telefonoContacto"
+                {...register("telefonoContacto")}
+                placeholder={selectedClienteObj?.telefono || "Número alternativo"}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {tipoDispositivo === "CELULAR"
+                  ? "El cliente deja su celular: ingresá un número alternativo para contactarlo"
+                  : "Número alternativo para avisos y seguimiento (opcional)"
+                }
+              </p>
+            </div>
+
+            {showPassword && (
+              <div>
+                <Label htmlFor={passwordType === "text" ? "codigoAccesoDispositivo" : undefined}>
+                  PIN o patrón de desbloqueo
+                </Label>
+                <div className="flex gap-1 mt-2 mb-3" role="group" aria-label="Tipo de bloqueo">
+                  <Button
+                    type="button"
+                    variant={passwordType === "text" ? "default" : "outline"}
+                    size="sm"
+                    aria-pressed={passwordType === "text"}
+                    onClick={() => {
+                      setPasswordType("text")
+                      setValue("codigoAccesoDispositivo", "")
+                    }}
+                    className="flex-1"
+                  >
+                    <Lock className="h-4 w-4 mr-2" />
+                    PIN / contraseña
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={passwordType === "pattern" ? "default" : "outline"}
+                    size="sm"
+                    aria-pressed={passwordType === "pattern"}
+                    onClick={() => {
+                      setPasswordType("pattern")
+                      setValue("codigoAccesoDispositivo", "")
+                    }}
+                    className="flex-1"
+                  >
+                    <Grid3X3 className="h-4 w-4 mr-2" />
+                    Patrón
+                  </Button>
+                </div>
+                {passwordType === "text" ? (
+                  <Input
+                    id="codigoAccesoDispositivo"
+                    {...register("codigoAccesoDispositivo")}
+                    placeholder="PIN o contraseña para las pruebas"
+                    autoComplete="off"
+                  />
+                ) : (
+                  <PatternLock
+                    value={watch("codigoAccesoDispositivo")}
+                    onChange={(pattern) => setValue("codigoAccesoDispositivo", pattern)}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Solo si hace falta para probar el {term("equipo")}.
+                </p>
+              </div>
+            )}
+          </div>
           </>)}
 
           {currentStep === 2 && (<>
@@ -1883,73 +1985,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             onOtroChange={setOtroAccesorio}
             onOtroAdd={addOtroAccesorio}
           />
-
-          {/* Password - driven by config visibility */}
-          {showPassword && <div>
-            <Label>Contrasena/Patron del Dispositivo</Label>
-            <div className="flex gap-1 mt-2 mb-3">
-              <Button
-                type="button"
-                variant={passwordType === "text" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setPasswordType("text")
-                  setValue("codigoAccesoDispositivo", "")
-                }}
-                className="flex-1"
-              >
-                <Lock className="h-4 w-4 mr-2" />
-                PIN / Contrasena
-              </Button>
-              <Button
-                type="button"
-                variant={passwordType === "pattern" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setPasswordType("pattern")
-                  setValue("codigoAccesoDispositivo", "")
-                }}
-                className="flex-1"
-              >
-                <Grid3X3 className="h-4 w-4 mr-2" />
-                Patron
-              </Button>
-            </div>
-            {passwordType === "text" ? (
-              <Input
-                id="codigoAccesoDispositivo"
-                {...register("codigoAccesoDispositivo")}
-                placeholder="PIN o contrasena para pruebas"
-              />
-            ) : (
-              <PatternLock
-                value={watch("codigoAccesoDispositivo")}
-                onChange={(pattern) => setValue("codigoAccesoDispositivo", pattern)}
-              />
-            )}
-            <p className="text-xs text-muted-foreground mt-2">
-              Solo si es necesario para realizar pruebas
-            </p>
-          </div>}
-
-          {/* Teléfono de contacto alternativo */}
-          <div>
-            <Label htmlFor="telefonoContacto">Teléfono de contacto</Label>
-            <Input
-              id="telefonoContacto"
-              {...register("telefonoContacto")}
-              placeholder={selectedClienteObj?.telefono || "Número alternativo"}
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {watch("tipoDispositivo") === "CELULAR"
-                ? "El cliente deja su celular — ingresá un número alternativo para contactarlo"
-                : "Número alternativo para notificaciones y seguimiento (opcional)"
-              }
-            </p>
-          </div>
 
           {/* Observaciones */}
           <div>
@@ -2154,27 +2189,37 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           )}
           </>)}
 
+          {currentStep < totalSteps && checklistRequeridosPendientes > 0 && (
+            <p className="text-sm text-warning-text" role="note">
+              {checklistRequeridosPendientes === 1
+                ? "El checklist de ingreso tiene 1 ítem obligatorio sin completar (paso 3)."
+                : `El checklist de ingreso tiene ${checklistRequeridosPendientes} ítems obligatorios sin completar (paso 3).`}
+            </p>
+          )}
+
           <FormActionBar className="flex-wrap justify-between" inDialog={inSheet} alwaysSticky={inSheet}>
-            <div>
-              {currentStep > 1 && (
-                <Button type="button" variant="outline" onClick={handlePrevStep} className="text-sm">
+            <div className="flex gap-2">
+              {currentStep > 1 ? (
+                <Button type="button" variant="ghost" onClick={handlePrevStep}>
                   Anterior
+                </Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={onClose}>
+                  Cancelar
                 </Button>
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onClose} className="text-sm">
-                Cancelar
-              </Button>
-              {currentStep < totalSteps ? (
-                <Button type="button" onClick={handleNextStep}>
-                  Siguiente
-                </Button>
-              ) : (
-                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit, onInvalid)}>
-                  {loading ? "Creando..." : "Crear Orden"}
+              {/* Los pasos 2 y 3 son opcionales: "Crear orden" esta en todos y
+                  avanzar queda como accion secundaria. */}
+              {currentStep < totalSteps && (
+                <Button type="button" variant="outline" onClick={handleNextStep}>
+                  {currentStep === 1 ? "Agregar detalles" : "Siguiente"}
                 </Button>
               )}
+              <Button type="button" loading={loading} onClick={handleSubmit(onSubmit, onInvalid)}>
+                Crear orden
+              </Button>
             </div>
           </FormActionBar>
         </form>

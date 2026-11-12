@@ -37,9 +37,10 @@ test.describe("Órdenes — crear (validación)", () => {
     await page.goto(ROUTES.ordenes)
     await page.getByRole("button", { name: /nueva/i }).click()
 
-    // Paso 1: intentar avanzar sin completar campos obligatorios.
+    // Paso 1: "Crear orden" esta desde el primer paso; sin los obligatorios
+    // no crea y marca los errores.
     await expect(page.getByText(/Cliente y Equipo/i).first()).toBeVisible()
-    await page.getByRole("button", { name: /siguiente/i }).click()
+    await page.getByRole("button", { name: /crear orden/i }).click()
 
     // Debe aparecer al menos un error de campo requerido (cliente/dispositivo/problema).
     await expect(
@@ -71,7 +72,7 @@ test.describe("Órdenes — crear (flujo completo)", () => {
     await page.getByLabel(/^Marca$/i).fill(data.marca)
     await page.getByLabel(/Modelo \/ Dispositivo/i).fill(data.dispositivo)
     await page.getByLabel(/Problema Reportado/i).fill(data.problema)
-    await page.getByRole("button", { name: /siguiente/i }).click()
+    await page.getByRole("button", { name: /agregar detalles/i }).click()
 
     // --- Paso 2: Detalles ---
     await page.getByLabel(/Presupuesto \(Opcional\)/i).fill(data.presupuesto)
@@ -81,6 +82,32 @@ test.describe("Órdenes — crear (flujo completo)", () => {
     await page.getByRole("button", { name: /crear orden/i }).click()
 
     // El modal cierra y la orden aparece (buscamos el dispositivo recién creado).
+    await expect(page.getByText(data.dispositivo).first()).toBeVisible({ timeout: 15_000 })
+    expect(serverErrors.failures, serverErrors.failures.join("\n")).toEqual([])
+  })
+
+  test("crear una orden desde el paso 1, sin pasar por detalles ni fotos", async ({ page, serverErrors }) => {
+    const data = makeOrden()
+    await page.goto(ROUTES.ordenes)
+    await page.getByRole("button", { name: /nueva/i }).click()
+
+    const clienteSelector = page.getByRole("combobox").first()
+    await clienteSelector.click()
+    const primerCliente = page.getByRole("option").first()
+    if (await primerCliente.isVisible().catch(() => false)) {
+      await primerCliente.click()
+    } else {
+      await page.keyboard.type("a")
+      await page.getByRole("option").first().click()
+    }
+
+    await page.getByLabel(/^Marca$/i).fill(data.marca)
+    await page.getByLabel(/Modelo \/ Dispositivo/i).fill(data.dispositivo)
+    await page.getByLabel(/Problema Reportado/i).fill(data.problema)
+    // Telefono de contacto vive en el paso 1.
+    await page.getByLabel(/Teléfono de contacto/i).fill("1155550000")
+    await page.getByRole("button", { name: /crear orden/i }).click()
+
     await expect(page.getByText(data.dispositivo).first()).toBeVisible({ timeout: 15_000 })
     expect(serverErrors.failures, serverErrors.failures.join("\n")).toEqual([])
   })

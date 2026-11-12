@@ -104,7 +104,8 @@ export const ordenes = {
     colDispositivo: "Dispositivo",
     colTecnico: "Técnico",
   },
-  // Create wizard (modal, 3 steps)
+  // Create wizard (modal, 3 steps; "Crear orden" is available from step 1,
+  // steps 2 and 3 are optional)
   form: {
     stepCliente: /Cliente y Equipo/i,
     stepDetalles: /Detalles/i,
@@ -113,6 +114,9 @@ export const ordenes = {
     problema: { label: /Problema Reportado/i },
     presupuesto: { label: /Presupuesto \(Opcional\)/i },
     tecnico: { label: /Técnico asignado/i },
+    telefonoContacto: { label: /Teléfono de contacto/i },
+    /** Step 1 -> 2 ("Agregar detalles"); step 2 -> 3 is "Siguiente". */
+    addDetails: { role: "button" as const, name: /agregar detalles/i },
     next: { role: "button" as const, name: /siguiente/i },
     prev: { role: "button" as const, name: /anterior/i },
     cancel: { role: "button" as const, name: /cancelar/i },

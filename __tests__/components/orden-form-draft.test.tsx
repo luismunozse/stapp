@@ -285,7 +285,7 @@ describe("OrdenForm — borrador local", () => {
     await renderForm()
     await screen.findByText(/se restauró un borrador no guardado/i)
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
 
     await screen.findByText("Presupuesto aceptado al momento")
     expect(screen.getByLabelText(/Presupuesto aceptado al momento/i)).not.toBeChecked()
@@ -738,7 +738,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await renderForm()
     await settle(2000)
 
-    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
     await settle(2000)
 
     expect(storedDraft()?.data.form.dispositivo).toBe("iPhone 13 Restaurado")
