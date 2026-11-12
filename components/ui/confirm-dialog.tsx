@@ -74,7 +74,7 @@ const TONES: Record<ConfirmTone, ToneConfig> = {
   danger: {
     icon: Trash2,
     alertIcon: XCircle,
-    badgeClass: "bg-destructive/10 text-destructive dark:bg-destructive/20",
+    badgeClass: "bg-destructive/10 text-destructive-text dark:bg-destructive/20",
     buttonVariant: "destructive",
   },
   warning: {
