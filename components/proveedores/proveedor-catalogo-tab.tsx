@@ -292,15 +292,15 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                     const stale = dias != null && dias > 60
                     return (
                       <tr key={i.id} className="border-t">
-                        <td className="px-3 py-2 font-mono text-[11px]">{i.codigoProveedor || "—"}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{i.codigoProveedor || "—"}</td>
                         <td className="px-3 py-2">
                           <div className="font-medium">{i.nombre}</div>
-                          {i.descripcion && <div className="text-[11px] text-muted-foreground">{i.descripcion}</div>}
+                          {i.descripcion && <div className="text-xs text-muted-foreground">{i.descripcion}</div>}
                         </td>
                         {canViewCost && (
                           <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                             {i.precioReferencia != null ? formatPrice(i.precioReferencia) : "—"}
-                            {i.unidad && <span className="text-[10px] text-muted-foreground ml-1">/ {i.unidad}</span>}
+                            {i.unidad && <span className="text-xs text-muted-foreground ml-1">/ {i.unidad}</span>}
                           </td>
                         )}
                         <td className="px-3 py-2 whitespace-nowrap">
@@ -308,7 +308,7 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                             {fmtDate(i.precioActualizadoAt, timezone)}
                           </span>
                           {stale && (
-                            <span className="ml-1 inline-flex items-center text-[10px] text-warning-600">
+                            <span className="ml-1 inline-flex items-center text-xs text-warning-600">
                               <AlertCircle className="h-3 w-3 mr-0.5" />
                               {dias}d
                             </span>
@@ -316,12 +316,12 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                         </td>
                         <td className="px-3 py-2">
                           {i.inventario ? (
-                            <Badge variant="outline" className="gap-1 text-[10px]">
+                            <Badge variant="outline" className="gap-1 text-xs">
                               <Link2 className="h-2.5 w-2.5" />
                               {i.inventario.codigo}
                             </Badge>
                           ) : (
-                            <span className="text-muted-foreground text-[11px]">—</span>
+                            <span className="text-muted-foreground text-xs">—</span>
                           )}
                         </td>
                         <td className="px-3 py-2">

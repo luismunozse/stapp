@@ -359,7 +359,7 @@ export default function ManualPage() {
                                 {section.roles.map((role) => (
                                   <span
                                     key={role}
-                                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${roleBadgeColors[role]}`}
+                                    className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${roleBadgeColors[role]}`}
                                   >
                                     {role === "TECNICO" ? "TÉCNICO" : role}
                                   </span>
@@ -428,7 +428,7 @@ export default function ManualPage() {
                                         {block.roles.map((role) => (
                                           <span
                                             key={role}
-                                            className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${roleBadgeColors[role]}`}
+                                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${roleBadgeColors[role]}`}
                                           >
                                             {role === "TECNICO"
                                               ? "TÉCNICO"

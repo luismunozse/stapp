@@ -175,17 +175,17 @@ export function ApiKeysManager() {
                       <div className="text-xs text-muted-foreground font-mono mb-1">
                         {k.prefix}••••••••••••••••
                       </div>
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         Creada: {new Date(k.created_at).toLocaleString("es-AR", { timeZone: timezone })}
                       </div>
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         Último uso:{" "}
                         {k.last_used_at
                           ? new Date(k.last_used_at).toLocaleString("es-AR", { timeZone: timezone })
                           : "Nunca"}
                       </div>
                       {k.revoked_at && (
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           Revocada: {new Date(k.revoked_at).toLocaleString("es-AR", { timeZone: timezone })}
                         </div>
                       )}

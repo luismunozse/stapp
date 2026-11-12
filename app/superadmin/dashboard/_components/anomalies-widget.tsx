@@ -119,7 +119,7 @@ export function AnomaliesWidget() {
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {m.payments.map((p) => (
-                        <Badge key={p.id} variant="outline" className="text-[10px]">
+                        <Badge key={p.id} variant="outline" className="text-xs">
                           {p.payment_provider} · ${p.amount}
                         </Badge>
                       ))}

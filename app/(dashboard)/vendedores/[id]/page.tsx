@@ -267,7 +267,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             <div className="text-lg sm:text-2xl font-bold">
               {vendedor.porcentajeComision}%
             </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Sobre el total de cada venta
             </p>
           </CardContent>
@@ -284,7 +284,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             <div className="text-lg sm:text-2xl font-bold">
               {formatCurrency(vendedor.comisionDevengada)}
             </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Ventas completadas
             </p>
           </CardContent>
@@ -358,7 +358,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
                       </div>
                     </div>
                   </div>
-                  <Badge className={`text-[10px] sm:text-xs w-fit ${estadoVentaColors[venta.estado] || "bg-gray-100 text-gray-800"}`}>
+                  <Badge className={`text-xs w-fit ${estadoVentaColors[venta.estado] || "bg-gray-100 text-gray-800"}`}>
                     {estadoVentaLabels[venta.estado] || venta.estado}
                   </Badge>
                 </Link>

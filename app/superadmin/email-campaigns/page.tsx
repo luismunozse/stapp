@@ -395,13 +395,13 @@ export default function EmailCampaignsPage() {
                                 <div className="flex gap-2 pt-1 border-t mt-1">
                                   <button
                                     onClick={() => setSelectedOrgIds(segment.orgs.map(o => o.id))}
-                                    className="text-[11px] text-primary hover:underline"
+                                    className="text-xs text-primary hover:underline"
                                   >
                                     Seleccionar todas
                                   </button>
                                   <button
                                     onClick={() => setSelectedOrgIds([])}
-                                    className="text-[11px] text-muted-foreground hover:underline"
+                                    className="text-xs text-muted-foreground hover:underline"
                                   >
                                     Deseleccionar
                                   </button>
@@ -543,12 +543,12 @@ export default function EmailCampaignsPage() {
                   {campaigns.map((campaign, i) => (
                     <div key={i} className="border rounded-lg p-3 space-y-1">
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" className="text-xs">
                           {CAMPAIGN_LABELS[campaign.emailType] || campaign.emailType}
                         </Badge>
                       </div>
                       <p className="text-sm font-medium truncate">{campaign.subject}</p>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <span className="text-green-600">{campaign.totalSent} enviados</span>
                           {campaign.totalFailed > 0 && (

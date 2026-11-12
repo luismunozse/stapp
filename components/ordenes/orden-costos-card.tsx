@@ -67,7 +67,7 @@ export function OrdenCostosCard({
             <div className="flex items-center gap-2 mb-1">
               <Label className="text-xs text-muted-foreground">Presupuesto</Label>
               {fromCotizacion && (
-                <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                <Badge variant="outline" className="text-xs leading-none h-4 gap-1">
                   <FileText className="h-2.5 w-2.5" />
                   Cotizacion
                 </Badge>
@@ -104,7 +104,7 @@ export function OrdenCostosCard({
               <div className="flex items-center gap-2 mb-1">
                 <Label className="text-xs text-muted-foreground">Costo Final</Label>
                 {fromCotizacion && (
-                  <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                  <Badge variant="outline" className="text-xs leading-none h-4 gap-1">
                     <FileText className="h-2.5 w-2.5" />
                     Cotizacion
                   </Badge>

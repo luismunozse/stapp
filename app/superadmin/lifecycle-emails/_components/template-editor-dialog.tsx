@@ -320,7 +320,7 @@ export function TemplateEditorDialog({ id, onClose }: Props) {
                       <div className="text-sm">
                         <strong>Subject:</strong> {previewSubject}
                         {previewSource && (
-                          <Badge variant="outline" className="ml-2 text-[10px]">
+                          <Badge variant="outline" className="ml-2 text-xs">
                             fuente: {previewSource}
                           </Badge>
                         )}
@@ -372,7 +372,7 @@ export function TemplateEditorDialog({ id, onClose }: Props) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                   Variables disponibles
                 </p>
-                <p className="text-[11px] text-muted-foreground mb-3">
+                <p className="text-xs text-muted-foreground mb-3">
                   Click para copiar. Se reemplazan al renderizar.
                 </p>
                 <div className="space-y-1">

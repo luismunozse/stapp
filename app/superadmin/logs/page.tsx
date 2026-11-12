@@ -258,7 +258,7 @@ function RiskBadge({ score, reasons }: { score: number; reasons: string[] }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant={variant} className={`text-[10px] px-1.5 ${colorClass}`}>
+        <Badge variant={variant} className={`text-xs px-1.5 ${colorClass}`}>
           <Zap className="h-2.5 w-2.5 mr-0.5" />
           {label}
         </Badge>
@@ -857,7 +857,7 @@ export default function LogsPage() {
                       {lastFailed && (
                         <>
                           {" "}Último intento: <strong>{formatDateTime(lastFailed.createdAt)}</strong>
-                          {lastFailed.ipAddress && <> desde IP <code className="px-1 py-0.5 bg-muted rounded text-[11px]">{lastFailed.ipAddress}</code></>}
+                          {lastFailed.ipAddress && <> desde IP <code className="px-1 py-0.5 bg-muted rounded text-xs">{lastFailed.ipAddress}</code></>}
                           {lastFailed.email && <> · {lastFailed.email}</>}.
                         </>
                       )}
@@ -1418,7 +1418,7 @@ export default function LogsPage() {
                         >
                           <Badge
                             variant={ACTION_VARIANTS[event.action] || "secondary"}
-                            className="text-[10px] px-1.5 py-0"
+                            className="text-xs px-1.5 py-0"
                           >
                             {ACTION_LABELS[event.action] || event.action}
                           </Badge>

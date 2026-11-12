@@ -204,7 +204,7 @@ export function TicketsListSuperadmin() {
           </CardTitle>
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 mt-3">
             <div className="relative flex-1">
-              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+              <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
                 Buscar
               </label>
               <Search className="absolute left-3 top-[calc(50%+8px)] -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -217,7 +217,7 @@ export function TicketsListSuperadmin() {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 sm:border-l sm:pl-3">
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
                   Estado
                 </label>
                 <Select value={filtroEstado || "all"} onValueChange={(v) => { setFiltroEstado(v === "all" ? "" : v); setPage(1) }}>
@@ -234,7 +234,7 @@ export function TicketsListSuperadmin() {
                 </Select>
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
                   Prioridad
                 </label>
                 <Select value={filtroPrioridad || "all"} onValueChange={(v) => { setFiltroPrioridad(v === "all" ? "" : v); setPage(1) }}>
@@ -250,7 +250,7 @@ export function TicketsListSuperadmin() {
                 </Select>
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
                   Tipo
                 </label>
                 <Select value={filtroTipo || "all"} onValueChange={(v) => { setFiltroTipo(v === "all" ? "" : v); setPage(1) }}>
@@ -300,7 +300,7 @@ export function TicketsListSuperadmin() {
                         <TipoIcon className="h-4 w-4" />
                       </div>
                       {ticket.noLeidos > 0 && (
-                        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-500 text-white text-xs leading-none font-bold flex items-center justify-center">
                           {ticket.noLeidos}
                         </span>
                       )}

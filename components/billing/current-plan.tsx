@@ -111,7 +111,7 @@ export function CurrentPlan({
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">Tu plan actual</CardDescription>
           </div>
-          <Badge className={`text-[10px] sm:text-xs shrink-0 ${statusColors[subscription.status]}`}>
+          <Badge className={`text-xs shrink-0 ${statusColors[subscription.status]}`}>
             {statusLabels[subscription.status]}
           </Badge>
         </div>
@@ -125,7 +125,7 @@ export function CurrentPlan({
                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 <span className="font-medium text-sm">Período de prueba</span>
               </div>
-              <Badge variant="outline" className="bg-white dark:bg-background text-[10px] sm:text-xs">
+              <Badge variant="outline" className="bg-white dark:bg-background text-xs">
                 {daysRemaining} {daysRemaining === 1 ? "día" : "días"}
               </Badge>
             </div>

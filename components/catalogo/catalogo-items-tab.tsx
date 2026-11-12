@@ -584,7 +584,7 @@ export function CatalogoItemsTab() {
                     <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground">
                       <ImageOff className="h-8 w-8" />
                       {item.activo && (
-                        <span className="text-[10px] uppercase tracking-wide font-medium text-orange-600 dark:text-orange-400">
+                        <span className="text-xs uppercase tracking-wide font-medium text-orange-600 dark:text-orange-400">
                           Falta foto
                         </span>
                       )}

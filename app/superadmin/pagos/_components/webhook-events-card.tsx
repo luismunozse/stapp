@@ -236,7 +236,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
               ) : (
                 <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
               )}
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-xs">
                 {e.provider}
               </Badge>
               {e.event_type && (
@@ -244,12 +244,12 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
               )}
               <Badge
                 variant={STATUS_VARIANT[e.status] || "secondary"}
-                className="text-[10px]"
+                className="text-xs"
               >
                 {e.status}
               </Badge>
               {e.signature_valid === false && (
-                <Badge variant="destructive" className="text-[10px]">
+                <Badge variant="destructive" className="text-xs">
                   firma ✗
                 </Badge>
               )}
@@ -276,7 +276,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-xs"
                 onClick={(ev) => {
                   ev.stopPropagation()
                   handleRetry(e.provider_event_id!)
@@ -323,7 +323,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
             {e.error_message && (
               <div>
                 <span className="text-muted-foreground block mb-1">Error:</span>
-                <pre className="text-red-600 whitespace-pre-wrap break-words bg-red-50 dark:bg-red-950/30 p-2 rounded text-[11px]">
+                <pre className="text-red-600 whitespace-pre-wrap break-words bg-red-50 dark:bg-red-950/30 p-2 rounded text-xs">
                   {e.error_message}
                 </pre>
               </div>
@@ -331,7 +331,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
             {e.payload && (
               <div>
                 <span className="text-muted-foreground block mb-1">Payload:</span>
-                <pre className="whitespace-pre-wrap break-words bg-muted p-2 rounded text-[11px] max-h-[300px] overflow-y-auto">
+                <pre className="whitespace-pre-wrap break-words bg-muted p-2 rounded text-xs max-h-[300px] overflow-y-auto">
                   {typeof e.payload === "string"
                     ? e.payload
                     : JSON.stringify(e.payload, null, 2)}
@@ -463,10 +463,10 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
                         ) : (
                           <ChevronRight className="h-3 w-3 text-red-600 shrink-0" />
                         )}
-                        <Badge variant="destructive" className="text-[10px]">
+                        <Badge variant="destructive" className="text-xs">
                           {item.count} intentos fallidos
                         </Badge>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-xs">
                           {latestEvent.provider}
                         </Badge>
                         <span className="font-mono">{item.paymentId}</span>
@@ -484,7 +484,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 px-2 text-[10px]"
+                          className="h-6 px-2 text-xs"
                           onClick={(ev) => {
                             ev.stopPropagation()
                             handleRetry(item.paymentId)

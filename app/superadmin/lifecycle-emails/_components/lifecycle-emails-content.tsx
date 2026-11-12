@@ -230,17 +230,17 @@ export function LifecycleEmailsContent() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-sm">{t.label}</p>
                           <StatusBadge status={t.status} />
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             {CATEGORY_LABEL[t.category] || t.category}
                           </Badge>
                           {!t.hasBody && (
-                            <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700">
+                            <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">
                               Sin cuerpo custom
                             </Badge>
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">{t.description}</p>
-                        <p className="text-[10px] text-muted-foreground/70 mt-1 font-mono">{t.type}</p>
+                        <p className="text-xs text-muted-foreground/70 mt-1 font-mono">{t.type}</p>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-1 shrink-0">
                         <Button

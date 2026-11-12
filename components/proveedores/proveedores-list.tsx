@@ -292,7 +292,7 @@ export function ProveedoresList() {
                       <CardTitle className="text-sm sm:text-base flex items-center gap-2 group-hover:text-primary transition-colors">
                         <span className="truncate">{proveedor.nombre}</span>
                         {!proveedor.activo && (
-                          <Badge variant="secondary" className="text-[10px] shrink-0">Inactivo</Badge>
+                          <Badge variant="secondary" className="text-xs shrink-0">Inactivo</Badge>
                         )}
                       </CardTitle>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -307,12 +307,12 @@ export function ProveedoresList() {
                           </span>
                         )}
                         {proveedor.cuit && (
-                          <span className="text-[11px] text-muted-foreground font-mono">
+                          <span className="text-xs text-muted-foreground font-mono">
                             {proveedor.cuit}
                           </span>
                         )}
                         {proveedor.leadTimeDias != null && (
-                          <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
                             <Truck className="h-3 w-3" />
                             {proveedor.leadTimeDias}d
                           </span>
@@ -321,12 +321,12 @@ export function ProveedoresList() {
                       {proveedor.tags && proveedor.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {proveedor.tags.slice(0, 4).map((t) => (
-                            <Badge key={t} variant="outline" className="text-[9px] px-1 py-0">
+                            <Badge key={t} variant="outline" className="text-xs px-1 py-0">
                               {t}
                             </Badge>
                           ))}
                           {proveedor.tags.length > 4 && (
-                            <span className="text-[10px] text-muted-foreground">+{proveedor.tags.length - 4}</span>
+                            <span className="text-xs text-muted-foreground">+{proveedor.tags.length - 4}</span>
                           )}
                         </div>
                       )}
@@ -469,7 +469,7 @@ function Kpi({
 }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
       </div>

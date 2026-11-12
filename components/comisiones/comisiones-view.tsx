@@ -257,7 +257,7 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
   const kindBadge = (i: Item) => {
     const label = commissionKindLabel(i.tipo, "ORDEN")
     return label ? (
-      <Badge variant="secondary" className="text-[10px] shrink-0">
+      <Badge variant="secondary" className="text-xs shrink-0">
         {label}
       </Badge>
     ) : null
@@ -538,7 +538,7 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                       <div>Base {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <Badge variant="outline" className="text-[10px] mb-1">
+                      <Badge variant="outline" className="text-xs mb-1">
                         <Percent className="h-3 w-3 mr-0.5" />
                         {i.porcentajeComision.toFixed(2)}
                       </Badge>

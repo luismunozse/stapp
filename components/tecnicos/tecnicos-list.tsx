@@ -467,7 +467,7 @@ export function TecnicosList() {
                                   {!tecnico.activo && (
                                     <Badge
                                       variant="outline"
-                                      className="text-[9px] font-normal bg-muted"
+                                      className="text-xs font-normal bg-muted"
                                     >
                                       Inactivo
                                     </Badge>
@@ -527,7 +527,7 @@ export function TecnicosList() {
                           <Badge
                             key={esp}
                             variant="secondary"
-                            className="text-[9px] font-normal px-1.5 py-0"
+                            className="text-xs font-normal px-1.5 py-0"
                           >
                             {esp}
                           </Badge>
@@ -535,7 +535,7 @@ export function TecnicosList() {
                         {tecnico.especialidades.length > 4 && (
                           <Badge
                             variant="outline"
-                            className="text-[9px] font-normal px-1.5 py-0"
+                            className="text-xs font-normal px-1.5 py-0"
                           >
                             +{tecnico.especialidades.length - 4}
                           </Badge>
@@ -565,7 +565,7 @@ export function TecnicosList() {
 
                     {/* KPIs del período (admin) */}
                     {isAdmin && summary && (
-                      <div className="space-y-1.5 text-[11px] pt-1 border-t">
+                      <div className="space-y-1.5 text-xs pt-1 border-t">
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground flex items-center gap-1">
                             <DollarSign className="h-3 w-3" />
@@ -608,7 +608,7 @@ export function TecnicosList() {
                     {alertas.length > 0 && (
                       <div className="flex items-start gap-1.5 p-1.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
                         <AlertTriangle className="h-3 w-3 text-amber-700 dark:text-amber-500 shrink-0 mt-0.5" />
-                        <div className="text-[10px] text-amber-900 dark:text-amber-200 leading-tight">
+                        <div className="text-xs text-amber-900 dark:text-amber-200 leading-tight">
                           {alertas.join(" · ")}
                         </div>
                       </div>
@@ -685,7 +685,7 @@ function SummaryKpi({
         >
           {value}
         </div>
-        {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
+        {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
       </CardContent>
     </Card>
   )

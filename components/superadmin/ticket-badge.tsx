@@ -25,7 +25,7 @@ export function TicketBadge() {
   if (count <= 0) return null
 
   return (
-    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-semibold leading-none text-white bg-red-500 rounded-full">
+    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold leading-none text-white bg-red-500 rounded-full">
       {count > 99 ? "99+" : count}
     </span>
   )

@@ -208,25 +208,25 @@ export function PerformanceTecnicos() {
 
                   <div className="grid grid-cols-4 gap-2">
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Hechas</p>
-                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
+                      <p className="text-xs text-muted-foreground">Hechas</p>
+                      <Badge variant="default" className="bg-success text-white text-xs">
                         {tecnico.ordenesCompletadas}
                       </Badge>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Proceso</p>
-                      <Badge variant="secondary" className="text-[10px] sm:text-xs">{tecnico.ordenesEnProceso}</Badge>
+                      <p className="text-xs text-muted-foreground">Proceso</p>
+                      <Badge variant="secondary" className="text-xs">{tecnico.ordenesEnProceso}</Badge>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Tiempo</p>
-                      <Badge variant="outline" className="text-[10px] sm:text-xs">
+                      <p className="text-xs text-muted-foreground">Tiempo</p>
+                      <Badge variant="outline" className="text-xs">
                         {tecnico.tiempoPromedioReparacion !== null
                           ? `${tecnico.tiempoPromedioReparacion}d`
                           : "-"}
                       </Badge>
                     </div>
                     <div>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mb-1 text-center">
+                      <p className="text-xs text-muted-foreground mb-1 text-center">
                         {tecnico.tasaCompletado}%
                       </p>
                       <Progress value={tecnico.tasaCompletado} className="h-2" />

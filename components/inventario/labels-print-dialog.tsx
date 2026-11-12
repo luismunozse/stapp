@@ -660,12 +660,12 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{item.nombre}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground truncate">
+                      <div className="text-xs font-mono text-muted-foreground truncate">
                         {code || <span className="text-muted-foreground">Sin código</span>}
                       </div>
                       {note && (
                         <div
-                          className={`flex items-center gap-1 mt-0.5 text-[11px] ${
+                          className={`flex items-center gap-1 mt-0.5 text-xs ${
                             content.printable ? "text-amber-600" : "text-destructive"
                           }`}
                         >
@@ -813,7 +813,7 @@ function ThermalConfig({
             <Textarea
               value={previewSpool}
               readOnly
-              className="font-mono text-[11px] min-h-[170px] resize-none"
+              className="font-mono text-xs min-h-[170px] resize-none"
             />
           </div>
         </div>

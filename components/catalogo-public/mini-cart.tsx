@@ -38,7 +38,7 @@ export function MiniCart({ cart, onOpen, formatPrecio, brandColor }: Props) {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium line-clamp-1 leading-tight">{item.nombre}</p>
                   {item.varianteEtiqueta && (
-                    <p className="text-[10px] text-muted-foreground line-clamp-1">{item.varianteEtiqueta}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{item.varianteEtiqueta}</p>
                   )}
                   <p className="text-xs font-semibold mt-0.5" style={{ color: brandColor }}>
                     {item.cantidad} × {formatPrecio(item.precio)}

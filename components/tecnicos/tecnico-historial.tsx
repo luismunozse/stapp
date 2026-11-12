@@ -193,13 +193,13 @@ export function TecnicoHistorial({ tecnicoId }: { tecnicoId: string }) {
                       {formatPrice(orden.costoFinal)}
                     </span>
                   )}
-                  <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     {formatDate(orden.fechaIngreso)}
                   </span>
                   <Badge
                     className={cn(
-                      "text-[10px] sm:text-xs whitespace-nowrap",
+                      "text-xs whitespace-nowrap",
                       estadoColors[orden.estado] || "bg-muted text-muted-foreground"
                     )}
                   >

@@ -1189,7 +1189,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   label={
                     <>
                       Notas internas
-                      <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
+                      <span className="text-xs font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
                     </>
                   }
                   value={orden.notasInternas || ""}

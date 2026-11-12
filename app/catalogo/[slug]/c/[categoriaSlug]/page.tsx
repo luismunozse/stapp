@@ -189,7 +189,7 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
             {data.categoria.descripcion && (
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 line-clamp-2">{data.categoria.descripcion}</p>
             )}
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {itemsCategoria.length} {itemsCategoria.length === 1 ? "item" : "items"}
             </p>
           </div>

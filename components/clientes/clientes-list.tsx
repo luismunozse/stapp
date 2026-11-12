@@ -200,7 +200,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             <div className="font-medium flex items-center gap-2">
               {cliente.nombre}
               {cliente.tipoCliente === "EMPRESA" && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
                   Empresa
                 </span>
               )}

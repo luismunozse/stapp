@@ -124,7 +124,7 @@ export function CatalogoFilters({
             <SlidersHorizontal className="h-4 w-4" />
             {activeAdvancedCount > 0 && (
               <span
-                className="absolute -top-1 -right-1 h-5 min-w-5 px-1 inline-flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none"
+                className="absolute -top-1 -right-1 h-5 min-w-5 px-1 inline-flex items-center justify-center rounded-full bg-rose-500 text-white text-xs font-bold leading-none"
                 style={{ backgroundColor: brandColor }}
               >
                 {activeAdvancedCount}
@@ -152,7 +152,7 @@ export function CatalogoFilters({
               className="snap-start shrink-0 flex flex-col items-center gap-1.5 w-[64px] group/cat"
             >
               <span
-                className={`h-[60px] w-[60px] rounded-full flex items-center justify-center font-display text-[11px] font-extrabold transition-all ${
+                className={`h-[60px] w-[60px] rounded-full flex items-center justify-center font-display text-xs font-extrabold transition-all ${
                   categoriaActiva === null
                     ? "bg-brand text-brand-foreground shadow-brand"
                     : "bg-cat-chip text-cat-ink border-[1.5px] border-cat-border group-hover/cat:border-cat-ink"
@@ -161,7 +161,7 @@ export function CatalogoFilters({
                 Todo
               </span>
               <span
-                className={`text-[11px] leading-tight text-center truncate w-full ${
+                className={`text-xs leading-tight text-center truncate w-full ${
                   categoriaActiva === null ? "font-bold text-cat-ink" : "text-cat-muted"
                 }`}
               >
@@ -205,7 +205,7 @@ export function CatalogoFilters({
                     )}
                   </span>
                   <span
-                    className={`text-[11px] leading-tight text-center truncate w-full ${
+                    className={`text-xs leading-tight text-center truncate w-full ${
                       active ? "font-bold text-cat-ink" : "text-cat-muted"
                     }`}
                   >
@@ -259,7 +259,7 @@ export function CatalogoFilters({
               Filtros
               {activeAdvancedCount > 0 && (
                 <span
-                  className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[11px] font-bold text-white"
+                  className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-xs font-bold text-white"
                   style={{ backgroundColor: brandColor }}
                 >
                   {activeAdvancedCount}
@@ -384,7 +384,7 @@ function FiltrosAvanzadosContent({
               minStepsBetweenThumbs={1}
             />
           </div>
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1 tabular-nums px-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mt-1 tabular-nums px-1">
             <span>{formatPrecio(precioMin)}</span>
             <span>{formatPrecio(precioMax)}</span>
           </div>

@@ -42,20 +42,20 @@ export function TurnoBlock({ turno, onClick, variant = "calendar", style, compac
       >
         <span className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />
         <div className="pl-2 pr-1.5 py-1 flex-1 min-h-0 overflow-hidden">
-          <div className="flex items-center gap-1 text-[10px] font-semibold leading-tight">
+          <div className="flex items-center gap-1 text-xs font-semibold leading-tight">
             <Clock className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{hora}{horaFin ? `–${horaFin}` : ""}</span>
-            <span className="ml-auto text-[9px] px-1 rounded bg-black/5 dark:bg-white/10 font-medium">
+            <span className="ml-auto text-xs px-1 rounded bg-black/5 dark:bg-white/10 font-medium">
               {TIPO_SHORT[turno.tipo]}
             </span>
           </div>
           {!compact && (
             <>
-              <p className="text-[11px] font-medium truncate mt-0.5 leading-tight">
+              <p className="text-xs font-medium truncate mt-0.5 leading-tight">
                 {clienteNombre}
               </p>
               {turno.tecnico && (
-                <p className="text-[10px] truncate opacity-75 leading-tight">
+                <p className="text-xs truncate opacity-75 leading-tight">
                   {turno.tecnico.nombre}
                 </p>
               )}
@@ -79,11 +79,11 @@ export function TurnoBlock({ turno, onClick, variant = "calendar", style, compac
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             {hora}{horaFin ? ` — ${horaFin}` : ""}
           </span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.bg} ${s.text} font-medium`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${s.bg} ${s.text} font-medium`}>
             {TIPO_SHORT[turno.tipo]}
           </span>
           {turno.orden && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-300 font-medium flex items-center gap-1">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-300 font-medium flex items-center gap-1">
               <FileText className="h-3 w-3" />
               {turno.orden.codigoOrden || `#${turno.orden.numeroOrden}`}
             </span>

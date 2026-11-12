@@ -161,7 +161,7 @@ export function LeadsList() {
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{lead.nombre || "Sin nombre"}</p>
                       {lead.plan_interes && (
-                        <Badge variant="outline" className="text-[10px] mt-1">{lead.plan_interes}</Badge>
+                        <Badge variant="outline" className="text-xs mt-1">{lead.plan_interes}</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

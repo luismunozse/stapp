@@ -402,7 +402,7 @@ function StatCard({
       <div className="flex items-center gap-1.5 text-xs font-medium opacity-80">
         {icon}
         {label}
-        {sub && <span className="text-[10px] opacity-70 ml-auto">{sub}</span>}
+        {sub && <span className="text-xs opacity-70 ml-auto">{sub}</span>}
       </div>
       <div className="text-2xl font-bold mt-1">{value}</div>
     </div>
@@ -444,7 +444,7 @@ function TimelineView({
           const today = isToday(day)
           return (
             <div key={day.toISOString()} className="px-2 py-2 text-center border-l">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">
                 {WEEKDAYS_SHORT[(day.getDay() + 6) % 7]}
               </div>
               <div className={`text-base font-semibold ${today ? "text-primary" : ""}`}>
@@ -474,7 +474,7 @@ function TimelineView({
             {horas.map((h) => (
               <div
                 key={h}
-                className="absolute left-0 right-0 text-[10px] text-muted-foreground pr-1 text-right"
+                className="absolute left-0 right-0 text-xs text-muted-foreground pr-1 text-right"
                 style={{ top: `${(h - HOUR_START) * HOUR_HEIGHT - 5}px` }}
               >
                 {h.toString().padStart(2, "0")}:00
@@ -558,7 +558,7 @@ function MesView({
       {/* Header días */}
       <div className="grid grid-cols-7 border-b bg-muted/30">
         {WEEKDAYS_SHORT.map((d) => (
-          <div key={d} className="px-2 py-2 text-center text-[10px] text-muted-foreground uppercase tracking-wide border-l first:border-l-0">
+          <div key={d} className="px-2 py-2 text-center text-xs text-muted-foreground uppercase tracking-wide border-l first:border-l-0">
             {d}
           </div>
         ))}
@@ -597,7 +597,7 @@ function MesView({
                   {format(day, "d")}
                 </span>
                 {turnos.length > 0 && (
-                  <span className="text-[9px] text-muted-foreground">{turnos.length}</span>
+                  <span className="text-xs text-muted-foreground">{turnos.length}</span>
                 )}
               </button>
 
@@ -609,7 +609,7 @@ function MesView({
                       key={t.id}
                       onClick={() => onTurnoClick(t)}
                       className={`
-                        w-full flex items-center gap-1 px-1 py-0.5 rounded text-[10px]
+                        w-full flex items-center gap-1 px-1 py-0.5 rounded text-xs
                         hover:bg-accent transition-colors text-left
                       `}
                     >
@@ -622,7 +622,7 @@ function MesView({
                 {extra > 0 && (
                   <button
                     onClick={() => onDayClick(day)}
-                    className="w-full text-left px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                    className="w-full text-left px-1 text-xs text-muted-foreground hover:text-foreground"
                   >
                     +{extra} más
                   </button>
@@ -630,7 +630,7 @@ function MesView({
                 {turnos.length === 0 && isCurMonth && (
                   <button
                     onClick={() => onNuevoEnDia(day)}
-                    className="w-full opacity-0 hover:opacity-100 transition-opacity text-[10px] text-muted-foreground hover:text-primary text-left px-1"
+                    className="w-full opacity-0 hover:opacity-100 transition-opacity text-xs text-muted-foreground hover:text-primary text-left px-1"
                   >
                     + agregar
                   </button>

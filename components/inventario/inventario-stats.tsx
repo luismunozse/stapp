@@ -119,7 +119,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
               <div className="text-base sm:text-lg font-bold text-foreground truncate">
                 {card.value}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {card.description}
               </p>
             </CardContent>

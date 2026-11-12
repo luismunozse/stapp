@@ -198,7 +198,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                 type="button"
                 onClick={() => setDepositoMetodo(value)}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 text-center transition-all text-[10px] leading-tight",
+                  "flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 text-center transition-all text-xs leading-tight",
                   depositoMetodo === value
                     ? "border-primary bg-primary/5 text-primary font-medium"
                     : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
@@ -294,11 +294,11 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                       <span className={cn("font-medium text-sm", mov.monto >= 0 ? "text-success-600" : "text-destructive")}>
                         {mov.monto >= 0 ? "+" : ""}{formatPrice(Math.abs(mov.monto))}
                       </span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0">
                         {tipoLabels[mov.tipo] || mov.tipo}
                       </Badge>
                       {mov.revertidoAt && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0">
                           Revertido
                         </Badge>
                       )}

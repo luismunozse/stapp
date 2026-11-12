@@ -295,7 +295,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             {proveedor.tags && proveedor.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {proveedor.tags.map((t) => (
-                  <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>
+                  <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
                 ))}
               </div>
             )}
@@ -341,7 +341,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           value={stats?.productosCount.toLocaleString("es-AR") ?? "—"}
           sub={
             stats && (stats.itemsSinStock > 0 || stats.itemsBajoStock > 0) ? (
-              <span className="flex items-center gap-1 text-warning-600 text-[11px]">
+              <span className="flex items-center gap-1 text-warning-600 text-xs">
                 <AlertTriangle className="h-3 w-3" />
                 {stats.itemsSinStock > 0 && `${stats.itemsSinStock} sin stock`}
                 {stats.itemsSinStock > 0 && stats.itemsBajoStock > 0 && " · "}
@@ -599,7 +599,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">{oc.numeroOC}</span>
-                            <Badge variant={badge.variant} className="text-[10px]">{badge.label}</Badge>
+                            <Badge variant={badge.variant} className="text-xs">{badge.label}</Badge>
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Emisión: {formatDate(oc.fechaEmision, timezone)}
@@ -682,7 +682,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                             : null
                         return (
                           <tr key={c.codigo} className="border-t">
-                            <td className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{c.codigo}</td>
+                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{c.codigo}</td>
                             <td className="px-3 py-2 max-w-[240px] truncate" title={c.nombre}>{c.nombre}</td>
                             <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                               {c.mine?.precioCompra != null ? (
@@ -693,7 +693,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                                 "—"
                               )}
                               {dif != null && dif > 0 && (
-                                <span className="ml-1 text-[10px] text-destructive">+{dif.toFixed(0)}%</span>
+                                <span className="ml-1 text-xs text-destructive">+{dif.toFixed(0)}%</span>
                               )}
                             </td>
                             <td className="px-3 py-2">
@@ -701,7 +701,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                                 {c.others.map((o) => (
                                   <span
                                     key={o.itemId}
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border ${
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${
                                       o.precioCompra != null && o.precioCompra === c.minPrecioCompra
                                         ? "border-success/50 bg-success/10"
                                         : "border-muted-foreground/20 bg-muted/30"
@@ -742,7 +742,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
 function FiscalField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={mono ? "font-mono text-sm" : "text-sm"}>{value}</div>
     </div>
   )
@@ -762,7 +762,7 @@ function KpiCard({
   return (
     <Card>
       <CardContent className="p-3 sm:p-4">
-        <div className="flex items-center gap-2 text-muted-foreground text-[11px] uppercase tracking-wide">
+        <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
           {icon}
           {label}
         </div>

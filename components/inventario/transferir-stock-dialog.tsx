@@ -175,7 +175,7 @@ export function TransferirStockDialog({
                       <div className="flex items-center gap-2">
                         {d.principal && <Star className="h-3 w-3 text-amber-500" />}
                         <span>{d.depositoNombre}</span>
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" className="text-xs">
                           {d.disponible} disp.
                         </Badge>
                       </div>
@@ -184,7 +184,7 @@ export function TransferirStockDialog({
                 </SelectContent>
               </Select>
               {origenRow && (
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Stock {origenRow.stock} · Reservado {origenRow.stockReservado} · Disponible {origenRow.disponible}
                 </p>
               )}
@@ -211,7 +211,7 @@ export function TransferirStockDialog({
                         <div className="flex items-center gap-2">
                           {d.principal && <Star className="h-3 w-3 text-amber-500" />}
                           <span>{d.depositoNombre}</span>
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             +{d.stock}
                           </Badge>
                         </div>
@@ -221,7 +221,7 @@ export function TransferirStockDialog({
                 </SelectContent>
               </Select>
               {destinoRow && (
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Stock actual {destinoRow.stock}
                 </p>
               )}
@@ -240,7 +240,7 @@ export function TransferirStockDialog({
                 className="mt-1"
               />
               {excedeOrigen && (
-                <p className="text-[11px] text-destructive mt-1">
+                <p className="text-xs text-destructive mt-1">
                   Excede disponible en origen ({origenRow?.disponible})
                 </p>
               )}

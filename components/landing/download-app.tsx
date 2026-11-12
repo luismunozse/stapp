@@ -95,7 +95,7 @@ function PhoneCarousel() {
           <div className="bg-black rounded-[2.25rem] overflow-hidden">
             {/* Status bar */}
             <div className="bg-black px-4 py-1.5 flex items-center justify-between relative z-10">
-              <span className="text-[10px] text-white/70 font-medium">9:41</span>
+              <span className="text-xs text-white/70 font-medium">9:41</span>
               <div className="w-20 h-5 bg-gray-900 rounded-full absolute left-1/2 -translate-x-1/2" />
               <div className="flex items-center gap-1">
                 <div className="w-3.5 h-2 border border-white/70 rounded-[2px] relative">
@@ -129,7 +129,7 @@ function PhoneCarousel() {
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-muted/50 p-4">
                       <Smartphone className="w-12 h-12 text-muted-foreground/30" />
-                      <p className="text-[10px] text-muted-foreground text-center">
+                      <p className="text-xs text-muted-foreground text-center">
                         {screenshots[current].label}
                       </p>
                     </div>
@@ -182,7 +182,7 @@ function PhoneCarousel() {
                 current === i ? "bg-primary scale-110" : "bg-muted-foreground/40"
               )}
             />
-            <span className="text-[10px] font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               {s.label}
             </span>
           </button>

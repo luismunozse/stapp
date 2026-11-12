@@ -227,12 +227,12 @@ export default function BroadcastPage() {
                         )}
                       </p>
                       {actionUrl.trim() && (
-                        <p className="text-[11px] text-primary mt-1.5 inline-flex items-center gap-1">
+                        <p className="text-xs text-primary mt-1.5 inline-flex items-center gap-1">
                           <ExternalLink className="h-3 w-3" />
                           {actionUrl.trim()}
                         </p>
                       )}
-                      <p className="text-[10px] text-muted-foreground mt-1">ahora</p>
+                      <p className="text-xs text-muted-foreground mt-1">ahora</p>
                     </div>
                   </div>
                 </div>
@@ -377,7 +377,7 @@ export default function BroadcastPage() {
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {item.body}
                       </p>
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                         <span>{item.count} usuarios</span>
                         <span>{formatDateTime(item.created_at)}</span>
                       </div>

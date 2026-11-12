@@ -157,7 +157,7 @@ export function ConversacionesContent() {
                   )}>
                     <p className="text-sm whitespace-pre-wrap">{msg.contenido}</p>
                     <div className={cn(
-                      "flex items-center gap-2 mt-1 text-[10px]",
+                      "flex items-center gap-2 mt-1 text-xs",
                       msg.tipo === "USER" ? "text-primary-foreground/60" : "text-muted-foreground"
                     )}>
                       <Clock className="w-2.5 h-2.5" />
@@ -168,7 +168,7 @@ export function ConversacionesContent() {
                         timeZone: DEFAULT_TIMEZONE,
                       })}
                       {msg.intencion_detectada && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
+                        <Badge variant="outline" className="text-xs leading-none px-1 py-0 h-3.5">
                           {msg.intencion_detectada}
                           {msg.confianza && ` (${Math.round(msg.confianza * 100)}%)`}
                         </Badge>
@@ -279,7 +279,7 @@ export function ConversacionesContent() {
                         <span className="text-sm text-muted-foreground">Visitante anónimo</span>
                       )}
                       {conv.lead_capturado && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-700">
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0 bg-green-500/10 text-green-700">
                           Lead
                         </Badge>
                       )}

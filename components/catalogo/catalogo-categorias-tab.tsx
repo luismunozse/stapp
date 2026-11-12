@@ -111,7 +111,7 @@ export function CatalogoCategoriasTab() {
                   <h3 className="font-medium">
                     {cat.nombre}
                     {!cat.activo && (
-                      <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground align-middle">
+                      <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground align-middle">
                         Inactiva
                       </span>
                     )}

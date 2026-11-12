@@ -27,7 +27,7 @@ export function BetaAndroidBadge() {
 
   return (
     <span
-      className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-semibold leading-none text-white bg-red-500 rounded-full"
+      className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold leading-none text-white bg-red-500 rounded-full"
       title={`${count} inscripto${count !== 1 ? "s" : ""} por agregar en Play Console`}
     >
       {count > 99 ? "99+" : count}

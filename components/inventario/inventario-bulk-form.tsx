@@ -787,13 +787,13 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
                           )}
                         </div>
                         {topMatch && !inBatchDup && (
-                          <div className="text-[11px] text-amber-700 mt-0.5">
+                          <div className="text-xs text-amber-700 mt-0.5">
                             Ya existe: {topMatch.nombre} ({topMatch.codigo}) · stock{" "}
                             {topMatch.stock}
                           </div>
                         )}
                         {inBatchDup && (
-                          <div className="text-[11px] text-amber-700 mt-0.5">
+                          <div className="text-xs text-amber-700 mt-0.5">
                             Nombre repetido en este lote
                           </div>
                         )}

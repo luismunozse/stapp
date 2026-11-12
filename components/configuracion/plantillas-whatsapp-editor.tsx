@@ -117,7 +117,7 @@ function WhatsAppPreview({ text, timezone }: { text: string; timezone: string })
 
   return (
     <div className="rounded-lg p-3 bg-[#e5ddd5] dark:bg-[#0b141a]">
-      <div className="text-[10px] text-center text-muted-foreground mb-2 font-medium">
+      <div className="text-xs text-center text-muted-foreground mb-2 font-medium">
         Vista previa en WhatsApp
       </div>
       <div className="flex justify-end">
@@ -127,7 +127,7 @@ function WhatsAppPreview({ text, timezone }: { text: string; timezone: string })
               <div key={i}>{renderMarkdown(line) || " "}</div>
             ))}
           </div>
-          <div className="text-[9px] text-gray-500 dark:text-gray-300 text-right mt-0.5 flex items-center justify-end gap-0.5">
+          <div className="text-xs text-gray-500 dark:text-gray-300 text-right mt-0.5 flex items-center justify-end gap-0.5">
             {time}
             <Check className="h-2.5 w-2.5" />
             <Check className="h-2.5 w-2.5 -ml-1.5" />
@@ -161,7 +161,7 @@ function VariableChip({
           onClick={onClick}
           disabled={disabled}
           className={cn(
-            "px-2 py-1 rounded-md text-[11px] font-mono transition-[transform,background-color,color,border-color] duration-200 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 border",
+            "px-2 py-1 rounded-md text-xs font-mono transition-[transform,background-color,color,border-color] duration-200 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 border",
             recentlyInserted
               ? "bg-primary text-primary-foreground border-primary scale-105"
               : "bg-muted hover:bg-primary/10 hover:text-primary border-transparent hover:border-primary/30",
@@ -272,13 +272,13 @@ function PlantillaEditor({
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="font-semibold text-base sm:text-lg">{plantilla.label}</h2>
             {isCustomized && !isDirty && (
-              <Badge variant="secondary" className="text-[10px] font-normal h-5">
+              <Badge variant="secondary" className="text-xs font-normal h-5">
                 <Sparkles className="h-2.5 w-2.5 mr-1" />
                 Personalizada
               </Badge>
             )}
             {isDirty && (
-              <Badge className="text-[10px] font-normal h-5 bg-warning hover:bg-warning text-white">
+              <Badge className="text-xs font-normal h-5 bg-warning hover:bg-warning text-white">
                 Sin guardar
               </Badge>
             )}
@@ -297,7 +297,7 @@ function PlantillaEditor({
             <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Variables disponibles
             </label>
-            <span className="text-[10px] text-muted-foreground">Click para insertar en el cursor</span>
+            <span className="text-xs text-muted-foreground">Click para insertar en el cursor</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {plantilla.variables.map((v) => (
@@ -311,7 +311,7 @@ function PlantillaEditor({
             ))}
           </div>
           {plantilla.variables.some((v) => v.label.includes("(auto)")) && (
-            <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+            <p className="text-xs text-muted-foreground mt-1.5 italic">
               Variables con <span className="font-mono">(auto)</span> ya incluyen el salto de
               línea y el texto fijo (p. ej. "Presupuesto estimado: $45.000"). Si el dato no
               existe, no aparece nada. No las borres si querés que ese dato se muestre.
@@ -342,7 +342,7 @@ function PlantillaEditor({
               </label>
               <span
                 className={cn(
-                  "text-[10px] tabular-nums",
+                  "text-xs tabular-nums",
                   (value || plantilla.defaultText).length >= MAX_TEMPLATE_LENGTH
                     ? "text-destructive font-medium"
                     : "text-muted-foreground",
@@ -401,7 +401,7 @@ function PlantillaEditor({
                 </Button>
               </div>
               {!value && (
-                <span className="text-[10px] text-muted-foreground italic">
+                <span className="text-xs text-muted-foreground italic">
                   Usando predeterminado
                 </span>
               )}
@@ -413,7 +413,7 @@ function PlantillaEditor({
               Vista previa
             </label>
             <WhatsAppPreview text={previewText} timezone={timezone} />
-            <p className="text-[10px] text-muted-foreground italic">
+            <p className="text-xs text-muted-foreground italic">
               Los valores son de ejemplo. En envíos reales se reemplazan con datos del cliente.
             </p>
           </div>
@@ -464,7 +464,7 @@ function SidebarItem({
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{plantilla.label}</div>
-        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{preview}</p>
+        <p className="text-xs text-muted-foreground truncate mt-0.5">{preview}</p>
       </div>
     </button>
   )
@@ -688,9 +688,9 @@ export function PlantillasWhatsappEditor() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Sin personalizar usan el texto predeterminado. Atajo:{" "}
-                <kbd className="px-1 py-0.5 rounded bg-muted border text-[10px] font-mono">Ctrl</kbd>{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted border text-xs font-mono">Ctrl</kbd>{" "}
                 +{" "}
-                <kbd className="px-1 py-0.5 rounded bg-muted border text-[10px] font-mono">S</kbd>{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted border text-xs font-mono">S</kbd>{" "}
                 para guardar.
               </p>
             </div>
@@ -745,7 +745,7 @@ export function PlantillasWhatsappEditor() {
                   type="button"
                   onClick={() => setCategoryFilter("all")}
                   className={cn(
-                    "px-2 py-1 rounded-md text-[11px] border transition-colors",
+                    "px-2 py-1 rounded-md text-xs border transition-colors",
                     categoryFilter === "all"
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background hover:bg-muted border-border",
@@ -763,7 +763,7 @@ export function PlantillasWhatsappEditor() {
                       type="button"
                       onClick={() => setCategoryFilter(cat)}
                       className={cn(
-                        "px-2 py-1 rounded-md text-[11px] border transition-colors flex items-center gap-1",
+                        "px-2 py-1 rounded-md text-xs border transition-colors flex items-center gap-1",
                         categoryFilter === cat
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background hover:bg-muted border-border",
@@ -805,15 +805,15 @@ export function PlantillasWhatsappEditor() {
                         <div className={cn("rounded p-1 border", colorClass)}>
                           <Icon className="h-3 w-3" />
                         </div>
-                        <span className="text-[11px] font-semibold uppercase tracking-wide flex-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide flex-1">
                           {CATEGORIES[cat].label}
                         </span>
                         {dirtyInCat > 0 && (
-                          <span className="text-[10px] bg-warning text-white px-1.5 py-0.5 rounded-full font-medium">
+                          <span className="text-xs bg-warning text-white px-1.5 py-0.5 rounded-full font-medium">
                             {dirtyInCat}
                           </span>
                         )}
-                        <span className="text-[10px] text-muted-foreground">{items.length}</span>
+                        <span className="text-xs text-muted-foreground">{items.length}</span>
                         <ChevronDown
                           className={cn(
                             "h-3 w-3 transition-transform",

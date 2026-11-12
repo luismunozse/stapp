@@ -203,7 +203,7 @@ export function CotizacionApproval({
             <div className="flex items-start gap-2">
               <Search className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-widest mb-1">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-widest mb-1">
                   Diagnóstico del técnico
                 </p>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{diagnostico}</p>
@@ -221,7 +221,7 @@ export function CotizacionApproval({
         {/* Items table */}
         <div>
           {/* Header */}
-          <div className="grid grid-cols-12 gap-1 text-[10px] font-medium text-muted-foreground pb-2 border-b uppercase tracking-wider">
+          <div className="grid grid-cols-12 gap-1 text-xs font-medium text-muted-foreground pb-2 border-b uppercase tracking-wider">
             <div className="col-span-5">Descripcion</div>
             <div className="col-span-1 text-center">Cant.</div>
             <div className="col-span-2 text-right">P. Unit.</div>
@@ -240,12 +240,12 @@ export function CotizacionApproval({
                 <div className="col-span-5">
                   <div className="text-sm">{item.descripcion}</div>
                   {item.unidad && item.unidad !== "Unidad" && (
-                    <div className="text-[10px] text-muted-foreground">{item.unidad}</div>
+                    <div className="text-xs text-muted-foreground">{item.unidad}</div>
                   )}
                 </div>
                 <div className="col-span-1 text-center text-sm">{item.cantidad}</div>
                 <div className="col-span-2 text-right text-sm">{fmt(item.precioUnitario)}</div>
-                <div className="col-span-1 text-center text-[10px] text-muted-foreground">
+                <div className="col-span-1 text-center text-xs text-muted-foreground">
                   {hasDiscount
                     ? item.descuentoTipo === "fijo"
                       ? `-${fmt(item.descuentoValor || 0)}`
@@ -254,7 +254,7 @@ export function CotizacionApproval({
                 </div>
                 <div className="col-span-3 text-right">
                   {hasDiscount && (
-                    <span className="text-[10px] text-muted-foreground line-through mr-1">
+                    <span className="text-xs text-muted-foreground line-through mr-1">
                       {fmt(bruto)}
                     </span>
                   )}

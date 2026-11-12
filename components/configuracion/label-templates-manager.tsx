@@ -214,7 +214,7 @@ export function LabelTemplatesManager() {
                       {t.notas && (
                         <p className="text-xs text-muted-foreground line-clamp-2">{t.notas}</p>
                       )}
-                      <pre className="text-[10px] font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-20 whitespace-pre">
+                      <pre className="text-xs font-mono bg-muted/50 rounded p-2 overflow-x-auto max-h-20 whitespace-pre">
                         {t.template.split("\n").slice(0, 4).join("\n")}
                         {t.template.split("\n").length > 4 ? "\n..." : ""}
                       </pre>
@@ -444,7 +444,7 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
                 className="font-mono text-xs min-h-[260px]"
                 spellCheck={false}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Tip: ZPL wrapea cada etiqueta entre <code>^XA</code> y <code>^XZ</code>.
                 EPL inicia con <code>N</code> y cierra con <code>P1</code>. Si tu
                 template los incluye, no los agregamos automáticamente.
@@ -459,7 +459,7 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
                 <PlaceholderRow code="{{precio}}" desc="Precio de venta (decimal)" />
                 <PlaceholderRow code="{{org_nombre}}" desc="Nombre de tu organización" />
               </div>
-              <StatusBanner tone="warning" icon={AlertTriangle} className="text-[11px]">
+              <StatusBanner tone="warning" icon={AlertTriangle} className="text-xs">
                 Los valores se escapan automáticamente para evitar romper el
                 spool (ZPL: <code>^</code>→<code>\5E</code>; EPL:{" "}
                 <code>&quot;</code>→<code>\&quot;</code>).
@@ -484,7 +484,7 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
               value={testOutput}
               readOnly
               placeholder='Item de prueba: { codigo: "PROD-001", nombre: "Producto de prueba", barcode: "7790001000017", precio: 12500.50 }'
-              className="font-mono text-[11px] min-h-[100px] resize-none"
+              className="font-mono text-xs min-h-[100px] resize-none"
             />
           </div>
 
@@ -517,10 +517,10 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
 function PlaceholderRow({ code, desc }: { code: string; desc: string }) {
   return (
     <div className="flex items-start gap-2">
-      <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px] shrink-0">
+      <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs shrink-0">
         {code}
       </code>
-      <span className="text-muted-foreground text-[11px] leading-relaxed">{desc}</span>
+      <span className="text-muted-foreground text-xs leading-relaxed">{desc}</span>
     </div>
   )
 }

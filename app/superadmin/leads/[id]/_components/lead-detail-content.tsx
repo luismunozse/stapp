@@ -384,7 +384,7 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
                         )}>
                           <p className="text-sm whitespace-pre-wrap">{msg.contenido}</p>
                           <div className={cn(
-                            "flex items-center gap-2 mt-1 text-[10px]",
+                            "flex items-center gap-2 mt-1 text-xs",
                             msg.tipo === "USER" ? "text-primary-foreground/60" : "text-muted-foreground"
                           )}>
                             <Clock className="w-2.5 h-2.5" />
@@ -394,7 +394,7 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
                               timeZone: DEFAULT_TIMEZONE,
                             })}
                             {msg.intencion_detectada && msg.tipo !== "USER" && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
+                              <Badge variant="outline" className="text-xs leading-none px-1 py-0 h-3.5">
                                 {msg.intencion_detectada}
                               </Badge>
                             )}

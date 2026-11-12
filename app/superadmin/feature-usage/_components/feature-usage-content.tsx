@@ -191,7 +191,7 @@ export function FeatureUsageContent() {
               <p className="text-xs text-muted-foreground">
                 &lt; 30% features
                 {data.summary.zeroAdoption > 0 && (
-                  <span className="block text-[10px] text-red-500/80">
+                  <span className="block text-xs text-red-500/80">
                     {data.summary.zeroAdoption} sin uso (0%)
                   </span>
                 )}
@@ -311,7 +311,7 @@ export function FeatureUsageContent() {
                                   {label}
                                 </span>
                                 {active && count > 0 && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 ml-auto">
+                                  <Badge variant="outline" className="text-xs leading-none px-1 py-0 h-4 ml-auto">
                                     {count.toLocaleString("es-AR")}
                                   </Badge>
                                 )}

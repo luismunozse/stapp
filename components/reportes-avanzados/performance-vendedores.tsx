@@ -334,25 +334,25 @@ export function PerformanceVendedores() {
 
                   <div className="grid grid-cols-4 gap-2">
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Ventas</p>
-                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
+                      <p className="text-xs text-muted-foreground">Ventas</p>
+                      <Badge variant="default" className="bg-success text-white text-xs">
                         {vendedor.ventasCompletadas}
                       </Badge>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Anuladas</p>
-                      <Badge variant="secondary" className="text-[10px] sm:text-xs">{vendedor.ventasAnuladas}</Badge>
+                      <p className="text-xs text-muted-foreground">Anuladas</p>
+                      <Badge variant="secondary" className="text-xs">{vendedor.ventasAnuladas}</Badge>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Ticket</p>
-                      <Badge variant="outline" className="text-[10px] sm:text-xs">
+                      <p className="text-xs text-muted-foreground">Ticket</p>
+                      <Badge variant="outline" className="text-xs">
                         {vendedor.ticketPromedio !== null
                           ? formatCurrency(vendedor.ticketPromedio)
                           : "-"}
                       </Badge>
                     </div>
                     <div>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mb-1 text-center">
+                      <p className="text-xs text-muted-foreground mb-1 text-center">
                         {vendedor.tasaCompletado}%
                       </p>
                       <Progress value={vendedor.tasaCompletado} className="h-2" />

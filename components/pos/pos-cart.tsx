@@ -568,7 +568,7 @@ export function PosCart({
                                   onSetItemDescuento(item.lineId, { tipo: t, valor: val })
                                 }}
                                 className={cn(
-                                  "px-2 h-full text-[10px] font-medium transition-colors",
+                                  "px-2 h-full text-xs font-medium transition-colors",
                                   currentTipo === t
                                     ? "bg-primary text-primary-foreground"
                                     : "bg-background text-muted-foreground hover:bg-muted"
@@ -670,7 +670,7 @@ export function PosCart({
                       if (val > 0) emitDescuentoGlobal({ tipo: t, valor: val })
                     }}
                     className={cn(
-                      "px-2 h-full text-[10px] font-medium transition-colors",
+                      "px-2 h-full text-xs font-medium transition-colors",
                       globalDescTipo === t
                         ? "bg-primary text-primary-foreground"
                         : "bg-background text-muted-foreground hover:bg-muted"
@@ -786,7 +786,7 @@ export function PosCart({
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               Recuperar (F6)
               {heldCount > 0 && (
-                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">
                   {heldCount}
                 </Badge>
               )}

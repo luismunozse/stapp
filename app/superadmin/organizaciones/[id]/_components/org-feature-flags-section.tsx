@@ -114,7 +114,7 @@ export function OrgFeatureFlagsSection({
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm truncate">{key}</span>
                       {hasOverride && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 leading-none">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200 leading-none">
                           override
                         </span>
                       )}

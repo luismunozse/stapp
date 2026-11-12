@@ -9,7 +9,7 @@ import type { Inventario } from "@/types"
 export function ChipVariante({ item }: { item: Pick<Inventario, "grupoId" | "etiqueta"> }) {
   if (!item.grupoId || !item.etiqueta) return null
   return (
-    <Badge data-testid="chip-variante" variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px] font-normal">
+    <Badge data-testid="chip-variante" variant="secondary" className="h-4 shrink-0 px-1.5 text-xs leading-none font-normal">
       {item.etiqueta}
     </Badge>
   )

@@ -343,7 +343,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
         </div>
         <div className="flex gap-2 items-end">
           <div className="space-y-1">
-            <Label className="text-[10px] text-muted-foreground">Desde</Label>
+            <Label className="text-xs text-muted-foreground">Desde</Label>
             <Input
               type="date"
               value={desde}
@@ -352,7 +352,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-[10px] text-muted-foreground">Hasta</Label>
+            <Label className="text-xs text-muted-foreground">Hasta</Label>
             <Input
               type="date"
               value={hasta}
@@ -492,18 +492,18 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                             <span className="text-sm text-muted-foreground">—</span>
                           )}
                           {i.rol === "RECEPCION" && (
-                            <Badge variant="outline" className="text-[10px] shrink-0">
+                            <Badge variant="outline" className="text-xs shrink-0">
                               {COMMISSION_ROLE_LABEL.RECEPCION}
                             </Badge>
                           )}
                           {commissionKindLabel(i.tipo, "ORDEN") && (
-                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                            <Badge variant="secondary" className="text-xs shrink-0">
                               {commissionKindLabel(i.tipo, "ORDEN")}
                             </Badge>
                           )}
                         </div>
                         <div className="text-sm truncate">{i.dispositivo}</div>
-                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <CalIcon className="h-3 w-3" />
                           {i.fechaCompletado ? formatDate(i.fechaCompletado) : "-"}
                         </div>
@@ -529,7 +529,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                       {/* Comisión + estado */}
                       <div className="col-span-4 sm:col-span-3 flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             <Percent className="h-3 w-3 mr-0.5" />
                             {i.porcentajeComision.toFixed(2)}
                           </Badge>
@@ -540,7 +540,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                         {i.comisionPagada ? (
                           readOnly ? (
                             <span
-                              className="inline-flex items-center gap-1 text-[10px] text-success-700 dark:text-success-500"
+                              className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500"
                               title={
                                 i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""
                               }
@@ -551,7 +551,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           ) : (
                             <button
                               onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
-                              className="inline-flex items-center gap-1 text-[10px] text-success-700 dark:text-success-500 hover:underline"
+                              className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline"
                               title={i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""}
                             >
                               <CheckCircle2 className="h-3 w-3" />
@@ -560,7 +560,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                             </button>
                           )
                         ) : (
-                          <Badge variant="warning" className="text-[10px]">
+                          <Badge variant="warning" className="text-xs">
                             Pendiente
                           </Badge>
                         )}
@@ -589,7 +589,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                       <div className="text-xs text-muted-foreground">{formatDate(p.fecha)}</div>
                       <div className="font-semibold text-lg">{formatPrice(p.total)}</div>
                     </div>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       {countOrders(p.ordenes)} orden(es)
                     </Badge>
                   </div>

@@ -275,7 +275,7 @@ export function ItemDetailDialog({
                   />
                 ))}
               </div>
-              <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur text-white text-[11px] font-medium px-2 py-1 rounded-full tabular-nums">
+              <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur text-white text-xs font-medium px-2 py-1 rounded-full tabular-nums">
                 {imgIdx + 1} / {galeria.length}
               </div>
             </>
@@ -399,7 +399,7 @@ export function ItemDetailDialog({
                   </div>
                   <div className="flex items-center justify-end gap-2 mt-1">
                     {item.precio_lista != null && Number(item.precio_lista) > precioEfectivo! && (
-                      <span className="text-[11px] font-bold text-white bg-emerald-600 px-2 py-0.5 rounded">
+                      <span className="text-xs font-bold text-white bg-emerald-600 px-2 py-0.5 rounded">
                         -{Math.round((1 - precioEfectivo! / Number(item.precio_lista)) * 100)}% OFF
                       </span>
                     )}

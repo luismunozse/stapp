@@ -777,14 +777,14 @@ export default function CotizacionesPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               {cotizacion.numeroCotizacion}
                               {cotizacion.tipo === "PRESUPUESTO" && (
-                                <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">
+                                <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                                   Presupuesto
                                 </Badge>
                               )}
                               {cotizacion.origen === "CATALOGO_PUBLICO" && (
                                 <Badge
                                   variant="outline"
-                                  className="text-[10px] border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300 gap-1"
+                                  className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300 gap-1"
                                   title="Solicitud generada desde el catálogo público"
                                 >
                                   <ShoppingCart className="h-2.5 w-2.5" />

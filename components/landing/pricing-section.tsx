@@ -260,7 +260,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                             {feature.text}
                           </span>
                           {feature.highlight && (
-                            <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
+                            <span className="text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full ml-auto flex-shrink-0">
                               {feature.highlight}
                             </span>
                           )}

@@ -41,7 +41,7 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt="Imagen del producto" className="w-full h-full object-cover" />
             {isCover && (
-              <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-background/90 px-1 py-0.5 text-[10px] font-medium">
+              <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-background/90 px-1 py-0.5 text-xs font-medium">
                 <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
                 Portada
               </span>
@@ -52,12 +52,12 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
                   type="button"
                   aria-label="Hacer portada"
                   onClick={() => onChange(setCover({ cover, gallery }, url))}
-                  className="text-[10px] hover:underline"
+                  className="text-xs hover:underline"
                 >
                   <Star className="h-3 w-3" aria-hidden="true" />
                 </button>
               ) : (
-                <span className="text-[10px] text-muted-foreground">Principal</span>
+                <span className="text-xs text-muted-foreground">Principal</span>
               )}
               <button
                 type="button"
@@ -77,7 +77,7 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
           className="aspect-square rounded-md border border-dashed flex flex-col items-center justify-center gap-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-          <span className="text-[10px]">Subir</span>
+          <span className="text-xs">Subir</span>
         </button>
       </div>
       <input
@@ -91,7 +91,7 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
           e.target.value = ""
         }}
       />
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         La primera imagen es la principal. Pasá el mouse para cambiarla o quitarla. JPG/PNG/WEBP ≤4MB.
       </p>
     </div>

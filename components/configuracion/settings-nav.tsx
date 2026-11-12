@@ -224,7 +224,7 @@ export function SettingsNav() {
                           </span>
                           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5" />
                         </span>
-                        <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground sm:text-xs">
+                        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
                           <span className="hidden sm:inline">{card.desc}</span>
                           <span className="sm:hidden">
                             {card.descShort ?? card.desc}

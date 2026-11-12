@@ -256,7 +256,7 @@ export function AnalisisInventario() {
                         {/* El endpoint devuelve null en el costo por item para
                             los roles sin acceso a inventario: se oculta, no se
                             pinta como $0. */}
-                        <p className="text-[10px] sm:text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {item.precioCompra !== null
                             ? `${item.stock} uds x ${formatPrice(item.precioCompra)}`
                             : `${item.stock} uds`}
@@ -264,7 +264,7 @@ export function AnalisisInventario() {
                       </div>
                     </div>
                     {item.valorEnStock != null && (
-                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
+                      <Badge variant="default" className="bg-success text-white text-xs shrink-0">
                         {formatPrice(item.valorEnStock)}
                       </Badge>
                     )}
