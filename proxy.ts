@@ -10,6 +10,7 @@ import {
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
+import { escrituraPermitidaSinSuscripcion, getSuscripcionBloqueada } from "@/lib/suscripcion-edge"
 import { checkSuperadminLoginLimit, checkTenantLoginLimit } from "@/lib/superadmin-login-limit-edge"
 import {
   isImpersonationWriteBlocked,
@@ -81,6 +82,35 @@ const RESERVED_SUBDOMAINS = new Set([
 // Devuelve la respuesta que corta la sesión (401 en /api, redirect a /login en
 // páginas, ambas borrando la cookie) o null si hay que seguir. Caché de 30 s y
 // fail-open si Supabase no responde; una baja encontrada nunca es fail-open.
+// Organización con la suscripción CANCELED o PAST_DUE: el panel la manda a
+// /suscripcion-requerida, pero la API seguía aceptando escrituras (crear
+// órdenes, cobrar, vender). Se cortan las escrituras de la API y las server
+// actions, salvo las que hacen falta para pagar, loguearse o pedir soporte.
+// Las lecturas siguen: el taller puede consultar y exportar sus datos.
+// Fail-open, como el resto de los chequeos del proxy: un error de Supabase no
+// bloquea a nadie. La impersonación ya es de solo lectura.
+async function suscripcionBloqueadaResponse(
+  request: NextRequest,
+  token: { organizationId?: unknown; isImpersonating?: unknown } | null,
+  pathname: string,
+): Promise<NextResponse | null> {
+  if (!token?.organizationId || token.isImpersonating) return null
+  const method = request.method.toUpperCase()
+  const isWrite =
+    !(method === "GET" || method === "HEAD" || method === "OPTIONS") ||
+    request.headers.has("next-action")
+  if (!isWrite) return null
+  if (pathname.startsWith("/api/") && (isPublicPath(pathname) || escrituraPermitidaSinSuscripcion(pathname))) {
+    return null
+  }
+  const lookup = await getSuscripcionBloqueada(token.organizationId as string)
+  if (lookup.kind !== "ok" || !lookup.bloqueada) return null
+  return NextResponse.json(
+    { error: "La suscripción de la organización no está activa", code: "SUBSCRIPTION_REQUIRED" },
+    { status: 402 }
+  )
+}
+
 // Impersonación y rutas públicas quedan fuera (/api/auth tiene que seguir
 // andando para poder cerrar sesión).
 async function deletedUserResponse(
@@ -525,6 +555,8 @@ export async function proxy(request: NextRequest) {
         const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
         if (apexDeleted) return apexDeleted
       }
+      const apexSinSuscripcion = await suscripcionBloqueadaResponse(request, apexToken, pathname)
+      if (apexSinSuscripcion) return apexSinSuscripcion
     }
 
     // Landing page y rutas públicas permitidas
@@ -655,6 +687,9 @@ export async function proxy(request: NextRequest) {
   // can be unit-tested in isolation.
   const impersonationRes = impersonationResponse(request, token, pathname)
   if (impersonationRes) return impersonationRes
+
+  const sinSuscripcion = await suscripcionBloqueadaResponse(request, token, pathname)
+  if (sinSuscripcion) return sinSuscripcion
 
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {
