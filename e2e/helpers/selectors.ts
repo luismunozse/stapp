@@ -47,20 +47,20 @@ export const ROUTE_GUARDS = {
   adminOrVendedor: ["/ventas", "/pos", "/reportes", "/proveedores"],
 } as const
 
-/** EstadoOrden enum keys + labels from lib/orden-state-machine.ts. */
+/** EstadoOrden enum keys + labels from lib/estado-orden-ui.ts. */
 export const ESTADO_ORDEN = {
   RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
+  EN_DIAGNOSTICO: "En diagnóstico",
   PRESUPUESTADO: "Presupuestado",
   APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
+  EN_REPARACION: "En reparación",
+  ESPERANDO_REPUESTO: "Esperando repuesto",
   REPARADO: "Reparado",
   ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
-  ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
+  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
+  ENTREGADO_SIN_COBRO: "Entregado sin cobro",
   CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
+  SIN_REPARACION: "Sin reparación",
 } as const
 
 /** Valid transitions from lib/orden-state-machine.ts (for valid/invalid tests). */

@@ -199,7 +199,7 @@ export function VentasList() {
       header: "Garantías",
       hideOnMobile: true,
       render: (venta) => (
-        <span className={venta.garantias.length > 0 ? "text-success font-medium" : "text-muted-foreground"}>
+        <span className={venta.garantias.length > 0 ? "text-success-text font-medium" : "text-muted-foreground"}>
           {venta.garantias.length > 0 ? `${venta.garantias.length} cert.` : "-"}
         </span>
       ),

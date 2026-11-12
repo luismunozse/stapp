@@ -35,7 +35,7 @@ const TONE_CHIP: Record<StatTone, string> = {
     "bg-success-50 text-success-600 dark:bg-success-100/50 dark:text-success-500",
   warning:
     "bg-warning-50 text-warning-600 dark:bg-warning-100/50 dark:text-warning-600",
-  danger: "bg-destructive/10 text-destructive",
+  danger: "bg-destructive/10 text-destructive-text",
 }
 
 // Urgent ring per tone — a calm ring instead of the banned border-left stripe.
@@ -100,7 +100,7 @@ export function StatCard({
             change.direction === "up"
               ? "text-success-600 dark:text-success-500"
               : change.direction === "down"
-                ? "text-destructive"
+                ? "text-destructive-text"
                 : "text-muted-foreground"
           )}
         >

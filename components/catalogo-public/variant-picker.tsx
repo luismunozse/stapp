@@ -24,7 +24,7 @@ export function VariantPicker({ variantes, varianteId, onSelect, topVarianteId, 
   return (
     <div>
       <div className="text-xs font-medium mb-2">
-        Variante: {varianteSel ? <span className="text-foreground">{varianteSel.etiqueta}</span> : <span className="text-destructive">elegí una opción</span>}
+        Variante: {varianteSel ? <span className="text-foreground">{varianteSel.etiqueta}</span> : <span className="text-destructive-text">elegí una opción</span>}
       </div>
       <div className="flex flex-wrap gap-2">
         {variantes.map((v) => {

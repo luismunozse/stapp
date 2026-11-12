@@ -63,7 +63,7 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
                 type="button"
                 aria-label={isCover ? "Quitar portada" : "Quitar imagen"}
                 onClick={() => onChange(isCover ? removeCover({ cover, gallery }) : removeFromGallery({ cover, gallery }, url))}
-                className="text-destructive"
+                className="text-destructive-text"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

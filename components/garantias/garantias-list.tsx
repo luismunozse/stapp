@@ -135,7 +135,7 @@ function Acciones({ g, compacto = false, onRegistrar, onDecidir }: AccionesProps
           <Button
             size={tam}
             variant="outline"
-            className={cn(tactil, "gap-1.5 text-destructive")}
+            className={cn(tactil, "gap-1.5 text-destructive-text")}
             onClick={() => onDecidir(g, "rechazar")}
           >
             <XCircle className="h-4 w-4" aria-hidden="true" />
@@ -502,7 +502,7 @@ export function GarantiasList() {
       <DecidirReclamoDialog pendiente={decision} onClose={() => setDecision(null)} onDecidido={() => void mutate()} />
 
       {error && data ? (
-        <p role="status" className="text-sm text-destructive">
+        <p role="status" className="text-sm text-destructive-text">
           No pudimos actualizar la lista.{" "}
           <button type="button" className="font-medium underline" onClick={() => void mutate()}>
             Reintentar

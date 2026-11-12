@@ -53,7 +53,7 @@ export function NotasCreditoOrden({ ordenId }: { ordenId: string }) {
                 <span className="font-mono text-sm font-medium">{nc.numero}</span>
                 {nc.anulada ? <Badge variant="destructive">Anulada</Badge> : null}
               </div>
-              <span className={nc.anulada ? "text-muted-foreground line-through" : "font-bold text-destructive"}>
+              <span className={nc.anulada ? "text-muted-foreground line-through" : "font-bold text-destructive-text"}>
                 -{formatPrice(nc.monto)}
               </span>
             </div>

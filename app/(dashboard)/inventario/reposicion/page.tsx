@@ -66,7 +66,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 function prioridadBadge(p: RepoItem["prioridad"]) {
   switch (p) {
     case "CRITICA":
-      return <Badge variant="outline" className="gap-1 border-destructive text-destructive bg-destructive/10"><Flame className="h-3 w-3" /> Crítica</Badge>
+      return <Badge variant="outline" className="gap-1 border-destructive text-destructive-text bg-destructive/10"><Flame className="h-3 w-3" /> Crítica</Badge>
     case "ALTA":
       return <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600 bg-amber-500/10"><AlertTriangle className="h-3 w-3" /> Alta</Badge>
     case "MEDIA":
@@ -224,7 +224,7 @@ export default function ReposicionPage() {
           </CardContent></Card>
           <Card><CardContent className="p-3">
             <div className="text-[10px] uppercase text-muted-foreground">Críticos</div>
-            <div className="text-xl font-bold text-destructive">{data.totales.criticos}</div>
+            <div className="text-xl font-bold text-destructive-text">{data.totales.criticos}</div>
           </CardContent></Card>
           <Card><CardContent className="p-3">
             <div className="text-[10px] uppercase text-muted-foreground">Altos</div>

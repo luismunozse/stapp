@@ -50,7 +50,7 @@ export function HeroMetric({
                   change.direction === "up" &&
                     "bg-success/10 text-success-600 dark:text-success-500",
                   change.direction === "down" &&
-                    "bg-destructive/10 text-destructive",
+                    "bg-destructive/10 text-destructive-text",
                   change.direction === "neutral" &&
                     "bg-muted text-muted-foreground"
                 )}

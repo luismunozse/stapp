@@ -196,7 +196,7 @@ export function ApiKeysManager() {
                         size="icon"
                         title="Revocar"
                         onClick={() => setRevokeId(k.id)}
-                        className="text-destructive hover:text-destructive shrink-0"
+                        className="text-destructive-text hover:text-destructive-text shrink-0"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -230,7 +230,7 @@ export function ApiKeysManager() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
-            {formError && <p className="text-sm text-destructive">{formError}</p>}
+            {formError && <p className="text-sm text-destructive-text">{formError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>

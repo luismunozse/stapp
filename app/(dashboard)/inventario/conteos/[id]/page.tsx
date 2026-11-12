@@ -302,7 +302,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
           <Button variant="outline" onClick={() => setShowScanner(true)}>
             <ScanLine className="h-4 w-4 mr-1" /> Escanear
           </Button>
-          <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-destructive hover:text-destructive">
+          <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-destructive-text hover:text-destructive-text">
             Cancelar conteo
           </Button>
           <Button onClick={() => setFinalizeOpen(true)}>
@@ -391,7 +391,7 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
                       {pending ? (
                         <span className="text-[10px] text-muted-foreground">—</span>
                       ) : (
-                        <span className={`text-sm font-bold ${it.diferencia > 0 ? "text-emerald-600" : it.diferencia < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        <span className={`text-sm font-bold ${it.diferencia > 0 ? "text-emerald-600" : it.diferencia < 0 ? "text-destructive-text" : "text-muted-foreground"}`}>
                           {it.diferencia > 0 ? "+" : ""}{it.diferencia}
                         </span>
                       )}

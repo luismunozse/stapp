@@ -189,7 +189,7 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
         </div>
 
         {error && (
-          <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2 mb-2">
+          <div className="text-sm text-destructive-text bg-destructive/10 rounded-md px-3 py-2 mb-2">
             {error}
           </div>
         )}

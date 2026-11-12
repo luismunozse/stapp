@@ -115,7 +115,7 @@ export function HistorialCierres() {
                     <td className="p-3 text-right hidden md:table-cell text-success-600">
                       {s.totalIngresos != null ? formatPrice(s.totalIngresos) : "-"}
                     </td>
-                    <td className="p-3 text-right hidden md:table-cell text-destructive">
+                    <td className="p-3 text-right hidden md:table-cell text-destructive-text">
                       {s.totalEgresos != null ? formatPrice(s.totalEgresos) : "-"}
                     </td>
                     <td className="p-3 text-right">
@@ -168,7 +168,7 @@ export function HistorialCierres() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Egresos</span>
-                    <div className="text-destructive">{s.totalEgresos != null ? formatPrice(s.totalEgresos) : "-"}</div>
+                    <div className="text-destructive-text">{s.totalEgresos != null ? formatPrice(s.totalEgresos) : "-"}</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-0.5">
@@ -215,7 +215,7 @@ function DiferenciaBadge({ diferencia, formatPrice }: { diferencia: number; form
     )
   }
   return (
-    <Badge variant="outline" className="text-destructive border-destructive/30">
+    <Badge variant="outline" className="text-destructive-text border-destructive/30">
       <TrendingDown className="h-3 w-3 mr-1" />
       -{formatPrice(Math.abs(diferencia))}
     </Badge>
@@ -267,7 +267,7 @@ function SesionDetailDialog({
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
                 <div className="text-xs text-muted-foreground">Egresos</div>
-                <div className="font-bold text-destructive">{formatPrice(sesion.totalEgresos || 0)}</div>
+                <div className="font-bold text-destructive-text">{formatPrice(sesion.totalEgresos || 0)}</div>
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
                 <div className="text-xs text-muted-foreground">Conteo Físico</div>
@@ -287,8 +287,8 @@ function SesionDetailDialog({
                 <span className="text-success-600">{formatPrice(sesion.totalIngresosEfectivo || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-destructive">- Egresos efectivo</span>
-                <span className="text-destructive">{formatPrice(sesion.totalEgresosEfectivo || 0)}</span>
+                <span className="text-destructive-text">- Egresos efectivo</span>
+                <span className="text-destructive-text">{formatPrice(sesion.totalEgresosEfectivo || 0)}</span>
               </div>
               <div className="border-t pt-2 flex justify-between font-bold text-sm">
                 <span>Esperado</span>
@@ -311,7 +311,7 @@ function SesionDetailDialog({
                       ? "text-success-600"
                       : sesion.diferencia > 0
                       ? "text-warning-600"
-                      : "text-destructive"
+                      : "text-destructive-text"
                   }`}
                 >
                   <span>
@@ -382,7 +382,7 @@ function SesionDetailDialog({
                           })}
                         </span>
                       </div>
-                      <span className={`font-medium ${m.esEgreso ? "text-destructive" : "text-success-600"}`}>
+                      <span className={`font-medium ${m.esEgreso ? "text-destructive-text" : "text-success-600"}`}>
                         {m.esEgreso ? "-" : "+"}
                         {formatPrice(m.monto)}
                       </span>

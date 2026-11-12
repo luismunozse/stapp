@@ -130,7 +130,7 @@ export default function AppEntryPage() {
             </span>
           </div>
           {error && (
-            <p id="slug-error" role="alert" className="text-sm text-destructive">
+            <p id="slug-error" role="alert" className="text-sm text-destructive-text">
               {error}
             </p>
           )}
@@ -165,7 +165,7 @@ export default function AppEntryPage() {
                   <button
                     onClick={() => removeTenant(tenant)}
                     aria-label={`Quitar ${tenant} de recientes`}
-                    className="mr-2 rounded-lg p-2 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    className="mr-2 rounded-lg p-2 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive-text"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>

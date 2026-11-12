@@ -190,7 +190,7 @@ export function LiquidarComisionesDialog({
               Cargando…
             </div>
           ) : error ? (
-            <div role="alert" className="py-8 text-center text-sm text-destructive">
+            <div role="alert" className="py-8 text-center text-sm text-destructive-text">
               No se pudieron cargar las comisiones.
             </div>
           ) : pendientes.length === 0 ? (

@@ -239,7 +239,7 @@ export function NotasCreditoList({ clienteId }: { clienteId: string | null }) {
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive-text">
           No se pudieron cargar las notas de crédito. Probá de nuevo en unos segundos.
         </p>
       ) : null}

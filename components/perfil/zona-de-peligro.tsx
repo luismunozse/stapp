@@ -60,7 +60,7 @@ export function ZonaDePeligro() {
   return (
     <Card id="eliminar" className="scroll-mt-20 border-destructive/40">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-destructive">
+        <CardTitle className="flex items-center gap-2 text-destructive-text">
           <AlertTriangle className="h-5 w-5" />
           Zona de peligro
         </CardTitle>

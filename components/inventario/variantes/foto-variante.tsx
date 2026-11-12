@@ -117,12 +117,12 @@ export function FotoVariante({
         )}
         {quitar && !errorAlQuitar && <span className="text-xs text-amber-900 dark:text-amber-200">Se quitará</span>}
         {reintento && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-xs text-destructive-text">
             {reintento}
           </p>
         )}
         {rechazo && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-xs text-destructive-text">
             {rechazo}
           </p>
         )}

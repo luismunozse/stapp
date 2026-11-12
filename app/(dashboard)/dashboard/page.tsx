@@ -26,6 +26,8 @@ import { countRealOrders } from "@/lib/onboarding/practica"
 import { HeroMetric } from "@/components/dashboard/hero-metric"
 import { ActionStrip, buildAdminActions } from "@/components/dashboard/action-strip"
 import { ordenesHref } from "@/lib/ordenes/filtros-url"
+import { ESTADOS_ORDEN } from "@/lib/estado-orden-ui"
+import type { EstadoOrden } from "@/types"
 
 // Cachear datos del dashboard por 2 minutos
 // Cache key = args: organizationId + the order read scope (branch, and user id
@@ -300,20 +302,9 @@ export default async function DashboardPage() {
   const clientesChange = pctChange(totalClientes, clientesMesAnterior)
 
   // Procesar órdenes por estado
-  const ordenesPorEstado = {
-    RECIBIDO: 0,
-    EN_DIAGNOSTICO: 0,
-    PRESUPUESTADO: 0,
-    APROBADO: 0,
-    EN_REPARACION: 0,
-    ESPERANDO_REPUESTO: 0,
-    REPARADO: 0,
-    ENTREGADO: 0,
-    ENTREGADO_SIN_REPARACION: 0,
-    ENTREGADO_SIN_COBRO: 0,
-    CANCELADO: 0,
-    SIN_REPARACION: 0,
-  }
+  const ordenesPorEstado = Object.fromEntries(
+    ESTADOS_ORDEN.map((estado) => [estado, 0])
+  ) as Record<EstadoOrden, number>
   ordenesPorEstadoResult.data?.forEach((orden: { estado: string }) => {
     if (orden.estado in ordenesPorEstado) {
       ordenesPorEstado[orden.estado as keyof typeof ordenesPorEstado]++

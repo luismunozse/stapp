@@ -128,7 +128,7 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
             />
           </div>
 
-          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+          {error && <p className="mt-2 text-sm text-destructive-text">{error}</p>}
 
           <TabsContent value="ordenes">
             <div className="mt-3 max-h-80 space-y-1 overflow-y-auto">

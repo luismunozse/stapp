@@ -153,7 +153,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
           className="h-8 text-xs"
         />
         {errorForm && (
-          <p role="alert" className="text-[11px] text-destructive leading-snug">
+          <p role="alert" className="text-[11px] text-destructive-text leading-snug">
             {errorForm}
           </p>
         )}

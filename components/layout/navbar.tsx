@@ -556,7 +556,7 @@ export function Navbar() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="cursor-pointer text-destructive focus:text-destructive"
+              className="cursor-pointer text-destructive-text focus:text-destructive-text"
               onClick={handleLogout}
             >
               <LogOut className="mr-2 h-4 w-4" />
@@ -697,7 +697,7 @@ export function Navbar() {
             </Button>
             <Button
               variant="ghost"
-              className="w-full justify-start py-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 touch-target active:scale-[0.98]"
+              className="w-full justify-start py-2.5 text-destructive-text hover:text-destructive-text hover:bg-destructive/10 touch-target active:scale-[0.98]"
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />

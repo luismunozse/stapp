@@ -414,7 +414,7 @@ export function KitDialog({
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : !data ? (
-          <div className="py-8 text-center text-sm text-destructive">
+          <div className="py-8 text-center text-sm text-destructive-text">
             {error || "Error al cargar el kit"}
           </div>
         ) : (
@@ -620,7 +620,7 @@ export function KitDialog({
                               className="h-7 w-7"
                               onClick={() => eliminarComponente(c.id)}
                             >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              <Trash2 className="h-3.5 w-3.5 text-destructive-text" />
                             </Button>
                           </div>
                         </div>
@@ -704,7 +704,7 @@ export function KitDialog({
                                 <span
                                   className={
                                     insuf
-                                      ? "text-destructive font-medium"
+                                      ? "text-destructive-text font-medium"
                                       : "text-muted-foreground"
                                   }
                                 >
@@ -804,7 +804,7 @@ export function KitDialog({
             </Tabs>
 
             {error && (
-              <p className="text-sm text-destructive flex items-center gap-1">
+              <p className="text-sm text-destructive-text flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {error}
               </p>

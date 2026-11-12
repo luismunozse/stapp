@@ -225,7 +225,7 @@ export function AnalisisInventario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success-text" />
               {valorPorItemOculto ? "Items con más stock" : "Items Más Valiosos"}
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
@@ -280,7 +280,7 @@ export function AnalisisInventario() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-warning" />
+            <AlertTriangle className="h-5 w-5 text-warning-text" />
             Stock Crítico
           </CardTitle>
           <CardDescription>
@@ -335,7 +335,7 @@ export function AnalisisInventario() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-info" />
+            <Layers className="h-5 w-5 text-info-text" />
             Resumen por Categoría
           </CardTitle>
         </CardHeader>

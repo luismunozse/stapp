@@ -6,18 +6,17 @@ import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { estadoConfig } from "@/components/cotizaciones/estado-config"
+import { StatusPill } from "@/components/ui/status-pill"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { useCurrency } from "@/contexts/currency-context"
 
 function EstadoBadge({ estado }: { estado: string }) {
   const config = estadoConfig[estado]
   if (!config) return <Badge variant="outline">{estado}</Badge>
-  const Icon = config.icon
   return (
-    <Badge className={config.color}>
-      <Icon className="mr-1 h-3 w-3" />
+    <StatusPill tone={config.tone} icon={config.icon}>
       {config.label}
-    </Badge>
+    </StatusPill>
   )
 }
 

@@ -41,7 +41,7 @@ interface Mensaje {
 const TONOS: Record<Mensaje["tone"], string> = {
   ok: "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500",
   warn: "bg-warning-50 dark:bg-warning/15 border border-warning-200 dark:border-warning/30 text-warning-700 dark:text-warning-500",
-  error: "bg-destructive/10 border border-destructive/30 text-destructive",
+  error: "bg-destructive/10 border border-destructive/30 text-destructive-text",
 }
 
 /**

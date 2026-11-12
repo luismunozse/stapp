@@ -14,9 +14,9 @@ interface TotalRowProps {
 
 const AMOUNT_TONE: Record<TotalTone, string> = {
   default: "",
-  success: "text-success",
-  danger: "text-destructive",
-  info: "text-info",
+  success: "text-success-text",
+  danger: "text-destructive-text",
+  info: "text-info-text",
 }
 
 /**

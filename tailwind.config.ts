@@ -37,6 +37,7 @@ const config: Config = {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          text: "hsl(var(--destructive-text))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -57,6 +58,7 @@ const config: Config = {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          text: "hsl(var(--success-text))",
           50: "hsl(var(--success-50))",
           100: "hsl(var(--success-100))",
           200: "hsl(var(--success-200))",
@@ -67,6 +69,7 @@ const config: Config = {
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          text: "hsl(var(--warning-text))",
           50: "hsl(var(--warning-50))",
           100: "hsl(var(--warning-100))",
           200: "hsl(var(--warning-200))",
@@ -77,6 +80,7 @@ const config: Config = {
         info: {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
+          text: "hsl(var(--info-text))",
           50: "hsl(var(--info-50))",
           100: "hsl(var(--info-100))",
           200: "hsl(var(--info-200))",

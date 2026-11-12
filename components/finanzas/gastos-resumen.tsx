@@ -102,7 +102,7 @@ export function GastosResumen({ desde, hasta }: GastosResumenProps) {
 
       {error && (
         <Card>
-          <CardContent className="py-6 text-center text-destructive">
+          <CardContent className="py-6 text-center text-destructive-text">
             Error al cargar los gastos
           </CardContent>
         </Card>
@@ -117,11 +117,11 @@ export function GastosResumen({ desde, hasta }: GastosResumenProps) {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground">Total gastos</p>
-                    <p className="text-2xl font-bold text-destructive">
+                    <p className="text-2xl font-bold text-destructive-text">
                       {formatPrice(data.gastos.total)}
                     </p>
                   </div>
-                  <div className="p-2 rounded-lg bg-destructive/10 dark:bg-destructive/15 text-destructive">
+                  <div className="p-2 rounded-lg bg-destructive/10 dark:bg-destructive/15 text-destructive-text">
                     <TrendingDown className="h-5 w-5" />
                   </div>
                 </div>

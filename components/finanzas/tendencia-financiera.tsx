@@ -195,11 +195,11 @@ export function TendenciaFinanciera() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t">
           <TotalItem label="Ingresos" value={formatPrice(data.totales.ingresos)} color="text-success-600" />
           <TotalItem label="Costos" value={formatPrice(data.totales.costos)} color="text-warning-600" />
-          <TotalItem label="Gastos" value={formatPrice(data.totales.gastos)} color="text-destructive" />
+          <TotalItem label="Gastos" value={formatPrice(data.totales.gastos)} color="text-destructive-text" />
           <TotalItem
             label="Ganancia neta"
             value={formatPrice(data.totales.gananciaNeta)}
-            color={data.totales.gananciaNeta >= 0 ? "text-info-600" : "text-destructive"}
+            color={data.totales.gananciaNeta >= 0 ? "text-info-600" : "text-destructive-text"}
             bold
           />
         </div>

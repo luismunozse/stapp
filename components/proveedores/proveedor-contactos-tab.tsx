@@ -235,7 +235,7 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                     <Edit className="h-3.5 w-3.5" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => remove(c.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    <Trash2 className="h-3.5 w-3.5 text-destructive-text" />
                   </Button>
                 </div>
               </div>

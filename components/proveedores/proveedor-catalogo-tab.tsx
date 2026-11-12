@@ -350,7 +350,7 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                               aria-label="Eliminar item"
                               onClick={() => remove(i)}
                             >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              <Trash2 className="h-3.5 w-3.5 text-destructive-text" />
                             </Button>
                           </div>
                         </td>

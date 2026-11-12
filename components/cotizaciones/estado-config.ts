@@ -1,9 +1,11 @@
 import { Clock, Edit, Mail, CheckCircle, XCircle } from "lucide-react"
+import type { StatusTone } from "@/lib/status-tone"
 
-// Single source of labels/colors for cotizacion states (list + client detail)
-export const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
-  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
-  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
+// Fuente única de etiqueta, ícono y tono por estado de cotización (listados,
+// detalle del cliente y vista pública). Se pinta con <StatusPill tone icon>.
+export const estadoConfig: Record<string, { label: string; icon: typeof Clock; tone: StatusTone }> = {
+  BORRADOR: { label: "Borrador", icon: Edit, tone: "neutral" },
+  ENVIADA: { label: "Enviada", icon: Mail, tone: "info" },
+  ACEPTADA: { label: "Aceptada", icon: CheckCircle, tone: "success" },
+  RECHAZADA: { label: "Rechazada", icon: XCircle, tone: "danger" },
 }

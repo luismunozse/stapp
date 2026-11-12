@@ -67,7 +67,7 @@ export function LeadCaptureForm({ sessionId, conversacionId, onCaptured }: LeadC
         inputMode="tel"
         disabled={submitting}
       />
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive-text">{error}</p>}
       <Button onClick={handleSubmit} disabled={submitting} className="w-full" size="sm">
         {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
         Enviar
