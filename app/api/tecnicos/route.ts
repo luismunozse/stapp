@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { APP_VERSION } from "@/lib/changelog"
 import { isSuperadminEmail } from "@/lib/auth-tokens"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
@@ -242,6 +243,8 @@ export async function POST(request: Request) {
         especialidades: especialidadesArr,
         fecha_ingreso_tecnico: fechaIngresoTecnico || null,
         activo: true,
+        // Usuario nuevo: el changelog anterior no le aplica (auditoría UX §5.1).
+        last_seen_version: APP_VERSION,
       })
       .select("id, nombre, email, porcentaje_comision, porcentaje_comision_recepcion, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()

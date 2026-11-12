@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isSuperadminEmail } from "@/lib/auth-tokens"
+import { APP_VERSION } from "@/lib/changelog"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import { z } from "zod"
@@ -267,6 +268,8 @@ export async function POST(request: NextRequest) {
         email_verification_token: verificationToken,
         email_verification_expires: verificationExpires?.toISOString() || null,
         provider: isGoogleRegister ? "google" : "credentials",
+        // Cuenta nueva: el changelog anterior no le aplica (auditoría UX §5.1).
+        last_seen_version: APP_VERSION,
       })
       .select("id, email, nombre, rol")
       .single()

@@ -21,6 +21,7 @@ import { isSuperadminEmail } from "@/lib/superadmin-auth"
 import { canUseAsistente } from "@/lib/asistente/access"
 import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
+import { debeVerAvisoCambioPolitica } from "@/lib/politica-trial"
 import { redirect } from "next/navigation"
 import { unstable_cache } from "next/cache"
 import { connection } from "next/server"
@@ -89,12 +90,15 @@ export default async function DashboardLayout({
   // Verificar si tiene datos de ejemplo
   const { data: orgData } = await supabaseAdmin
     .from("organizations")
-    .select("has_sample_data, onboarding_completed")
+    .select("has_sample_data, onboarding_completed, created_at")
     .eq("id", organizationId)
     .single()
 
   const hasSampleData = orgData?.has_sample_data || false
   const showTrialBanner = trialInfo.isInTrial && !trialInfo.isPaid
+  // El aviso de cambio de políticas es sólo para cuentas previas al cambio:
+  // las nuevas ya aceptaron la política vigente al registrarse.
+  const showPolicyChange = showTrialBanner && debeVerAvisoCambioPolitica(orgData?.created_at)
 
   // Banner de mantenimiento global (gestionado por superadmin)
   const maintenanceBanner = await getMaintenanceBanner()
@@ -148,8 +152,8 @@ export default async function DashboardLayout({
             {!showTrialBanner && !showMaintenanceBanner && <UsageWarningBanner />}
             {children}
           </SidebarMain>
-          {/* Modal de cambio de políticas - se muestra una sola vez */}
-          {showTrialBanner && (
+          {/* Modal de cambio de políticas - una sola vez, sólo cuentas previas al cambio */}
+          {showPolicyChange && (
             <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
           )}
           {/* Tour guiado - se muestra automáticamente la primera vez */}
