@@ -144,6 +144,18 @@ describe("OrdenEstadoCard — acción principal y más estados", () => {
     expect(onUpdateEstado).toHaveBeenCalledWith("ESPERANDO_REPUESTO")
   })
 
+  it("respeta la acción principal que le pasa la ficha (null: todo en 'Cambiar estado…')", () => {
+    renderCard({ estado: "REPARADO" as EstadoOrden, accionPrincipal: null })
+    expect(screen.queryByRole("button", { name: /^Entregar/ })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Cambiar estado/ })).toBeInTheDocument()
+  })
+
+  it("en solo lectura muestra el estado sin botones de cambio", () => {
+    renderCard({ estado: "EN_REPARACION" as EstadoOrden, soloLectura: true })
+    expect(screen.getByText("En reparación")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Marcar reparado|Más estados|Cambiar estado/ })).not.toBeInTheDocument()
+  })
+
   it("en un estado terminal no hay botones de cambio", () => {
     renderCard({ estado: "ENTREGADO" as EstadoOrden })
     expect(screen.queryByRole("button", { name: /Más estados|Cambiar estado/ })).not.toBeInTheDocument()
