@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cargarConfigMoneda, resolverTipoCambio } from "@/lib/currency/tipo-cambio.server"
+import { unidadRedondeo } from "@/lib/currency/convert"
 import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
 
 // GET /api/inventario/[id]/kit
@@ -42,7 +44,7 @@ export async function GET(
     const { data: rawComponentes } = await supabaseAdmin
       .from("inventario_kit_items")
       .select(
-        "id, kit_id, componente_id, cantidad, es_obligatorio, notas, orden, created_at, updated_at, componente:componente_id(id, codigo, nombre, stock, stock_reservado, precio_compra, imagen_url, es_kit, tipo_kit)"
+        "id, kit_id, componente_id, cantidad, es_obligatorio, notas, orden, created_at, updated_at, componente:componente_id(id, codigo, nombre, stock, stock_reservado, precio_compra, imagen_url, es_kit, tipo_kit, moneda)"
       )
       .eq("kit_id", id)
       .eq("organization_id", organizationId!)
@@ -73,16 +75,46 @@ export async function GET(
             imagenUrl: c.componente.imagen_url ?? null,
             esKit: c.componente.es_kit ?? false,
             tipoKit: c.componente.tipo_kit ?? null,
+            moneda: c.componente.moneda ?? null,
           }
         : null,
+      // En la moneda propia del componente (cantidad x precio de compra).
       subtotalCosto: canViewCost ? c.cantidad * Number(c.componente?.precio_compra ?? 0) : null,
     }))
 
-    // Costo calculado via RPC (autoritario)
-    const { data: costoData } = await supabaseAdmin.rpc("calcular_costo_kit", {
+    // Cotización: una sola vez por request, y solo si hay componentes en divisa (o sub-kits,
+    // que pueden tenerlos) y el rol ve costos.
+    const necesitaCotizacion =
+      canViewCost &&
+      (rawComponentes || []).some(
+        (c: any) => (c.componente?.moneda ?? null) !== null || c.componente?.es_kit === true
+      )
+    let monedaExtranjera: string | null = null
+    let pMoneda: string | null = null
+    let pTipoCambio: number | null = null
+    let pUnidad = 0
+    if (necesitaCotizacion) {
+      const { config } = await cargarConfigMoneda(organizationId!)
+      const tc = await resolverTipoCambio(organizationId!)
+      monedaExtranjera = config.monedaExtranjera
+      pMoneda = config.monedaExtranjera
+      pTipoCambio = tc.disponible ? tc.valor : null
+      pUnidad = unidadRedondeo(config.redondeoConversion, config.monedaLocal)
+    }
+
+    // Costo calculado via RPC (autoritario); null = sin equivalente local
+    const { data: costoData, error: costoErr } = await supabaseAdmin.rpc("calcular_costo_kit", {
       p_kit_id: id,
       p_org_id: organizationId!,
+      p_moneda: pMoneda,
+      p_tipo_cambio: pTipoCambio,
+      p_unidad: pUnidad,
     })
+    const costoCalculado: number | null = costoErr
+      ? 0
+      : costoData === null || costoData === undefined
+        ? null
+        : Number(costoData)
 
     let explosionado: any[] | null = null
     if (explosionar) {
@@ -91,7 +123,20 @@ export async function GET(
         { p_kit_id: id, p_org_id: organizationId! }
       )
       if (!expErr) {
+        const ids = [...new Set((expData || []).map((r: any) => r.componente_id))]
+        const monedas = new Map<string, string | null>()
+        if (ids.length > 0) {
+          const { data: mons } = await supabaseAdmin
+            .from("inventario")
+            .select("id, moneda")
+            .in("id", ids)
+            .eq("organization_id", organizationId!)
+          for (const m of (mons || []) as Array<{ id: string; moneda: string | null }>) {
+            monedas.set(m.id, m.moneda ?? null)
+          }
+        }
         explosionado = (expData || []).map((r: any) => ({
+          moneda: monedas.get(r.componente_id) ?? null,
           componenteId: r.componente_id,
           codigo: r.codigo,
           nombre: r.nombre,
@@ -118,7 +163,10 @@ export async function GET(
         imagenUrl: kit.imagen_url ?? null,
       },
       componentes,
-      costoCalculado: canViewCost ? Number(costoData ?? 0) : null,
+      costoCalculado: canViewCost ? costoCalculado : null,
+      // Con acceso a costos pero sin equivalente local: distinto de "oculto" (que también es null).
+      costoNoDisponible: canViewCost && costoCalculado === null,
+      monedaExtranjera,
       explosionado,
     })
   } catch (err) {
