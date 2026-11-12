@@ -108,17 +108,21 @@ describe("/api/configuracion — permiso para que los técnicos tomen órdenes",
     expect(status).toBe(200)
     expect(body.tecnicosTomanOrdenes).toBe(false)
 
-    // Two attempts: this flag has its own step on top of everything, and the
-    // second (without it) already succeeds. More than two means it dragged
-    // another migration down with it. Assert WHICH select each attempt carried,
-    // not only how many there were.
-    expect(chain.single).toHaveBeenCalledTimes(2)
+    // Three attempts: the newer top step (technicians see client debt, 405)
+    // fails first, because in any state where this flag is missing that newer
+    // column is missing too; then this flag's own step; the third (without it)
+    // already succeeds. More than three means it dragged another migration down
+    // with it. Assert WHICH select each attempt carried, not only how many
+    // there were.
+    expect(chain.single).toHaveBeenCalledTimes(3)
     const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
-    expect(selects[0]).toContain("tecnicos_toman_ordenes")
-    expect(selects.filter((s) => s.includes("tecnicos_toman_ordenes"))).toHaveLength(1)
-    expect(selects[1]).not.toContain("tecnicos_toman_ordenes")
-    expect(selects[1]).toContain("orden_formato_papel")
-    expect(selects[1]).toContain("pos_agrupa_variantes")
+    expect(selects[0]).toContain("tecnicos_ven_deuda_clientes")
+    expect(selects[1]).not.toContain("tecnicos_ven_deuda_clientes")
+    expect(selects[1]).toContain("tecnicos_toman_ordenes")
+    expect(selects.filter((s) => s.includes("tecnicos_toman_ordenes"))).toHaveLength(2)
+    expect(selects[2]).not.toContain("tecnicos_toman_ordenes")
+    expect(selects[2]).toContain("orden_formato_papel")
+    expect(selects[2]).toContain("pos_agrupa_variantes")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)

@@ -26,10 +26,12 @@ vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn().mockResolvedValu
 
 const COLUMN = "orden_formato_papel"
 const POS_COLUMN = "pos_agrupa_variantes" // the step this one stacks on top of
-// Newer column, a NEW TOP step above this one in every cascade. In any older-state database
-// (this column missing) it is missing too, so such scenarios list it as missing and see ONE
-// extra failed attempt at the front.
+// Newer columns, steps above this one in every cascade. In any older-state database
+// (this column missing) they are missing too, so such scenarios list them as missing and see
+// TWO extra failed attempts at the front: VEN (migration 405) is now the newest top step, and
+// TOMAN (migration 374) sits right under it.
 const TOMAN = "tecnicos_toman_ordenes"
+const VEN = "tecnicos_ven_deuda_clientes"
 
 interface Call {
   select: string
@@ -88,13 +90,14 @@ const FULL_ROW: Record<string, unknown> = {
   tecnicos_cobran_cotizaciones: true,
   vendedores_ven_ingresos: false, // non-default on purpose: reading false proves it was READ
   [TOMAN]: true,
+  [VEN]: true,
   [POS_COLUMN]: false, // non-default on purpose too
   [COLUMN]: "A6",
 }
 
 /** The same organization on a database where the migration has not been applied. */
 const rowWithoutColumn = (overrides: Record<string, unknown> = {}) => {
-  const { [COLUMN]: _omitted, [TOMAN]: _newer, ...rest } = FULL_ROW
+  const { [COLUMN]: _omitted, [TOMAN]: _newer, [VEN]: _newest, ...rest } = FULL_ROW
   return { ...rest, ...overrides }
 }
 
@@ -219,8 +222,8 @@ describe("GET /api/configuracion - ordenFormatoPapel", () => {
     }
   })
 
-  it("column missing: its own step, so the newer top step fails first, then exactly this step fails and the next is its select minus ONLY the column", async () => {
-    const { calls } = fakeOrganizations(rowWithoutColumn(), [TOMAN, COLUMN])
+  it("column missing: its own step, so the two newer steps fail first, then exactly this step fails and the next is its select minus ONLY the column", async () => {
+    const { calls } = fakeOrganizations(rowWithoutColumn(), [VEN, TOMAN, COLUMN])
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -228,22 +231,26 @@ describe("GET /api/configuracion - ordenFormatoPapel", () => {
     expect(body.ordenFormatoPapel).toBe("A4") // reads A4 without the column
     expectOtherSettingsSurvived(body)
 
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(4)
     expect(calls[0].errorCode).toBe("42703")
-    expect(calls[0].columns).toContain(TOMAN) // the newer top step
+    expect(calls[0].columns).toContain(VEN) // the newest top step (405)
     expect(calls[1].errorCode).toBe("42703")
-    expect(calls[1].columns).toContain(COLUMN)
-    expect(calls[1].columns).not.toContain(TOMAN)
-    expect(calls[1].columns).toContain(POS_COLUMN) // this step stacks on the pos_agrupa_variantes step
-    expect(calls[2].ok).toBe(true)
-    expect(calls[2].columns).not.toContain(COLUMN)
-    expect(calls[2].columns).toContain(POS_COLUMN)
-    expect(calls[0].columns).toEqual([...calls[1].columns, TOMAN])
-    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
+    expect(calls[1].columns).toContain(TOMAN) // the step under it (374)
+    expect(calls[1].columns).not.toContain(VEN)
+    expect(calls[2].errorCode).toBe("42703")
+    expect(calls[2].columns).toContain(COLUMN)
+    expect(calls[2].columns).not.toContain(TOMAN)
+    expect(calls[2].columns).toContain(POS_COLUMN) // this step stacks on the pos_agrupa_variantes step
+    expect(calls[3].ok).toBe(true)
+    expect(calls[3].columns).not.toContain(COLUMN)
+    expect(calls[3].columns).toContain(POS_COLUMN)
+    expect(calls[0].columns).toEqual([...calls[1].columns, VEN])
+    expect(calls[1].columns).toEqual([...calls[2].columns, TOMAN])
+    expect(calls[2].columns).toEqual([...calls[3].columns, COLUMN])
   })
 
   it("this column and the one under it both missing: the chain continues one step at a time", async () => {
-    const { calls } = fakeOrganizations(rowWithoutColumn({ [POS_COLUMN]: undefined }), [TOMAN, COLUMN, POS_COLUMN])
+    const { calls } = fakeOrganizations(rowWithoutColumn({ [POS_COLUMN]: undefined }), [VEN, TOMAN, COLUMN, POS_COLUMN])
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -253,16 +260,16 @@ describe("GET /api/configuracion - ordenFormatoPapel", () => {
     expect(body.terminologiaOverrides).toEqual({ orden: "Trabajo" })
     expect(body.vendedoresVenIngresos).toBe(false)
 
-    expect(calls).toHaveLength(4) // the newer top step, then this one, the one under it, the one that works
-    expect(calls[2].columns).not.toContain(COLUMN)
-    expect(calls[2].columns).toContain(POS_COLUMN)
+    expect(calls).toHaveLength(5) // the two newer steps, then this one, the one under it, the one that works
     expect(calls[3].columns).not.toContain(COLUMN)
-    expect(calls[3].columns).not.toContain(POS_COLUMN)
-    expect(calls[3].columns).toContain("vendedores_ven_ingresos")
+    expect(calls[3].columns).toContain(POS_COLUMN)
+    expect(calls[4].columns).not.toContain(COLUMN)
+    expect(calls[4].columns).not.toContain(POS_COLUMN)
+    expect(calls[4].columns).toContain("vendedores_ven_ingresos")
   })
 
   it("an older database that also misses a legacy column bottoms out at the minimal select without the new column", async () => {
-    const { calls } = fakeOrganizations(rowWithoutColumn(), [TOMAN, COLUMN, "comprobante_terminos"])
+    const { calls } = fakeOrganizations(rowWithoutColumn(), [VEN, TOMAN, COLUMN, "comprobante_terminos"])
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -271,7 +278,7 @@ describe("GET /api/configuracion - ordenFormatoPapel", () => {
     const last = calls.at(-1)!
     expect(last.ok).toBe(true)
     expect(last.columns).not.toContain(COLUMN)
-    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(2) // only the two top steps carry it (the newer one stacks on this one)
+    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(3) // only the three top steps carry it (the two newer ones stack on this one)
   })
 })
 
@@ -288,18 +295,18 @@ describe("PUT /api/configuracion, no-op branch - ordenFormatoPapel", () => {
     expect(calls[0].update).toBeUndefined()
   })
 
-  it("column missing: three attempts (the newer top step, this one, the rest), the last without the column, nothing written, other settings intact", async () => {
-    const { calls } = fakeOrganizations(rowWithoutColumn(), [TOMAN, COLUMN])
+  it("column missing: four attempts (the two newer steps, this one, the rest), the last without the column, nothing written, other settings intact", async () => {
+    const { calls } = fakeOrganizations(rowWithoutColumn(), [VEN, TOMAN, COLUMN])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({}))) as Response)
 
     expect(status).toBe(200)
     expect(body.ordenFormatoPapel).toBe("A4")
     expectOtherSettingsSurvived(body)
-    expect(calls).toHaveLength(3)
-    expect(calls[2].ok).toBe(true)
-    expect(calls[2].columns).not.toContain(COLUMN)
-    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
+    expect(calls).toHaveLength(4)
+    expect(calls[3].ok).toBe(true)
+    expect(calls[3].columns).not.toContain(COLUMN)
+    expect(calls[2].columns).toEqual([...calls[3].columns, COLUMN])
     expect(calls.every((c) => c.update === undefined)).toBe(true)
   })
 })
@@ -356,7 +363,7 @@ describe("PUT /api/configuracion, write - ordenFormatoPapel", () => {
   it("column missing: the retry drops ONLY the key from payload and select; every other setting is saved and returned", async () => {
     const { calls, store } = fakeOrganizations(
       rowWithoutColumn({ iva_regimen: "EXENTO", terminologia: {}, cuit: null, vendedores_ven_ingresos: true }),
-      [TOMAN, COLUMN],
+      [VEN, TOMAN, COLUMN],
     )
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
@@ -382,24 +389,28 @@ describe("PUT /api/configuracion, write - ordenFormatoPapel", () => {
     expect(store).not.toHaveProperty(COLUMN)
     expect(store.iva_regimen).toBe("ADITIVO")
 
-    // The newer top step fails first (the body carries no key for it, so the payload is unchanged),
+    // The two newer steps fail first (the body carries no key for them, so the payload is unchanged),
     // then this step fails with PGRST204 on the payload, then the one that drops ONLY the key works.
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(4)
     expect(calls[0].errorCode).toBe("PGRST204")
-    expect(calls[0].columns).toContain(TOMAN)
+    expect(calls[0].columns).toContain(VEN)
     expect(calls[1].errorCode).toBe("PGRST204")
-    expect(calls[1].update).toHaveProperty(COLUMN, "A6")
+    expect(calls[1].columns).toContain(TOMAN)
+    expect(calls[1].columns).not.toContain(VEN)
     expect(calls[1].update).toEqual(calls[0].update)
-    expect(calls[1].columns).toContain(COLUMN)
-    expect(calls[1].columns).not.toContain(TOMAN)
-    expect(calls[2].ok).toBe(true)
-    expect(calls[2].update).toEqual(without(calls[1].update, COLUMN))
-    expect(calls[2].columns).not.toContain(COLUMN)
-    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
+    expect(calls[2].errorCode).toBe("PGRST204")
+    expect(calls[2].update).toHaveProperty(COLUMN, "A6")
+    expect(calls[2].update).toEqual(calls[1].update)
+    expect(calls[2].columns).toContain(COLUMN)
+    expect(calls[2].columns).not.toContain(TOMAN)
+    expect(calls[3].ok).toBe(true)
+    expect(calls[3].update).toEqual(without(calls[2].update, COLUMN))
+    expect(calls[3].columns).not.toContain(COLUMN)
+    expect(calls[2].columns).toEqual([...calls[3].columns, COLUMN])
   })
 
   it("column missing and the body does not carry the key: the RETURNING-only 42703 still triggers the retry, same payload", async () => {
-    const { calls, store } = fakeOrganizations(rowWithoutColumn(), [TOMAN, COLUMN])
+    const { calls, store } = fakeOrganizations(rowWithoutColumn(), [VEN, TOMAN, COLUMN])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({ umbralStockBajo: 9 }))) as Response)
 
@@ -407,32 +418,34 @@ describe("PUT /api/configuracion, write - ordenFormatoPapel", () => {
     expect(body.umbralStockBajo).toBe(9)
     expect(store.umbral_stock_bajo).toBe(9)
     expect(body.ordenFormatoPapel).toBe("A4")
-    expect(calls).toHaveLength(3) // the newer top step, this step, the one that works
+    expect(calls).toHaveLength(4) // the two newer steps, this step, the one that works
     expect(calls[0].errorCode).toBe("42703")
     expect(calls[1].errorCode).toBe("42703")
-    expect(calls[2].update).toEqual({ umbral_stock_bajo: 9 })
-    expect(calls[2].columns).not.toContain(COLUMN)
+    expect(calls[2].errorCode).toBe("42703")
+    expect(calls[3].update).toEqual({ umbral_stock_bajo: 9 })
+    expect(calls[3].columns).not.toContain(COLUMN)
   })
 
   it("this column and the one under it both missing: the payload loses exactly those two keys", async () => {
-    const { calls, store } = fakeOrganizations(rowWithoutColumn({ [POS_COLUMN]: undefined, iva_regimen: "EXENTO" }), [TOMAN, COLUMN, POS_COLUMN])
+    const { calls, store } = fakeOrganizations(rowWithoutColumn({ [POS_COLUMN]: undefined, iva_regimen: "EXENTO" }), [VEN, TOMAN, COLUMN, POS_COLUMN])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status } = await parseResponse(
       (await PUT(putRequest({ ordenFormatoPapel: "A6", posAgrupaVariantes: false, ivaRegimen: "ADITIVO" }))) as Response,
     )
 
     expect(status).toBe(200)
-    expect(calls).toHaveLength(4) // the newer top step (same payload), then one step per key dropped
+    expect(calls).toHaveLength(5) // the two newer steps (same payload), then one step per key dropped
     expect(calls[0].update).toEqual({ [COLUMN]: "A6", [POS_COLUMN]: false, iva_regimen: "ADITIVO" })
     expect(calls[1].update).toEqual({ [COLUMN]: "A6", [POS_COLUMN]: false, iva_regimen: "ADITIVO" })
-    expect(calls[2].update).toEqual({ [POS_COLUMN]: false, iva_regimen: "ADITIVO" })
-    expect(calls[3].update).toEqual({ iva_regimen: "ADITIVO" })
-    expect(calls[3].ok).toBe(true)
+    expect(calls[2].update).toEqual({ [COLUMN]: "A6", [POS_COLUMN]: false, iva_regimen: "ADITIVO" })
+    expect(calls[3].update).toEqual({ [POS_COLUMN]: false, iva_regimen: "ADITIVO" })
+    expect(calls[4].update).toEqual({ iva_regimen: "ADITIVO" })
+    expect(calls[4].ok).toBe(true)
     expect(store.iva_regimen).toBe("ADITIVO")
   })
 
   it("an older database also missing a legacy column: no attempt after the first (the minimal select included) carries the key", async () => {
-    const { calls, store } = fakeOrganizations(rowWithoutColumn(), [TOMAN, COLUMN, "comprobante_terminos"])
+    const { calls, store } = fakeOrganizations(rowWithoutColumn(), [VEN, TOMAN, COLUMN, "comprobante_terminos"])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
       (await PUT(putRequest({ ordenFormatoPapel: "A6", umbralStockBajo: 9, ivaRegimen: "ADITIVO" }))) as Response,
@@ -447,10 +460,11 @@ describe("PUT /api/configuracion, write - ordenFormatoPapel", () => {
     expect(last.update).not.toHaveProperty(COLUMN)
     expect(store.umbral_stock_bajo).toBe(9)
     expect(calls[0].update).toHaveProperty(COLUMN, "A6")
-    // The newer top step fails first with the payload untouched (it has no key of its own to drop), so
-    // the second attempt still carries the key; from the third on, none does.
+    // The two newer steps fail first with the payload untouched (they have no key of their own in it),
+    // so the second and third attempts still carry the key; from the fourth on, none does.
     expect(calls[1].update).toHaveProperty(COLUMN, "A6")
-    expect(calls.slice(2).every((c) => !c.update || !(COLUMN in c.update))).toBe(true)
+    expect(calls[2].update).toHaveProperty(COLUMN, "A6")
+    expect(calls.slice(3).every((c) => !c.update || !(COLUMN in c.update))).toBe(true)
   })
 })
 
@@ -491,10 +505,10 @@ describe("GET /api/configuracion/operativa - ordenFormatoPapel", () => {
 })
 
 describe("every query of the new step is scoped to the caller's organization", () => {
-  for (const missing of [[], [TOMAN, COLUMN]] as string[][]) {
+  for (const missing of [[], [VEN, TOMAN, COLUMN]] as string[][]) {
     const scenario = missing.length ? "column missing: the failed attempt AND its retry" : "column present: the single attempt"
     const initial = () => (missing.length ? rowWithoutColumn() : { ...FULL_ROW })
-    const attempts = missing.length ? 3 : 1 // missing: the newer top step, this step, the one that works
+    const attempts = missing.length ? 4 : 1 // missing: the two newer steps, this step, the one that works
 
     it(`GET - ${scenario} filter by id and read org-1, never org-2`, async () => {
       const h = fakeOrganizations(initial(), missing)
@@ -536,7 +550,8 @@ describe("an error that is NOT a missing column is never retried by the new step
     expect(status).toBe(404)
     expect(calls).toHaveLength(1)
     expect(calls[0].columns).toContain(COLUMN)
-    expect(calls[0].columns).toContain(TOMAN) // the first attempt is now the newer top step
+    expect(calls[0].columns).toContain(TOMAN)
+    expect(calls[0].columns).toContain(VEN) // the first attempt is now the newest top step (405)
     expect(calls[0].errorCode).toBe("57014")
   })
 

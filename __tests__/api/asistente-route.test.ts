@@ -249,7 +249,7 @@ describe("POST /api/asistente", () => {
 
     const params = createMessageMock.mock.calls[0][0]
     expect(params.model).toBe("claude-haiku-5-5")
-    expect(params.tools.map((t: any) => t.name)).toEqual(["ver_orden"])
+    expect(params.tools.map((t: any) => t.name)).toEqual(["ver_orden", "buscar_ordenes", "resumen_cliente", "resumen_ordenes"])
     expect(params.system[0].text).toBe("PROMPT DE PRUEBA (estático)")
     const ultimo = params.messages[params.messages.length - 1]
     expect(ultimo.role).toBe("user")
