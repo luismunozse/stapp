@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { venceLaGracia } from "@/lib/subscriptions/sweep-rules"
+import { FREE_PLAN_LIMITS_FALLBACK } from "@/lib/plan-copy"
 
 export type PlanSlug = "free" | "profesional" | string
+
+export type PlanLimitType = "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage" | "sucursales"
 
 export interface SubscriptionInfo {
   id: string
@@ -163,16 +166,16 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
   }
 }
 
-// Límites por defecto del plan FREE (cuando no hay suscripción).
-// Deben coincidir con lo seteado en plans.slug='free' por la última migración
-// (ver supabase/migrations/187_free_plan_v2_loosen.sql).
-const FREE_PLAN_LIMITS: Record<string, number> = {
-  ordenes: 30,
-  tecnicos: 1,
-  vendedores: 1,
-  clientes: 200,
-  storageMb: 100,
-  sucursales: 1,
+// Límites por defecto del plan FREE (cuando no hay suscripción). Salen del
+// mismo objeto que usa la landing como fallback (lib/plan-copy.ts), así lo que
+// se promete y lo que se aplica no pueden divergir.
+const FREE_PLAN_LIMITS: Record<PlanLimitType, number | null> = {
+  ordenes: FREE_PLAN_LIMITS_FALLBACK.ordenes,
+  tecnicos: FREE_PLAN_LIMITS_FALLBACK.tecnicos,
+  vendedores: FREE_PLAN_LIMITS_FALLBACK.vendedores,
+  clientes: FREE_PLAN_LIMITS_FALLBACK.clientes,
+  storage: FREE_PLAN_LIMITS_FALLBACK.storageMb,
+  sucursales: FREE_PLAN_LIMITS_FALLBACK.sucursales,
 }
 
 // COUNT en vivo de sucursales activas de la org. No usamos el contador cacheado
@@ -219,7 +222,7 @@ export type UpgradeAction = "upgrade_free_to_profesional" | "activate_trial" | n
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
-  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage" | "sucursales"
+  limitType: PlanLimitType
 ): Promise<{
   allowed: boolean
   current: number

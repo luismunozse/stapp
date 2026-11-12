@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import type { UpdatePlanInput } from "@/types/superadmin"
+import { invalidatePricesCache } from "@/lib/pricing"
 
 // Schema de validación para actualizar plan
 const updatePlanSchema = z.object({
@@ -151,6 +152,9 @@ export async function PATCH(
         { status: 500 }
       )
     }
+
+    // Landing, /precios y el cobro leen los planes de la Data Cache.
+    invalidatePricesCache()
 
     return NextResponse.json({
       success: true,

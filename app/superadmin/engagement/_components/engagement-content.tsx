@@ -60,6 +60,8 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { CHART_STATUS_COLORS, chartSeriesColor } from "@/lib/chart-colors"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { toast } from "sonner"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
@@ -230,29 +232,6 @@ function npsColor(nps: number): string {
   if (nps >= 30) return "text-green-600 dark:text-green-400"
   if (nps >= 0) return "text-amber-600 dark:text-amber-400"
   return "text-red-600 dark:text-red-400"
-}
-
-// ---------------------------------------------------------------------------
-// Custom chart tooltip
-// ---------------------------------------------------------------------------
-
-function ChartTooltipContent({ active, payload, label }: {
-  active?: boolean
-  payload?: Array<{ value: number; dataKey: string; color: string }>
-  label?: string
-}) {
-  if (!active || !payload || !label) return null
-  return (
-    <div className="rounded-lg border bg-background p-3 shadow-md text-sm">
-      <p className="font-medium mb-1">{formatDateShort(label)}</p>
-      {payload.map((entry) => (
-        <p key={entry.dataKey} className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
-          {entry.dataKey === "avgScore" ? "Score" : "Orgs registradas"}: <span className="font-medium">{entry.value}</span>
-        </p>
-      ))}
-    </div>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -611,7 +590,7 @@ export function EngagementContent() {
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   {/* Zona roja de alerta si score < 20 */}
-                  <ReferenceArea y1={0} y2={Math.min(20, chartYMax)} fill="hsl(0, 80%, 50%)" fillOpacity={0.06} yAxisId="left" />
+                  <ReferenceArea y1={0} y2={Math.min(20, chartYMax)} fill={CHART_STATUS_COLORS.danger} fillOpacity={0.06} yAxisId="left" />
                   <XAxis
                     dataKey="fecha"
                     tickFormatter={formatDateShort}
@@ -634,7 +613,14 @@ export function EngagementContent() {
                     className="fill-muted-foreground"
                     label={{ value: "Orgs", angle: 90, position: "insideRight", style: { fontSize: 11 } }}
                   />
-                  <RechartsTooltip content={<ChartTooltipContent />} />
+                  <RechartsTooltip
+                    content={<ChartTooltipContent />}
+                    labelFormatter={(label: string) => formatDateShort(label)}
+                    formatter={(value: number, name: string) => [
+                      value,
+                      name === "avgScore" ? "Score" : "Orgs registradas",
+                    ]}
+                  />
                   <Legend
                     formatter={(value: string) => value === "avgScore" ? "Score engagement" : "Orgs registradas"}
                     wrapperStyle={{ fontSize: 12 }}
@@ -643,7 +629,7 @@ export function EngagementContent() {
                     yAxisId="left"
                     type="monotone"
                     dataKey="avgScore"
-                    stroke="hsl(0, 80%, 55%)"
+                    stroke={chartSeriesColor(7)}
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     activeDot={{ r: 5 }}
@@ -652,7 +638,7 @@ export function EngagementContent() {
                     yAxisId="right"
                     type="monotone"
                     dataKey="orgsActivas"
-                    stroke="hsl(215, 80%, 55%)"
+                    stroke={chartSeriesColor(0)}
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     activeDot={{ r: 5 }}

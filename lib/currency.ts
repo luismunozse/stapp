@@ -56,3 +56,28 @@ export function formatCurrencyValue(
     maximumFractionDigits: config.decimals,
   }).format(numericAmount)
 }
+
+/**
+ * Monto abreviado para ejes y rótulos de gráficos ("$1,5 M", "1,5 mil €").
+ * Usa el locale de la moneda (igual que formatCurrencyValue) para que un eje
+ * en USD o EUR no salga con signo de peso. Hasta un decimal: el monto exacto
+ * va en el tooltip con formatCurrencyValue.
+ */
+export function formatCompactCurrencyValue(
+  amount: number | string | null | undefined,
+  currencyCode: CurrencyCode = DEFAULT_CURRENCY
+): string {
+  if (amount === null || amount === undefined) return ""
+  const numericAmount = typeof amount === "string" ? Number(amount) : amount
+  if (!Number.isFinite(numericAmount)) return ""
+
+  const config = CURRENCIES[currencyCode] || CURRENCIES[DEFAULT_CURRENCY]
+
+  return new Intl.NumberFormat(config.locale, {
+    notation: "compact",
+    style: "currency",
+    currency: config.code,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(numericAmount)
+}

@@ -16,6 +16,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { useCurrency } from "@/contexts/currency-context"
+import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface RentabilidadData {
   tipoDispositivo: string
@@ -32,6 +36,7 @@ interface RentabilidadData {
 }
 
 export function RentabilidadChart() {
+  const { formatPrice, currency } = useCurrency()
   const { resultado, reintentar } = useReporte<{ data?: RentabilidadData[] }>("/api/reportes/rentabilidad")
 
   if (resultado.estado === "cargando") return <ReporteCargando />
@@ -93,18 +98,14 @@ export function RentabilidadChart() {
           <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="nombre" fontSize={12} />
-            <YAxis fontSize={12} />
-            <Tooltip
-              formatter={(value: number) =>
-                [`$${value.toLocaleString()}`, undefined]
-              }
-            />
+            <YAxis fontSize={12} tickFormatter={(v: number) => formatCompactCurrency(v, currency)} />
+            <Tooltip content={<ChartTooltipContent />} formatter={(value: number) => formatPrice(value)} />
             <Legend />
-            <Bar dataKey="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Ingresos" fill={CHART_CONCEPT_COLORS.ingresos} radius={[4, 4, 0, 0]} />
             {!costosOcultos && (
               <>
-                <Bar dataKey="Costos" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Margen" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Costos" fill={CHART_CONCEPT_COLORS.costos} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Margen" fill={CHART_CONCEPT_COLORS.ganancia} radius={[4, 4, 0, 0]} />
               </>
             )}
           </BarChart>
@@ -113,7 +114,7 @@ export function RentabilidadChart() {
         <div className={`mt-4 grid gap-3 ${costosOcultos ? "grid-cols-1" : "grid-cols-3"}`}>
           <StatCard
             title="Total Ingresos"
-            value={`$${data.reduce((s, d) => s + d.ingresos, 0).toLocaleString()}`}
+            value={formatPrice(data.reduce((s, d) => s + d.ingresos, 0))}
             icon={DollarSign}
             tone="success"
           />
@@ -121,13 +122,13 @@ export function RentabilidadChart() {
             <>
               <StatCard
                 title="Total Costos"
-                value={`$${data.reduce((s, d) => s + (d.costos ?? 0), 0).toLocaleString()}`}
+                value={formatPrice(data.reduce((s, d) => s + (d.costos ?? 0), 0))}
                 icon={TrendingDown}
-                tone="danger"
+                tone="warning"
               />
               <StatCard
                 title="Margen Total"
-                value={`$${data.reduce((s, d) => s + (d.ganancia ?? 0), 0).toLocaleString()}`}
+                value={formatPrice(data.reduce((s, d) => s + (d.ganancia ?? 0), 0))}
                 icon={TrendingUp}
                 tone="info"
               />

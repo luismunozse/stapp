@@ -22,6 +22,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { useCurrency } from "@/contexts/currency-context"
+import { CHART_CONCEPT_COLORS, chartSeriesColor } from "@/lib/chart-colors"
 
 interface VendedorData {
   vendedorId: string
@@ -46,14 +49,6 @@ interface PerformanceData {
     desde: string
     hasta: string
   }
-}
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-  }).format(amount)
 }
 
 const toYMD = (d: Date) => format(d, "yyyy-MM-dd")
@@ -94,6 +89,7 @@ const PRESET_OPTIONS: { key: PresetKey; label: string }[] = [
 ]
 
 export function PerformanceVendedores() {
+  const { formatPrice: formatCurrency } = useCurrency()
   const [data, setData] = useState<PerformanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -283,13 +279,14 @@ export function PerformanceVendedores() {
                   <XAxis type="number" fontSize={12} />
                   <YAxis dataKey="nombre" type="category" width={60} fontSize={12} />
                   <Tooltip
+                    content={<ChartTooltipContent />}
                     formatter={(value: number, name: string) =>
                       name === "Monto" ? formatCurrency(value) : value
                     }
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="monto" name="Monto" fill="#22c55e" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="ventas" name="Cantidad" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="monto" name="Monto" fill={CHART_CONCEPT_COLORS.ingresos} radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="ventas" name="Cantidad" fill={chartSeriesColor(0)} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

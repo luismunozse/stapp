@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 
 const anthropic = new Anthropic({ apiKey: process.env.STAPP_CHATBOT_API_KEY })
 
-const EXTRACT_MODEL = "claude-haiku-4-5"
+const EXTRACT_MODEL = "claude-haiku-5-5"
 
 export interface ExtractedLeadData {
   nombre: string | null
@@ -87,11 +87,11 @@ export async function extractLeadData(messages: ChatTurn[]): Promise<ExtractedLe
   try {
     const response = await anthropic.messages.create({
       model: EXTRACT_MODEL,
-      max_tokens: 500,
-      temperature: 0,
+      // Haiku 5.5: no acepta temperature (400) y el pensamiento cuenta en max_tokens.
+      max_tokens: 1500,
       system: EXTRACTION_SYSTEM,
       messages: [{ role: "user", content: `Conversación:\n${conversation}` }],
-      output_config: { format: { type: "json_schema", schema: extractionSchema } },
+      output_config: { effort: "low", format: { type: "json_schema", schema: extractionSchema } },
     })
 
     const textBlock = response.content.find((b) => b.type === "text")

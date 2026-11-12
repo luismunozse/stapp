@@ -17,6 +17,8 @@ import {
   Legend,
   Tooltip,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
 
 interface ItemInventario {
   id: string
@@ -59,8 +61,6 @@ interface AnalisisData {
   porCategoria: CategoriaResumen[]
   masValiosos: (ItemInventario & { valorEnStock: number | null })[]
 }
-
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
 
 export function AnalisisInventario() {
   const { formatPrice } = useCurrency()
@@ -201,7 +201,6 @@ export function AnalisisInventario() {
                       cy="50%"
                       labelLine={false}
                       outerRadius={80}
-                      fill="#8884d8"
                       dataKey="value"
                       label={({ percent }) =>
                         `${(percent * 100).toFixed(0)}%`
@@ -209,10 +208,10 @@ export function AnalisisInventario() {
                       fontSize={11}
                     >
                       {chartData.map((entry, index) => (
-                        <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${entry.name}`} fill={chartSeriesColor(index)} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatPrice(value)} />
+                    <Tooltip content={<ChartTooltipContent />} formatter={(value: number) => formatPrice(value)} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>

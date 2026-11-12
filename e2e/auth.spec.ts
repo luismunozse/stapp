@@ -56,7 +56,7 @@ test.describe("Auth — sesión real (requiere tenant QA)", () => {
   test("login válido lleva al dashboard correcto", async ({ page }) => {
     await loginViaForm(page)
     await expect(page).toHaveURL(/\/dashboard/)
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Inicio" })).toBeVisible()
   })
 
   test("logout limpia la sesión (rutas protegidas vuelven a redirigir)", async ({ page }) => {

@@ -538,7 +538,7 @@ export default async function DashboardPage() {
 
   return (
     <PageShell
-      title="Dashboard"
+      title="Inicio"
       description={`Bienvenido, ${currentUserName}`}
       actions={isAdmin && esArgentina ? <DolarWidget variant="header" /> : undefined}
     >

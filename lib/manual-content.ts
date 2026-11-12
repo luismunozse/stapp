@@ -700,7 +700,7 @@ export const manualSections: ManualSection[] = [
           "Asigná un número de remito (manual)",
           "Guardá el remito",
         ],
-        tip: "Para facturar ante ARCA activá la facturación electrónica en Configuración > pestaña Facturación (ver \"Facturación electrónica (ARCA)\"). El remito te sigue sirviendo para el control interno, los pagos parciales y la cuenta corriente.",
+        tip: "Para facturar ante ARCA activá la facturación electrónica en Configuración > pestaña IVA y ARCA (ver \"Facturación electrónica (ARCA)\"). El remito te sigue sirviendo para el control interno, los pagos parciales y la cuenta corriente.",
         seeAlso: ["facturacion-electronica"],
       },
       {
@@ -730,7 +730,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Requisitos y activación",
-        body: "La factura electrónica está disponible para talleres de Argentina. Se activa en Configuración > pestaña Facturación, tarjeta \"Facturación electrónica (AFIP/ARCA)\", con la casilla \"Activar facturación electrónica\", que se guarda al tocarla. Las facturas salen a consumidor final: Factura C si sos Monotributo, Factura B si sos Responsable Inscripto. Por ahora se factura desde las ventas, no desde las órdenes.",
+        body: "La factura electrónica está disponible para talleres de Argentina. Se activa en Configuración > pestaña IVA y ARCA, tarjeta \"Facturación electrónica (AFIP/ARCA)\", con la casilla \"Activar facturación electrónica\", que se guarda al tocarla. Las facturas salen a consumidor final: Factura C si sos Monotributo, Factura B si sos Responsable Inscripto. Por ahora se factura desde las ventas, no desde las órdenes.",
       },
       {
         subtitle: "Autorizar a STApp en ARCA (delegación)",
@@ -1076,7 +1076,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Plan y suscripción",
-        body: "En Configuración > Secciones > Facturación y Plan podés ver tu plan actual, los días restantes de prueba, cambiar de plan y gestionar tu método de pago a través de MercadoPago.",
+        body: "En el menú de tu cuenta (tu foto, arriba a la derecha) > Mi plan podés ver tu plan actual, los días restantes de prueba, cambiar de plan y gestionar tu método de pago a través de MercadoPago.",
         seeAlso: ["suscripcion"],
       },
       {
@@ -1271,7 +1271,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Gestión de suscripción",
-        body: "Para gestionar tu suscripción, andá a Configuración > Secciones > Facturación y Plan. Ahí podés ver tu plan actual, cambiar de plan, actualizar el método de pago y ver el historial de pagos.",
+        body: "Para gestionar tu suscripción, abrí el menú de tu cuenta (tu foto, arriba a la derecha) y elegí Mi plan. Ahí podés ver tu plan actual, cambiar de plan, actualizar el método de pago y ver el historial de pagos.",
       },
     ],
   },

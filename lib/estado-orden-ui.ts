@@ -75,6 +75,28 @@ export function getEstadoOrdenUi(estado: string | null | undefined): EstadoOrden
   return { ...FALLBACK, label: estado ?? "", labelCliente: estado ?? "" }
 }
 
+export interface EstadoOrdenChartDatum {
+  estado: EstadoOrden
+  name: string
+  value: number
+  color: string
+}
+
+/**
+ * Porciones del gráfico "Órdenes por estado": orden del flujo, misma etiqueta
+ * y color que la píldora, y solo los estados con al menos una orden.
+ */
+export function ordenesPorEstadoChartData(
+  conteo: Partial<Record<EstadoOrden, number>>
+): EstadoOrdenChartDatum[] {
+  return ESTADOS_ORDEN.filter((estado) => (conteo[estado] ?? 0) > 0).map((estado) => ({
+    estado,
+    name: ESTADO_ORDEN_UI[estado].label,
+    value: conteo[estado] ?? 0,
+    color: ESTADO_ORDEN_UI[estado].chartColor,
+  }))
+}
+
 export function getEstadoOrdenLabel(estado: string | null | undefined): string {
   return getEstadoOrdenUi(estado).label
 }

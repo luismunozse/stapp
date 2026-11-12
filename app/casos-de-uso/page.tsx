@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
 import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
@@ -52,54 +51,47 @@ export default function CasosDeUsoPage() {
                 mirá cómo ordena tus reparaciones, cobros y clientes.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Link href="/registro?plan=profesional">
-                  <Button
-                    size="lg"
-                    className="group h-14 rounded-full px-8 text-base"
-                  >
+                <Button asChild size="lg" className="group h-14 rounded-full px-8 text-base">
+                  <Link href="/registro?plan=profesional">
                     Probar gratis
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                </Link>
-                <Link href="/precios">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-14 rounded-full px-6 text-base"
-                  >
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="h-14 rounded-full px-6 text-base">
+                  <Link href="/precios">
                     Ver precios
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Grid de casos de uso */}
+        {/* Lista de casos de uso: una fila por rubro, sin grilla de tarjetas */}
         <section className="container mx-auto px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-          <div className="mx-auto grid max-w-4xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mx-auto max-w-3xl divide-y rounded-xl border bg-card">
             {useCases.map((useCase) => {
               const Icon = useCase.icon
               return (
-                <Link key={useCase.slug} href={`/casos-de-uso/${useCase.slug}`}>
-                  <Card className="group h-full p-6 transition-all hover:border-primary/30 hover:shadow-lg">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
-                      <Icon className="h-6 w-6 text-primary" />
+                <li key={useCase.slug}>
+                  <Link
+                    href={`/casos-de-uso/${useCase.slug}`}
+                    className="group flex items-center gap-4 p-4 transition-colors hover:bg-muted/50 sm:p-5"
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <h2 className="font-semibold text-foreground">{useCase.title}</h2>
+                      <p className="mt-0.5 text-sm text-muted-foreground">{useCase.cardDescription}</p>
                     </div>
-                    <h2 className="mb-2 text-lg font-semibold text-foreground">
-                      {useCase.title}
-                    </h2>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      {useCase.cardDescription}
-                    </p>
-                    <span className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-all group-hover:gap-2">
-                      Ver más <ArrowRight className="h-4 w-4" />
-                    </span>
-                  </Card>
-                </Link>
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                </li>
               )
             })}
-          </div>
+          </ul>
         </section>
 
         <CtaBand />

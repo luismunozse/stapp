@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   // automática e IVA discriminado y exporta a PDF, pero no tiene integración
   // con AFIP. Esta description es el snippet que se ve en Google, así que la
   // promesa se cumple tal cual está escrita.
-  description: "Software #1 de gestión para talleres de reparación de celulares y servicio técnico. Órdenes de trabajo, clientes, inventario, facturación y notificaciones WhatsApp. Probá 30 días gratis.",
+  description: "Software de gestión para talleres de reparación de celulares y servicio técnico. Órdenes de trabajo, clientes, inventario, facturación y notificaciones WhatsApp. Probá 30 días gratis.",
   keywords: [
     "software servicio técnico",
     "gestión taller reparación",

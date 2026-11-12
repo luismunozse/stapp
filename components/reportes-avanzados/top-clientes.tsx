@@ -18,6 +18,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
+import { chartSeriesColor } from "@/lib/chart-colors"
+import { formatCompactCurrency } from "@/lib/utils"
 
 interface ClienteTop {
   clienteId: string
@@ -43,7 +46,7 @@ interface TopClientesData {
 }
 
 export function TopClientes() {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, currency } = useCurrency()
   const [data, setData] = useState<TopClientesData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -172,16 +175,17 @@ export function TopClientes() {
                     type="number"
                     fontSize={12}
                     tickFormatter={(value) =>
-                      ordenarPor === "monto" ? `$${(value / 1000).toFixed(0)}k` : value.toString()
+                      ordenarPor === "monto" ? formatCompactCurrency(value, currency) : value.toString()
                     }
                   />
                   <YAxis dataKey="nombre" type="category" width={80} fontSize={11} />
                   <Tooltip
+                    content={<ChartTooltipContent />}
                     formatter={(value: number) =>
                       ordenarPor === "monto" ? formatPrice(value) : `${value} órdenes`
                     }
                   />
-                  <Bar dataKey="valor" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="valor" fill={chartSeriesColor(0)} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

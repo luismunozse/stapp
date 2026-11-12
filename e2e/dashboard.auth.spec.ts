@@ -13,7 +13,7 @@ import { settle } from "./helpers/utils"
 test.describe("Dashboard", () => {
   test("carga el dashboard con KPIs y sin errores de consola", async ({ page, consoleWatcher }) => {
     await page.goto(ROUTES.dashboard)
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Inicio" })).toBeVisible()
     // Al menos una card de KPI visible (cualquiera de los roles muestra "Órdenes").
     await expect(page.getByText(/Órdenes/i).first()).toBeVisible()
     await expect(page.getByText(/^Alertas$/).first()).toBeVisible()

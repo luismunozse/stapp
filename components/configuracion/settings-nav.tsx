@@ -3,7 +3,6 @@ import Link from "next/link"
 import {
   ClipboardCheck,
   ChevronRight,
-  CreditCard,
   FileSpreadsheet,
   Percent,
   Smartphone,
@@ -38,7 +37,9 @@ type SettingSection = {
 
 // Agrupado por modelo mental del dueño del taller. Webhooks y API Keys quedan
 // fuera (features de integración para devs, sin clientes activos); sus rutas
-// siguen vivas en /configuracion/webhooks y /configuracion/api-keys.
+// siguen vivas en /configuracion/webhooks y /configuracion/api-keys. La
+// suscripción (/configuracion/billing) tampoco está: es "Mi plan", en el menú
+// de la cuenta.
 const SECTIONS: SettingSection[] = [
   {
     title: "Operación",
@@ -103,14 +104,6 @@ const SECTIONS: SettingSection[] = [
     title: "Finanzas",
     accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     cards: [
-      {
-        href: "/configuracion/billing",
-        icon: CreditCard,
-        label: "Facturación y Plan",
-        labelShort: "Facturación",
-        desc: "Gestioná tu suscripción y pagos",
-        descShort: "Plan y pagos",
-      },
       {
         href: "/configuracion/categorias-gasto",
         icon: Tag,

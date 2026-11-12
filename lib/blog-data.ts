@@ -360,7 +360,7 @@ La inversión varía según tu ubicación:
 - Herramientas básicas: USD 500-1000
 - Stock inicial de repuestos: USD 1000-3000
 - Local o espacio de trabajo: variable
-- Software de gestión: desde USD 14/mes
+- Software de gestión: hay opciones gratuitas para arrancar (STApp tiene un plan Free)
 
 ## 3. Equipamiento esencial
 
@@ -836,8 +836,8 @@ No todos los software de "gestión" entienden las necesidades de un taller de re
 
 STApp fue diseñado desde cero para talleres de reparación en Latinoamérica:
 - Interfaz intuitiva en español
-- Todas las funciones incluidas en un solo plan
-- Precios en pesos argentinos y dólares
+- Un plan Free para empezar y un plan Profesional con todo
+- Precios en pesos argentinos, con pago por MercadoPago
 - Soporte personalizado
 - Actualizaciones semanales basadas en feedback real
 

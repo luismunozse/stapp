@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { ESTADO_ORDEN_UI, ESTADOS_ORDEN, getEstadoOrdenUi, getEstadoOrdenLabel, esEstadoOrden } from "@/lib/estado-orden-ui"
+import {
+  ESTADO_ORDEN_UI,
+  ESTADOS_ORDEN,
+  getEstadoOrdenUi,
+  getEstadoOrdenLabel,
+  esEstadoOrden,
+  ordenesPorEstadoChartData,
+} from "@/lib/estado-orden-ui"
 import { STATUS_TONES, STATUS_TONE_HEX } from "@/lib/status-tone"
 import { ESTADO_LABELS, TRANSICIONES_VALIDAS } from "@/lib/orden-state-machine"
 
@@ -67,6 +74,32 @@ describe("getEstadoOrdenUi", () => {
   it("esEstadoOrden distingue estados válidos", () => {
     expect(esEstadoOrden("REPARADO")).toBe(true)
     expect(esEstadoOrden("toString")).toBe(false)
+  })
+})
+
+describe("ordenesPorEstadoChartData", () => {
+  it("cada porción usa la etiqueta y el color del estado, en el orden del flujo", () => {
+    const data = ordenesPorEstadoChartData({ ENTREGADO: 2, RECIBIDO: 5, SIN_FALLA_DETECTADA: 1, EN_REPARACION: 3 })
+    expect(data.map((d) => d.estado)).toEqual(["RECIBIDO", "EN_REPARACION", "ENTREGADO", "SIN_FALLA_DETECTADA"])
+    for (const d of data) {
+      expect(d.name).toBe(ESTADO_ORDEN_UI[d.estado].label)
+      expect(d.color).toBe(ESTADO_ORDEN_UI[d.estado].chartColor)
+    }
+  })
+
+  it("En reparación es naranja como la píldora (antes cian, el color de Reparado)", () => {
+    const [d] = ordenesPorEstadoChartData({ EN_REPARACION: 1 })
+    expect(ESTADO_ORDEN_UI.EN_REPARACION.tone).toBe("orange")
+    expect(d.color).toBe(ESTADO_ORDEN_UI.EN_REPARACION.chartColor)
+    expect(d.color).not.toBe(ESTADO_ORDEN_UI.REPARADO.chartColor)
+  })
+
+  it("incluye SIN_FALLA_DETECTADA y omite los estados sin órdenes", () => {
+    const data = ordenesPorEstadoChartData({ SIN_FALLA_DETECTADA: 4, CANCELADO: 0 })
+    expect(data).toEqual([
+      { estado: "SIN_FALLA_DETECTADA", name: "Sin falla detectada", value: 4, color: ESTADO_ORDEN_UI.SIN_FALLA_DETECTADA.chartColor },
+    ])
+    expect(ordenesPorEstadoChartData({})).toEqual([])
   })
 })
 

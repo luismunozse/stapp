@@ -76,20 +76,20 @@ export function NavbarLanding() {
             {isChecking ? (
               <div className="w-32 h-9" /> // Placeholder para evitar layout shift
             ) : isLoggedIn ? (
-              <Link href="/dashboard">
-                <Button className="whitespace-nowrap">
+              <Button asChild className="whitespace-nowrap">
+                <Link href="/dashboard">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   Ir al Dashboard
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             ) : (
               <>
-                <Link href="/login">
-                  <Button variant="ghost" className="whitespace-nowrap">Iniciar Sesión</Button>
-                </Link>
-                <Link href="/registro?plan=profesional">
-                  <Button className="whitespace-nowrap rounded-full">Probar gratis</Button>
-                </Link>
+                <Button asChild variant="ghost" className="whitespace-nowrap">
+                  <Link href="/login">Iniciar Sesión</Link>
+                </Button>
+                <Button asChild className="whitespace-nowrap rounded-full">
+                  <Link href="/registro?plan=profesional">Probar gratis</Link>
+                </Button>
               </>
             )}
           </div>
@@ -142,22 +142,22 @@ export function NavbarLanding() {
               })}
               <div className="flex flex-col gap-2 pt-4 border-t">
                 {isChecking ? null : isLoggedIn ? (
-                  <Link href="/dashboard">
-                    <Button className="w-full">
+                  <Button asChild className="w-full">
+                    <Link href="/dashboard">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
                       Ir al Dashboard
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 ) : (
                   <>
-                    <Link href="/login">
-                      <Button variant="outline" className="w-full">
+                    <Button asChild variant="outline" className="w-full">
+                      <Link href="/login">
                         Iniciar Sesión
-                      </Button>
-                    </Link>
-                    <Link href="/registro?plan=profesional">
-                      <Button className="w-full rounded-full">Probar gratis</Button>
-                    </Link>
+                      </Link>
+                    </Button>
+                    <Button asChild className="w-full rounded-full">
+                      <Link href="/registro?plan=profesional">Probar gratis</Link>
+                    </Button>
                   </>
                 )}
               </div>

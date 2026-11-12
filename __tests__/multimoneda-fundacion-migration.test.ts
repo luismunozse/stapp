@@ -61,6 +61,34 @@ describe("migration 365: multimoneda foundation", () => {
     ["pagos_venta", "moneda"], ["pagos_venta", "tipo_cambio"], ["pagos_venta", "vuelto_moneda"],
   ]
 
+  // Catalog and line tables accept USD and EUR; phase 2 tables stay USD-only.
+  const FOREIGN: Array<[string, string]> = [
+    ["inventario", "moneda"], ["servicios", "moneda"],
+    ["items_venta", "moneda_origen"], ["servicios_orden", "moneda_origen"],
+    ["repuestos_orden", "moneda_origen"], ["items_cotizacion", "moneda_origen"],
+  ]
+  const USD_ONLY: Array<[string, string]> = [
+    ["movimientos_caja", "moneda"], ["pagos_venta", "moneda"], ["pagos_venta", "vuelto_moneda"],
+  ]
+
+  it.each(FOREIGN)("%s.%s accepts USD and EUR", (table, col) => {
+    const call = new RegExp(`add_check_nv\\('${table}',\\s*'${table}_${col}_chk',\\s*'${col} IS NULL OR ${col} IN \\(''USD'', ''EUR''\\)'\\)`)
+    expect(CODE).toMatch(call)
+  })
+
+  it.each(USD_ONLY)("%s.%s stays USD-only (phase 2)", (table, col) => {
+    const call = new RegExp(`add_check_nv\\('${table}',\\s*'${table}_${col}_chk',\\s*'${col} IS NULL OR ${col} = ''USD'''\\)`)
+    expect(CODE).toMatch(call)
+  })
+
+  it("organizacion_moneda.moneda_extranjera: USD or EUR, default USD", () => {
+    expect(CODE).toMatch(/moneda_extranjera\s+CHAR\(3\) NOT NULL DEFAULT 'USD' CHECK \(moneda_extranjera IN \('USD', 'EUR'\)\)/)
+  })
+
+  it("header explains the in-place correction", () => {
+    expect(SQL).toMatch(/never applied/i)
+  })
+
   it.each(CHECKS)("%s.%s: named CHECK added NOT VALID, validated apart, dropped in rollback", (table, col) => {
     const name = `${table}_${col}_chk`
     const call = new RegExp(`add_check_nv\\('${table}',\\s*'${name}',\\s*'${col}\\b[^;]*?'\\)\\s*;`)

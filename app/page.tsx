@@ -1,7 +1,4 @@
 import type { Metadata } from "next"
-import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
-import { supabaseAdmin } from "@/lib/supabase"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
 import { Transformation } from "@/components/landing/transformation"
@@ -12,7 +9,6 @@ import { FAQ } from "@/components/landing/faq"
 import { CtaBand } from "@/components/landing/cta-band"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
-import { WhatsAppButton } from "@/components/landing/whatsapp-button"
 import { ReducedMotionProvider } from "@/components/landing/reduced-motion-provider"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
@@ -114,31 +110,12 @@ const faqData = [
   },
 ]
 
+// Sin auth() ni consultas por request: al usuario logueado lo manda a su
+// panel el proxy (proxy.ts, redirectLoggedInFromLanding) antes de llegar acá, y
+// los planes salen de la Data Cache (lib/pricing.ts).
 export default async function Home() {
-  const [session, prices, allPlans] = await Promise.all([
-    auth(),
-    getPremiumPrices(),
-    getAllPlanPrices(),
-  ])
+  const [prices, allPlans] = await Promise.all([getPremiumPrices(), getAllPlanPrices()])
 
-  // Si el usuario est\u00e1 autenticado, redirigir a su subdominio de tenant
-  if (session) {
-    const { data: org } = await supabaseAdmin
-      .from("organizations")
-      .select("slug")
-      .eq("id", session.user.organizationId)
-      .single()
-
-    if (org?.slug) {
-      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-      const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
-      redirect(`${protocol}://${org.slug}.${rootDomain}/dashboard`)
-    }
-
-    // Fallback: si no se encuentra el slug, mostrar landing
-  }
-
-  // Mostrar landing page para usuarios no autenticados
   return (
     <>
       <FAQPageJsonLd faqs={faqData} />
@@ -158,7 +135,8 @@ export default async function Home() {
           <FAQ faqs={faqData} />
           <CtaBand />
           <Footer />
-          <WhatsAppButton />
+          {/* Un solo botón flotante: Santi responde al instante y su panel
+              tiene el atajo a WhatsApp con una persona. */}
           <ChatbotButton />
         </ReducedMotionProvider>
       </main>

@@ -153,8 +153,8 @@ function BillingContent() {
 
   return (
     <PageShell
-      title="Facturación"
-      description="Gestiona tu suscripción y pagos"
+      title="Mi plan"
+      description="Tu suscripción a STApp y sus pagos"
       backHref="/configuracion"
       backLabel="Volver a configuración"
     >
