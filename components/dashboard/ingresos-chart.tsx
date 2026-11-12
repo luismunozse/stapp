@@ -43,7 +43,7 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Ingresos Últimos 7 Días</CardTitle>
+          <CardTitle className="text-base">Ingresos de los últimos 7 días</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
@@ -57,7 +57,7 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
   return (
     <Card>
       <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
-        <CardTitle className="text-sm sm:text-base">Ingresos Últimos 7 Días</CardTitle>
+        <CardTitle className="text-sm sm:text-base">Ingresos de los últimos 7 días</CardTitle>
         <CardDescription className="text-xs sm:text-sm">
           Total: <span className="font-semibold text-foreground">{formatPrice(totalPeriodo)}</span>
         </CardDescription>

@@ -36,7 +36,7 @@ export function OrdenesRecientes({ ordenes }: OrdenesRecientesProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Órdenes Recientes</CardTitle>
+          <CardTitle className="text-base">Órdenes recientes</CardTitle>
           <CardDescription>Últimas órdenes de servicio</CardDescription>
         </CardHeader>
         <CardContent>
@@ -53,7 +53,7 @@ export function OrdenesRecientes({ ordenes }: OrdenesRecientesProps) {
       <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-sm sm:text-base">Órdenes Recientes</CardTitle>
+            <CardTitle className="text-sm sm:text-base">Órdenes recientes</CardTitle>
             <CardDescription className="text-xs sm:text-sm">Últimas órdenes de servicio</CardDescription>
           </div>
           <Link
