@@ -54,6 +54,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
 import { PlanBadge } from "@/components/billing/plan-badge"
+import { AsistenteNavButton } from "@/components/asistente/asistente-nav-button"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -514,6 +515,7 @@ export function Navbar() {
         "px-2 py-1"
       )}>
         <PlanBadge />
+        <AsistenteNavButton variant="pill" />
         <GlobalSearch />
         <DeadlineCalendar />
         <SucursalSwitcher />
@@ -573,6 +575,7 @@ export function Navbar() {
             <BusinessLogo size="sm" showText={true} textClassName="text-base truncate" />
           </Link>
           <div className="flex items-center gap-1 flex-shrink-0">
+            <AsistenteNavButton variant="icon" />
             <GlobalSearch />
             <NotificationBell />
             <DeadlineCalendar />
