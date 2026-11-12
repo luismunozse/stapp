@@ -16,7 +16,7 @@ export function OrgPaymentsTab({ payments }: OrgPaymentsTabProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Receipt className="h-5 w-5" />
-          Historial de Pagos
+          Historial de pagos
         </CardTitle>
         <CardDescription>
           Últimos {payments.length} pagos de la organización

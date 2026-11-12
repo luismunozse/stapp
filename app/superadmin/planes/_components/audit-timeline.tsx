@@ -96,12 +96,12 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
     const names: Record<string, string> = {
       nombre: "Nombre",
       descripcion: "Descripción",
-      precio_mensual: "Precio Mensual",
-      precio_anual: "Precio Anual",
-      limite_ordenes: "Límite Órdenes",
-      limite_tecnicos: "Límite Técnicos",
-      limite_clientes: "Límite Clientes",
-      limite_storage_mb: "Límite Storage",
+      precio_mensual: "Precio mensual",
+      precio_anual: "Precio anual",
+      limite_ordenes: "Límite de órdenes",
+      limite_tecnicos: "Límite de técnicos",
+      limite_clientes: "Límite de clientes",
+      limite_storage_mb: "Límite de almacenamiento",
       features: "Características",
       activo: "Estado",
     }

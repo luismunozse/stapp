@@ -452,7 +452,7 @@ export default function SuscripcionesPage() {
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => setRenewModal({ open: true, orgId: sub.organization?.id, orgName: sub.organization?.nombre, idempotencyKey: crypto.randomUUID() })}>
-              <RefreshCw className="h-4 w-4 mr-2" /> {sub.status === "ACTIVE" ? "Extender suscripción" : "Activar Premium"}
+              <RefreshCw className="h-4 w-4 mr-2" /> {sub.status === "ACTIVE" ? "Extender suscripción" : "Activar Profesional"}
             </DropdownMenuItem>
             {sub.status !== "CANCELED" && (
               <DropdownMenuItem
@@ -481,7 +481,7 @@ export default function SuscripcionesPage() {
   return (
     <PageShell
       title="Suscripciones"
-      description="Gestiona todas las suscripciones del sistema"
+      description="Gestioná todas las suscripciones del sistema"
       icon={CreditCard}
       meta={<LastUpdated formattedLastUpdated={formattedLastUpdated} onRefresh={fetchSubscriptions} loading={loading} />}
       actions={
@@ -509,7 +509,7 @@ export default function SuscripcionesPage() {
               <Clock className="h-4 w-4 mr-1" /> Extender trials
             </Button>
             <Button size="sm" variant="outline" onClick={() => setBulkModal({ open: true, action: "activate" })}>
-              <Zap className="h-4 w-4 mr-1" /> Activar Premium
+              <Zap className="h-4 w-4 mr-1" /> Activar Profesional
             </Button>
             <Button size="sm" variant="outline" className="text-red-600" onClick={() => setBulkModal({ open: true, action: "cancel" })}>
               <XCircle className="h-4 w-4 mr-1" /> Cancelar
@@ -547,7 +547,7 @@ export default function SuscripcionesPage() {
               <SelectContent>
                 <SelectItem value="all">Todos los planes</SelectItem>
                 <SelectItem value="free">Free</SelectItem>
-                <SelectItem value="premium">Premium</SelectItem>
+                <SelectItem value="premium">Profesional</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
@@ -599,7 +599,7 @@ export default function SuscripcionesPage() {
             </div>
             {cancelImmediate && (
               <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 text-sm">
-                La organización perderá acceso Premium inmediatamente.
+                La organización va a perder el acceso al plan Profesional de inmediato.
               </div>
             )}
             <div className="flex gap-3 justify-end">
@@ -644,7 +644,7 @@ export default function SuscripcionesPage() {
       <Dialog open={renewModal.open} onOpenChange={(open) => setRenewModal((p) => ({ ...p, open }))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Activar / Renovar Premium</DialogTitle>
+            <DialogTitle>Activar o renovar Profesional</DialogTitle>
             <DialogDescription>{renewModal.orgName}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -766,7 +766,7 @@ export default function SuscripcionesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Acción masiva: {bulkModal.action === "extend_trial" ? "Extender trials" : bulkModal.action === "activate" ? "Activar Premium" : "Cancelar"}
+              Acción masiva: {bulkModal.action === "extend_trial" ? "Extender trials" : bulkModal.action === "activate" ? "Activar Profesional" : "Cancelar"}
             </DialogTitle>
             <DialogDescription>{selectedIds.size} organizaciones seleccionadas</DialogDescription>
           </DialogHeader>

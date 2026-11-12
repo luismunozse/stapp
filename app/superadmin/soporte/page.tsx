@@ -7,7 +7,7 @@ export default function SuperadminSoportePage() {
   return (
     <PageShell
       title="Soporte"
-      description="Gestiona los tickets de soporte de todas las organizaciones"
+      description="Gestioná los tickets de soporte de todas las organizaciones"
     >
       <TicketsListSuperadmin />
     </PageShell>

@@ -36,7 +36,7 @@ export function FeaturesEditor({ features, onChange, disabled }: FeaturesEditorP
 
   return (
     <div className="space-y-3">
-      <Label>Características del Plan</Label>
+      <Label>Características del plan</Label>
 
       {/* Lista de features */}
       <div className="space-y-2">

@@ -367,14 +367,14 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
           <CardTitle className="text-sm">Conversacion</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4" style={{ maxHeight: "500px" }}>
-          {/* Descripcion original del ticket como primer mensaje */}
+          {/* Descripción original del ticket como primer mensaje */}
           {ticket.descripcion && (
             <div className="flex justify-start">
               <div className="max-w-[80%]">
                 <div className="flex items-center gap-1.5 mb-1">
                   <FileText className="h-3 w-3 text-muted-foreground" />
                   <span className="text-xs font-medium text-muted-foreground">
-                    Descripcion original
+                    Descripción original
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {timeAgo(ticket.createdAt)}
