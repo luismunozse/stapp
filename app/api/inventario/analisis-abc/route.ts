@@ -81,17 +81,20 @@ export async function GET(request: Request) {
 
     // La función SQL calcula capital y margen con el precio crudo. Los ítems en divisa se
     // recalculan en local; sin equivalente (sin cotización / otra divisa) se excluyen y se cuentan.
-    const ids = rowsRpc.map((r) => r.inventarioId)
+    // Se piden solo los ítems en divisa de la org (no la lista de ids en la URL, que con
+    // inventarios grandes excede el largo de la query); los ausentes del RPC se ignoran y los
+    // del RPC que no aparecen acá son locales.
+    const idsRpc = new Set(rowsRpc.map((r) => r.inventarioId))
     const monedaPorId = new Map<string, { moneda: MonedaCatalogo; pc: number | null; pv: number | null }>()
-    if (ids.length > 0) {
+    if (idsRpc.size > 0) {
       const { data: precios, error: preciosErr } = await supabaseAdmin
         .from("inventario")
         .select("id, moneda, precio_compra, precio_venta")
         .eq("organization_id", organizationId!)
-        .in("id", ids)
+        .not("moneda", "is", null)
       if (preciosErr) throw preciosErr
       for (const p of precios || []) {
-        if (p.moneda != null) {
+        if (p.moneda != null && idsRpc.has(p.id)) {
           monedaPorId.set(p.id, {
             moneda: p.moneda as MonedaCatalogo,
             pc: p.precio_compra == null ? null : Number(p.precio_compra),

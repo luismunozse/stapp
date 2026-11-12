@@ -271,6 +271,24 @@ describe("GET /api/inventario/analisis-abc", () => {
     expect(body.totales.capitalInmovilizado).toBe(500)
   })
 
+  it("pide solo los ítems en divisa de la org, sin la lista de ids en la URL", async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: [rpcRow("b"), rpcRow("a")], error: null } as any)
+    // "z" está en divisa pero no salió del RPC: se ignora
+    const inv = createChainMock([
+      { id: "b", moneda: "USD", precio_compra: 10, precio_venta: 20 },
+      { id: "z", moneda: "USD", precio_compra: 99, precio_venta: 99 },
+    ])
+    mockSupabaseFrom({ inventario: inv })
+    const { body } = await parseResponse(await getAbc(createGetRequest()))
+    expect(inv.in).not.toHaveBeenCalled()
+    expect(inv.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(inv.not).toHaveBeenCalledWith("moneda", "is", null)
+    expect(body.data).toHaveLength(2)
+    expect(body.data.find((r: any) => r.inventarioId === "b").capitalInmovilizado).toBe(12000)
+    expect(body.data.find((r: any) => r.inventarioId === "a").capitalInmovilizado).toBe(10)
+    expect(body.data.find((r: any) => r.inventarioId === "z")).toBeUndefined()
+  })
+
   it("sin ítems en divisa no resuelve cotización", async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: [rpcRow("a")], error: null } as any)
     mockSupabaseFrom({ inventario: createChainMock([]) })
