@@ -163,9 +163,11 @@ INSERT INTO _r SELECT 20, 'RPC is executable by service_role only', 'false|false
   has_function_privilege('service_role', 'public.registrar_estado_fisico_recepcion(text,text,jsonb,boolean,text)', 'EXECUTE')::TEXT;
 
 -- 21: user deletion (ON DELETE SET NULL on created_by) must not trip the immutability trigger.
-INSERT INTO users (id, email, password, nombre, rol, organization_id)
-  SELECT 'probe408-user', 'probe408@example.invalid', 'x', 'Probe 408', 'TECNICO', id
-    FROM organizations WHERE slug = 'probe-408-org';
+-- 241: non-admin users need a sucursal_id, so take the scratch org's principal sucursal.
+INSERT INTO users (id, email, password, nombre, rol, organization_id, sucursal_id)
+  SELECT 'probe408-user', 'probe408@example.invalid', 'x', 'Probe 408', 'TECNICO', o.id,
+         (SELECT s.id FROM sucursales s WHERE s.organization_id = o.id AND s.principal LIMIT 1)
+    FROM organizations o WHERE o.slug = 'probe-408-org';
 SELECT public.registrar_estado_fisico_recepcion(
   (SELECT id FROM _o WHERE k = 'g'), (SELECT id FROM organizations WHERE slug = 'probe-408-org'),
   '[{"diagrama":"celular@1","vista":"frente","x":0.1,"y":0.2,"tipo":"rayon"}]'::jsonb, false, 'probe408-user');
