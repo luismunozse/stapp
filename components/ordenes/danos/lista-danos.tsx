@@ -12,11 +12,13 @@ interface Props {
   onBorrar?: (id: string) => void
   puedeBorrar?: (p: PinVista) => boolean
   mostrarAutor?: boolean
+  /** Leyenda para los pins de diagnóstico (p. ej. en la vista pública). */
+  etiquetaDiagnostico?: string
   resaltado?: number | null
   onSeleccionar?: (numero: number) => void
 }
 
-export function ListaDanos({ pins, onQuitar, onBorrar, puedeBorrar, mostrarAutor, resaltado, onSeleccionar }: Props) {
+export function ListaDanos({ pins, onQuitar, onBorrar, puedeBorrar, mostrarAutor, etiquetaDiagnostico, resaltado, onSeleccionar }: Props) {
   if (pins.length === 0) return null
 
   return (
@@ -48,6 +50,9 @@ export function ListaDanos({ pins, onQuitar, onBorrar, puedeBorrar, mostrarAutor
                     <Lock className="h-3 w-3" aria-hidden="true" data-testid="icono-candado" />
                     Firmado por el cliente
                   </span>
+                )}
+                {!recepcion && etiquetaDiagnostico && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{etiquetaDiagnostico}</span>
                 )}
                 {mostrarAutor && (p.createdByNombre || p.createdAt) && (
                   <span className="mt-0.5 block text-xs text-muted-foreground">
