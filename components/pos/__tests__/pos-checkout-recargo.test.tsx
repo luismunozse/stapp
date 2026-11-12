@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -52,7 +53,7 @@ function stubFetch(recargos: "ok" | "falla" | "falla-una-vez" = "ok") {
 const CLIENTE = { id: "c1", nombre: "Ana", telefono: "" }
 
 async function confirmarYLeerPayload(calls: Array<{ url: string; body: any }>) {
-  fireEvent.click(screen.getByRole("button", { name: /confirmar venta/i }))
+  fireEvent.click(await botonConfirmarListo())
   await waitFor(() => expect(calls.some((c) => c.url === "/api/ventas")).toBe(true))
   return calls.find((c) => c.url === "/api/ventas")!.body
 }

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -48,7 +49,7 @@ describe("PosCheckoutDialog — cobro de mostrador hacia onComplete", () => {
     )
     const input = await screen.findByPlaceholderText(/monto recibido/i)
     fireEvent.change(input, { target: { value: "2000" } })
-    fireEvent.click(await screen.findByRole("button", { name: /confirmar venta/i }))
+    fireEvent.click(await botonConfirmarListo())
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     expect(onComplete).toHaveBeenCalledWith(VENTA, { montoRecibido: 2000, vuelto: 500 })
@@ -59,7 +60,7 @@ describe("PosCheckoutDialog — cobro de mostrador hacia onComplete", () => {
     render(
       <PosCheckoutDialog open onClose={() => {}} items={[buildItem()]} cliente={CLIENTE as any} onComplete={onComplete} />
     )
-    fireEvent.click(await screen.findByRole("button", { name: /confirmar venta/i }))
+    fireEvent.click(await botonConfirmarListo())
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     expect(onComplete).toHaveBeenCalledWith(VENTA, undefined)
@@ -76,7 +77,7 @@ describe("PosCheckoutDialog — cobro de mostrador hacia onComplete", () => {
     fireEvent.click(await screen.findByRole("button", { name: /fiar \/ cuenta corriente/i }))
     const input = await screen.findByPlaceholderText(/monto recibido/i)
     fireEvent.change(input, { target: { value: "2000" } })
-    fireEvent.click(screen.getByRole("button", { name: /confirmar venta/i }))
+    fireEvent.click(await botonConfirmarListo())
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     expect(onComplete).toHaveBeenCalledWith(VENTA, undefined)

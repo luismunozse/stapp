@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -71,7 +72,7 @@ describe("PosCheckoutDialog — el botón Fiar realmente deja la venta impaga", 
     fireEvent.click(await screen.findByRole("button", { name: /fiar \/ cuenta corriente/i }))
     expect(screen.getByText(/venta sin pago/i)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: /confirmar venta/i }))
+    fireEvent.click(await botonConfirmarListo())
 
     await waitFor(() => {
       expect(calls.some((c) => c.url === "/api/ventas")).toBe(true)

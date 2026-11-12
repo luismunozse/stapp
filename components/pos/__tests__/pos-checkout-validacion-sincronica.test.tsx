@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { PosCheckoutDialog } from "@/components/pos/pos-checkout-dialog"
 import type { PosCartItem } from "@/components/pos/pos-types"
+import { botonConfirmarListo } from "./checkout-test-utils"
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -66,7 +67,7 @@ describe("PosCheckoutDialog — una validación puramente sincrónica no finge e
       />
     )
 
-    const boton = await screen.findByRole("button", { name: /confirmar venta/i })
+    const boton = await botonConfirmarListo()
     fireEvent.click(boton)
 
     await waitFor(() => expect(showError).toHaveBeenCalledTimes(1))
@@ -91,7 +92,7 @@ describe("PosCheckoutDialog — una validación puramente sincrónica no finge e
       />
     )
 
-    const boton = await screen.findByRole("button", { name: /confirmar venta/i })
+    const boton = await botonConfirmarListo()
     fireEvent.click(boton)
     await waitFor(() => expect(showError).toHaveBeenCalledTimes(1))
 
