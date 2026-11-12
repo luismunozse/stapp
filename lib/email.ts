@@ -193,7 +193,7 @@ export async function sendVerificationEmail({
     </p>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
-      Para completar tu registro y acceder a tu cuenta, verifica tu correo electrónico.
+      Para completar tu registro y acceder a tu cuenta, verificá tu correo electrónico.
     </p>
 
     ${getButton(verifyUrl, "Verificar mi cuenta")}
@@ -213,7 +213,7 @@ export async function sendVerificationEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
-      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+      ¿El botón no funciona? Copiá y pegá este enlace en tu navegador:
     </p>
     <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
       ${verifyUrl}
@@ -222,15 +222,15 @@ export async function sendVerificationEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-      Si no creaste esta cuenta, puedes ignorar este correo de forma segura.
+      Si no creaste esta cuenta, podés ignorar este correo de forma segura.
     </p>
   `
 
   return sendEmail({
     to: email,
-    subject: "Verifica tu cuenta - STApp",
+    subject: "Verificá tu cuenta - STApp",
     html: getBaseTemplate({
-      preheader: `${nombreSeguro}, verifica tu email para activar tu cuenta de STApp`,
+      preheader: `${nombreSeguro}, verificá tu email para activar tu cuenta de STApp`,
       content,
       rootDomain,
       footerText: "Este correo fue enviado porque alguien se registró con esta dirección de email.",
@@ -292,7 +292,7 @@ export async function sendAccountActivatedEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
-      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+      ¿El botón no funciona? Copiá y pegá este enlace en tu navegador:
     </p>
     <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
       ${loginUrl}
@@ -375,7 +375,7 @@ export async function sendPasswordResetEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
-      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+      ¿El botón no funciona? Copiá y pegá este enlace en tu navegador:
     </p>
     <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
       ${resetUrl}
@@ -388,7 +388,7 @@ export async function sendPasswordResetEmail({
         <tr>
           <td align="center">
             <p class="text-muted" style="color: #92400e; font-size: 13px; margin: 0;">
-              🔒 <strong>Consejo de seguridad:</strong> Si no solicitaste este cambio, ignora este correo. Tu contraseña actual seguirá siendo válida.
+              🔒 <strong>Consejo de seguridad:</strong> Si no solicitaste este cambio, ignorá este correo. Tu contraseña actual seguirá siendo válida.
             </p>
           </td>
         </tr>
@@ -400,7 +400,7 @@ export async function sendPasswordResetEmail({
     to: email,
     subject: "Restablecer contraseña - STApp",
     html: getBaseTemplate({
-      preheader: `${nombre}, usa este enlace para restablecer tu contraseña`,
+      preheader: `${nombre}, usá este enlace para restablecer tu contraseña`,
       headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
       content,
       rootDomain,
@@ -488,7 +488,7 @@ export async function sendSupportReplyEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
-      Puedes responder directamente desde la plataforma haciendo clic en el botón de arriba.
+      Podés responder directamente desde la plataforma con el botón de arriba.
     </p>
   `
 
@@ -500,7 +500,7 @@ export async function sendSupportReplyEmail({
       headerGradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
       content,
       rootDomain,
-      footerText: "Recibiste este correo porque tienes un ticket de soporte abierto en STApp.",
+      footerText: "Recibiste este correo porque tenés un ticket de soporte abierto en STApp.",
     }),
   })
 }
@@ -554,7 +554,7 @@ export async function sendCotizacionEmail({
       <tr>
         <td align="center">
           <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
-            Nueva Cotización
+            Nuevo presupuesto
           </h1>
         </td>
       </tr>
@@ -565,7 +565,7 @@ export async function sendCotizacionEmail({
     </p>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
-      Le enviamos la cotización correspondiente a su orden de servicio.
+      Te enviamos el presupuesto correspondiente a tu orden de servicio.
     </p>
 
     ${getInfoCard(`
@@ -573,7 +573,7 @@ export async function sendCotizacionEmail({
         <tr>
           <td align="center" style="padding-bottom: 16px;">
             <p class="text-muted" style="color: #6b7280; font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">
-              Total de la cotización
+              Total del presupuesto
             </p>
           </td>
         </tr>
@@ -590,7 +590,7 @@ export async function sendCotizacionEmail({
               <tr>
                 <td style="padding: 8px 16px; background: #eff6ff; border-radius: 6px; margin-right: 8px;">
                   <p class="text-body" style="color: #1d4ed8; font-size: 13px; margin: 0;">
-                    <strong>Cotización:</strong> ${numeroCotizacion}
+                    <strong>Presupuesto:</strong> ${numeroCotizacion}
                   </p>
                 </td>
                 <td style="width: 8px;"></td>
@@ -621,17 +621,17 @@ export async function sendCotizacionEmail({
     ${getDivider()}
 
     <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0;">
-      📎 <strong>Adjuntamos el PDF</strong> con el detalle completo de la cotización.
+      📎 <strong>Adjuntamos el PDF</strong> con el detalle completo del presupuesto.
     </p>
 
     <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 12px 0 0 0;">
-      Si desea aceptar esta cotización o tiene alguna consulta, por favor responda a este correo o contáctenos.
+      Si querés aceptar este presupuesto o tenés alguna consulta, respondé a este correo o contactanos.
     </p>
   `
 
   return sendEmail({
     to: email,
-    subject: `Cotización ${numeroCotizacion} - Orden #${numeroOrden}`,
+    subject: `Presupuesto ${numeroCotizacion} - Orden #${numeroOrden}`,
     attachments: [
       {
         content: pdfBuffer.toString("base64"),
@@ -640,10 +640,10 @@ export async function sendCotizacionEmail({
       },
     ],
     html: getBaseTemplate({
-      preheader: `${nombreCliente}, tu cotización ${numeroCotizacion} por ${formatCurrency(total)} está lista`,
+      preheader: `${nombreCliente}, tu presupuesto ${numeroCotizacion} por ${formatCurrency(total)} está listo`,
       content,
       rootDomain,
-      footerText: "Responde a este correo si deseas confirmar la cotización o tienes consultas.",
+      footerText: "Respondé a este correo si querés confirmar el presupuesto o tenés consultas.",
     }),
   })
 }
@@ -709,7 +709,7 @@ export async function sendAdminEmail({
     to,
     subject: `${asunto} - ${nombreOrganizacion}`,
     html: getBaseTemplate({
-      preheader: `${destinatarioHtml}, tienes un mensaje de ${organizacionHtml}`,
+      preheader: `${destinatarioHtml}, tenés un mensaje de ${organizacionHtml}`,
       content,
       rootDomain,
       footerText: `Este correo fue enviado por ${organizacionHtml} a través de STApp.`,
@@ -793,7 +793,7 @@ export async function sendNewLeadNotification({
       </table>
     `)}
 
-    ${getButton(leadsUrl, "Ver lead en el dashboard", "#22c55e")}
+    ${getButton(leadsUrl, "Ver lead en el panel", "#22c55e")}
 
     ${getDivider()}
 
