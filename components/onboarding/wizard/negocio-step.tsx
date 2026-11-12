@@ -170,7 +170,7 @@ export function NegocioStep({
           onBloqueado={onRubroBloqueado}
         />
         {error && (
-          <div role="alert" className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div role="alert" className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-text">
             {error}
           </div>
         )}

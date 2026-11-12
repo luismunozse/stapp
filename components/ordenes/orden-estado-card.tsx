@@ -142,8 +142,8 @@ export function OrdenEstadoCard({
 
         {fechaPrometidaVencida && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/25 text-xs">
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
-            <span className="text-destructive font-medium">
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive-text shrink-0" />
+            <span className="text-destructive-text font-medium">
               Fecha prometida vencida
             </span>
           </div>

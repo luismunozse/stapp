@@ -280,7 +280,7 @@ export function LotesDialog({
                 maxLength={500}
               />
             </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-xs text-destructive-text">{error}</p>}
             {okMsg && <p className="text-xs text-emerald-600">{okMsg}</p>}
             <Button onClick={handleSubmit} disabled={submitting} className="w-full">
               {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}

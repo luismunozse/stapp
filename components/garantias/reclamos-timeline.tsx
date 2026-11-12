@@ -95,7 +95,7 @@ export function ReclamosTimeline({ reclamos, formatDate, puedeDecidir = false, o
                 <Button
                   size="sm"
                   variant="outline"
-                  className="min-h-11 gap-1.5 text-destructive"
+                  className="min-h-11 gap-1.5 text-destructive-text"
                   onClick={() => onDecidir(r, "rechazar")}
                 >
                   <XCircle className="h-4 w-4" aria-hidden="true" />

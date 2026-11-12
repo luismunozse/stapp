@@ -29,7 +29,7 @@ interface EmptyStateProps {
 const VARIANT_CHIP: Record<EmptyStateVariant, string> = {
   default: "bg-accent text-primary ring-primary/10",
   search: "bg-muted text-muted-foreground ring-border",
-  error: "bg-destructive/10 text-destructive ring-destructive/15",
+  error: "bg-destructive/10 text-destructive-text ring-destructive/15",
   success: "bg-success-50 text-success-600 ring-success-200",
 }
 

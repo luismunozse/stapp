@@ -291,7 +291,7 @@ function PracticaReparar({
             className={simbolo.length > 2 ? "pl-14" : "pl-10"}
           />
         </div>
-        <p id="practica-costo-ayuda" className={cn("text-xs", mostrarAyuda ? "text-destructive" : "text-muted-foreground")}>
+        <p id="practica-costo-ayuda" className={cn("text-xs", mostrarAyuda ? "text-destructive-text" : "text-muted-foreground")}>
           {mostrarAyuda ? "Poné un monto mayor a cero." : "Es solo para la práctica: nadie te va a cobrar nada."}
         </p>
       </div>
@@ -357,7 +357,7 @@ function AvisoError({
       ref={ref}
       tabIndex={-1}
       role="alert"
-      className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive outline-none sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-text outline-none sm:flex-row sm:items-center sm:justify-between"
     >
       <p>{mensaje}</p>
       {onReintentar && (

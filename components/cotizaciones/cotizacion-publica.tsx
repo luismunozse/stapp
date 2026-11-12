@@ -315,7 +315,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             {data.fechaVencimiento && (
               <div>
                 <p className="text-muted-foreground">Valida hasta</p>
-                <p className={`font-medium ${isExpired ? "text-destructive" : ""}`}>
+                <p className={`font-medium ${isExpired ? "text-destructive-text" : ""}`}>
                   {formatDate(data.fechaVencimiento)}
                   {isExpired && " (Vencida)"}
                 </p>
@@ -613,7 +613,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                     ? `(${data.descuentoGlobalValor}%)`
                     : ""}
                 </span>
-                <span className="text-destructive">-{fmt(globalDiscountAmount)}</span>
+                <span className="text-destructive-text">-{fmt(globalDiscountAmount)}</span>
               </div>
             )}
             {hasIVA && (
@@ -701,15 +701,15 @@ export function CotizacionPublica({ token }: { token: string }) {
       {data.estado === "RECHAZADA" && (
         <Card className="border-destructive/25 bg-destructive/10">
           <CardContent className="flex items-start gap-3 py-4">
-            <XCircle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+            <XCircle className="h-6 w-6 text-destructive-text flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-destructive">Cotizacion rechazada</p>
+              <p className="font-medium text-destructive-text">Cotizacion rechazada</p>
               {(data as any).motivoRechazo && (
-                <p className="text-sm text-destructive mt-1">
+                <p className="text-sm text-destructive-text mt-1">
                   Motivo: {(data as any).motivoRechazo}
                 </p>
               )}
-              <p className="text-sm text-destructive mt-1">
+              <p className="text-sm text-destructive-text mt-1">
                 Contacte al servicio tecnico si desea una nueva cotizacion.
               </p>
             </div>
@@ -744,7 +744,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             </Button>
             <Button
               variant="outline"
-              className="w-full text-destructive hover:text-destructive/80 border-destructive/25 hover:bg-destructive/10"
+              className="w-full text-destructive-text hover:text-destructive-text/80 border-destructive/25 hover:bg-destructive/10"
               onClick={() => setShowReject(true)}
             >
               <XCircle className="mr-2 h-4 w-4" />
@@ -758,7 +758,7 @@ export function CotizacionPublica({ token }: { token: string }) {
       {showReject && (
         <Card className="border-destructive/25">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-destructive">Rechazar cotizacion</CardTitle>
+            <CardTitle className="text-lg text-destructive-text">Rechazar cotizacion</CardTitle>
             <p className="text-sm text-muted-foreground">
               Indique el motivo del rechazo (opcional).
             </p>
@@ -773,7 +773,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               disabled={rejecting}
             />
             {approveError && (
-              <p className="text-sm text-destructive">{approveError}</p>
+              <p className="text-sm text-destructive-text">{approveError}</p>
             )}
             <div className="flex gap-2">
               <Button
@@ -826,7 +826,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             />
 
             {approveError && (
-              <p className="text-sm text-destructive">{approveError}</p>
+              <p className="text-sm text-destructive-text">{approveError}</p>
             )}
 
             <div className="flex gap-2">

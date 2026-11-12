@@ -100,7 +100,7 @@ export default function SeriesGlobalPage() {
       </Card>
 
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive-text">{error}</p>
       )}
 
       <Card>

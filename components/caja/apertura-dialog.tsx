@@ -79,7 +79,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
               Monto de efectivo con el que se inicia la caja
             </p>
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive-text">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

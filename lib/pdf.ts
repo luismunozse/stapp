@@ -11,9 +11,13 @@ import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
+import { lineasAvances, recortarAvances } from "@/lib/ordenes/avances"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { bloquesTerminosGarantia } from "@/lib/garantias/config"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+
+/** Renglones que puede ocupar la sección de avances en la hoja de entrega A4. */
+const AVANCES_MAX_LINEAS_A4 = 6
 
 /** Corta con "…" para que el texto entre en maxWidth puntos. */
 function truncarAncho(font: PDFFont, text: string, size: number, maxWidth: number): string {
@@ -1040,6 +1044,8 @@ interface OrdenPDFData {
   cobros?: Array<{ fecha: Date; metodo: string; referencia?: string | null; monto: number }> | null
   /** orden_tiempos_estado: primera ocurrencia de cada estado, ordenado por inicio. */
   timeline?: Array<{ estado: string; fecha: Date }> | null
+  /** Avances de la orden marcados "visible para el cliente" (lib/ordenes/avances), del más viejo al más nuevo. Solo salen en la hoja de entrega. */
+  avances?: Array<{ fecha: Date; texto: string }> | null
   /**
    * Hoja de impresion. Sin valor (o cualquier cosa que no sea A5/A6) es A4: el dibujo de
    * siempre, abajo. A5 y A6 usan el layout de una columna de lib/pdf-orden-compact.ts.
@@ -1524,7 +1530,28 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const rowAccFotosEn = rxDrawGridRow([
       { x: rxMargin, width: rxContentW, label: "Accesorios recibidos", lines: accesoriosLinesEn },
     ], ey)
-    ey -= rowAccFotosEn + 8
+    ey -= rowAccFotosEn
+
+    // ---- Avances de la reparación (solo los marcados visibles para el
+    // cliente). Tope de renglones para que la hoja siga entrando en una
+    // página: quedan los más recientes y un renglón avisa cuántos se omiten.
+    const avancesTextoEn = lineasAvances(data.avances, tz)
+    if (avancesTextoEn.length > 0) {
+      const { lineas: avancesLineasEn } = recortarAvances(
+        avancesTextoEn.map(l => rxWrap(l, archivoRegular, 8.5, rxContentW - rxCellPadX * 2)),
+        AVANCES_MAX_LINEAS_A4,
+      )
+      const rowAvancesEn = rxDrawGridRow([
+        {
+          x: rxMargin,
+          width: rxContentW,
+          label: "Avances de la reparación",
+          lines: avancesLineasEn.map(l => ({ text: l, font: archivoRegular, size: 8.5, color: l.startsWith("+") ? MONO.faint : MONO.ink })),
+        },
+      ], ey)
+      ey -= rowAvancesEn
+    }
+    ey -= 8
 
     // ---- Mid split: TRABAJO REALIZADO + totales (58%) | Pagos + Chequeo (42%) ----
     const midGapEn = 8

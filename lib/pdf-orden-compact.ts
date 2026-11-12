@@ -58,6 +58,7 @@ import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import { resolveTerminologia, t } from "@/lib/terminologia"
 import { ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
+import { lineasAvances } from "@/lib/ordenes/avances"
 
 export type CompactPapel = "A5" | "A6"
 
@@ -403,7 +404,10 @@ export async function generateOrdenCompactPDF(
   const accesorios = safe(data.accesorios)
   const metadataCampos = Array.isArray(data.metadataCampos) ? data.metadataCampos : []
   const metadataText = metadataCampos.map((m) => `${m.label}: ${m.valor}`).join(" · ")
-  const diagnostico = safe(data.diagnostico)
+  // The delivery sheet has no room for a section of its own: the progress entries the shop marked
+  // visible to the customer ride along with the diagnosis, so the one-page fit cuts them with it.
+  const avancesTexto = isEntrega ? lineasAvances(data.avances, tz).map(safe).filter(Boolean).join(" · ") : ""
+  const diagnostico = [safe(data.diagnostico), avancesTexto ? `Avances: ${avancesTexto}` : ""].filter(Boolean).join(". ")
   const observaciones = safe(data.observaciones)
 
   const recibidoPor = safe(data.recibidoPorNombre)
@@ -855,7 +859,7 @@ export async function generateOrdenCompactPDF(
 
     const diag = isEntrega ? cap("diagnostico", diagnostico) : ""
     if (diag) {
-      section("Diagnóstico técnico")
+      section(avancesTexto ? "Diagnóstico y avances" : "Diagnóstico técnico")
       para(diag, reg, F.body, MONO.ink)
     }
     const obs = !isEntrega ? cap("observaciones", observaciones) : ""

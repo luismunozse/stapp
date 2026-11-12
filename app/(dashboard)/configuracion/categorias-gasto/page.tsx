@@ -320,7 +320,7 @@ function CategoriaList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(c.id)}
-                    className="text-destructive hover:text-destructive"
+                    className="text-destructive-text hover:text-destructive-text"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

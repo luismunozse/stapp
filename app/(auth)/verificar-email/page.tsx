@@ -148,11 +148,11 @@ function VerifyEmailContent() {
                 </Button>
               </div>
               {resendSuccess && (
-                <p className="text-xs text-success">
+                <p className="text-xs text-success-text">
                   Email enviado. Revisá tu bandeja de entrada y la carpeta de spam.
                 </p>
               )}
-              {resendError && <p className="text-xs text-destructive">{resendError}</p>}
+              {resendError && <p className="text-xs text-destructive-text">{resendError}</p>}
             </div>
 
             <Button onClick={handleGoToLogin} variant="outline" className="w-full h-11">

@@ -235,7 +235,7 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
           </div>
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="text-sm text-destructive-text">{error}</p>
           )}
 
           <div className="flex gap-2 justify-end pt-2">

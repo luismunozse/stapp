@@ -3,6 +3,7 @@ import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
 import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
 
@@ -64,6 +65,8 @@ export async function GET(
     // seguimiento (endpoint /timeline, via orden_eventos). Es lo UNICO del
     // expediente que se agrega a esta copia publica junto con diagnostico y
     // codigoOrden — nada de costos, cliente fiscal, sucursal ni repuestos.
+    // (Más abajo se suman los avances que el taller marcó visibles para el
+    // cliente; los internos nunca salen.)
     const { data: tiemposData } = await supabaseAdmin
       .from("orden_tiempos_estado")
       .select("estado, inicio")
@@ -107,6 +110,9 @@ export async function GET(
       })
       .map((t) => ({ estado: t.estado, fecha: new Date(t.inicio) }))
     const timeline = timelineAll.length > 0 ? timelineAll : null
+
+    // Avances que el taller marcó visibles para el cliente (solo se dibujan en la hoja de entrega).
+    const avances = await cargarAvancesVisibles(orden.id, orden.organization_id)
 
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
@@ -167,6 +173,7 @@ export async function GET(
       codigoOrden: orden.codigo_orden,
       diagnostico: orden.diagnostico,
       timeline,
+      avances,
     }
 
     // Resolver terminología configurable y generar PDF

@@ -10,6 +10,7 @@ import { CurrencyProvider } from "@/contexts/currency-context"
 import { PushNotificationRegistrar } from "@/components/push-notification-registrar"
 import { syncStatusBarToTheme, hideSplashScreen } from "@/lib/capacitor"
 import { Toaster } from "sonner"
+import { MotionConfig } from "framer-motion"
 
 /**
  * Sincroniza el StatusBar nativo con la clase `dark` en <html>.
@@ -45,22 +46,26 @@ function CapacitorThemeSync() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
-      <SessionRefresher>
-        {/* Antes que cualquier consumidor: si el cache del SW quedo de otra
-            sesion, hay que tirarlo antes de que la pantalla lo lea. */}
-        <ApiCacheSessionGuard />
-        <CurrencyProvider>
-          <ConfirmProvider>
-            <ModalProvider>
-              <CapacitorThemeSync />
-              {children}
-              <PushNotificationRegistrar />
-              <Toaster position="top-right" richColors closeButton />
-            </ModalProvider>
-          </ConfirmProvider>
-        </CurrencyProvider>
-      </SessionRefresher>
-    </SessionProvider>
+    // reducedMotion="user": toda animación framer-motion de la app respeta
+    // prefers-reduced-motion (descarta transforms y deja solo opacity).
+    <MotionConfig reducedMotion="user">
+      <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
+        <SessionRefresher>
+          {/* Antes que cualquier consumidor: si el cache del SW quedo de otra
+              sesion, hay que tirarlo antes de que la pantalla lo lea. */}
+          <ApiCacheSessionGuard />
+          <CurrencyProvider>
+            <ConfirmProvider>
+              <ModalProvider>
+                <CapacitorThemeSync />
+                {children}
+                <PushNotificationRegistrar />
+                <Toaster position="top-right" richColors closeButton />
+              </ModalProvider>
+            </ConfirmProvider>
+          </CurrencyProvider>
+        </SessionRefresher>
+      </SessionProvider>
+    </MotionConfig>
   )
 }

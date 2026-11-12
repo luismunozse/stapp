@@ -838,7 +838,7 @@ export default function CotizacionesPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-destructive hover:text-destructive/80"
+                                    className="text-destructive-text hover:text-destructive-text/80"
                                     onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                                     title="Rechazar"
                                   >
@@ -924,7 +924,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-destructive hover:text-destructive"
+                                  className="text-destructive-text hover:text-destructive-text"
                                   onClick={() => handleDelete(cotizacion.id)}
                                   title="Eliminar"
                                 >
@@ -1096,7 +1096,7 @@ export default function CotizacionesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-destructive hover:text-destructive/80"
+                            className="text-destructive-text hover:text-destructive-text/80"
                             onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                           >
                             <XCircle className="mr-2 h-3 w-3" />
@@ -1153,7 +1153,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive-text hover:text-destructive-text"
                           onClick={() => handleDelete(cotizacion.id)}
                         >
                           <Trash2 className="mr-2 h-3 w-3" />

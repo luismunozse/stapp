@@ -763,8 +763,8 @@ export function PosTerminal() {
               size="sm"
               className={cn(
                 "h-8 gap-1.5 text-xs",
-                printer.connected && "text-success",
-                printer.error && "text-destructive"
+                printer.connected && "text-success-text",
+                printer.error && "text-destructive-text"
               )}
               onClick={printer.connected ? printer.disconnect : printer.connect}
               disabled={printer.connecting}

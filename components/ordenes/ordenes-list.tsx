@@ -653,7 +653,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive-text"
                 onClick={(e) => {
                   // DataTable row clicks do not stop propagation: without this the row opens the order.
                   e.stopPropagation()
@@ -681,7 +681,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive-text"
                   onClick={(e) => handleDelete(e, orden)}
                   disabled={deleting === orden.id}
                   aria-label="Eliminar"

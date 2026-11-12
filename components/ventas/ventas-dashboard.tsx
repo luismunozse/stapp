@@ -101,7 +101,7 @@ export function VentasDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Ventas del Mes</span>
-              <Calendar className="h-4 w-4 text-info" />
+              <Calendar className="h-4 w-4 text-info-text" />
             </div>
             <div className="text-xl font-bold">{formatPrice(data.ventasMes.total)}</div>
             <p className="text-xs text-muted-foreground">{data.ventasMes.count} ventas</p>
@@ -127,9 +127,9 @@ export function VentasDashboard() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-muted-foreground">Margen Bruto</span>
-                <TrendingUp className="h-4 w-4 text-success" />
+                <TrendingUp className="h-4 w-4 text-success-text" />
               </div>
-              <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success" : "text-destructive"}`}>
+              <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success-text" : "text-destructive-text"}`}>
                 {data.margenBruto.porcentaje.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
@@ -155,7 +155,7 @@ export function VentasDashboard() {
                       <div key={i} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`text-xs font-bold w-5 text-center ${
-                            i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
+                            i === 0 ? "text-warning-text" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                           }`}>
                             {i + 1}
                           </span>
@@ -185,7 +185,7 @@ export function VentasDashboard() {
                       <div key={i} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`text-xs font-bold w-5 text-center ${
-                            i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
+                            i === 0 ? "text-warning-text" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                           }`}>
                             {i + 1}
                           </span>
@@ -240,7 +240,7 @@ export function VentasDashboard() {
               <CardContent className="pt-0 space-y-3">
                 <div>
                   <div className="text-xs text-muted-foreground">Total descontado</div>
-                  <div className="text-lg font-bold text-destructive">{formatPrice(data.descuentosOtorgados.totalDescuentos)}</div>
+                  <div className="text-lg font-bold text-destructive-text">{formatPrice(data.descuentosOtorgados.totalDescuentos)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Ventas con descuento</div>
@@ -263,8 +263,8 @@ export function VentasDashboard() {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className={`text-3xl font-bold ${
-                  data.tasaAnulacion.porcentaje > 10 ? "text-destructive" :
-                  data.tasaAnulacion.porcentaje > 5 ? "text-warning" : "text-success"
+                  data.tasaAnulacion.porcentaje > 10 ? "text-destructive-text" :
+                  data.tasaAnulacion.porcentaje > 5 ? "text-warning-text" : "text-success-text"
                 }`}>
                   {data.tasaAnulacion.porcentaje.toFixed(1)}%
                 </div>

@@ -89,9 +89,9 @@ export function OrgCommandHeader({ organization, subscription }: OrgCommandHeade
         {/* Suspension detail — only when the org is suspended */}
         {!organization.activo && organization.suspension_reason && (
           <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
-            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive-text" />
             <div className="text-sm">
-              <p className="font-medium text-destructive">
+              <p className="font-medium text-destructive-text">
                 Motivo de la suspensión
               </p>
               <p className="text-foreground/80">{organization.suspension_reason}</p>

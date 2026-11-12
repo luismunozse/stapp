@@ -194,7 +194,7 @@ export function WhatsAppSetup() {
               </Button>
             </div>
             {testResult && (
-              <p className={testResult.ok ? "text-sm text-success-600" : "text-sm text-destructive"}>
+              <p className={testResult.ok ? "text-sm text-success-600" : "text-sm text-destructive-text"}>
                 {testResult.text}
               </p>
             )}
@@ -235,7 +235,7 @@ export function WhatsAppSetup() {
         </div>
       )}
 
-      {error && <p className="text-sm text-destructive mt-3">{error}</p>}
+      {error && <p className="text-sm text-destructive-text mt-3">{error}</p>}
     </div>
   )
 }

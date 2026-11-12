@@ -165,7 +165,7 @@ export function PosVentaExito({
         <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 duration-200 ease-snappy">
           <header className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-success/10 motion-safe:animate-in motion-safe:zoom-in-90 duration-200 ease-snappy">
-              <Check className="h-6 w-6 text-success" aria-hidden="true" />
+              <Check className="h-6 w-6 text-success-text" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2 id="venta-exito-titulo" className="text-xl font-bold leading-tight text-foreground md:text-2xl">
@@ -188,7 +188,7 @@ export function PosVentaExito({
               {cobro ? (
                 <>
                   <p className="text-sm font-medium text-muted-foreground">Vuelto</p>
-                  <p className="text-5xl font-bold tabular-nums leading-none text-success">
+                  <p className="text-5xl font-bold tabular-nums leading-none text-success-text">
                     {formatPrice(cobro.vuelto)}
                   </p>
                   <p className="mt-2 text-sm tabular-nums text-muted-foreground">
@@ -272,7 +272,7 @@ export function PosVentaExito({
                   </div>
                 ))}
                 {saldoPendiente > 0 && (
-                  <div className="flex justify-between gap-3 font-medium text-warning">
+                  <div className="flex justify-between gap-3 font-medium text-warning-text">
                     <dt>Saldo pendiente</dt>
                     <dd className="tabular-nums">{formatPrice(saldoPendiente)}</dd>
                   </div>
@@ -383,14 +383,14 @@ function EstadoItem({
     <li
       className={cn(
         "flex items-start gap-2",
-        tono === "error" ? "text-destructive" : "text-foreground"
+        tono === "error" ? "text-destructive-text" : "text-foreground"
       )}
     >
       <Icono
         aria-hidden="true"
         className={cn(
           "mt-0.5 h-4 w-4 shrink-0",
-          tono === "ok" && "text-success",
+          tono === "ok" && "text-success-text",
           tono === "pendiente" && "animate-spin text-muted-foreground"
         )}
       />
