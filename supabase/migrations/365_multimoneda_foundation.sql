@@ -9,7 +9,8 @@
 --
 -- DESIGN DECISIONS
 --   * Rates are NUMERIC(14,6): the app accepts up to 6 decimals (REQ-1.6), so storage must not truncate.
---   * moneda CHAR(3) NULL, NULL = the organization's local currency, CHECK NULL or 'USD'.
+--   * moneda CHAR(3) NULL, NULL = the organization's local currency, CHECK NULL or a code
+--     the app can quote ('USD'/'EUR' on catalog and lines, 'USD' only on cash and payments).
 --     No DEFAULT and no backfill: an insert path that forgets the column (import, bulk,
 --     v1 API, onboarding seed) must not label CLP/EUR items as ARS. Existing rows are NOT
 --     rewritten (no UPDATE in this file).
@@ -21,6 +22,16 @@
 --   * USD amounts exist only on catalog rows and as origin metadata on lines/payments.
 --     monto, total, precio_unitario and costo_final keep meaning local currency.
 --   * crear_venta_atomica is NOT redefined here (that is M2, a later change).
+--
+-- CORRECTED IN PLACE (multimoneda S3). This file was merged in October but was never applied
+-- in production (checked read-only on 2026-11-11: none of its tables, columns or CHECKs exist),
+-- so it was edited instead of adding a migration that drops what this one creates. Changes:
+-- catalog and line tables (inventario, servicios, items_venta, servicios_orden, repuestos_orden,
+-- items_cotizacion) accept 'USD' and 'EUR' in moneda / moneda_origen, and organizacion_moneda
+-- gains moneda_extranjera. Cash and payment tables (pagos_venta, movimientos_caja,
+-- sesion_caja_saldos) and vuelto_moneda_default stay USD-only until phase 2.
+-- If an environment DID apply the old version, 407 is not enough: drop and re-add the six
+-- *_moneda_chk / *_moneda_origen_chk constraints and add the column by hand.
 --
 -- No BEGIN/COMMIT: scripts/db-run.mjs wraps the file (dry-run by default).
 --
@@ -48,6 +59,8 @@ SET LOCAL lock_timeout = '3s';
 CREATE TABLE IF NOT EXISTS organizacion_moneda (
   organization_id        TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
   multimoneda_habilitada BOOLEAN NOT NULL DEFAULT false,
+  -- The one foreign currency this organization quotes in (S3). Phase 2 (cash, payments) is still USD-only.
+  moneda_extranjera      CHAR(3) NOT NULL DEFAULT 'USD' CHECK (moneda_extranjera IN ('USD', 'EUR')),
   tipo_cambio_fuente     TEXT CHECK (tipo_cambio_fuente IN ('MANUAL', 'OFICIAL', 'BLUE', 'MEP')),
   tipo_cambio_manual     NUMERIC(14,6) CHECK (tipo_cambio_manual IS NULL OR tipo_cambio_manual > 0),
   -- Last confirmed rate, kept for the fallback chain when the rate service is down.
@@ -99,8 +112,8 @@ ALTER TABLE inventario ADD COLUMN IF NOT EXISTS moneda CHAR(3);
 ALTER TABLE servicios ADD COLUMN IF NOT EXISTS moneda CHAR(3);
 ALTER TABLE movimientos_caja ADD COLUMN IF NOT EXISTS moneda CHAR(3);
 
-SELECT pg_temp.add_check_nv('inventario', 'inventario_moneda_chk', 'moneda IS NULL OR moneda = ''USD''');
-SELECT pg_temp.add_check_nv('servicios', 'servicios_moneda_chk', 'moneda IS NULL OR moneda = ''USD''');
+SELECT pg_temp.add_check_nv('inventario', 'inventario_moneda_chk', 'moneda IS NULL OR moneda IN (''USD'', ''EUR'')');
+SELECT pg_temp.add_check_nv('servicios', 'servicios_moneda_chk', 'moneda IS NULL OR moneda IN (''USD'', ''EUR'')');
 SELECT pg_temp.add_check_nv('movimientos_caja', 'movimientos_caja_moneda_chk', 'moneda IS NULL OR moneda = ''USD''');
 
 -- ----------------------------------------------------------------------------
@@ -124,13 +137,13 @@ ALTER TABLE items_cotizacion
   ADD COLUMN IF NOT EXISTS precio_origen NUMERIC(12,2),
   ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6);
 
-SELECT pg_temp.add_check_nv('items_venta', 'items_venta_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen = ''USD''');
+SELECT pg_temp.add_check_nv('items_venta', 'items_venta_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen IN (''USD'', ''EUR'')');
 SELECT pg_temp.add_check_nv('items_venta', 'items_venta_tipo_cambio_chk', 'tipo_cambio IS NULL OR tipo_cambio > 0');
-SELECT pg_temp.add_check_nv('servicios_orden', 'servicios_orden_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen = ''USD''');
+SELECT pg_temp.add_check_nv('servicios_orden', 'servicios_orden_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen IN (''USD'', ''EUR'')');
 SELECT pg_temp.add_check_nv('servicios_orden', 'servicios_orden_tipo_cambio_chk', 'tipo_cambio IS NULL OR tipo_cambio > 0');
-SELECT pg_temp.add_check_nv('repuestos_orden', 'repuestos_orden_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen = ''USD''');
+SELECT pg_temp.add_check_nv('repuestos_orden', 'repuestos_orden_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen IN (''USD'', ''EUR'')');
 SELECT pg_temp.add_check_nv('repuestos_orden', 'repuestos_orden_tipo_cambio_chk', 'tipo_cambio IS NULL OR tipo_cambio > 0');
-SELECT pg_temp.add_check_nv('items_cotizacion', 'items_cotizacion_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen = ''USD''');
+SELECT pg_temp.add_check_nv('items_cotizacion', 'items_cotizacion_moneda_origen_chk', 'moneda_origen IS NULL OR moneda_origen IN (''USD'', ''EUR'')');
 SELECT pg_temp.add_check_nv('items_cotizacion', 'items_cotizacion_tipo_cambio_chk', 'tipo_cambio IS NULL OR tipo_cambio > 0');
 
 -- ----------------------------------------------------------------------------

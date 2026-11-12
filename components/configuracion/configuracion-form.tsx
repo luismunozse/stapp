@@ -14,6 +14,7 @@ import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
 import { compressImageToDataUrl } from "@/lib/images/compress-image"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
+import { MonedaConfig } from "@/components/configuracion/moneda-config"
 import { ComisionesConfig } from "@/components/configuracion/comisiones-config"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { GarantiasConfig, type GarantiasConfigValor } from "@/components/configuracion/garantias-config"
@@ -1327,6 +1328,11 @@ export function ConfiguracionForm({
       <TabsContent value="comisiones" forceMount className={PANEL_CLASS}>
         {/* Se guarda por separado (botón propio), por eso esta pestaña no tiene la barra de guardado */}
         <ComisionesConfig allowEdit={allowEdit} />
+      </TabsContent>
+
+      <TabsContent value="moneda" forceMount className={PANEL_CLASS}>
+        {/* Se guarda por separado (botón propio), por eso esta pestaña no tiene la barra de guardado */}
+        <MonedaConfig allowEdit={allowEdit} />
       </TabsContent>
 
       <TabsContent value="avisos" forceMount className={PANEL_CLASS}>

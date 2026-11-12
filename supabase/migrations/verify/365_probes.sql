@@ -69,14 +69,16 @@ INSERT INTO _r SELECT 14, 'real inventory exists (so probe 15 is not vacuous)', 
 INSERT INTO _r SELECT 15, 'no existing inventario row got a moneda', '0',
   (SELECT count(*) FROM inventario WHERE moneda IS NOT NULL)::TEXT;
 
--- 16-17: the CHECKs reject anything but NULL or USD. They run on scratch rows of the scratch
+-- 16-18: the CHECKs reject anything but NULL, USD or EUR. They run on scratch rows of the scratch
 -- organization (never "the first row of the table": that is empty on a fresh database).
 INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
   SELECT id, 'PRB-MM-INV', 'PROBE', 0, 'Probe MM producto', 0, 0, 0 FROM organizations WHERE slug = 'probe-mm-org';
 INSERT INTO servicios (organization_id, codigo, nombre, precio)
   SELECT id, 'PRB-MM-SRV', 'Probe MM servicio', 0 FROM organizations WHERE slug = 'probe-mm-org';
 DO $$ BEGIN
-  PERFORM pg_temp.probe(16, 'inventario.moneda rejects EUR', '23514',
+  PERFORM pg_temp.probe(16, 'inventario.moneda rejects BRL', '23514',
+    'UPDATE inventario SET moneda = ''BRL'' WHERE codigo = ''PRB-MM-INV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+  PERFORM pg_temp.probe(18, 'inventario.moneda accepts EUR', 'ok',
     'UPDATE inventario SET moneda = ''EUR'' WHERE codigo = ''PRB-MM-INV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
   PERFORM pg_temp.probe(17, 'servicios.moneda rejects ARS (local is NULL, never a code)', '23514',
     'UPDATE servicios SET moneda = ''ARS'' WHERE codigo = ''PRB-MM-SRV'' AND organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
@@ -99,6 +101,12 @@ DO $$ BEGIN
     'UPDATE organizacion_moneda SET tipo_cambio_referencia = -5 WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
   PERFORM pg_temp.probe(23, 'change currency other than LOCAL/USD is refused', '23514',
     'UPDATE organizacion_moneda SET vuelto_moneda_default = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+END $$;
+DO $$ BEGIN
+  PERFORM pg_temp.probe(51, 'moneda_extranjera outside USD/EUR is refused', '23514',
+    'UPDATE organizacion_moneda SET moneda_extranjera = ''BRL'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
+  PERFORM pg_temp.probe(50, 'moneda_extranjera accepts EUR', 'ok',
+    'UPDATE organizacion_moneda SET moneda_extranjera = ''EUR'' WHERE organization_id = (SELECT id FROM organizations WHERE slug = ''probe-mm-org'')');
 END $$;
 INSERT INTO _r SELECT 24, 'organizations did not gain any multi-currency column', '0',
   (SELECT count(*) FROM information_schema.columns
@@ -169,7 +177,10 @@ DO $$ BEGIN
   PERFORM pg_temp.probe(41, 'items_cotizacion.tipo_cambio = 0 is refused', '23514', 'INSERT INTO _sh_items_cotizacion (tipo_cambio) VALUES (0)');
   PERFORM pg_temp.probe(42, 'pagos_venta.moneda rejects EUR', '23514', 'INSERT INTO _sh_pagos_venta (moneda) VALUES (''EUR'')');
   PERFORM pg_temp.probe(43, 'pagos_venta.vuelto_moneda rejects EUR', '23514', 'INSERT INTO _sh_pagos_venta (vuelto_moneda) VALUES (''EUR'')');
-  PERFORM pg_temp.probe(44, 'items_venta.moneda_origen rejects EUR', '23514', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(44, 'items_venta.moneda_origen rejects BRL', '23514', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''BRL'')');
+  PERFORM pg_temp.probe(47, 'items_venta.moneda_origen accepts EUR', 'ok', 'INSERT INTO _sh_items_venta (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(48, 'items_cotizacion.moneda_origen accepts EUR', 'ok', 'INSERT INTO _sh_items_cotizacion (moneda_origen) VALUES (''EUR'')');
+  PERFORM pg_temp.probe(49, 'servicios_orden.moneda_origen rejects BRL', '23514', 'INSERT INTO _sh_servicios_orden (moneda_origen) VALUES (''BRL'')');
   PERFORM pg_temp.probe(45, 'movimientos_caja.moneda rejects EUR', '23514', 'INSERT INTO _sh_movimientos_caja (moneda) VALUES (''EUR'')');
   PERFORM pg_temp.probe(46, 'a valid USD rate is accepted', 'ok', 'INSERT INTO _sh_ventas (tipo_cambio) VALUES (1250.123456)');
 END $$;
