@@ -73,6 +73,8 @@ describe("Bug 1 — PUT totals account for per-item discounts", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
     })
 
@@ -109,6 +111,8 @@ describe("Bug 1 — PUT totals account for per-item discounts", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
     })
 
@@ -145,6 +149,8 @@ describe("Bug 1 — PUT totals account for per-item discounts", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
     })
 
@@ -181,6 +187,8 @@ describe("Bug 1 — PUT totals account for per-item discounts", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
     })
 
@@ -216,6 +224,8 @@ describe("Bug 1 — PUT totals account for per-item discounts", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
     })
 
@@ -332,6 +342,8 @@ describe("Bug 2 — IVA snapshot recomputed after edit", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
       organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 0, redondeo_efectivo: 0 }),
     })
@@ -513,6 +525,8 @@ describe("Bug 5 (light) — per-item discount fields survive the route", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      // foreign-currency guard of the PUT: the edited lines' items are local
+      inventario: createChainMock([]),
       ventas: createChainMock(existingVenta),
       organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 0 }),
     })

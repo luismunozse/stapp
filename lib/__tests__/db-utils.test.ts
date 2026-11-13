@@ -470,7 +470,8 @@ describe('formatInventario', () => {
 describe('formatInventario: variant groups', () => {
   // The two JSON literals were captured from the implementation BEFORE the variant
   // fields existed: a row that has no `grupo_id` key (the select of an org without
-  // the M1 columns) must keep serializing byte for byte, key order included.
+  // the M1 columns) must keep serializing byte for byte, key order included. The only
+  // later addition is `moneda` (multimoneda S4, always emitted, null = local), right after tipoKit.
   const filaSuelta = {
     id: 'inv-1', codigo: 'FX-1', nombre: 'Funda X', descripcion: 'Funda de silicona', categoria: 'Fundas',
     tipo_dispositivo: 'CELULAR', stock: 10, stock_reservado: 2, precio_compra: 300, precio_venta: 900,
@@ -481,10 +482,10 @@ describe('formatInventario: variant groups', () => {
     organization_id: 'org-1', created_at: '2024-01-01', updated_at: '2024-01-02',
   }
   const salidaSuelta =
-    '{"id":"inv-1","codigo":"FX-1","nombre":"Funda X","descripcion":"Funda de silicona","categoria":"Fundas","tipoDispositivo":"CELULAR","stock":10,"stockReservado":2,"precioCompra":300,"precioVenta":900,"proveedor":"Proveedor X","proveedorId":"prov-1","imagenUrl":"https://x/img.jpg","imagenPath":"org-1/inv-1/a.jpg","stockMinimo":3,"stockMaximo":50,"puntoReorden":5,"barcode":"7790001","ubicacion":"A-1","trackeaLotes":true,"trackeaSeries":false,"diasAlertaVencimiento":30,"diasGarantiaDefault":90,"tieneVariantes":false,"esKit":false,"tipoKit":null,"deletedAt":null,"deletedBy":null,"organizationId":"org-1","createdAt":"2024-01-01","updatedAt":"2024-01-02"}'
+    '{"id":"inv-1","codigo":"FX-1","nombre":"Funda X","descripcion":"Funda de silicona","categoria":"Fundas","tipoDispositivo":"CELULAR","stock":10,"stockReservado":2,"precioCompra":300,"precioVenta":900,"proveedor":"Proveedor X","proveedorId":"prov-1","imagenUrl":"https://x/img.jpg","imagenPath":"org-1/inv-1/a.jpg","stockMinimo":3,"stockMaximo":50,"puntoReorden":5,"barcode":"7790001","ubicacion":"A-1","trackeaLotes":true,"trackeaSeries":false,"diasAlertaVencimiento":30,"diasGarantiaDefault":90,"tieneVariantes":false,"esKit":false,"tipoKit":null,"moneda":null,"deletedAt":null,"deletedBy":null,"organizationId":"org-1","createdAt":"2024-01-01","updatedAt":"2024-01-02"}'
   const filaMinima = { id: '1', codigo: 'P', nombre: 'N', organization_id: 'o' }
   const salidaMinima =
-    '{"id":"1","codigo":"P","nombre":"N","stockReservado":0,"precioCompra":null,"proveedor":null,"proveedorId":null,"imagenUrl":null,"imagenPath":null,"stockMinimo":null,"stockMaximo":null,"puntoReorden":null,"barcode":null,"ubicacion":null,"trackeaLotes":false,"trackeaSeries":false,"diasAlertaVencimiento":null,"diasGarantiaDefault":null,"tieneVariantes":false,"esKit":false,"tipoKit":null,"deletedAt":null,"deletedBy":null,"organizationId":"o"}'
+    '{"id":"1","codigo":"P","nombre":"N","stockReservado":0,"precioCompra":null,"proveedor":null,"proveedorId":null,"imagenUrl":null,"imagenPath":null,"stockMinimo":null,"stockMaximo":null,"puntoReorden":null,"barcode":null,"ubicacion":null,"trackeaLotes":false,"trackeaSeries":false,"diasAlertaVencimiento":null,"diasGarantiaDefault":null,"tieneVariantes":false,"esKit":false,"tipoKit":null,"moneda":null,"deletedAt":null,"deletedBy":null,"organizationId":"o"}'
   const atributos = [
     { opcion: 'Color', valor: 'Azul' },
     { opcion: 'Talle', valor: 'M' },
