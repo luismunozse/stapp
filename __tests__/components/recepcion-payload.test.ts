@@ -52,6 +52,7 @@ const sideVacio = (): EquipoSideState => ({
   otroAccesorio: "",
   camposExtraValues: {},
   fotos: [],
+  estadoFisico: { danos: [], sinDanos: false },
 })
 
 describe("construirEquipoPayload — accesorios", () => {
@@ -174,6 +175,30 @@ describe("construirEquipoPayload — metadata y campos base", () => {
   it("sin campos extra con valor, metadata queda undefined", () => {
     const result = construirEquipoPayload(equipoFixture, sideVacio(), tiposFixture)
     expect(result.metadata).toBeUndefined()
+  })
+})
+
+describe("construirEquipoPayload — estado físico", () => {
+  const pin = { diagrama: "celular@1", vista: "frente" as const, x: 0.1, y: 0.2, tipo: "golpe" as const, nota: null }
+
+  it("manda los pins del equipo y recepcionSinDanos en false", () => {
+    const side: EquipoSideState = { ...sideVacio(), estadoFisico: { danos: [pin], sinDanos: false } }
+    const result = construirEquipoPayload(equipoFixture, side, tiposFixture)
+    expect(result.danos).toEqual([pin])
+    expect(result.recepcionSinDanos).toBe(false)
+  })
+
+  it("'Sin daños visibles' sin pins manda recepcionSinDanos en true y sin danos", () => {
+    const side: EquipoSideState = { ...sideVacio(), estadoFisico: { danos: [], sinDanos: true } }
+    const result = construirEquipoPayload(equipoFixture, side, tiposFixture)
+    expect(result.danos).toBeUndefined()
+    expect(result.recepcionSinDanos).toBe(true)
+  })
+
+  it("sin estado físico no manda pins ni el flag", () => {
+    const result = construirEquipoPayload(equipoFixture, sideVacio(), tiposFixture)
+    expect(result.danos).toBeUndefined()
+    expect(result.recepcionSinDanos).toBe(false)
   })
 })
 

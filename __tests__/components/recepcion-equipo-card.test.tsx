@@ -50,6 +50,9 @@ function Harness({
       labelFotos="Fotos"
       codigoAcceso={codigoAcceso}
       onCodigoAccesoChange={onCodigoAccesoChange}
+      estadoFisico={{ danos: [], sinDanos: false }}
+      onEstadoFisicoChange={vi.fn()}
+      estadoFisicoObligatorio={false}
     />
   )
 }
