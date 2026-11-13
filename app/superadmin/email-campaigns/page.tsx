@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -96,7 +97,7 @@ El equipo de STApp`,
 
 Tu período de prueba en {{organizacion}} está por terminar.
 
-No pierdas el acceso a tu cuenta y todos los datos que cargaste. Suscribite al plan Premium para seguir usando STApp sin interrupciones.
+No pierdas el acceso a tu cuenta y todos los datos que cargaste. Suscribite al plan Profesional para seguir usando STApp sin interrupciones.
 
 Entrá a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
 
@@ -122,7 +123,7 @@ El equipo de STApp`,
     subject: "Oferta especial para tu taller",
     body: `Hola {{nombre}},
 
-Tenemos una oferta especial para {{organizacion}}. Suscribite al plan Premium y obtené acceso a todas las funcionalidades:
+Tenemos una oferta especial para {{organizacion}}. Suscribite al plan Profesional y obtené acceso a todas las funcionalidades:
 
 - Órdenes de servicio ilimitadas
 - Técnicos y vendedores ilimitados
@@ -146,10 +147,10 @@ El equipo de STApp`,
 }
 
 const TEMPLATE_LABELS: Record<string, string> = {
-  trial_expired: "Trial vencido - 7 dias mas",
-  trial_expiring: "Trial por vencer - Suscribirse",
-  win_back: "Win-back - Te extrañamos",
-  upgrade: "Oferta de upgrade",
+  trial_expired: "Trial vencido: 7 días más",
+  trial_expiring: "Trial por vencer: suscribirse",
+  win_back: "Recuperación: te extrañamos",
+  upgrade: "Oferta de mejora de plan",
   custom: "Mensaje personalizado",
 }
 
@@ -159,7 +160,7 @@ const SEGMENT_COLORS: Record<string, string> = {
   amber: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
   blue: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30",
   yellow: "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30",
-  gray: "border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950/30",
+  gray: "border-border bg-muted/40",
 }
 
 const SEGMENT_ICONS: Record<string, typeof AlertTriangle> = {
@@ -184,8 +185,8 @@ const CAMPAIGN_LABELS: Record<string, string> = {
   CAMPAIGN_CUSTOM: "Personalizado",
   CAMPAIGN_TRIAL_EXPIRED: "Trial vencido",
   CAMPAIGN_TRIAL_EXPIRING: "Trial por vencer",
-  CAMPAIGN_WIN_BACK: "Win-back",
-  CAMPAIGN_UPGRADE: "Upgrade",
+  CAMPAIGN_WIN_BACK: "Recuperación",
+  CAMPAIGN_UPGRADE: "Mejora de plan",
 }
 
 export default function EmailCampaignsPage() {
@@ -256,7 +257,7 @@ export default function EmailCampaignsPage() {
       return
     }
     if (selectedOrgIds.length === 0) {
-      toast.error("Selecciona al menos una organizacion")
+      toast.error("Seleccioná al menos una organización")
       return
     }
     setConfirmOpen(true)
@@ -299,17 +300,11 @@ export default function EmailCampaignsPage() {
   const campaigns = data?.campaigns || []
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Mail className="h-6 w-6" />
-          Campañas de Email
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Envia emails masivos a segmentos de organizaciones
-        </p>
-      </div>
-
+    <PageShell
+      title="Campañas de email"
+      description="Enviá emails masivos a segmentos de organizaciones"
+      icon={Mail}
+    >
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           {/* Paso 1: Segmentos */}
@@ -320,7 +315,7 @@ export default function EmailCampaignsPage() {
                 1. Elegir segmento
               </CardTitle>
               <CardDescription>
-                Selecciona el grupo de organizaciones al que queres enviar
+                Seleccioná el grupo de organizaciones al que querés enviar
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -427,13 +422,13 @@ export default function EmailCampaignsPage() {
                   2. Componer email
                 </CardTitle>
                 <CardDescription>
-                  Elegí un template o escribí un mensaje personalizado. Usa {"{{nombre}}"}, {"{{organizacion}}"}, {"{{slug}}"} para personalizar.
+                  Elegí una plantilla o escribí un mensaje personalizado. Usá {"{{nombre}}"}, {"{{organizacion}}"}, {"{{slug}}"} para personalizar.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Template selector */}
                 <div className="space-y-2">
-                  <Label>Template</Label>
+                  <Label>Plantilla</Label>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(TEMPLATE_LABELS).map(([id, label]) => (
                       <Button
@@ -468,7 +463,7 @@ export default function EmailCampaignsPage() {
                       onClick={() => setShowPreview(!showPreview)}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1" />
-                      {showPreview ? "Editar" : "Preview"}
+                      {showPreview ? "Editar" : "Vista previa"}
                     </Button>
                   </div>
 
@@ -570,13 +565,13 @@ export default function EmailCampaignsPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Enviar campaña de email"
-        description={`Se enviara "${subject}" a los administradores de ${selectedOrgIds.length} organizacion(es). Los emails se envian inmediatamente.`}
+        description={`Se va a enviar "${subject}" a los administradores de ${selectedOrgIds.length} organización(es). Los emails se envían inmediatamente.`}
         confirmText="Enviar emails"
         variant="warning"
         loading={sending}
         onConfirm={handleConfirmSend}
       />
-    </div>
+    </PageShell>
   )
 }
 

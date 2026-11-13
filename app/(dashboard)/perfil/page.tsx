@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PersonalInfo } from "@/components/perfil/personal-info"
@@ -57,12 +58,12 @@ export default function PerfilPage() {
     if (!file) return
 
     if (file.size > 2 * 1024 * 1024) {
-      toast.error("El archivo excede el limite de 2MB")
+      toast.error("El archivo supera el límite de 2 MB")
       return
     }
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      toast.error("Tipo de archivo no permitido. Use JPG, PNG o WebP")
+      toast.error("Tipo de archivo no permitido. Usá JPG, PNG o WebP")
       return
     }
 
@@ -151,14 +152,10 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Mi Perfil</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Gestiona tu informacion personal y seguridad
-        </p>
-      </div>
-
+    <PageShell
+      title="Mi perfil"
+      description="Gestioná tu información personal y seguridad"
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto">
           <TabsList className="w-auto min-w-full sm:min-w-0">
@@ -218,7 +215,7 @@ export default function PerfilPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    JPG, PNG o WebP. Maximo 2MB.
+                    JPG, PNG o WebP. Máximo 2 MB.
                   </p>
                   <input
                     ref={fileInputRef}
@@ -252,7 +249,7 @@ export default function PerfilPage() {
               <CardContent className="flex items-center gap-3 py-4">
                 <Info className="h-5 w-5 text-muted-foreground shrink-0" />
                 <p className="text-sm text-muted-foreground">
-                  Tu cuenta usa autenticacion con Google. La contraseña se gestiona desde tu cuenta de Google.
+                  Tu cuenta usa autenticación con Google. La contraseña se gestiona desde tu cuenta de Google.
                 </p>
               </CardContent>
             </Card>
@@ -270,6 +267,6 @@ export default function PerfilPage() {
           <PushSettings />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }

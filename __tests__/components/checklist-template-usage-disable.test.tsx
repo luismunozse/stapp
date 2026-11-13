@@ -34,7 +34,7 @@ describe("TemplateEditor — template en uso", () => {
       </ModalProvider>
     )
 
-    const deleteBtn = await screen.findByRole("button", { name: /eliminar template/i })
+    const deleteBtn = await screen.findByRole("button", { name: /eliminar plantilla/i })
     expect(deleteBtn).toBeDisabled()
 
     await waitFor(() =>

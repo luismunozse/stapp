@@ -2,9 +2,8 @@
 
 import { useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { IconButton } from "@/components/ui/icon-button"
-import { ArrowLeft, Package } from "lucide-react"
+import { Package } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 import { PlanForm } from "../_components/plan-form"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import type { PlanWithUsage } from "@/types/superadmin"
@@ -40,24 +39,13 @@ export default function EditPlanPage({ params }: PageProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/superadmin/planes">
-          <IconButton label="Volver a planes" variant="ghost">
-            <ArrowLeft className="h-5 w-5" />
-          </IconButton>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Package className="h-8 w-8" />
-            Editar Plan: {plan.nombre}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Modifica la configuración del plan de suscripción
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title={`Editar plan: ${plan.nombre}`}
+      description="Modificá la configuración del plan de suscripción"
+      icon={Package}
+      backHref="/superadmin/planes"
+      backLabel="Volver a planes"
+    >
       <PlanForm
         mode="edit"
         planId={planId}
@@ -77,6 +65,6 @@ export default function EditPlanPage({ params }: PageProps) {
           feature_flags: plan.feature_flags || {},
         }}
       />
-    </div>
+    </PageShell>
   )
 }

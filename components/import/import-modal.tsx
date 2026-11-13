@@ -79,7 +79,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
       return
     }
     if (!isCsv && !isXlsx) {
-      setError('Formato de archivo no válido. Use CSV o Excel (.xlsx)')
+      setError('Formato de archivo no válido. Usá CSV o Excel (.xlsx)')
       return
     }
 
@@ -244,9 +244,9 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
           {step === 'select' && (
             <div className="space-y-4">
               <div>
-                <Label>1. Descarga la plantilla</Label>
+                <Label>1. Descargá la plantilla</Label>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Usa nuestra plantilla para asegurar el formato correcto
+                  Usá nuestra plantilla para asegurar el formato correcto
                 </p>
                 <Button
                   variant="outline"
@@ -254,12 +254,12 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                   className="gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Descargar Plantilla CSV
+                  Descargar plantilla CSV
                 </Button>
               </div>
 
               <div>
-                <Label>2. Sube tu archivo</Label>
+                <Label>2. Subí tu archivo</Label>
                 <p className="text-sm text-muted-foreground mb-2">
                   Formatos aceptados: CSV, Excel (.xlsx)
                 </p>
@@ -276,7 +276,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                   className="gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  Seleccionar Archivo
+                  Seleccionar archivo
                 </Button>
               </div>
 
@@ -432,7 +432,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                 <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-primary animate-pulse" />
                 <p className="font-medium">Importando datos...</p>
                 <p className="text-sm text-muted-foreground">
-                  Por favor espera mientras procesamos el archivo
+                  Esperá mientras procesamos el archivo
                 </p>
               </div>
               <Progress value={progress} className="w-full" />

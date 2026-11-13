@@ -112,7 +112,7 @@ export function PWAInstaller() {
               <div>
                 <div className="font-bold">Instalar STApp</div>
                 <div className="text-sm text-muted-foreground">
-                  Agrega la app a tu pantalla de inicio
+                  Agregá la app a tu pantalla de inicio
                 </div>
               </div>
             </div>
@@ -132,7 +132,7 @@ export function PWAInstaller() {
                 1
               </div>
               <div className="flex items-center gap-2">
-                <span>Toca el botón</span>
+                <span>Tocá el botón</span>
                 <Share className="h-5 w-5 text-primary" />
                 <span className="font-medium">Compartir</span>
               </div>
@@ -143,7 +143,7 @@ export function PWAInstaller() {
                 2
               </div>
               <div className="flex items-center gap-2">
-                <span>Selecciona</span>
+                <span>Seleccioná</span>
                 <Plus className="h-5 w-5 text-primary" />
                 <span className="font-medium">Agregar a inicio</span>
               </div>
@@ -170,7 +170,7 @@ export function PWAInstaller() {
             <div>
               <div className="font-bold">Instalar STApp</div>
               <div className="text-sm text-muted-foreground">
-                Instala para acceso rápido
+                Instalala para tener acceso rápido
               </div>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -169,7 +170,7 @@ export default function PagosPage() {
         )
       case "REFUNDED":
         return (
-          <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300">
+          <Badge className="bg-muted text-foreground border-border">
             {status}
           </Badge>
         )
@@ -303,22 +304,18 @@ export default function PagosPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Receipt className="h-8 w-8" />
-            Pagos
-          </h1>
-          <p className="text-muted-foreground">
-            Historial de pagos de todas las organizaciones
-          </p>
-          <LastUpdated
-            formattedLastUpdated={formattedLastUpdated}
-            onRefresh={fetchPayments}
-            loading={loading}
-          />
-        </div>
+    <PageShell
+      title="Pagos"
+      description="Historial de pagos de todas las organizaciones"
+      icon={Receipt}
+      meta={
+        <LastUpdated
+          formattedLastUpdated={formattedLastUpdated}
+          onRefresh={fetchPayments}
+          loading={loading}
+        />
+      }
+      actions={
         <Button
           variant="outline"
           onClick={handleExportCSV}
@@ -327,7 +324,8 @@ export default function PagosPage() {
           <Download className="h-4 w-4 mr-2" />
           Exportar CSV
         </Button>
-      </div>
+      }
+    >
 
       {/* KPI Dashboard */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -385,12 +383,12 @@ export default function PagosPage() {
               <div className={`p-2 rounded-lg ${
                 (stats?.webhookErrorRate ?? 0) > 10
                   ? "bg-red-100 dark:bg-red-950"
-                  : "bg-gray-100 dark:bg-gray-800"
+                  : "bg-muted"
               }`}>
                 <AlertCircle className={`h-5 w-5 ${
                   (stats?.webhookErrorRate ?? 0) > 10
                     ? "text-red-600"
-                    : "text-gray-600"
+                    : "text-muted-foreground"
                 }`} />
               </div>
               <div>
@@ -414,12 +412,12 @@ export default function PagosPage() {
               <div className={`p-2 rounded-lg ${
                 (stats?.pagosPendientes ?? 0) > 0
                   ? "bg-yellow-100 dark:bg-yellow-950"
-                  : "bg-gray-100 dark:bg-gray-800"
+                  : "bg-muted"
               }`}>
                 <Clock className={`h-5 w-5 ${
                   (stats?.pagosPendientes ?? 0) > 0
                     ? "text-yellow-600"
-                    : "text-gray-600"
+                    : "text-muted-foreground"
                 }`} />
               </div>
               <div>
@@ -544,6 +542,6 @@ export default function PagosPage() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

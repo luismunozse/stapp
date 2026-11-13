@@ -54,7 +54,7 @@ interface SignatureCardProps {
 export function SignatureCard({
   signature,
   mime,
-  title = "Firma del Cliente",
+  title = "Firma del cliente",
   date,
 }: SignatureCardProps) {
   const { formatDate } = useCurrency()

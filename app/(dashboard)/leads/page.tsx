@@ -4,8 +4,8 @@ import { redirect } from "next/navigation"
 import { PageShell } from "@/components/ui/page-shell"
 
 export const metadata = {
-  title: "Leads del Chatbot - STApp",
-  description: "Gestiona los contactos capturados por Santi",
+  title: "Contactos del chatbot - STApp",
+  description: "Gestioná los contactos capturados por Santi",
 }
 
 export default async function LeadsPage() {
@@ -13,7 +13,7 @@ export default async function LeadsPage() {
   if (error) redirect("/login")
 
   return (
-    <PageShell title="Leads del Chatbot" description="Contactos capturados por Santi, tu asistente virtual">
+    <PageShell title="Contactos del chatbot" description="Contactos capturados por Santi, tu asistente virtual">
       <LeadsList />
     </PageShell>
   )

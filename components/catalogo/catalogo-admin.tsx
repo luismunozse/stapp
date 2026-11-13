@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Package, FolderTree, Share2, BookMarked, Ticket, ShoppingCart, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { CatalogoPreviewDialog } from "./catalogo-preview-dialog"
 import { CatalogoItemsTab } from "./catalogo-items-tab"
 import { CatalogoCategoriasTab } from "./catalogo-categorias-tab"
@@ -26,29 +27,23 @@ export function CatalogoAdmin() {
   }, [])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <BookMarked className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Catálogo público</h1>
-            <p className="text-sm text-muted-foreground">
-              Compartí tu lista de productos y servicios. Los clientes pueden navegar y solicitar cotización.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Catálogo público"
+      description="Compartí tu lista de productos y servicios. Los clientes pueden navegar y solicitar cotización."
+      icon={BookMarked}
+      actions={
         <Button
           variant="outline"
           className="gap-1.5 shrink-0"
           disabled={!config}
           onClick={() => setPreviewOpen(true)}
+          aria-label="Vista previa"
         >
           <Eye className="h-4 w-4" />
           <span className="hidden sm:inline">Vista previa</span>
         </Button>
-      </div>
+      }
+    >
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5 max-w-3xl">
@@ -99,6 +94,6 @@ export function CatalogoAdmin() {
           activo={config.activo}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

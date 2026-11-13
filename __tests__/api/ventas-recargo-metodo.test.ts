@@ -44,6 +44,7 @@ function buildTableMocks() {
   const ventasChain = createChainMock({ id: "v1", numero_venta: 1, total: 1030 })
 
   mockSupabaseFrom({
+    inventario: createChainMock([]), // sin ítems en divisa
     // EXENTO → no IVA branch, no extra ventas.update() for IVA snapshot
     organizations: createChainMock({ iva_regimen: "EXENTO" }),
     sucursales: sucursalesChain,
@@ -265,6 +266,7 @@ describe("POST /api/ventas — mismo total que el POS", () => {
   it("una venta fiada no se redondea como si fuera en efectivo", async () => {
     vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "EXENTO", redondeo_efectivo: 50 }),
       sucursales: createChainMock({ id: "suc-principal" }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 121 }),
@@ -294,6 +296,7 @@ describe("POST /api/ventas — mismo total que el POS", () => {
   it("rechaza un cliente de otra organización", async () => {
     vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "EXENTO" }),
       ventas: createChainMock({ id: "v1" }),
       clientes: createChainMock(null),

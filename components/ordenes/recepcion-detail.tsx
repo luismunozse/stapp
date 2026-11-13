@@ -82,7 +82,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
     try {
       const res = await fetch(`/api/recepciones/${recepcionId}`)
       if (!res.ok) {
-        toast.error("No se pudo cargar la recepcion")
+        toast.error("No se pudo cargar la recepción")
         return
       }
       const json: RecepcionDetalleResponse = await res.json()
@@ -90,7 +90,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
       setDescuentoTipo(json.recepcion.descuentoTipo ?? "porcentaje")
       setDescuentoValor(json.recepcion.descuentoValor != null ? String(json.recepcion.descuentoValor) : "")
     } catch {
-      toast.error("No se pudo cargar la recepcion")
+      toast.error("No se pudo cargar la recepción")
     } finally {
       setLoading(false)
     }
@@ -136,7 +136,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
   }
 
   if (!data) {
-    return <div className="text-center py-8 text-muted-foreground">Recepcion no encontrada</div>
+    return <div className="text-center py-8 text-muted-foreground">Recepción no encontrada</div>
   }
 
   const { recepcion, ordenes, totales } = data

@@ -41,9 +41,9 @@ interface ChecklistViewProps {
 }
 
 const categoriaLabels: Record<string, string> = {
-  CONDICION_FISICA: "Condicion Fisica",
-  ACCESORIOS: "Accesorios Entregados",
-  FUNCIONAL: "Estado Funcional",
+  CONDICION_FISICA: "Condición física",
+  ACCESORIOS: "Accesorios entregados",
+  FUNCIONAL: "Estado funcional",
   OTRO: "Otros",
   GENERAL: "General",
 }
@@ -68,7 +68,7 @@ export function ChecklistView({ checklist, onEdit }: ChecklistViewProps) {
           return (
             <Badge className="bg-green-100 text-green-800">
               <Check className="h-3 w-3 mr-1" />
-              Si
+              Sí
             </Badge>
           )
         } else if (value === false) {
@@ -107,7 +107,7 @@ export function ChecklistView({ checklist, onEdit }: ChecklistViewProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" />
-            Checklist de Recepcion
+            Checklist de recepción
           </CardTitle>
           {onEdit && (
             <Button variant="ghost" size="sm" onClick={onEdit}>
@@ -151,7 +151,7 @@ export function ChecklistView({ checklist, onEdit }: ChecklistViewProps) {
 
         {checklist.firmaCliente && (
           <div className="pt-2 border-t">
-            <h4 className="font-medium text-sm mb-2">Firma del Cliente:</h4>
+            <h4 className="font-medium text-sm mb-2">Firma del cliente:</h4>
             <img
               src={`data:${checklist.firmaMime};base64,${checklist.firmaCliente}`}
               alt="Firma del cliente"

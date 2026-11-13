@@ -14,7 +14,7 @@ import { GET } from "@/app/api/inventario/route"
 
 // The list select exactly as it was on origin/main before the variant columns.
 const SELECT_ACTUAL =
-  "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)"
+  "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, moneda, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)"
 const SELECT_CON_GRUPO = `${SELECT_ACTUAL}, grupo_id, atributos`
 const LISTA = "http://localhost:3000/api/inventario"
 

@@ -4,11 +4,11 @@ import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
+import { PageShell } from "@/components/ui/page-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  ArrowLeft,
   TrendingUp,
   Mail,
   Calendar,
@@ -106,7 +106,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      title: "Eliminar Vendedor",
+      title: "Eliminar vendedor",
       description: "¿Estás seguro de eliminar este vendedor? Si tiene historial (ventas, órdenes o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -155,22 +155,14 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link href="/vendedores">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-3xl font-bold truncate">{vendedor.nombre}</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">Detalle del vendedor</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-2 pl-12 sm:pl-0">
+    <PageShell
+      title={vendedor.nombre}
+      description="Detalle del vendedor"
+      backHref="/vendedores"
+      backLabel="Volver a vendedores"
+      actions={
+        isAdmin && (
+          <>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Edit className="mr-1.5 h-4 w-4" />
               Editar
@@ -185,9 +177,10 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
               <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
             </Button>
-          </div>
-        )}
-      </div>
+          </>
+        )
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-3 sm:gap-6 grid-cols-2 lg:grid-cols-4">
@@ -217,7 +210,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Total Ventas</span>
+              <span className="hidden sm:inline">Total ventas</span>
               <span className="sm:hidden">Ventas</span>
             </CardTitle>
           </CardHeader>
@@ -242,7 +235,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Monto Total</span>
+              <span className="hidden sm:inline">Monto total</span>
               <span className="sm:hidden">Monto</span>
             </CardTitle>
           </CardHeader>
@@ -332,7 +325,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
       {/* Historial de Ventas */}
       <Card>
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Historial de Ventas</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Historial de ventas</CardTitle>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
           {vendedor.ventas.length === 0 ? (
@@ -382,6 +375,6 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
         vendedorNombre={vendedor.nombre}
         onLiquidated={fetchVendedor}
       />
-    </div>
+    </PageShell>
   )
 }

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { useSession } from "next-auth/react"
+import { PageShell } from "@/components/ui/page-shell"
+import { SectionHeader } from "@/components/ui/section-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  ArrowLeft,
   Mail,
   Calendar,
   ClipboardList,
@@ -183,35 +183,21 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3 sm:gap-4">
-          {isAdmin && (
-            <Button variant="ghost" size="icon" asChild className="shrink-0">
-              <Link href="/tecnicos">
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-            </Button>
-          )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-3xl font-bold truncate">
-                {isSelf ? "Mi desempeño" : tecnico.nombre}
-              </h1>
-              {!tecnico.activo && (
-                <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">
-                  Inactivo
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {isSelf ? tecnico.nombre : "Detalle del técnico"}
-            </p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="flex flex-wrap gap-2 pl-12 sm:pl-0">
+    <PageShell
+      title={isSelf ? "Mi desempeño" : tecnico.nombre}
+      description={isSelf ? tecnico.nombre : "Detalle del técnico"}
+      backHref={isAdmin ? "/tecnicos" : undefined}
+      backLabel="Volver a técnicos"
+      titleAddon={
+        !tecnico.activo && (
+          <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">
+            Inactivo
+          </Badge>
+        )
+      }
+      actions={
+        isAdmin && (
+          <>
             {tecnico.ordenesActivas > 0 && (
               <Button
                 variant="outline"
@@ -250,9 +236,10 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
               <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
             </Button>
-          </div>
-        )}
-      </div>
+          </>
+        )
+      }
+    >
 
       {!tecnico.activo && (
         <div className="flex items-start gap-2 p-3 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-sm">
@@ -334,7 +321,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Órdenes Activas</span>
+              <span className="hidden sm:inline">Órdenes activas</span>
               <span className="sm:hidden">Activas</span>
             </CardTitle>
           </CardHeader>
@@ -362,22 +349,19 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
 
       {/* Comisiones del técnico */}
       {canView && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-semibold">
-              {isSelf ? "Mis comisiones" : "Comisiones"}
-            </h2>
-            <span className="text-xs text-muted-foreground">
-              % Comisión base aplicada a ganancia (cobrado − repuestos)
-            </span>
-          </div>
+        <section className="space-y-3" aria-labelledby="tecnico-comisiones">
+          <SectionHeader
+            id="tecnico-comisiones"
+            title={isSelf ? "Mis comisiones" : "Comisiones"}
+            description="% Comisión base aplicada a ganancia (cobrado − repuestos)"
+          />
           <TecnicoComisiones
             tecnicoId={tecnico.id}
             tecnicoNombre={tecnico.nombre}
             porcentajeDefault={tecnico.porcentajeComision}
             readOnly={!isAdmin}
           />
-        </div>
+        </section>
       )}
 
       {/* Horario laboral (sólo admin) */}
@@ -407,6 +391,6 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
         ordenesActivas={tecnico.ordenesActivas}
         onSuccess={fetchTecnico}
       />
-    </div>
+    </PageShell>
   )
 }

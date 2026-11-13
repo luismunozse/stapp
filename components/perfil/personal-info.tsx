@@ -64,7 +64,7 @@ export function PersonalInfo({ initialName, email, role, onNameUpdated }: Person
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Informacion personal</CardTitle>
+        <CardTitle>Información personal</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">

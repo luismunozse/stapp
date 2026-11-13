@@ -307,7 +307,7 @@ export function EmailCompose() {
           <Label htmlFor="contenido">Mensaje</Label>
           <Textarea
             id="contenido"
-            placeholder="Escribe tu mensaje aquí..."
+            placeholder="Escribí tu mensaje acá..."
             maxLength={10000}
             value={contenido}
             onChange={(e) => setContenido(e.target.value)}

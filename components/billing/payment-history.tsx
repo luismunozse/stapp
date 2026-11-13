@@ -57,7 +57,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
     return (
       <Card>
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Historial de Pagos</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Historial de pagos</CardTitle>
           <CardDescription className="text-xs sm:text-sm">Tus pagos y facturas</CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
@@ -73,7 +73,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
   return (
     <Card>
       <CardHeader className="p-4 sm:p-6">
-        <CardTitle className="text-base sm:text-lg">Historial de Pagos</CardTitle>
+        <CardTitle className="text-base sm:text-lg">Historial de pagos</CardTitle>
         <CardDescription className="text-xs sm:text-sm">Tus pagos y facturas</CardDescription>
       </CardHeader>
       <CardContent className="p-4 sm:p-6 pt-0">

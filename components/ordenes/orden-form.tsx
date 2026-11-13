@@ -801,7 +801,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     showColor,
     showMarca,
   } = useTipoDispositivoConfig(tiposDispositivo, tipoDispositivo)
-  const imeiLabel = config.campos?.imei?.label || "Numero de Serie"
+  const imeiLabel = config.campos?.imei?.label || "Número de serie"
   const imeiPlaceholder = config.campos?.imei?.placeholder || "S/N del equipo"
   const imeiMaxLength = config.campos?.imei?.maxLength
   const imeiEsImei = config.campos?.imei?.validacion === "imei"
@@ -1284,7 +1284,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       if (res.status === 202) {
         // Queued offline
         clearDraft()
-        await showInfo("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
+        await showInfo("Orden guardada sin conexión. Se va a sincronizar automáticamente cuando vuelva la conexión.")
         onSuccess?.()
         onClose()
         return
@@ -1646,7 +1646,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {/* Sector selector for empresa clients */}
           {esClienteEmpresa && (
             <div>
-              <Label>Sector / Area</Label>
+              <Label>Sector / área</Label>
               {sectoresCliente.length > 0 ? (
                 <Select
                   value={selectedSectorId}
@@ -1668,7 +1668,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 <Input
                   value={nuevoSectorNombre}
                   onChange={(e) => setNuevoSectorNombre(e.target.value)}
-                  placeholder="Nuevo sector (ej: Contaduria, Transito)"
+                  placeholder="Nuevo sector (ej: Contaduría, Tránsito)"
                   className="flex-1"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -1742,7 +1742,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
             <div>
               <Label htmlFor="dispositivo">
-                {campoDispositivo ? campoDispositivo.label + " *" : "Modelo / Dispositivo *"}
+                {campoDispositivo ? campoDispositivo.label + " *" : "Modelo / dispositivo *"}
               </Label>
               {campoDispositivo ? (
                 <Select
@@ -1766,7 +1766,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                       if (e.target.value.trim()) clearErrors("dispositivo")
                     },
                   })}
-                  placeholder="Modelo o descripcion del equipo"
+                  placeholder="Modelo o descripción del equipo"
                 />
               )}
               {errors.dispositivo && (
@@ -1826,7 +1826,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {/* Problema reportado con seleccion rapida */}
           <div>
-            <Label htmlFor="problemaReportado">Problema Reportado *</Label>
+            <Label htmlFor="problemaReportado">Problema reportado *</Label>
             {problemasComunes.length > 0 && (
               <div className="mb-2">
                 <p className="text-xs text-muted-foreground mb-1">Problemas comunes (clic para agregar):</p>
@@ -1858,7 +1858,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   if (e.target.value.trim()) clearErrors("problemaReportado")
                 },
               })}
-              placeholder="Describa el problema del equipo..."
+              placeholder="Describí el problema del equipo..."
               rows={3}
             />
             {errors.problemaReportado && (
@@ -1948,7 +1948,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {currentStep === 2 && (<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="presupuesto">Presupuesto (Opcional)</Label>
+              <Label htmlFor="presupuesto">Presupuesto (opcional)</Label>
               <Input
                 id="presupuesto"
                 type="text"
@@ -1968,7 +1968,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             </div>
             <DatePicker
               id="fechaPrometida"
-              label="Fecha Prometida (Opcional)"
+              label="Fecha prometida (opcional)"
               value={watch("fechaPrometida")}
               onChange={(value) => setValue("fechaPrometida", value || "")}
               min={new Date().toISOString().split("T")[0]}
@@ -1977,7 +1977,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {!isTecnicoRole && tecnicosDisponibles.length > 0 && (
             <div>
-              <Label htmlFor="tecnicoId">{term("tecnico")} asignado (Opcional)</Label>
+              <Label htmlFor="tecnicoId">{term("tecnico")} asignado (opcional)</Label>
               <Select
                 value={tecnicoElegido || "NONE"}
                 onValueChange={(v) => setSelectedTecnicoId(v === "NONE" ? "" : v)}
@@ -2036,14 +2036,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     Presupuesto aceptado al momento
                   </span>
                   <p className="text-xs text-muted-foreground">
-                    El cliente acepta el precio y deja el equipo para reparacion
+                    El cliente acepta el precio y deja el equipo para reparación
                   </p>
                 </div>
               </label>
 
               {presupuestoAceptado && (
                 <div className="mt-4 pl-7">
-                  <Label htmlFor="sena">Seña / Adelanto (Opcional)</Label>
+                  <Label htmlFor="sena">Seña / adelanto (opcional)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-muted-foreground">$</span>
                     <Input
@@ -2159,7 +2159,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               >
                 <div className="flex items-center gap-2 font-medium">
                   <ClipboardCheck className="h-4 w-4" />
-                  Checklist de Recepción
+                  Checklist de recepción
                   <span className="text-xs text-muted-foreground font-normal">
                     ({checklistTemplate.nombre})
                   </span>
@@ -2181,8 +2181,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     }, {})
                     const categoriaLabels: Record<string, string> = {
                       CONDICION_FISICA: "Condición Física",
-                      ACCESORIOS: "Accesorios Entregados",
-                      FUNCIONAL: "Estado Funcional",
+                      ACCESORIOS: "Accesorios entregados",
+                      FUNCIONAL: "Estado funcional",
                       OTRO: "Otros",
                       GENERAL: "General",
                     }
@@ -2298,7 +2298,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   <div className="pt-2 border-t">
                     <SignaturePad
                       key={firmaResetKey}
-                      label="Firma del Cliente (Conformidad de recepción)"
+                      label="Firma del cliente (conformidad de recepción)"
                       onSignatureChange={(data, mime) => {
                         setChecklistFirma(data)
                         setChecklistFirmaMime(mime)

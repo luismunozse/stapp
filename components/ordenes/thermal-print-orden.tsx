@@ -13,7 +13,7 @@ import {
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { useTerminologia } from "@/contexts/currency-context"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import {
@@ -21,11 +21,13 @@ import {
   saveAncho,
   anchoToPx,
   anchoLogoDots,
+  logoMaxDots,
   ANCHOS_TERMICOS,
   DEFAULT_ANCHO,
   type AnchoTermico,
 } from "@/lib/thermal-paper"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
 import { lineasEstadoFisico, type EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
@@ -89,7 +91,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       ? `${window.location.origin}/seguimiento/${orden.publicToken}`
       : null
     return {
-      nombreEmpresa: orden.organizationName || "Servicio Tecnico",
+      nombreEmpresa: orden.organizationName || "Servicio Técnico",
       telefonoEmpresa: orden.organizationTelefono ?? null,
       direccionEmpresa: orden.organizationDireccion ?? null,
       logoUrl: orden.organizationLogoUrl ?? null,
@@ -126,7 +128,10 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null
     if (preview.logoUrl) {
-      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
+      logoRaster = await imageUrlToRaster(preview.logoUrl, {
+        ...logoMaxDots(ancho),
+        printerDots: anchoLogoDots(ancho),
+      })
     }
     return {
       numeroOrden: orden.numeroOrden,
@@ -255,7 +260,7 @@ ${styles}
       try {
         await waitForImages()
         try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
-        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
+        ajustarPaginaImpresion(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -349,6 +354,8 @@ ${styles}
               </Button>
             )}
           </div>
+
+          <AvisoImpresionNavegador />
         </DialogContent>
       </Dialog>
     </>
@@ -471,7 +478,7 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
       {qrDataUrl && (
         <>
           <div className="text-center font-bold mt-2">SEGUIMIENTO ONLINE</div>
-          <div className="text-center text-[10px]">Escanea para ver el estado</div>
+          <div className="text-center text-[10px]">Escaneá para ver el estado</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrDataUrl} alt="QR seguimiento" className="mx-auto my-1" style={{ width: "150px", height: "150px" }} />
           <Sep />
@@ -480,13 +487,13 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
 
       {data.terminosCondiciones && (
         <>
-          <div className="font-bold">TERMINOS Y CONDICIONES</div>
+          <div className="font-bold">TÉRMINOS Y CONDICIONES</div>
           <div className="whitespace-pre-wrap break-words text-[10px]">{data.terminosCondiciones}</div>
           <Sep />
         </>
       )}
 
-      <div className="text-center font-bold mt-1">Conserve este comprobante</div>
+      <div className="text-center font-bold mt-1">Conservá este comprobante</div>
       {data.telefonoEmpresa && (
         <div className="text-center">Consultas: {data.telefonoEmpresa}</div>
       )}

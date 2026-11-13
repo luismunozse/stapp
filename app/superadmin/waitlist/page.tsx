@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Smartphone, Trash2, Download, Search, Mail, X, Loader2, Inbox } from "lucide-react"
@@ -101,17 +102,11 @@ export default function WaitlistPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Smartphone className="h-8 w-8" />
-          Waitlist iOS
-        </h1>
-        <p className="text-muted-foreground">
-          Emails registrados para la app de iOS
-        </p>
-      </div>
-
+    <PageShell
+      title="Lista de espera de iOS"
+      description="Emails registrados para la app de iOS"
+      icon={Smartphone}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -306,6 +301,6 @@ export default function WaitlistPage() {
         loading={bulkDeleting}
         onConfirm={handleBulkDelete}
       />
-    </div>
+    </PageShell>
   )
 }

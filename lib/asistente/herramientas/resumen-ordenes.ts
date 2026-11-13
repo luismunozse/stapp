@@ -19,6 +19,7 @@ const inputSchema = z.object({
 const NC_EMBED = NOTAS_CREDITO_APLICADO_EMBED.replace(/\s+\(/, "(")
 
 export const resumenOrdenes: Herramienta = {
+  etiqueta: "Armando el resumen de órdenes…",
   definicion: {
     name: "resumen_ordenes",
     description:

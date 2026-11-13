@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import {
   Building2,
   Users,
@@ -113,7 +114,7 @@ export function DashboardContent() {
   const stats = data
     ? [
         {
-          title: "Total Organizaciones",
+          title: "Total de organizaciones",
           value: data.totalOrganizations,
           icon: Building2,
           description: `${data.activeOrganizations} activas`,
@@ -123,7 +124,7 @@ export function DashboardContent() {
           tooltip: undefined as string | undefined,
         },
         {
-          title: "Total Usuarios",
+          title: "Total de usuarios",
           value: data.totalUsers,
           icon: Users,
           description: "En todas las organizaciones",
@@ -133,7 +134,7 @@ export function DashboardContent() {
           tooltip: undefined as string | undefined,
         },
         {
-          title: "Suscripciones Premium",
+          title: "Suscripciones Profesional",
           value: data.premiumSubscriptions,
           icon: CreditCard,
           description: "Planes activos",
@@ -143,7 +144,7 @@ export function DashboardContent() {
           tooltip: undefined as string | undefined,
         },
         {
-          title: "Ingresos del Mes",
+          title: "Ingresos del mes",
           value: ingresosDelMes,
           icon: DollarSign,
           description: sinIngresos && data.premiumSubscriptions > 0
@@ -153,11 +154,11 @@ export function DashboardContent() {
           bgColor: "bg-amber-100 dark:bg-amber-950",
           href: "/superadmin/pagos",
           tooltip: sinIngresos && data.premiumSubscriptions > 0
-            ? "Hay suscripciones Premium pero ningún pago registrado este mes. Verificá la integración con el provider de pagos."
+            ? "Hay suscripciones Profesional pero ningún pago registrado este mes. Verificá la integración con el provider de pagos."
             : undefined,
         },
         {
-          title: "Nuevas Orgs (Mes)",
+          title: "Organizaciones nuevas (mes)",
           value: data.newOrgsThisMonth,
           icon: TrendingUp,
           description: "Registradas este mes",
@@ -170,15 +171,11 @@ export function DashboardContent() {
     : []
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Panel SuperAdmin</h1>
-          <p className="text-muted-foreground">
-            Vista global del sistema
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <PageShell
+      title="Panel de superadmin"
+      description="Vista global del sistema"
+      actions={
+        <>
           <div
             className="flex items-center gap-1.5 text-xs text-muted-foreground"
             title={
@@ -207,8 +204,9 @@ export function DashboardContent() {
             )}
             {loading ? "Actualizando..." : "Actualizar"}
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Widget de anomalías de facturación. Se auto-oculta si no hay nada. */}
       <AnomaliesWidget />
@@ -325,7 +323,7 @@ export function DashboardContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Organizaciones Recientes
+                Organizaciones recientes
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -364,7 +362,7 @@ export function DashboardContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
-                Resumen de Ingresos
+                Resumen de ingresos
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -379,7 +377,7 @@ export function DashboardContent() {
                 </div>
                 <div className="flex items-center justify-between py-3 border-b">
                   <span className="text-muted-foreground">
-                    Suscripciones Premium
+                    Suscripciones Profesional
                   </span>
                   <span className="font-medium">
                     {data.premiumSubscriptions}
@@ -399,6 +397,6 @@ export function DashboardContent() {
 
       {/* Cron Jobs Panel */}
       <CronPanel />
-    </div>
+    </PageShell>
   )
 }

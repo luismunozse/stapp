@@ -153,7 +153,7 @@ function NotificationItem({
           onDismiss(notification.id)
         }}
         className="absolute top-2 right-2 h-5 w-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent text-muted-foreground hover:text-foreground"
-        aria-label="Descartar notificacion"
+        aria-label="Descartar notificación"
       >
         <X className="h-3 w-3" />
       </button>

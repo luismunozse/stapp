@@ -98,10 +98,10 @@ describe("OrdenDetail: encabezado y barra de acción", () => {
     expect(screen.getByRole("button", { name: /Cobrar \$10000/ })).toBeInTheDocument()
   })
 
-  it("una orden paga dice Pagado y no ofrece cobrar", async () => {
+  it("una orden paga dice Cobrado y no ofrece cobrar", async () => {
     orden = { ...BASE, totalCobrado: 15000, estadoCobro: "COBRADO" }
     render(<OrdenDetail ordenId="ord-1" />)
-    expect(await screen.findByText("Pagado")).toBeInTheDocument()
+    expect(await screen.findByText("Cobrado")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Cobrar \$/ })).not.toBeInTheDocument()
   })
 
@@ -113,7 +113,7 @@ describe("OrdenDetail: encabezado y barra de acción", () => {
   it("una orden entregada no tiene acción principal", async () => {
     orden = { ...BASE, estado: "ENTREGADO", totalCobrado: 15000 }
     render(<OrdenDetail ordenId="ord-1" />)
-    await screen.findByText("Pagado")
+    await screen.findByText("Cobrado")
     expect(screen.queryByRole("button", { name: /^Entregar/ })).not.toBeInTheDocument()
   })
 

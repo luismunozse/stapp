@@ -21,6 +21,8 @@ export interface ResultadoHerramienta {
 
 export interface Herramienta {
   definicion: Anthropic.Tool
+  /** Lo que ve el usuario mientras corre ("Buscando órdenes…"). Sin etiqueta, uno genérico. */
+  etiqueta?: string
   /** Si esta herramienta se ofrece a este actor. Sin permiso, el modelo ni siquiera la ve. */
   disponible: (ctx: ContextoHerramienta) => boolean | Promise<boolean>
   ejecutar: (input: unknown, ctx: ContextoHerramienta) => Promise<ResultadoHerramienta>

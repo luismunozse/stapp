@@ -186,7 +186,7 @@ function EditarEquipoForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="editar-dispositivo">
-            {campoDispositivo ? campoDispositivo.label : "Modelo / Dispositivo"} *
+            {campoDispositivo ? campoDispositivo.label : "Modelo / dispositivo"} *
           </Label>
           {campoDispositivo ? (
             <Select value={dispositivo} onValueChange={(v) => handleCampoExtraChange(campoDispositivo, v)}>

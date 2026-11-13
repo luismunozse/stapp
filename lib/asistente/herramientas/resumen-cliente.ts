@@ -54,6 +54,7 @@ async function ordenesRecientes(clienteId: string, ctx: ContextoHerramienta) {
 }
 
 export const resumenCliente: Herramienta = {
+  etiqueta: "Buscando el cliente…",
   definicion: {
     name: "resumen_cliente",
     description:

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
+import { resolverContextoValuacion } from "@/lib/currency/valuacion.server"
+import { montoLocal } from "@/lib/currency/valuacion.server"
+import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 
 // GET /api/inventario/analisis-abc?dias=90&diasMuerto=90
 // Devuelve análisis ABC + rotación por item, con totales agregados.
@@ -30,13 +34,14 @@ export async function GET(request: Request) {
       proveedorId: string | null
       proveedorNombre: string | null
       stockActual: number
-      precioCompra: number
-      precioVenta: number
-      capitalInmovilizado: number
+      // null: ítem en divisa sin equivalente local (sin cotización / otra divisa)
+      precioCompra: number | null
+      precioVenta: number | null
+      capitalInmovilizado: number | null
       qtyVendida: number
       revenue: number
-      margenUnitario: number
-      margenTotal: number
+      margenUnitario: number | null
+      margenTotal: number | null
       ventasCount: number
       ultimaVentaAt: string | null
       diasSinVenta: number | null
@@ -48,7 +53,7 @@ export async function GET(request: Request) {
       clasificacionRotacion: "ALTA" | "MEDIA" | "BAJA" | "MUERTA" | "NUEVA"
     }
 
-    const rows: Row[] = (data || []).map((r: any) => ({
+    const rowsRpc: Row[] = (data || []).map((r: any) => ({
       inventarioId: r.inventario_id,
       codigo: r.codigo,
       nombre: r.nombre,
@@ -75,15 +80,79 @@ export async function GET(request: Request) {
       clasificacionRotacion: r.clasificacion_rotacion,
     }))
 
-    // Totales agregados
+    // La función SQL calcula capital y margen con el precio crudo. Los ítems en divisa se
+    // recalculan en local; sin equivalente (sin cotización / otra divisa) se excluyen y se cuentan.
+    // Se piden solo los ítems en divisa de la org (no la lista de ids en la URL, que con
+    // inventarios grandes excede el largo de la query); los ausentes del RPC se ignoran y los
+    // del RPC que no aparecen acá son locales.
+    const idsRpc = new Set(rowsRpc.map((r) => r.inventarioId))
+    const monedaPorId = new Map<string, { moneda: MonedaCatalogo; pc: number | null; pv: number | null }>()
+    if (idsRpc.size > 0) {
+      // Paginado: un select suelto se corta en silencio a 1000 filas y el resto pasaría por local.
+      const precios = await fetchAllRows<{
+        id: string
+        moneda: string | null
+        precio_compra: number | string | null
+        precio_venta: number | string | null
+      }>("inventario", "id, moneda, precio_compra, precio_venta", (q) =>
+        q.eq("organization_id", organizationId!).not("moneda", "is", null)
+      )
+      for (const p of precios) {
+        if (p.moneda != null && idsRpc.has(p.id)) {
+          monedaPorId.set(p.id, {
+            moneda: p.moneda as MonedaCatalogo,
+            pc: p.precio_compra == null ? null : Number(p.precio_compra),
+            pv: p.precio_venta == null ? null : Number(p.precio_venta),
+          })
+        }
+      }
+    }
+    const ctx = monedaPorId.size > 0
+      ? await resolverContextoValuacion(organizationId!, [...monedaPorId.values()])
+      : null
+
+    // Todas las filas se conservan: revenue, conteos, porcentajes y clasificación son los de SQL.
+    // Un ítem en divisa sin equivalente queda con capital y margen en null y fuera de los totales
+    // de valor de stock; se cuenta en excluidosSinCotizacion.
+    let excluidosSinCotizacion = 0
+    let aproximado = false
+    const rows: Row[] = rowsRpc.map((r) => {
+      const d = monedaPorId.get(r.inventarioId)
+      if (!d || ctx === null) return r
+      const pc = montoLocal(d.pc ?? 0, d.moneda, ctx)
+      const pv = montoLocal(d.pv ?? 0, d.moneda, ctx)
+      if (pc === null || pv === null) {
+        excluidosSinCotizacion++
+        return {
+          ...r,
+          precioCompra: null,
+          precioVenta: null,
+          capitalInmovilizado: null,
+          margenUnitario: null,
+          margenTotal: null,
+        }
+      }
+      aproximado = true
+      const margenUnitario = pv - pc
+      return {
+        ...r,
+        precioCompra: pc,
+        precioVenta: pv,
+        capitalInmovilizado: Math.round((Number(r.stockActual) || 0) * pc * 100) / 100,
+        margenUnitario: Math.round(margenUnitario * 100) / 100,
+        margenTotal: Math.round((Number(r.qtyVendida) || 0) * Math.max(margenUnitario, 0) * 100) / 100,
+      }
+    })
+
+    // Totales agregados (los de valor de stock suman solo filas con equivalente)
     const totales = {
       items: rows.length,
       revenue: rows.reduce((s, r) => s + r.revenue, 0),
-      margenTotal: rows.reduce((s, r) => s + r.margenTotal, 0),
-      capitalInmovilizado: rows.reduce((s, r) => s + r.capitalInmovilizado, 0),
+      margenTotal: rows.reduce((s, r) => s + (r.margenTotal ?? 0), 0),
+      capitalInmovilizado: rows.reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
       capitalMuerto: rows
         .filter((r) => r.clasificacionRotacion === "MUERTA")
-        .reduce((s, r) => s + r.capitalInmovilizado, 0),
+        .reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
     }
 
     const porAbc = {
@@ -103,6 +172,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       periodo: { dias, diasMuerto },
+      aproximado,
+      excluidosSinCotizacion,
       totales,
       resumenAbc: {
         A: { count: porAbc.A.length, revenue: porAbc.A.reduce((s, r) => s + r.revenue, 0) },
@@ -110,7 +181,7 @@ export async function GET(request: Request) {
         C: { count: porAbc.C.length, revenue: porAbc.C.reduce((s, r) => s + r.revenue, 0) },
         SIN_VENTAS: {
           count: porAbc.SIN_VENTAS.length,
-          capitalInmovilizado: porAbc.SIN_VENTAS.reduce((s, r) => s + r.capitalInmovilizado, 0),
+          capitalInmovilizado: porAbc.SIN_VENTAS.reduce((s, r) => s + (r.capitalInmovilizado ?? 0), 0),
         },
       },
       resumenRotacion: porRotacion,

@@ -11,6 +11,8 @@ import { formatInventario } from "@/lib/db-utils"
 import { selectConFallback } from "@/lib/variantes"
 import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
 import { registrarCreacion } from "@/lib/inventario-eventos"
+import { validarMonedaEscritura } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -42,6 +44,9 @@ const inventarioSchema = z.object({
   tieneVariantes: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
+  // Currency of the price: null = the organization's local currency. Any string passes the schema
+  // on purpose: validarMonedaEscritura owns the business rule and its message.
+  moneda: z.string().nullable().optional(),
 })
 
 const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
@@ -50,7 +55,7 @@ const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
 // that migration is not applied the database answers with a missing-column error and
 // the list falls back to the plain select, which is the one the list always used.
 const LISTA_SELECT_BASE =
-  "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)"
+  "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, moneda, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)"
 const LISTA_SELECT_CON_GRUPO = `${LISTA_SELECT_BASE}, grupo_id, atributos`
 
 export async function GET(request: Request) {
@@ -93,6 +98,8 @@ export async function GET(request: Request) {
     const sortOrder = searchParams.get("sortOrder") === "desc" ? false : true
 
     const includeArchived = searchParams.get("includeArchived") === "true"
+    // "local" = priced in the local currency, "divisa" = priced in a foreign one; anything else = all.
+    const monedaFiltro = searchParams.get("moneda")
 
     // bajoStock necesita el umbral de la org antes de armar la query.
     let stockThreshold: number | null = null
@@ -149,6 +156,12 @@ export async function GET(request: Request) {
         } else {
           q = q.eq("proveedor_id", proveedorId)
         }
+      }
+
+      if (monedaFiltro === "local") {
+        q = q.is("moneda", null)
+      } else if (monedaFiltro === "divisa") {
+        q = q.not("moneda", "is", null)
       }
 
       if (stockThreshold !== null) {
@@ -239,6 +252,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // The foreign-currency rules need the organization's config: read it only when a currency is
+    // asked for, so a plain (local) create costs no extra query.
+    let moneda: "USD" | "EUR" | null = null
+    if (data.moneda != null) {
+      const { config } = await cargarConfigMoneda(organizationId!)
+      const validacion = validarMonedaEscritura(data.moneda, undefined, config)
+      if (!validacion.ok) return NextResponse.json({ error: validacion.error }, { status: 400 })
+      moneda = validacion.moneda
+    }
+
     let codigo = data.codigo
     let inventario = null
     let retries = 3
@@ -267,6 +290,7 @@ export async function POST(request: Request) {
         barcode: data.barcode?.trim() || null,
         ubicacion: data.ubicacion?.trim() || null,
         dias_garantia_default: diasGarantiaDefaultVal,
+        moneda,
         organization_id: organizationId!,
       }
 

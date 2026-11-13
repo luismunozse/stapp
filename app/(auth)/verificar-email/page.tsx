@@ -73,7 +73,7 @@ function VerifyEmailContent() {
         }
       } catch {
         setStatus("error")
-        setErrorMessage("Error de conexión. Intenta de nuevo.")
+        setErrorMessage("Error de conexión. Intentá de nuevo.")
       }
     }
 

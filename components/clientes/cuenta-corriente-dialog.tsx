@@ -29,7 +29,7 @@ export function CuentaCorrienteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PiggyBank className="h-5 w-5" />
-            Cuenta Corriente - {cliente.nombre}
+            Cuenta corriente: {cliente.nombre}
           </DialogTitle>
         </DialogHeader>
         {open && <CuentaCorrientePanel cliente={cliente} onDeposito={onDeposito} />}

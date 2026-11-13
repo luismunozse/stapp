@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -374,27 +375,26 @@ export function EngagementContent() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
-        {/* ================================================================ */}
-        {/* SECCIÓN 1 — HEADER Y ALERTA DE RIESGO                          */}
-        {/* ================================================================ */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Engagement y Retención</h1>
-            <p className="text-muted-foreground">
-              Monitoreo de salud, NPS y acciones de retención
+      {/* ================================================================ */}
+      {/* SECCIÓN 1 — HEADER Y ALERTA DE RIESGO                          */}
+      {/* ================================================================ */}
+      <PageShell
+        title="Salud y retención"
+        description="Monitoreo de salud, NPS y acciones de retención"
+        meta={
+          data?.summary.lastCalculatedAt && (
+            <p className="text-xs text-muted-foreground">
+              Último cálculo: {timeAgo(data.summary.lastCalculatedAt + "T00:00:00")}
             </p>
-            {data?.summary.lastCalculatedAt && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Último cálculo: {timeAgo(data.summary.lastCalculatedAt + "T00:00:00")}
-              </p>
-            )}
-          </div>
+          )
+        }
+        actions={
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             {loading ? "Cargando..." : "Actualizar"}
           </Button>
-        </div>
+        }
+      >
 
         {/* Alerta de riesgo */}
         {data && (highRisk > 0 || mediumRisk > 0) && (
@@ -463,7 +463,7 @@ export function EngagementContent() {
             {/* 1. Riesgo Alto */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Riesgo Alto</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Riesgo alto</CardTitle>
                 <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950"><AlertTriangle className="h-4 w-4 text-red-600" /></div>
               </CardHeader>
               <CardContent>
@@ -513,7 +513,7 @@ export function EngagementContent() {
             {/* 4. Churn Rate */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Churn Rate</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tasa de abandono</CardTitle>
                 <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950"><TrendingUp className="h-4 w-4 text-purple-600" /></div>
               </CardHeader>
               <CardContent>
@@ -560,7 +560,7 @@ export function EngagementContent() {
             {/* 6. Orgs Activas */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Orgs Activas</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Organizaciones activas</CardTitle>
                 <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950"><Users className="h-4 w-4 text-blue-600" /></div>
               </CardHeader>
               <CardContent>
@@ -660,7 +660,7 @@ export function EngagementContent() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Salud por Organización
+                  Salud por organización
                 </CardTitle>
 
                 {/* Filter pills */}
@@ -1148,7 +1148,7 @@ export function EngagementContent() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageShell>
     </TooltipProvider>
   )
 }

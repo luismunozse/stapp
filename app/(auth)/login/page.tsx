@@ -498,7 +498,7 @@ function LoginForm() {
               </Link>
             </div>
             <Button type="submit" className="w-full h-11" disabled={loading}>
-              {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+              {loading ? "Iniciando sesión..." : "Iniciar sesión"}
             </Button>
           </form>
 

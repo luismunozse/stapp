@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -50,9 +51,9 @@ interface ChangelogEntry {
 }
 
 const tipoConfig: Record<string, { icon: typeof Sparkles; label: string; color: string }> = {
-  NUEVA_FUNCION: { icon: Sparkles, label: "Nueva funcion", color: "text-blue-600" },
+  NUEVA_FUNCION: { icon: Sparkles, label: "Nueva función", color: "text-blue-600" },
   MEJORA: { icon: Zap, label: "Mejora", color: "text-amber-600" },
-  CORRECCION: { icon: Wrench, label: "Correccion", color: "text-green-600" },
+  CORRECCION: { icon: Wrench, label: "Corrección", color: "text-green-600" },
 }
 
 export function ChangelogContent() {
@@ -101,13 +102,11 @@ export function ChangelogContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Changelog</h1>
-          <p className="text-muted-foreground">Gestiona las novedades que ven los usuarios</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title="Novedades"
+      description="Gestioná las novedades que ven los usuarios"
+      actions={
+        <>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Actualizar
@@ -116,8 +115,9 @@ export function ChangelogContent() {
             <Plus className="h-4 w-4 mr-2" />
             Nueva entrada
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -148,11 +148,11 @@ export function ChangelogContent() {
       </div>
 
       {/* List */}
-      <Card>
+      <Card variant="flat">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Newspaper className="h-5 w-5" />
-            Entradas del Changelog
+            Entradas
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -213,7 +213,7 @@ export function ChangelogContent() {
               })
             ) : (
               <p className="text-center text-muted-foreground py-8">
-                No hay entradas en el changelog. Crea una para comunicar novedades a tus usuarios.
+                No hay novedades cargadas. Creá una para comunicar cambios a tus usuarios.
               </p>
             )}
           </div>
@@ -224,21 +224,21 @@ export function ChangelogContent() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nueva entrada de changelog</DialogTitle>
+            <DialogTitle>Nueva novedad</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Titulo</Label>
+              <Label>Título</Label>
               <Input
-                placeholder="Ej: Nueva funcion de reportes"
+                placeholder="Ej.: Nueva función de reportes"
                 value={form.titulo}
                 onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
-              <Label>Descripcion</Label>
+              <Label>Descripción</Label>
               <Textarea
-                placeholder="Describe la novedad..."
+                placeholder="Describí la novedad..."
                 value={form.descripcion}
                 onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
                 rows={3}
@@ -250,9 +250,9 @@ export function ChangelogContent() {
                 <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NUEVA_FUNCION">Nueva funcion</SelectItem>
+                    <SelectItem value="NUEVA_FUNCION">Nueva función</SelectItem>
                     <SelectItem value="MEJORA">Mejora</SelectItem>
-                    <SelectItem value="CORRECCION">Correccion</SelectItem>
+                    <SelectItem value="CORRECCION">Corrección</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -262,7 +262,7 @@ export function ChangelogContent() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="no">No</SelectItem>
-                    <SelectItem value="si">Si - Destacado</SelectItem>
+                    <SelectItem value="si">Sí, destacado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -277,6 +277,6 @@ export function ChangelogContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

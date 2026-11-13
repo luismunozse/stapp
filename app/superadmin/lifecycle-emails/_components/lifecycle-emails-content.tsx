@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import {
   Mail,
   Eye,
@@ -59,7 +60,7 @@ function StatusBadge({ status }: { status: string }) {
   }
   if (status === "ARCHIVED") {
     return (
-      <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+      <Badge className="bg-muted text-muted-foreground">
         Archivado
       </Badge>
     )
@@ -123,19 +124,16 @@ export function LifecycleEmailsContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Plantillas de Email</h1>
-          <p className="text-muted-foreground">
-            Editá y publicá los emails antes de que el sistema los envíe automáticamente.
-          </p>
-        </div>
+    <PageShell
+      title="Emails automáticos"
+      description="Editá y publicá los emails antes de que el sistema los envíe automáticamente."
+      actions={
         <Button variant="outline" size="sm" onClick={loadTemplates} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
           Actualizar
         </Button>
-      </div>
+      }
+    >
 
       {/* Kill switch info */}
       <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
@@ -208,7 +206,7 @@ export function LifecycleEmailsContent() {
               <Mail className="h-5 w-5" />
               Plantillas
             </CardTitle>
-            <CardDescription>Click en "Editar" para abrir el editor o "Preview" para ver el render.</CardDescription>
+            <CardDescription>Hacé clic en "Editar" para abrir el editor o en "Vista previa" para ver cómo queda.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -254,7 +252,7 @@ export function LifecycleEmailsContent() {
                           ) : (
                             <Eye className="h-4 w-4 sm:mr-1" />
                           )}
-                          <span className="hidden sm:inline">Preview</span>
+                          <span className="hidden sm:inline">Vista previa</span>
                         </Button>
                         <Button variant="default" size="sm" onClick={() => handleEdit(t.id)}>
                           <Pencil className="h-4 w-4 sm:mr-1" />
@@ -288,7 +286,7 @@ export function LifecycleEmailsContent() {
                 <iframe
                   srcDoc={previewState.html}
                   className="w-full h-[700px] border-0 border-t bg-white"
-                  title="Email preview"
+                  title="Vista previa del email"
                   sandbox="allow-same-origin"
                 />
               </CardContent>
@@ -307,6 +305,6 @@ export function LifecycleEmailsContent() {
       {editingId && (
         <TemplateEditorDialog id={editingId} onClose={handleEditorClose} />
       )}
-    </div>
+    </PageShell>
   )
 }

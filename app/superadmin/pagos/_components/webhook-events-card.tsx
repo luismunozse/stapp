@@ -301,13 +301,13 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
         {isExpanded && (
           <div className="ml-5 mt-1 mb-2 p-3 rounded border border-dashed bg-muted/20 text-xs space-y-2">
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              <span className="text-muted-foreground">Provider Event ID:</span>
+              <span className="text-muted-foreground">ID del evento del proveedor:</span>
               <span className="font-mono">{e.provider_event_id || "—"}</span>
               <span className="text-muted-foreground">Request ID:</span>
               <span className="font-mono">{(e as any).provider_request_id || "—"}</span>
               <span className="text-muted-foreground">Organization:</span>
               <span>{e.organization ? `${e.organization.nombre} (${e.organization.slug})` : "—"}</span>
-              <span className="text-muted-foreground">Signature Valid:</span>
+              <span className="text-muted-foreground">Firma válida:</span>
               <span>{e.signature_valid === null ? "N/A" : e.signature_valid ? "Si" : "No"}</span>
               <span className="text-muted-foreground">Processed At:</span>
               <span>{e.processed_at ? formatDateTime(e.processed_at) : "—"}</span>
@@ -315,7 +315,7 @@ export function WebhookEventsCard({ onReconcile }: { onReconcile?: () => void })
               <span>{e.duration_ms != null ? `${e.duration_ms}ms` : "—"}</span>
               {e.retry_count != null && e.retry_count > 0 && (
                 <>
-                  <span className="text-muted-foreground">Retry Count:</span>
+                  <span className="text-muted-foreground">Reintentos:</span>
                   <span className="text-red-600">{e.retry_count}</span>
                 </>
               )}

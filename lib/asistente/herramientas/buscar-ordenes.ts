@@ -29,6 +29,7 @@ const inputSchema = z.object({
 const MAX_CLIENTES_EN_BUSQUEDA = 50
 
 export const buscarOrdenes: Herramienta = {
+  etiqueta: "Buscando órdenes…",
   definicion: {
     name: "buscar_ordenes",
     description:

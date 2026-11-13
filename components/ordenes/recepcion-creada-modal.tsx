@@ -152,8 +152,8 @@ export function RecepcionCreadaModal({
       console.error("Error imprimiendo etiquetas de la recepcion:", error)
       await showError(
         impresas > 0
-          ? `Se imprimieron ${impresas} de ${resultado.ordenes.length} etiquetas. Revisa la impresora y reimprimi las que faltan.`
-          : `No se pudo imprimir ninguna de las ${resultado.ordenes.length} etiquetas. Revisa la impresora e intenta de nuevo.`,
+          ? `Se imprimieron ${impresas} de ${resultado.ordenes.length} etiquetas. Revisá la impresora y reimprimí las que faltan.`
+          : `No se pudo imprimir ninguna de las ${resultado.ordenes.length} etiquetas. Revisá la impresora y probá de nuevo.`,
       )
     } finally {
       setPrintingLabels(false)
@@ -176,11 +176,11 @@ export function RecepcionCreadaModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-green-600">
             <Check className="h-5 w-5" />
-            Recepcion {resultado.recepcion.codigo} creada
+            Recepción {resultado.recepcion.codigo} creada
           </DialogTitle>
           <DialogDescription>
-            Se crearon {resultado.ordenes.length} ordenes con un solo comprobante. Imprimi el
-            comprobante, las etiquetas de cada equipo y envia el WhatsApp al cliente.
+            Se crearon {resultado.ordenes.length} órdenes con un solo comprobante. Imprimí el
+            comprobante, las etiquetas de cada equipo y enviá el WhatsApp al cliente.
           </DialogDescription>
         </DialogHeader>
 

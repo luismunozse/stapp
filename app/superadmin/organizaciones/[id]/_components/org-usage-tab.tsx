@@ -44,7 +44,7 @@ export function OrgUsageTab({ usage, ordersHistory = [] }: OrgUsageTabProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Uso Actual
+            Uso actual
           </CardTitle>
           <CardDescription>
             Consumo de recursos de la organización

@@ -18,7 +18,7 @@ export function TipoDispositivoPicker({
   onChange,
   loading,
   error,
-  label = "Tipo de Dispositivo *",
+  label = "Tipo de dispositivo *",
 }: TipoDispositivoPickerProps) {
   return (
     <div>

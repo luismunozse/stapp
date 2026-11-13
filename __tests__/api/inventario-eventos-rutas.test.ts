@@ -24,8 +24,11 @@ vi.mock("@/lib/audit", async (importActual) => ({
 }))
 vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }))
+vi.mock("@/lib/currency/tipo-cambio.server", () => ({ cargarConfigMoneda: vi.fn() }))
 
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
+import { resolverConfigMoneda } from "@/lib/currency/config-moneda"
 import { POST } from "@/app/api/inventario/route"
 import { PUT, DELETE } from "@/app/api/inventario/[id]/route"
 
@@ -51,6 +54,8 @@ const fila = (extra: Record<string, unknown> = {}) => ({
   deleted_at: null,
   ...extra,
 })
+
+const CONFIG_USD = { config: resolverConfigMoneda({ multimoneda_habilitada: true, moneda_extranjera: "USD" } as any, "AR"), fila: null }
 
 const params = { params: Promise.resolve({ id: "i1" }) }
 const putRequest = (body: unknown) =>
@@ -97,7 +102,7 @@ describe("POST /api/inventario emits the created events", () => {
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.created", {
       id: "i1", codigo: "C1", nombre: "Pantalla", categoria: "Repuestos", tipoDispositivo: "CELULAR", stock: 0,
-      precioVenta: 900, precioCompra: 300, proveedorId: "p1", barcode: "7790001",
+      precioVenta: 900, precioCompra: 300, proveedorId: "p1", barcode: "7790001", moneda: null,
     })
   })
 
@@ -112,6 +117,17 @@ describe("POST /api/inventario emits the created events", () => {
     expect(auditoria.create).not.toHaveBeenCalled()
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.created", expect.objectContaining({ id: "i1", codigo: "C1" }))
+  })
+
+  it("the created webhook carries the currency of the price", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(CONFIG_USD as any)
+    mockSupabaseFrom({ inventario: createChainMock(fila({ moneda: "USD" })) })
+
+    const { status } = await parseResponse(await POST(createPostRequest({ ...cuerpo, moneda: "USD" }, "http://localhost:3000/api/inventario")))
+
+    expect(status).toBe(201)
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.created", expect.objectContaining({ moneda: "USD" }))
   })
 
   it("a failed insert emits nothing", async () => {
@@ -138,11 +154,27 @@ describe("PUT /api/inventario/[id] emits the updated events", () => {
     expect(auditoria.update).toHaveBeenCalledTimes(1)
     const [entidad, id, antes, despues] = auditoria.update.mock.calls[0]
     expect([entidad, id, antes.precio_venta, despues.precio_venta, antes.codigo, despues.codigo]).toEqual(["inventario", "i1", 900, 1200, "C1", "C1"])
-    expect(Object.keys(antes)).toHaveLength(14)
+    expect(Object.keys(antes)).toHaveLength(15)
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.updated", {
       id: "i1", codigo: "C1", nombre: "Pantalla", changes: { precio_venta: { before: 900, after: 1200 } },
     })
+  })
+
+  it("a currency change shows up in the changes of inventario.updated, from and to null", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(CONFIG_USD as any)
+    dosLecturas(fila({ moneda: null }), fila({ moneda: "USD" }))
+    await parseResponse(await PUT(putRequest({ moneda: "USD" }), params))
+    expect(emitWebhookEvent).toHaveBeenLastCalledWith("org-1", "inventario.updated", expect.objectContaining({
+      changes: { moneda: { before: null, after: "USD" } },
+    }))
+
+    dosLecturas(fila({ moneda: "USD" }), fila({ moneda: null }))
+    await parseResponse(await PUT(putRequest({ moneda: null }), params))
+    expect(emitWebhookEvent).toHaveBeenLastCalledWith("org-1", "inventario.updated", expect.objectContaining({
+      changes: { moneda: { before: "USD", after: null } },
+    }))
   })
 
   it("without a user id a price edit emits neither the audit entry nor the webhook", async () => {

@@ -13,7 +13,7 @@ export default async function TecnicosPage() {
   }
 
   return (
-    <PageShell title="Técnicos" description="Gestiona los técnicos y sus asignaciones">
+    <PageShell title="Técnicos" description="Gestioná los técnicos y sus asignaciones">
       <TecnicosList />
     </PageShell>
   )

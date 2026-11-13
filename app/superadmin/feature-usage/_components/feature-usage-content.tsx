@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Input } from "@/components/ui/input"
 import {
   Puzzle,
@@ -91,7 +92,7 @@ export function FeatureUsageContent() {
 
   // Los datos los calcula el cron diario: sin ninguna corrida no hay lastUpdate.
   const sinDatosMsg = data && !data.summary.lastUpdate
-    ? "Todavía no hay datos: el cron diario de feature usage no corrió."
+    ? "Todavía no hay datos: el cron diario de uso de funciones no corrió."
     : "Sin organizaciones activas para analizar."
 
   const filteredOrgs = (data?.organizations || [])
@@ -103,12 +104,17 @@ export function FeatureUsageContent() {
     })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Feature Usage</h1>
-          <p className="text-muted-foreground">Adopción de funcionalidades por organización</p>
-          {data?.summary.lastUpdate && (
+    <PageShell
+      title="Uso de funciones"
+      description="Adopción de funcionalidades por organización"
+      actions={
+        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+          Actualizar
+        </Button>
+      }
+      meta={
+        data?.summary.lastUpdate && (
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
               <Clock className="h-3 w-3" />
               Tracking actualizado: {new Date(data.summary.lastUpdate).toLocaleDateString("es-AR", {
@@ -119,13 +125,9 @@ export function FeatureUsageContent() {
               })}
               <span className="text-muted-foreground/60">· cron diario 3 AM</span>
             </p>
-          )}
-        </div>
-        <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Actualizar
-        </Button>
-      </div>
+        )
+      }
+    >
 
       {/* Summary Cards */}
       {loading && !data ? (
@@ -207,7 +209,7 @@ export function FeatureUsageContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Puzzle className="h-5 w-5" />
-              Adopción por Feature
+              Adopción por función
             </CardTitle>
             <CardDescription>% de orgs que usan cada funcionalidad</CardDescription>
           </CardHeader>
@@ -247,7 +249,7 @@ export function FeatureUsageContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Puzzle className="h-5 w-5" />
-                Adopción por Organización
+                Adopción por organización
               </CardTitle>
               <div className="flex gap-2 mt-2">
                 <div className="relative flex-1">
@@ -352,6 +354,6 @@ export function FeatureUsageContent() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

@@ -323,6 +323,8 @@ export function formatInventario(item: any, includeCost = false) {
     tieneVariantes: !!item.grupo_id,
     esKit: item.es_kit ?? false,
     tipoKit: item.tipo_kit ?? null,
+    // Currency of the price (null = local); never gated by cost access.
+    moneda: (item.moneda ?? null) as "USD" | "EUR" | null,
     deletedAt: item.deleted_at ?? null,
     deletedBy: item.deleted_by ?? null,
     organizationId: item.organization_id,

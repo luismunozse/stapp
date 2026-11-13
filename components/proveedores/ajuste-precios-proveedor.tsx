@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 import { PageShell } from "@/components/ui/page-shell"
 import { EmptyState } from "@/components/ui/empty-state"
 
@@ -35,23 +37,26 @@ interface InventarioItem {
   stock: number
   precioCompra: number | null
   precioVenta: number | null
+  /** null = local currency, otherwise the item's foreign currency. */
+  moneda?: MonedaCatalogo
 }
 
 type RoundMode = "none" | "0" | "10" | "100"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-function round(value: number, mode: RoundMode): number {
-  if (mode === "none") return Math.round(value * 100) / 100
+/** The rounding mode only applies to local items: a foreign-currency price always rounds to cents. */
+function round(value: number, mode: RoundMode, moneda: MonedaCatalogo = null): number {
+  if (mode === "none" || moneda !== null) return Math.round(value * 100) / 100
   if (mode === "0") return Math.round(value)
   const step = Number(mode)
   return Math.round(value / step) * step
 }
 
-function applyPct(base: number | null, pct: number, mode: RoundMode): number | null {
+function applyPct(base: number | null, pct: number, mode: RoundMode, moneda: MonedaCatalogo = null): number | null {
   if (base == null || isNaN(base)) return null
   const v = base * (1 + pct / 100)
-  return round(v, mode)
+  return round(v, mode, moneda)
 }
 
 function deltaPct(a: number | null, b: number | null): string {
@@ -63,7 +68,7 @@ function deltaPct(a: number | null, b: number | null): string {
 
 export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string }) {
   const router = useRouter()
-  const { formatPrice, timezone } = useCurrency()
+  const { timezone } = useCurrency()
 
   const { data: proveedor } = useSWR<Proveedor>(
     `/api/proveedores/${proveedorId}`,
@@ -97,22 +102,23 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
   const computed = useMemo(() => {
     return items.map((it) => {
       const ov = overrides[it.id] || {}
+      const mon = it.moneda ?? null
       const ovCompra = ov.compra !== undefined && ov.compra !== "" ? parseFloat(ov.compra) : null
       const ovVenta = ov.venta !== undefined && ov.venta !== "" ? parseFloat(ov.venta) : null
 
-      const baseCompraNuevo = pctCompra !== "" ? applyPct(it.precioCompra, pcCompra, roundMode) : null
-      const compraNuevo = ovCompra !== null && !isNaN(ovCompra) ? round(ovCompra, roundMode) : baseCompraNuevo
+      const baseCompraNuevo = pctCompra !== "" ? applyPct(it.precioCompra, pcCompra, roundMode, mon) : null
+      const compraNuevo = ovCompra !== null && !isNaN(ovCompra) ? round(ovCompra, roundMode, mon) : baseCompraNuevo
 
       let ventaNuevo: number | null = null
       if (ovVenta !== null && !isNaN(ovVenta)) {
-        ventaNuevo = round(ovVenta, roundMode)
+        ventaNuevo = round(ovVenta, roundMode, mon)
       } else if (pctVenta !== "") {
         const base = updateVentaFromCompra && compraNuevo != null && it.precioCompra && it.precioVenta && it.precioCompra > 0
           ? (compraNuevo / it.precioCompra) * it.precioVenta
           : it.precioVenta
-        ventaNuevo = applyPct(base, pcVenta, roundMode)
+        ventaNuevo = applyPct(base, pcVenta, roundMode, mon)
       } else if (updateVentaFromCompra && compraNuevo != null && it.precioCompra && it.precioVenta && it.precioCompra > 0) {
-        ventaNuevo = round((compraNuevo / it.precioCompra) * it.precioVenta, roundMode)
+        ventaNuevo = round((compraNuevo / it.precioCompra) * it.precioVenta, roundMode, mon)
       }
 
       const cambiaCompra = compraNuevo != null && compraNuevo !== it.precioCompra
@@ -332,7 +338,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
                         <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap">{item.codigo}</td>
                         <td className="px-2 py-1.5 max-w-[280px] truncate" title={item.nombre}>{item.nombre}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                          {item.precioCompra != null ? formatPrice(item.precioCompra) : "—"}
+                          <PrecioEnMoneda monto={item.precioCompra} moneda={item.moneda ?? null} />
                         </td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
@@ -350,7 +356,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
                           </div>
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                          {item.precioVenta != null ? formatPrice(item.precioVenta) : "—"}
+                          <PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} />
                         </td>
                         <td className="px-2 py-1.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">

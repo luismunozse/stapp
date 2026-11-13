@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
+import { SectionHeader } from "@/components/ui/section-header"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { SucursalWhatsAppCard } from "@/components/configuracion/sucursal-whatsapp-card"
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Store, Star } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, Store, Star } from "lucide-react"
 import { toast } from "sonner"
 
 interface Sucursal {
@@ -148,27 +148,18 @@ export default function SucursalesPage() {
   const inactivos = sucursales.filter((s) => !s.activo)
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Store className="h-6 w-6" /> Sucursales
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Locales físicos de tu negocio. Órdenes, ventas y caja se separan por sucursal; el personal se asigna a una.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Sucursales"
+      description="Locales físicos de tu negocio. Órdenes, ventas y caja se separan por sucursal; el personal se asigna a una."
+      icon={Store}
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+      actions={
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-1" /> Nueva
         </Button>
-      </div>
+      }
+    >
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -178,14 +169,10 @@ export default function SucursalesPage() {
         <div className="space-y-4">
           <SucursalList items={activos} onEdit={openEdit} onArchive={(id) => setArchiveId(id)} />
           {inactivos.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-muted-foreground">Archivadas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SucursalList items={inactivos} onEdit={openEdit} onArchive={() => {}} muted />
-              </CardContent>
-            </Card>
+            <section className="space-y-3 pt-2">
+              <SectionHeader title="Archivadas" className="text-muted-foreground" />
+              <SucursalList items={inactivos} onEdit={openEdit} onArchive={() => {}} muted />
+            </section>
           )}
         </div>
       )}
@@ -293,7 +280,7 @@ export default function SucursalesPage() {
         loading={saving}
         onConfirm={handleArchive}
       />
-    </div>
+    </PageShell>
   )
 }
 

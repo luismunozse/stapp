@@ -90,7 +90,7 @@ export function ClienteDetalleHeader({
                     className="flex items-center gap-2 w-full px-3 py-2.5 text-sm rounded-md hover:bg-accent transition-colors"
                     onClick={() => router.push(`/cotizaciones?clienteId=${cliente.id}`)}
                   >
-                    <Receipt className="h-4 w-4" /> Nueva cotización
+                    <Receipt className="h-4 w-4" /> Nuevo presupuesto
                   </button>
                 )}
               </PopoverContent>

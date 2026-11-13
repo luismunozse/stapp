@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -70,18 +71,18 @@ const ACTION_LABELS: Record<string, string> = {
   DELETE: "Eliminar",
   LOGIN: "Login",
   LOGOUT: "Logout",
-  LOGIN_FAILED: "Login Fallido",
-  TOGGLE_STATUS: "Cambiar Estado",
-  BROADCAST: "Broadcast",
-  EMAIL_CAMPAIGN: "Campaña Email",
-  CRON_RUN: "Cron Manual",
-  SUBSCRIPTION_RENEW: "Renovar Suscripción",
-  TRIAL_EXTENSION: "Extender Trial",
+  LOGIN_FAILED: "Inicio de sesión fallido",
+  TOGGLE_STATUS: "Cambiar estado",
+  BROADCAST: "Notificación masiva",
+  EMAIL_CAMPAIGN: "Campaña de email",
+  CRON_RUN: "Cron manual",
+  SUBSCRIPTION_RENEW: "Renovar suscripción",
+  TRIAL_EXTENSION: "Extender trial",
   EXPORT: "Exportar",
-  PLAN_TOGGLE: "Toggle Plan",
-  BULK_ACTION: "Acción Masiva",
-  TICKET_REPLY: "Respuesta Soporte",
-  VERIFY_EMAIL: "Verificar Email",
+  PLAN_TOGGLE: "Activar/desactivar plan",
+  BULK_ACTION: "Acción masiva",
+  TICKET_REPLY: "Respuesta de soporte",
+  VERIFY_EMAIL: "Verificar email",
 }
 
 const ACTION_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -116,17 +117,17 @@ const ENTITY_LABELS: Record<string, string> = {
   subscriptions: "Suscripciones",
   plans: "Planes",
   payments: "Pagos",
-  broadcasts: "Broadcasts",
-  email_campaigns: "Campañas Email",
+  broadcasts: "Notificaciones masivas",
+  email_campaigns: "Campañas de email",
   support_tickets: "Soporte",
-  cron_jobs: "Cron Jobs",
+  cron_jobs: "Tareas programadas (cron)",
   sessions: "Sesiones",
   system: "Sistema",
   ordenes_servicio: "Órdenes",
   clientes: "Clientes",
   inventario: "Inventario",
   proveedores: "Proveedores",
-  cotizaciones: "Cotizaciones",
+  cotizaciones: "Presupuestos",
   facturas: "Remitos",
   garantias: "Garantías",
   ventas: "Ventas",
@@ -755,28 +756,28 @@ export default function LogsPage() {
       return [
         { value: "LOGIN", label: "Login" },
         { value: "LOGOUT", label: "Logout" },
-        { value: "LOGIN_FAILED", label: "Login Fallido" },
+        { value: "LOGIN_FAILED", label: "Inicio de sesión fallido" },
       ]
     }
     if (activeTab === "superadmin") {
       return [
-        { value: "TOGGLE_STATUS", label: "Cambiar Estado" },
-        { value: "BROADCAST", label: "Broadcast" },
-        { value: "EMAIL_CAMPAIGN", label: "Campaña Email" },
-        { value: "CRON_RUN", label: "Cron Manual" },
-        { value: "SUBSCRIPTION_RENEW", label: "Renovar Suscripción" },
-        { value: "TRIAL_EXTENSION", label: "Extender Trial" },
-        { value: "PLAN_TOGGLE", label: "Toggle Plan" },
-        { value: "BULK_ACTION", label: "Acción Masiva" },
-        { value: "TICKET_REPLY", label: "Resp. Soporte" },
-        { value: "VERIFY_EMAIL", label: "Verificar Email" },
+        { value: "TOGGLE_STATUS", label: "Cambiar estado" },
+        { value: "BROADCAST", label: "Notificación masiva" },
+        { value: "EMAIL_CAMPAIGN", label: "Campaña de email" },
+        { value: "CRON_RUN", label: "Cron manual" },
+        { value: "SUBSCRIPTION_RENEW", label: "Renovar suscripción" },
+        { value: "TRIAL_EXTENSION", label: "Extender trial" },
+        { value: "PLAN_TOGGLE", label: "Activar/desactivar plan" },
+        { value: "BULK_ACTION", label: "Acción masiva" },
+        { value: "TICKET_REPLY", label: "Resp. de soporte" },
+        { value: "VERIFY_EMAIL", label: "Verificar email" },
         { value: "EXPORT", label: "Exportar" },
         { value: "CREATE", label: "Crear" },
         { value: "UPDATE", label: "Actualizar" },
         { value: "DELETE", label: "Eliminar" },
         { value: "ARCHIVE", label: "Archivar" },
         { value: "RESTORE", label: "Restaurar" },
-        { value: "BULK_DELETE", label: "Eliminación Masiva" },
+        { value: "BULK_DELETE", label: "Eliminación masiva" },
       ]
     }
     return [
@@ -785,13 +786,13 @@ export default function LogsPage() {
       { value: "DELETE", label: "Eliminar" },
       { value: "LOGIN", label: "Login" },
       { value: "LOGOUT", label: "Logout" },
-      { value: "LOGIN_FAILED", label: "Login Fallido" },
-      { value: "TOGGLE_STATUS", label: "Cambiar Estado" },
-      { value: "BROADCAST", label: "Broadcast" },
-      { value: "EMAIL_CAMPAIGN", label: "Campaña Email" },
-      { value: "CRON_RUN", label: "Cron Manual" },
-      { value: "SUBSCRIPTION_RENEW", label: "Renovar Suscripción" },
-      { value: "TRIAL_EXTENSION", label: "Extender Trial" },
+      { value: "LOGIN_FAILED", label: "Inicio de sesión fallido" },
+      { value: "TOGGLE_STATUS", label: "Cambiar estado" },
+      { value: "BROADCAST", label: "Notificación masiva" },
+      { value: "EMAIL_CAMPAIGN", label: "Campaña de email" },
+      { value: "CRON_RUN", label: "Cron manual" },
+      { value: "SUBSCRIPTION_RENEW", label: "Renovar suscripción" },
+      { value: "TRIAL_EXTENSION", label: "Extender trial" },
       { value: "EXPORT", label: "Exportar" },
     ]
   }
@@ -801,27 +802,21 @@ export default function LogsPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8" />
-              Auditoría del Sistema
-            </h1>
-            <p className="text-muted-foreground">
-              Registro completo de todas las acciones, eventos de seguridad y
-              operaciones del sistema
-            </p>
-            <LastUpdated
-              formattedLastUpdated={formattedLastUpdated}
-              onRefresh={() => {
-                fetchLogs()
-                fetchStats()
-              }}
-              loading={loading || statsLoading}
-            />
-          </div>
+      <PageShell
+        title="Auditoría del sistema"
+        description="Registro completo de todas las acciones, eventos de seguridad y operaciones del sistema"
+        icon={Shield}
+        meta={
+          <LastUpdated
+            formattedLastUpdated={formattedLastUpdated}
+            onRefresh={() => {
+              fetchLogs()
+              fetchStats()
+            }}
+            loading={loading || statsLoading}
+          />
+        }
+        actions={
           <Button
             variant="outline"
             size="sm"
@@ -831,7 +826,8 @@ export default function LogsPage() {
             <Sliders className="h-4 w-4" />
             Configurar alertas
           </Button>
-        </div>
+        }
+      >
 
         {/* ============================================================ */}
         {/* ALERTAS ACTIVAS                                              */}
@@ -997,7 +993,7 @@ export default function LogsPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
-                  Distribución de Actividad
+                  Distribución de actividad
                 </CardTitle>
                 <div className="flex gap-1">
                   <Button
@@ -1169,7 +1165,7 @@ export default function LogsPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-1.5">
                   <Database className="h-4 w-4" />
-                  Retención y Almacenamiento
+                  Retención y almacenamiento
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1490,7 +1486,7 @@ export default function LogsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Sliders className="h-5 w-5" />
-                Configuración de Alertas y Retención
+                Configuración de alertas y retención
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-5 py-2">
@@ -1574,7 +1570,7 @@ export default function LogsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageShell>
     </TooltipProvider>
   )
 }

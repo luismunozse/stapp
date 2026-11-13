@@ -88,7 +88,7 @@ export function OrgSubscriptionTab({
             </CardTitle>
             <Button onClick={openRenewModal}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              {isActive ? "Extender suscripción" : "Activar Premium"}
+              {isActive ? "Extender suscripción" : "Activar Profesional"}
             </Button>
           </div>
         </CardHeader>
@@ -215,7 +215,7 @@ export function OrgSubscriptionTab({
               </p>
               <Button onClick={openRenewModal}>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Activar Premium
+                Activar Profesional
               </Button>
             </div>
           )}
@@ -228,13 +228,13 @@ export function OrgSubscriptionTab({
           <DialogHeader>
             <DialogTitle>
               {isActive
-                ? "Extender suscripción Premium"
-                : "Activar suscripción Premium"}
+                ? "Extender suscripción Profesional"
+                : "Activar suscripción Profesional"}
             </DialogTitle>
             <DialogDescription>
               {isActive
                 ? `La suscripción actual vence el ${subscription?.current_period_end ? formatDate(subscription.current_period_end) : "-"}. El nuevo período se sumará al existente.`
-                : `Activar manualmente el plan Premium para ${organizationName}.`}
+                : `Activar manualmente el plan Profesional para ${organizationName}.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -263,7 +263,7 @@ export function OrgSubscriptionTab({
 
               <div className="p-3 rounded-lg bg-muted text-sm">
                 <p className="text-muted-foreground">
-                  Esto activará el plan Premium sin proceso de pago. Se registrará en el log de auditoría.
+                  Esto activará el plan Profesional sin proceso de pago. Se registrará en el log de auditoría.
                 </p>
               </div>
 

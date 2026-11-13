@@ -85,7 +85,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos", keywords: ["devoluciones"] },
       { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos", keywords: ["punto de venta", "mostrador", "vender"] },
-      { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"], keywords: ["presupuestos"] },
+      { href: "/cotizaciones", label: "Presupuestos", icon: Receipt, roles: ["ADMIN", "TECNICO"], keywords: ["cotizaciones", "presupuestos"] },
       { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"], keywords: ["tienda", "e-commerce"] },
     ],
   },

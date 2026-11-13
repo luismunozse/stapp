@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Receipt, Printer } from "lucide-react"
 import { useTerminologia } from "@/contexts/currency-context"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import {
   readAncho,
   saveAncho,
@@ -152,7 +153,7 @@ ${styles}
         } catch {
           /* measurement falls back to current metrics */
         }
-        fitPrintPageToContent(doc, doc.getElementById("recepcion-receipt-print-area"), ancho)
+        ajustarPaginaImpresion(doc, doc.getElementById("recepcion-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -173,7 +174,7 @@ ${styles}
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        title={`Comprobante de recepcion ${ancho}mm`}
+        title={`Comprobante de recepción ${ancho}mm`}
       >
         <Receipt className="h-4 w-4 mr-2" />
         Comprobante
@@ -182,10 +183,10 @@ ${styles}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Comprobante de recepcion</DialogTitle>
+            <DialogTitle>Comprobante de recepción</DialogTitle>
             <DialogDescription>
               Vista previa del comprobante {ancho}mm con los {data.equipos.length} equipos del lote.
-              Imprimi por navegador en la impresora termica.
+              Imprimí por navegador en la impresora térmica.
             </DialogDescription>
           </DialogHeader>
 
@@ -218,6 +219,8 @@ ${styles}
             <Printer className="h-4 w-4 mr-2" />
             Imprimir (navegador)
           </Button>
+
+          <AvisoImpresionNavegador />
         </DialogContent>
       </Dialog>
     </>
@@ -245,7 +248,7 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
 
       <Sep char="=" />
 
-      <div className="text-center font-bold text-base">RECEPCION</div>
+      <div className="text-center font-bold text-base">RECEPCIÓN</div>
       <div className="font-bold text-lg">{data.codigo}</div>
       <div>{data.fecha}</div>
 
@@ -290,7 +293,7 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
 
       {data.organizationComprobanteTerminos && (
         <>
-          <div className="font-bold">TERMINOS Y CONDICIONES</div>
+          <div className="font-bold">TÉRMINOS Y CONDICIONES</div>
           <div className="whitespace-pre-wrap break-words text-[10px]">
             {data.organizationComprobanteTerminos}
           </div>
@@ -313,7 +316,7 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
       <div className="text-center">{data.clienteNombre}</div>
 
       <Sep />
-      <div className="text-center font-bold mt-1">Conserve este comprobante</div>
+      <div className="text-center font-bold mt-1">Conservá este comprobante</div>
       {data.organizationTelefono && (
         <div className="text-center">Consultas: {data.organizationTelefono}</div>
       )}

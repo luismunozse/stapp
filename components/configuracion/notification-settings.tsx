@@ -61,14 +61,14 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
       })
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Configuracion guardada" })
+        setMessage({ type: "success", text: "Configuración guardada" })
         setTimeout(() => setMessage(null), 3000)
       } else {
         const error = await res.json()
         setMessage({ type: "error", text: error.error || "Error al guardar" })
       }
     } catch (error) {
-      setMessage({ type: "error", text: "Error al guardar configuracion" })
+      setMessage({ type: "error", text: "Error al guardar la configuración" })
     } finally {
       setSaving(false)
     }
@@ -101,7 +101,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
         </CardHeader>
         <CardContent>
           <div className="text-muted-foreground">
-            Error al cargar configuracion
+            Error al cargar la configuración
           </div>
         </CardContent>
       </Card>
@@ -116,7 +116,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           Notificaciones
         </CardTitle>
         <CardDescription className="text-xs sm:text-sm">
-          Configura como y cuando se envian notificaciones
+          Configurá cómo y cuándo se envían las notificaciones
         </CardDescription>
       </CardHeader>
       <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
@@ -138,7 +138,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
             <div className="min-w-0">
               <Label className="text-sm sm:text-base">Email</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Emails al cambiar estado, presupuesto, garantia, etc.
+                Emails al cambiar estado, presupuesto, garantía, etc.
               </p>
             </div>
           </div>
@@ -162,7 +162,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
             <div className="min-w-0">
               <Label className="text-sm sm:text-base">WhatsApp</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Boton con plantillas de mensajes en ordenes
+                Botón con plantillas de mensajes en órdenes
               </p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               disabled={!allowEdit}
               className="w-20 sm:w-24"
             />
-            <span className="text-xs sm:text-sm text-muted-foreground">dias</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">días</span>
           </div>
         </div>
 
@@ -249,7 +249,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
 
         <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full">
           <Save className="mr-2 h-4 w-4" />
-          {saving ? "Guardando..." : "Guardar configuracion"}
+          {saving ? "Guardando..." : "Guardar configuración"}
         </Button>
       </CardContent>
     </Card>

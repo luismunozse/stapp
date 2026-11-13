@@ -8,7 +8,21 @@ import {
   parseResponse,
 } from "./helpers"
 
+import { supabaseAdmin } from "@/lib/supabase"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
+import { resolverConfigMoneda } from "@/lib/currency/config-moneda"
 import { GET, POST } from "@/app/api/servicios/route"
+
+vi.mock("@/lib/currency/tipo-cambio.server", () => ({ cargarConfigMoneda: vi.fn() }))
+
+const configUsd = (habilitada: boolean) => ({
+  config: { ...resolverConfigMoneda({ multimoneda_habilitada: habilitada, moneda_extranjera: "USD" } as any, "AR"), habilitada },
+  fila: null,
+})
+const filaSrv = (extra: Record<string, unknown> = {}) => ({
+  id: "srv-1", codigo: "SRV-001", nombre: "Instalacion", descripcion: null, categoria: null,
+  precio: 50, duracion_estimada_min: null, activo: true, moneda: null, ...extra,
+})
 
 describe("GET /api/servicios", () => {
   beforeEach(() => {
@@ -100,5 +114,76 @@ describe("POST /api/servicios", () => {
 
     expect(status).toBe(400)
     expect(body.error).toContain("código")
+  })
+})
+
+describe("servicios con moneda", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
+  })
+  const cuerpo = { codigo: "SRV-001", nombre: "Instalacion", precio: 50 }
+
+  it("toDTO incluye la moneda (null si la fila no la tiene)", async () => {
+    mockSupabaseFrom({ servicios: createChainMock([filaSrv({ moneda: "USD" }), filaSrv({ id: "s2", moneda: undefined })]) })
+    const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/servicios")))
+    expect(body.servicios.map((s: any) => s.moneda)).toEqual(["USD", null])
+  })
+
+  it("GET ?moneda=local filtra moneda null y ?moneda=divisa las que no son null", async () => {
+    const local = createChainMock([])
+    mockSupabaseFrom({ servicios: local })
+    await GET(createGetRequest("http://localhost:3000/api/servicios?moneda=local"))
+    expect(local.is).toHaveBeenCalledWith("moneda", null)
+
+    const divisa = createChainMock([])
+    mockSupabaseFrom({ servicios: divisa })
+    await GET(createGetRequest("http://localhost:3000/api/servicios?moneda=divisa"))
+    expect(divisa.not).toHaveBeenCalledWith("moneda", "is", null)
+  })
+
+  it("POST sin moneda inserta moneda null y no lee la configuración", async () => {
+    const chain = createChainMock(filaSrv())
+    mockSupabaseFrom({ servicios: chain })
+    const { status } = await parseResponse(await POST(createPostRequest(cuerpo)))
+    expect(status).toBe(201)
+    expect(chain.insert.mock.calls[0][0]).toHaveProperty("moneda", null)
+    expect(cargarConfigMoneda).not.toHaveBeenCalled()
+  })
+
+  it("POST con USD y la función activa inserta USD", async () => {
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(true) as any)
+    const chain = createChainMock(filaSrv({ moneda: "USD" }))
+    mockSupabaseFrom({ servicios: chain })
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ...cuerpo, moneda: "USD" })))
+    expect(status).toBe(201)
+    expect(chain.insert.mock.calls[0][0].moneda).toBe("USD")
+    expect(body.servicio.moneda).toBe("USD")
+  })
+
+  it("POST con USD y la función apagada es 400 y no inserta", async () => {
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(false) as any)
+    const chain = createChainMock(filaSrv())
+    mockSupabaseFrom({ servicios: chain })
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ...cuerpo, moneda: "USD" })))
+    expect(status).toBe(400)
+    expect(body.error).toBe("La moneda extranjera está deshabilitada")
+    expect(chain.insert).not.toHaveBeenCalled()
+  })
+
+  it("POST con EUR en una org USD es 400 con el mensaje del validador", async () => {
+    vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(true) as any)
+    mockSupabaseFrom({ servicios: createChainMock(filaSrv()) })
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ...cuerpo, moneda: "EUR" })))
+    expect(status).toBe(400)
+    expect(body.error).toBe("La moneda del precio debe ser la moneda local o USD")
+  })
+
+  it("POST con moneda null explícita inserta null sin leer la configuración", async () => {
+    const chain = createChainMock(filaSrv())
+    mockSupabaseFrom({ servicios: chain })
+    await POST(createPostRequest({ ...cuerpo, moneda: null }))
+    expect(chain.insert.mock.calls[0][0].moneda).toBeNull()
+    expect(cargarConfigMoneda).not.toHaveBeenCalled()
   })
 })

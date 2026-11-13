@@ -24,7 +24,7 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
       case "DISABLE":
         return <XCircle className="h-5 w-5 text-red-600" />
       default:
-        return <Edit className="h-5 w-5 text-gray-600" />
+        return <Edit className="h-5 w-5 text-muted-foreground" />
     }
   }
 
@@ -54,7 +54,7 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
       case "DISABLE":
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+        return "bg-muted text-foreground"
     }
   }
 
@@ -96,12 +96,12 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
     const names: Record<string, string> = {
       nombre: "Nombre",
       descripcion: "Descripción",
-      precio_mensual: "Precio Mensual",
-      precio_anual: "Precio Anual",
-      limite_ordenes: "Límite Órdenes",
-      limite_tecnicos: "Límite Técnicos",
-      limite_clientes: "Límite Clientes",
-      limite_storage_mb: "Límite Storage",
+      precio_mensual: "Precio mensual",
+      precio_anual: "Precio anual",
+      limite_ordenes: "Límite de órdenes",
+      limite_tecnicos: "Límite de técnicos",
+      limite_clientes: "Límite de clientes",
+      limite_storage_mb: "Límite de almacenamiento",
       features: "Características",
       activo: "Estado",
     }

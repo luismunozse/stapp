@@ -1,6 +1,7 @@
 import { sesionConSucursalVigente } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageShell } from "@/components/ui/page-shell"
 import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
@@ -430,7 +431,7 @@ export default async function DashboardPage() {
   // Admin: only secondary KPIs — hero income + action concerns render separately.
   const adminStats: StatCardProps[] = [
     {
-      title: "Órdenes Pendientes",
+      title: "Órdenes pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
@@ -452,7 +453,7 @@ export default async function DashboardPage() {
 
   const vendedorStats: StatCardProps[] = [
     {
-      title: "Órdenes Pendientes",
+      title: "Órdenes pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
@@ -468,7 +469,7 @@ export default async function DashboardPage() {
       href: "/clientes",
     },
     {
-      title: "Mis Ventas Hoy",
+      title: "Mis ventas de hoy",
       value: formatCurrency(misVentasHoyTotal, moneda),
       description: `${misVentasHoyCount} venta${misVentasHoyCount !== 1 ? "s" : ""}`,
       icon: ShoppingCart,
@@ -476,7 +477,7 @@ export default async function DashboardPage() {
       href: "/ventas",
     },
     {
-      title: "Mis Ventas del Mes",
+      title: "Mis ventas del mes",
       value: formatCurrency(misVentasMesTotal, moneda),
       description: `${misVentasMesCount} ventas completadas`,
       icon: TrendingUp,
@@ -487,7 +488,7 @@ export default async function DashboardPage() {
 
   const tecnicoStats: StatCardProps[] = [
     {
-      title: "Mis Órdenes Activas",
+      title: "Mis órdenes activas",
       value: misOrdenesActivas.toString(),
       description: "Asignadas a mí",
       icon: ClipboardList,
@@ -495,7 +496,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ filtro: "activas" }),
     },
     {
-      title: "Sin Diagnóstico",
+      title: "Sin diagnóstico",
       value: misSinDiagnostico.toString(),
       description: "Requieren atención",
       icon: AlertTriangle,
@@ -504,7 +505,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ estado: "RECIBIDO" }),
     },
     {
-      title: "Esperando Repuesto",
+      title: "Esperando repuesto",
       value: misEsperandoRepuesto.toString(),
       description: "En espera de piezas",
       icon: Clock,
@@ -512,7 +513,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ estado: "ESPERANDO_REPUESTO" }),
     },
     {
-      title: "Completadas (Mes)",
+      title: "Completadas (mes)",
       value: misOrdenesCompletadas.toString(),
       description: avgDiasResolucion !== null ? `Prom. ${avgDiasResolucion} día${avgDiasResolucion !== 1 ? "s" : ""}` : "Reparadas/entregadas",
       icon: CheckCircle,
@@ -536,17 +537,11 @@ export default async function DashboardPage() {
     : []
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-headline">Inicio</h1>
-          <p className="text-muted-foreground">
-            Bienvenido, {currentUserName}
-          </p>
-        </div>
-        {isAdmin && esArgentina && <DolarWidget variant="header" />}
-      </div>
-
+    <PageShell
+      title="Inicio"
+      description={`Bienvenido, ${currentUserName}`}
+      actions={isAdmin && esArgentina ? <DolarWidget variant="header" /> : undefined}
+    >
       {/* Setup checklist (oculto al 100%) — guía nuevos/inactivos a su primera orden */}
       {isAdmin && <SetupChecklist />}
 
@@ -640,7 +635,7 @@ export default async function DashboardPage() {
                   tone="warning"
                   icon={Package}
                   href="/inventario"
-                  title={`${itemsBajoStock} items con stock bajo`}
+                  title={`${itemsBajoStock} ítems con stock bajo`}
                 />
               )}
               {!isTecnico && ordenesPendientes > 0 && (
@@ -736,6 +731,6 @@ export default async function DashboardPage() {
 
       {/* NPS Survey — se muestra cada 60 días */}
       <NpsSurvey />
-    </div>
+    </PageShell>
   )
 }

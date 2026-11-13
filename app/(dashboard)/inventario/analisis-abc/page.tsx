@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search, BarChart3, Flame, TrendingUp, TrendingDown, Skull, Sparkles, Download } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 
 type AbcClass = "A" | "B" | "C" | "SIN_VENTAS"
 type RotClass = "ALTA" | "MEDIA" | "BAJA" | "MUERTA" | "NUEVA"
@@ -22,12 +23,13 @@ interface Row {
   tipoDispositivo: string
   proveedorNombre: string | null
   stockActual: number
-  precioCompra: number
-  precioVenta: number
-  capitalInmovilizado: number
+  precioCompra: number | null
+  precioVenta: number | null
+  /** null: ítem en divisa sin cotización (se muestra "—"). */
+  capitalInmovilizado: number | null
   qtyVendida: number
   revenue: number
-  margenTotal: number
+  margenTotal: number | null
   ventasCount: number
   ultimaVentaAt: string | null
   diasSinVenta: number | null
@@ -41,6 +43,8 @@ interface Row {
 
 interface Resp {
   periodo: { dias: number; diasMuerto: number }
+  aproximado?: boolean
+  excluidosSinCotizacion?: number
   totales: { items: number; revenue: number; margenTotal: number; capitalInmovilizado: number; capitalMuerto: number }
   resumenAbc: {
     A: { count: number; revenue: number }
@@ -105,8 +109,8 @@ export default function AnalisisAbcPage() {
     ]
     const rows = filtered.map((r) => [
       r.codigo, `"${r.nombre.replace(/"/g, '""')}"`, r.categoria, r.proveedorNombre || "",
-      r.stockActual, r.precioCompra, r.precioVenta, r.capitalInmovilizado,
-      r.qtyVendida, r.revenue, r.margenTotal, r.ventasCount,
+      r.stockActual, r.precioCompra ?? "", r.precioVenta ?? "", r.capitalInmovilizado ?? "",
+      r.qtyVendida, r.revenue, r.margenTotal ?? "", r.ventasCount,
       r.diasSinVenta ?? "", r.rotacion, r.diasPromedioStock ?? "",
       r.pctRevenue, r.pctRevenueAcumulado,
       r.clasificacionAbc, r.clasificacionRotacion,
@@ -173,15 +177,16 @@ export default function AnalisisAbcPage() {
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <div className="text-xs uppercase text-muted-foreground">Capital inmovilizado</div>
-              <div className="text-lg font-bold">{formatPrice(data.totales.capitalInmovilizado)}</div>
+              <div className="text-lg font-bold">{prefijoAprox(data.aproximado)}{formatPrice(data.totales.capitalInmovilizado)}</div>
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <div className="text-xs uppercase text-muted-foreground flex items-center gap-1">
                 <Skull className="h-3 w-3" /> Capital muerto
               </div>
-              <div className="text-lg font-bold text-destructive-text">{formatPrice(data.totales.capitalMuerto)}</div>
+              <div className="text-lg font-bold text-destructive-text">{prefijoAprox(data.aproximado)}{formatPrice(data.totales.capitalMuerto)}</div>
             </CardContent></Card>
           </div>
+          <AvisoExcluidos n={data.excluidosSinCotizacion} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card>
@@ -314,9 +319,9 @@ export default function AnalisisAbcPage() {
                       <td className="p-2 text-right">{r.stockActual}</td>
                       <td className="p-2 text-right">{r.qtyVendida}</td>
                       <td className="p-2 text-right font-medium">{formatPrice(r.revenue)}</td>
-                      <td className="p-2 text-right text-emerald-600">{formatPrice(r.margenTotal)}</td>
+                      <td className="p-2 text-right text-emerald-600">{r.margenTotal == null ? "—" : formatPrice(r.margenTotal)}</td>
                       <td className={`p-2 text-right ${muerta ? "text-destructive-text font-medium" : ""}`}>
-                        {formatPrice(r.capitalInmovilizado)}
+                        {r.capitalInmovilizado == null ? "—" : formatPrice(r.capitalInmovilizado)}
                       </td>
                       <td className="p-2 text-right">{r.rotacion > 0 ? r.rotacion.toFixed(1) : "—"}</td>
                       <td className="p-2 text-right">

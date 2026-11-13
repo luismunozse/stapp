@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { PageShell } from "@/components/ui/page-shell"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react"
 
 interface Categoria {
   id: string
@@ -135,25 +135,17 @@ export default function CategoriasGastoPage() {
   const variables = categorias.filter((c) => c.tipo === "VARIABLE")
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/configuracion">
-            <IconButton label="Volver a configuración" variant="ghost">
-              <ArrowLeft className="h-4 w-4" />
-            </IconButton>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Categorías de Gasto</h1>
-            <p className="text-sm text-muted-foreground">
-              Definí cómo querés clasificar tus gastos para el cálculo de ganancia neta.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Categorías de gasto"
+      description="Definí cómo querés clasificar tus gastos para el cálculo de ganancia neta."
+      backHref="/configuracion"
+      backLabel="Volver a configuración"
+      actions={
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-1" /> Nueva
         </Button>
-      </div>
+      }
+    >
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -254,7 +246,7 @@ export default function CategoriasGastoPage() {
         loading={saving}
         onConfirm={handleDelete}
       />
-    </div>
+    </PageShell>
   )
 }
 

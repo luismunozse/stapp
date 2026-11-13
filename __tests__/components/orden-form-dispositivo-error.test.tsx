@@ -35,7 +35,7 @@ describe("OrdenForm — el error de 'dispositivo' y 'problema reportado' se limp
     // Bug original: mode por defecto es "onSubmit" y el input de dispositivo
     // sólo usaba `register("dispositivo")` sin onChange — el error quedaba
     // visible aunque el usuario ya hubiera tipeado un valor.
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 12" },
     })
     await waitFor(() =>
@@ -45,7 +45,7 @@ describe("OrdenForm — el error de 'dispositivo' y 'problema reportado' se limp
     // porque todavia no se tipeo ahi.
     expect(screen.getByText("El problema es requerido")).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describí el problema del equipo..."), {
       target: { value: "No enciende" },
     })
     await waitFor(() =>

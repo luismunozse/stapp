@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
@@ -488,22 +489,18 @@ export default function OrganizacionesPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Building2 className="h-8 w-8" />
-            Organizaciones
-          </h1>
-          <p className="text-muted-foreground">
-            Gestiona todas las organizaciones del sistema
-          </p>
-          <LastUpdated
-            formattedLastUpdated={formattedLastUpdated}
-            onRefresh={fetchOrganizations}
-            loading={loading}
-          />
-        </div>
+    <PageShell
+      title="Organizaciones"
+      description="Gestioná todas las organizaciones del sistema"
+      icon={Building2}
+      meta={
+        <LastUpdated
+          formattedLastUpdated={formattedLastUpdated}
+          onRefresh={fetchOrganizations}
+          loading={loading}
+        />
+      }
+      actions={
         <Button
           variant="outline"
           onClick={handleExportCSV}
@@ -512,7 +509,8 @@ export default function OrganizacionesPage() {
           <Download className="h-4 w-4 mr-2" />
           Exportar CSV
         </Button>
-      </div>
+      }
+    >
 
       {/* KPIs */}
       {kpis ? (
@@ -545,7 +543,7 @@ export default function OrganizacionesPage() {
               },
             },
             {
-              title: "Premium",
+              title: "Profesional",
               value: kpis.premium,
               icon: CreditCard,
               description: "Con plan de pago activo",
@@ -570,7 +568,7 @@ export default function OrganizacionesPage() {
               title: "Tasa de conversión",
               value: `${kpis.conversionRate}%`,
               icon: TrendingUp,
-              description: "Free → Premium",
+              description: "Free → Profesional",
               color: "text-cyan-600",
               bgColor: "bg-cyan-100 dark:bg-cyan-950",
               filter: undefined as (() => void) | undefined,
@@ -679,7 +677,7 @@ export default function OrganizacionesPage() {
                 <SelectContent>
                   <SelectItem value="all">Todos los planes</SelectItem>
                   <SelectItem value="free">Free / Trial</SelectItem>
-                  <SelectItem value="premium">Premium (pago)</SelectItem>
+                  <SelectItem value="premium">Profesional (pago)</SelectItem>
                   <SelectItem value="trial_expired">Trial expirado</SelectItem>
                 </SelectContent>
               </Select>
@@ -945,6 +943,6 @@ export default function OrganizacionesPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

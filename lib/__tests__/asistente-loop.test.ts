@@ -98,3 +98,61 @@ describe("ejecutarAsistente", () => {
     expect(r.texto).toBe("Con lo que tengo: ...")
   })
 })
+
+describe("ejecutarAsistente en streaming", () => {
+  /** Un stream falso del SDK: emite los eventos de la respuesta y `finalMessage` la devuelve entera. */
+  function streamDe(respuesta: any) {
+    const eventos: any[] = []
+    for (const bloque of respuesta.content) {
+      if (bloque.type === "tool_use") eventos.push({ type: "content_block_start", content_block: { type: "tool_use", name: bloque.name } })
+      if (bloque.type === "text") {
+        for (const parte of bloque.text.match(/.{1,4}/g) ?? []) {
+          eventos.push({ type: "content_block_delta", delta: { type: "text_delta", text: parte } })
+        }
+      }
+    }
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield* eventos
+      },
+      finalMessage: async () => respuesta,
+    }
+  }
+  function clienteStream(...respuestas: any[]) {
+    const stream = vi.fn()
+    const create = vi.fn()
+    for (const r of respuestas) stream.mockReturnValueOnce(streamDe(r))
+    return { stream, create, client: { messages: { create, stream } } as any }
+  }
+
+  it("avisa la herramienta con su etiqueta y el texto en partes; el resultado es el mismo", async () => {
+    const h = { ...herramienta("ver_orden", vi.fn().mockResolvedValue({ datos: {}, filas: 1 })), etiqueta: "Buscando la orden…" }
+    const { client, create } = clienteStream(pideHerramienta("t1", "ver_orden", {}), texto("Está lista."))
+    const eventos: any[] = []
+    const r = await ejecutarAsistente({ ...base, client, herramientas: [h], alEvento: (e) => eventos.push(e) })
+
+    expect(create).not.toHaveBeenCalled()
+    expect(eventos[0]).toEqual({ tipo: "herramienta", nombre: "ver_orden", etiqueta: "Buscando la orden…" })
+    expect(eventos.filter((e) => e.tipo === "texto").map((e) => e.delta).join("")).toBe("Está lista.")
+    expect(r.texto).toBe("Está lista.")
+  })
+
+  it("el texto escrito antes de consultar queda en la respuesta, en otro párrafo", async () => {
+    const conPreambulo = {
+      ...pideHerramienta("t1", "x", {}),
+      content: [{ type: "text", text: "Busco." }, { type: "tool_use", id: "t1", name: "x", input: {} }],
+    }
+    const { client } = clienteStream(conPreambulo, texto("Listo."))
+    const eventos: any[] = []
+    const r = await ejecutarAsistente({
+      ...base,
+      client,
+      herramientas: [herramienta("x", vi.fn().mockResolvedValue({ datos: {}, filas: 0 }))],
+      alEvento: (e) => eventos.push(e),
+    })
+    expect(r.texto).toBe("Busco.\n\nListo.")
+    expect(eventos.filter((e) => e.tipo === "texto").map((e) => e.delta).join("")).toBe("Busco.\n\nListo.")
+    // Sin etiqueta propia, una genérica.
+    expect(eventos.find((e) => e.tipo === "herramienta")?.etiqueta).toBe("Consultando tus datos…")
+  })
+})

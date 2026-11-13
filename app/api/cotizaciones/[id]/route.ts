@@ -1,3 +1,4 @@
+import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { NextResponse } from "next/server"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -691,10 +692,26 @@ export async function PUT(
       const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
         .from("items_cotizacion")
         .select(
-          "id, descripcion, costo_unitario, inventario_id, catalogo_item_id, variante_id, variante_etiqueta"
+          "id, descripcion, costo_unitario, inventario_id, servicio_id, catalogo_item_id, variante_id, variante_etiqueta"
         )
         .eq("cotizacion_id", id)
       if (existingItemsError) throw existingItemsError
+
+      // Only NEW catalog lines are checked: a stored line already carries a local price,
+      // so editing a quote keeps working if its item later switched to a foreign currency. An id
+      // the request lists more times than the stored quote has it brings a new line: checked.
+      const enDivisa = await rechazarItemsEnDivisa({
+        organizationId: organizationId!,
+        inventarioIds: idsConLineasNuevas(
+          data.items.map((i) => i.inventarioId),
+          (existingItemRows || []).map((r: any) => r.inventario_id)
+        ),
+        servicioIds: idsConLineasNuevas(
+          data.items.map((i) => i.servicioId),
+          (existingItemRows || []).map((r: any) => r.servicio_id)
+        ),
+      })
+      if (enDivisa) return enDivisa
 
       for (const row of existingItemRows || []) {
         const stored: StoredItemCost = {

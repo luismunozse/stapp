@@ -91,7 +91,7 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       tone: "warning",
       icon: Package,
       label: "Stock bajo",
-      value: `${input.stockBajoCount} item${input.stockBajoCount !== 1 ? "s" : ""}`,
+      value: `${input.stockBajoCount} ítem${input.stockBajoCount !== 1 ? "s" : ""}`,
       href: "/inventario",
     })
   }
