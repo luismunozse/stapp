@@ -57,4 +57,14 @@ describe("buildVentaPayload con divisa", () => {
     const p = buildVentaPayload({ ...base, items: [linea({ moneda: "USD", precioOrigen: 10 })], tipoCambio: null })
     expect("tipoCambio" in p).toBe(false)
   })
+
+  it("un precioOrigen 0 o negativo no viaja (el servidor usa el de lista)", () => {
+    const p = buildVentaPayload({
+      ...base,
+      items: [linea({ moneda: "USD", precioOrigen: 0 }), linea({ lineId: "l2", moneda: "USD", precioOrigen: -3 })],
+      tipoCambio: 1200,
+    })
+    expect("precioOrigen" in p.items[0]).toBe(false)
+    expect("precioOrigen" in p.items[1]).toBe(false)
+  })
 })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,7 @@ import { autoSelectSeries, computeVentaTotals } from "./pos-types"
 import type { PosCartItem, PosCliente, SerieDisponible, DescuentoConfig, TipoDescuento, FiscalConfig } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TotalRow } from "@/components/pos/total-row"
+import { formatDivisa } from "./pos-divisa"
 
 interface PosCartProps {
   items: PosCartItem[]
@@ -53,7 +54,10 @@ interface PosCartProps {
   onSetItemDescuento: (lineId: string, d: { tipo: TipoDescuento; valor: number }) => void
   onSetDescuentoGlobal: (d: DescuentoConfig | null) => void
   onSetDescuentoMotivo: (m: string) => void
+  /** In a foreign-currency line the price is the origin one, in its currency (the terminal reconverts it). */
   onSetPrecio: (lineId: string, precio: number) => void
+  /** Exchange-rate chip shown above the cart (the terminal decides when). */
+  chipCotizacion?: ReactNode
   fiscal?: FiscalConfig | null
   /** Sucursal the sale will actually draw stock from, when resolved (see pos-terminal.tsx). */
   ventaSucursalNombre?: string | null
@@ -94,6 +98,7 @@ export function PosCart({
   onSetDescuentoGlobal,
   onSetDescuentoMotivo,
   onSetPrecio,
+  chipCotizacion,
   fiscal,
   ventaSucursalNombre = null,
   ventaAlcanceOrg = false,
@@ -259,6 +264,8 @@ export function PosCart({
           </div>
         </div>
 
+        {chipCotizacion && <div className="flex">{chipCotizacion}</div>}
+
         {/* Selling-from indicator — only when "todas las sucursales" would otherwise hide it */}
         {showVentaSucursal && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -400,7 +407,12 @@ export function PosCart({
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatPrice(item.precioUnitario)} c/u</span>
+                        <span>
+                          {item.moneda && item.precioOrigen != null
+                            ? `${formatDivisa(item.precioOrigen, item.moneda)} → ${formatPrice(item.precioUnitario)}`
+                            : formatPrice(item.precioUnitario)}{" "}
+                          c/u
+                        </span>
                         {item.codigo && <span className="font-mono">{item.codigo}</span>}
                         {item.stockDisponible <= 3 && (
                           <span className="text-destructive-text">Stock: {item.stockDisponible}</span>
@@ -534,16 +546,30 @@ export function PosCart({
                         />
                       </label>
 
-                      {/* Per-line unit price override */}
+                      {/* Per-line unit price override; a foreign line edits its origin price */}
                       <label className="flex items-center gap-1.5">
                         <span className="text-muted-foreground">Precio unit.:</span>
-                        <MoneyInput
-                          value={item.precioUnitario}
-                          onValueChange={(v) => {
-                            if (v !== null && v > 0) onSetPrecio(item.lineId, v)
-                          }}
-                          className="h-7 w-24 text-xs text-center"
-                        />
+                        {item.moneda ? (
+                          <>
+                            <span className="font-medium text-muted-foreground">{item.moneda}</span>
+                            <MoneyInput
+                              aria-label={`Precio unitario en ${item.moneda}`}
+                              value={item.precioOrigen ?? null}
+                              onValueChange={(v) => {
+                                if (v !== null && v > 0) onSetPrecio(item.lineId, v)
+                              }}
+                              className="h-7 w-24 text-xs text-center"
+                            />
+                          </>
+                        ) : (
+                          <MoneyInput
+                            value={item.precioUnitario}
+                            onValueChange={(v) => {
+                              if (v !== null && v > 0) onSetPrecio(item.lineId, v)
+                            }}
+                            className="h-7 w-24 text-xs text-center"
+                          />
+                        )}
                       </label>
 
                       {/* Per-line discount */}

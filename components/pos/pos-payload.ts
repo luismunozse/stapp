@@ -84,7 +84,8 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
         porcentajeDescuento: tipo === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : 0,
         ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
         ...(item.costo != null && { costo: item.costo }),
-        ...(item.moneda && item.precioOrigen != null && { precioOrigen: item.precioOrigen }),
+        // Solo un precio de origen positivo: con 0 el servidor usa el de lista, igual que sin él.
+        ...(item.moneda && typeof item.precioOrigen === "number" && item.precioOrigen > 0 && { precioOrigen: item.precioOrigen }),
       }
     }),
     ...(hayDivisa && tipoCambio != null ? { tipoCambio } : {}),

@@ -56,6 +56,10 @@ interface PosCheckoutDialogProps {
   descuentoGlobal?: DescuentoConfig | null
   descuentoMotivo?: string
   fiscal?: FiscalConfig | null
+  /** Cotización con la que el carrito convirtió las líneas en divisa (viaja en el payload). */
+  tipoCambio?: number | null
+  /** 409 COTIZACION_CAMBIO: el terminal adopta la nueva y reconvierte el carrito. */
+  onCotizacionCambiada?: (nueva: number) => void
 }
 
 export function PosCheckoutDialog({
@@ -67,6 +71,8 @@ export function PosCheckoutDialog({
   descuentoGlobal = null,
   descuentoMotivo,
   fiscal = null,
+  tipoCambio = null,
+  onCotizacionCambiada,
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
@@ -349,6 +355,7 @@ export function PosCheckoutDialog({
         descuentoGlobal,
         ...(descuentoMotivo ? { descuentoMotivo } : {}),
         ...(vendedorId ? { vendedorId } : {}),
+        tipoCambio,
       })
 
       const res = await fetch("/api/ventas", {
@@ -359,6 +366,12 @@ export function PosCheckoutDialog({
 
       if (!res.ok) {
         const error = await res.json()
+        // La cotización cambió en el servidor: el carrito se reconvierte con la nueva y el
+        // diálogo queda abierto con el total recalculado (misma idempotencyKey) para confirmar.
+        // DIVISA_NO_DISPONIBLE solo se avisa: el cajero decide qué quitar.
+        if (res.status === 409 && error?.code === "COTIZACION_CAMBIO" && error.nueva?.disponible === true && typeof error.nueva.valor === "number") {
+          onCotizacionCambiada?.(error.nueva.valor)
+        }
         await showError(error.error || "Error al crear la venta")
         return
       }

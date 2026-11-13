@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -54,6 +54,11 @@ import {
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useOffline } from "@/contexts/offline-context"
 import { useSession } from "next-auth/react"
+import { useMoneda } from "@/hooks/use-moneda"
+import { ChipCotizacion } from "@/components/moneda/chip-cotizacion"
+import { convertirALocal, unidadRedondeo } from "@/lib/currency/convert"
+import { aplicarCotizacionLineas, mensajeNoVendible, motivoNoVendible } from "@/lib/currency/venta-divisa"
+import { formatDivisa, motivoCorto, reconvertirApartada } from "./pos-divisa"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -108,6 +113,39 @@ export function PosTerminal() {
     cartItemsRef.current = cartItems
   }, [cartItems])
   const [cliente, setCliente] = useState<PosCliente>({ ...EMPTY_CLIENT })
+
+  // Multimoneda: la cotización en uso del carrito (`tcCarrito`) arranca con la del hook y se
+  // reemplaza cuando el hook trae otra o el servidor responde 409 COTIZACION_CAMBIO. Cada cambio
+  // reconvierte las líneas en divisa. Con la función apagada el hook no pide la cotización.
+  const { config: configMoneda, tipoCambio } = useMoneda()
+  const unidadConversion = configMoneda ? unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal) : 0
+  const tcHook = tipoCambio?.disponible ? tipoCambio.valor : null
+  const [tcCarrito, setTcCarrito] = useState<number | null>(tcHook)
+  const cambiarCotizacion = useCallback((nueva: number, unidad: number) => {
+    setTcCarrito(nueva)
+    setCartItems((items) => aplicarCotizacionLineas(items, nueva, unidad))
+  }, [])
+  // El hook trajo otra cotización (o cambió la unidad de redondeo): se adopta durante el render,
+  // sin un efecto, como cualquier estado que se ajusta a un valor que cambió.
+  const [monedaVista, setMonedaVista] = useState({ tc: tcHook, unidad: unidadConversion })
+  if (monedaVista.tc !== tcHook || monedaVista.unidad !== unidadConversion) {
+    setMonedaVista({ tc: tcHook, unidad: unidadConversion })
+    const tc = monedaVista.tc !== tcHook && tcHook !== null ? tcHook : tcCarrito
+    if (tc !== null) cambiarCotizacion(tc, unidadConversion)
+  }
+  const onCotizacionCambiada = useCallback(
+    (nueva: number) => cambiarCotizacion(nueva, unidadConversion),
+    [cambiarCotizacion, unidadConversion]
+  )
+  const hayLineasDivisa = cartItems.some((i) => i.moneda)
+  const noVendible = useMemo(
+    () => (p: InventarioResult): string | null => {
+      if (!p.moneda) return null
+      const motivo = motivoNoVendible(p.moneda, configMoneda, tipoCambio)
+      return motivo ? motivoCorto(motivo, p.moneda) : null
+    },
+    [configMoneda, tipoCambio]
+  )
   const [showClienteSearch, setShowClienteSearch] = useState(false)
   const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoConfig | null>(null)
   const [descuentoMotivo, setDescuentoMotivo] = useState("")
@@ -307,6 +345,20 @@ export function PosTerminal() {
 
   // --- Cart operations ---
   const addProduct = useCallback((product: InventarioResult) => {
+    let precio = { precioUnitario: product.precioVenta } as Pick<PosCartItem, "precioUnitario" | "moneda" | "precioOrigen">
+    if (product.moneda) {
+      const motivo = motivoNoVendible(product.moneda, configMoneda, tipoCambio)
+      const tc = tcCarrito ?? tcHook
+      if (motivo || tc === null) {
+        void showError(mensajeNoVendible(motivo ?? "SIN_COTIZACION", product.nombre, product.moneda))
+        return
+      }
+      precio = {
+        moneda: product.moneda,
+        precioOrigen: product.precioVenta,
+        precioUnitario: convertirALocal(product.precioVenta, tc, unidadConversion),
+      }
+    }
     setCartItems((prev) => {
       const existing = prev.find((item) => item.inventarioId === product.id)
       if (existing) {
@@ -324,7 +376,7 @@ export function PosTerminal() {
           inventarioId: product.id,
           codigo: product.codigo,
           nombre: product.nombre,
-          precioUnitario: product.precioVenta,
+          ...precio,
           cantidad: 1,
           stockDisponible: product.stock,
           diasGarantia: resolveDiasGarantia(product.diasGarantiaDefault, orgGarantiaDefault),
@@ -333,7 +385,7 @@ export function PosTerminal() {
         },
       ]
     })
-  }, [orgGarantiaDefault])
+  }, [orgGarantiaDefault, configMoneda, tipoCambio, tcCarrito, tcHook, unidadConversion, showError])
 
   const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number; costo?: number }) => {
     setCartItems((prev) => [
@@ -399,13 +451,18 @@ export function PosTerminal() {
     )
   }, [])
 
+  // En una línea en divisa el precio editado es el de origen (en su moneda) y se reconvierte.
   const setItemPrecio = useCallback((lineId: string, precio: number) => {
+    if (!(precio > 0)) return
     setCartItems((prev) =>
-      prev.map((item) =>
-        item.lineId === lineId ? { ...item, precioUnitario: precio } : item
-      )
+      prev.map((item) => {
+        if (item.lineId !== lineId) return item
+        if (!item.moneda) return { ...item, precioUnitario: precio }
+        if (tcCarrito === null) return item
+        return { ...item, precioOrigen: precio, precioUnitario: convertirALocal(precio, tcCarrito, unidadConversion) }
+      })
     )
-  }, [])
+  }, [tcCarrito, unidadConversion])
 
   const resetVenta = useCallback(() => {
     setCartItems([])
@@ -497,11 +554,19 @@ export function PosTerminal() {
         body: JSON.stringify({ ids: deInventario.map((i) => i.inventarioId), precios: true }),
       })
       if (!res.ok) return
-      const { stock = {}, precios = {} } = await res.json()
+      const { stock = {}, precios = {}, monedas = {} } = await res.json()
       const cambios: string[] = []
       for (const it of deInventario) {
         const id = it.inventarioId!
-        if (id in precios && precios[id] !== it.precioUnitario) {
+        const moneda = it.moneda ?? null
+        if (id in monedas && (monedas[id] ?? null) !== moneda) {
+          const nombreMoneda = (m: string | null) => m ?? "moneda local"
+          cambios.push(`${it.nombre}: ahora tiene precio en ${nombreMoneda(monedas[id] ?? null)} (en la venta apartada: ${nombreMoneda(moneda)})`)
+        } else if (moneda) {
+          if (id in precios && precios[id] !== it.precioOrigen) {
+            cambios.push(`${it.nombre}: precio de lista actual ${formatDivisa(precios[id], moneda)} (en la venta apartada: ${formatDivisa(it.precioOrigen ?? 0, moneda)})`)
+          }
+        } else if (id in precios && precios[id] !== it.precioUnitario) {
           cambios.push(`${it.nombre}: precio de lista actual ${formatPrice(precios[id])} (en la venta apartada: ${formatPrice(it.precioUnitario)})`)
         }
         if (id in stock && stock[id] < it.cantidad) {
@@ -542,17 +607,25 @@ export function PosTerminal() {
       }
 
       // Clear stale serieIds on serialized items so cashier picks fresh available series
-      const restoredItems = sale.items.map((item) =>
+      const sinSeries = sale.items.map((item) =>
         item.trackeaSeries ? { ...item, serieIds: [] } : item
+      )
+      // Las líneas en divisa se reconvierten con la cotización en uso; las que ya no se pueden
+      // vender se quitan y se avisa por cada una.
+      const { items: restoredItems, avisos } = reconvertirApartada(
+        sinSeries, configMoneda, tipoCambio, tcCarrito ?? tcHook, unidadConversion
       )
       setCartItems(restoredItems)
       setCliente(sale.cliente)
       setDescuentoGlobal(sale.descuentoGlobal ?? null)
       setDescuentoMotivo(sale.descuentoMotivo ?? "")
       setMobileTab("cart")
-      void avisarCambiosApartada(restoredItems)
+      void (async () => {
+        if (avisos.length > 0) await showError(avisos.join("\n"))
+        await avisarCambiosApartada(restoredItems)
+      })()
     },
-    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada]
+    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada, configMoneda, tipoCambio, tcCarrito, tcHook, unidadConversion, showError]
   )
 
 
@@ -749,6 +822,7 @@ export function PosTerminal() {
         precioVenta: item.precioVenta,
         trackeaSeries: item.trackeaSeries ?? false,
         diasGarantiaDefault: item.diasGarantiaDefault ?? null,
+        moneda: item.moneda ?? null,
       })
       // Item 5: Show brief scan success indicator (~1.2s)
       if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
@@ -815,6 +889,15 @@ export function PosTerminal() {
     },
     enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
   })
+
+  const chipCotizacion =
+    configMoneda && (hayLineasDivisa || configMoneda.habilitada) ? (
+      <ChipCotizacion
+        tipoCambio={tipoCambio}
+        monedaLocal={configMoneda.monedaLocal}
+        monedaExtranjera={configMoneda.monedaExtranjera}
+      />
+    ) : null
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -982,7 +1065,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchDesktopRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
+          <PosProductSearch ref={searchDesktopRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} noVendible={noVendible} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -1008,6 +1091,7 @@ export function PosTerminal() {
             onSetDescuentoGlobal={setDescuentoGlobal}
             onSetDescuentoMotivo={setDescuentoMotivo}
             onSetPrecio={setItemPrecio}
+            chipCotizacion={chipCotizacion}
             fiscal={fiscal}
             ventaSucursalNombre={ventaSucursal?.nombre ?? null}
             ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
@@ -1023,7 +1107,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchMobileRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
+            <PosProductSearch ref={searchMobileRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} noVendible={noVendible} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
@@ -1051,6 +1135,7 @@ export function PosTerminal() {
               onSetDescuentoGlobal={setDescuentoGlobal}
               onSetDescuentoMotivo={setDescuentoMotivo}
               onSetPrecio={setItemPrecio}
+              chipCotizacion={chipCotizacion}
               fiscal={fiscal}
               ventaSucursalNombre={ventaSucursal?.nombre ?? null}
               ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
@@ -1132,6 +1217,8 @@ export function PosTerminal() {
         descuentoGlobal={descuentoGlobal}
         descuentoMotivo={descuentoMotivo.trim() || undefined}
         fiscal={fiscal}
+        tipoCambio={tcCarrito}
+        onCotizacionCambiada={onCotizacionCambiada}
       />
 
       <PosHeldSales
