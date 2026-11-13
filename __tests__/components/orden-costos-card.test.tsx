@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 
 describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
-  it("orden totalmente pagada: muestra el total cobrado y el saldo con la píldora 'Cobrado'", () => {
+  it("orden totalmente pagada: 'Cobrado' aparece una sola vez (con su importe) y el saldo queda en $0", () => {
     render(
       <OrdenCostosCard
         ordenId="orden-1"
@@ -19,11 +19,11 @@ describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
       />,
     )
 
-    // El total realmente cobrado sigue mostrándose (línea verde original) y la
-    // línea de saldo, en pago completo, lleva la píldora de estado de pago, que
-    // en la UI interna dice "Cobrado" (lib/estado-pago-ui).
-    expect(screen.getAllByText("Cobrado")).toHaveLength(2)
-    expect(screen.getByText("Saldo")).toBeInTheDocument()
+    // La línea del total cobrado dice "Cobrado" con su importe; la de saldo
+    // muestra $0 y no repite la píldora "Cobrado".
+    expect(screen.getAllByText("Cobrado")).toHaveLength(1)
+    const saldo = screen.getByText("Saldo").parentElement!
+    expect(saldo).toHaveTextContent(/\$\s?0(,00)?$/)
     expect(screen.queryByText("Pagado")).not.toBeInTheDocument()
   })
 
@@ -126,8 +126,9 @@ describe("OrdenCostosCard — notas de crédito", () => {
       />,
     )
 
-    // 1000 - 400 cobrado - 600 de NC = 0: el saldo está cobrado, no debe $600.
-    expect(screen.getByText("Saldo")).toBeInTheDocument()
-    expect(screen.getAllByText("Cobrado")).toHaveLength(2)
+    // 1000 - 400 cobrado - 600 de NC = 0: el saldo queda en $0, no debe $600.
+    const saldo = screen.getByText("Saldo").parentElement!
+    expect(saldo).toHaveTextContent(/\$\s?0(,00)?$/)
+    expect(screen.getAllByText("Cobrado")).toHaveLength(1)
   })
 })
