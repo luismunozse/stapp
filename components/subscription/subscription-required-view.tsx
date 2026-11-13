@@ -150,7 +150,7 @@ export function SubscriptionRequiredView({
           <Link
             href="/dashboard"
             className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label="Ir al dashboard"
+            aria-label="Ir al inicio"
           >
             <BusinessLogo size="sm" showText />
           </Link>

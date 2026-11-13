@@ -55,7 +55,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const titulo = `${data.categoria.nombre} — ${orgName}`
   const descripcion =
     data.categoria.descripcion ||
-    `${data.categoria.nombre} disponibles en el catálogo de ${orgName}. Ver precios, stock y solicitar cotización online.`
+    `${data.categoria.nombre} disponibles en el catálogo de ${orgName}. Ver precios, stock y pedir presupuesto online.`
 
   return {
     title: titulo,
@@ -219,7 +219,7 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
                   <a
                     href={catalogoWhatsAppUrl(
                       data.config.whatsapp,
-                      `Hola! Estoy buscando algo en "${data.categoria.nombre}". ¿Tienen disponibilidad?`
+                      `¡Hola! Estoy buscando algo en "${data.categoria.nombre}". ¿Tienen disponibilidad?`
                     ) ?? undefined}
                     target="_blank"
                     rel="noreferrer"

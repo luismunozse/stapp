@@ -21,10 +21,10 @@ export default function GlobalError({
           textAlign: "center",
         }}>
           <h2 style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>
-            Algo salio mal
+            Algo salió mal
           </h2>
           <p style={{ color: "#666", marginBottom: "2rem" }}>
-            Ocurrio un error inesperado.
+            Ocurrió un error inesperado.
           </p>
           <button
             onClick={reset}

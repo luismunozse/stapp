@@ -273,7 +273,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           />
         ) : null}
         <h1 className="text-xl font-bold">
-          {data.organizacion.nombre || "Servicio técnico"}
+          {data.organizacion.nombre || "Servicio Técnico"}
         </h1>
         <p className="text-sm text-muted-foreground">
           {data.tipo === "PRESUPUESTO" ? "Presupuesto" : "Presupuesto de servicio"}
@@ -317,7 +317,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                 <p className="text-muted-foreground">Válido hasta</p>
                 <p className={`font-medium ${isExpired ? "text-destructive-text" : ""}`}>
                   {formatDate(data.fechaVencimiento)}
-                  {isExpired && " (Vencida)"}
+                  {isExpired && " (Vencido)"}
                 </p>
               </div>
             )}
@@ -672,7 +672,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2 text-success-700">
               <CheckCircle className="h-5 w-5" />
-              {data.tipo === "PRESUPUESTO" ? "Presupuesto aprobado" : "Presupuesto aprobado"}
+              Presupuesto aprobado
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -690,7 +690,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             )}
             {data.fechaAprobacion && (
               <p className="text-sm text-muted-foreground text-center">
-                Aprobada el {formatDate(data.fechaAprobacion)}
+                Aprobado el {formatDate(data.fechaAprobacion)}
               </p>
             )}
           </CardContent>
@@ -760,7 +760,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg text-destructive-text">Rechazar presupuesto</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Indique el motivo del rechazo (opcional).
+              Indicá el motivo del rechazo (opcional).
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -802,7 +802,7 @@ export function CotizacionPublica({ token }: { token: string }) {
         <Card className="border-primary">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">
-              {data.tipo === "PRESUPUESTO" ? "Aprobar presupuesto" : "Aprobar presupuesto"}
+              Aprobar presupuesto
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               {data.tipo === "PRESUPUESTO"

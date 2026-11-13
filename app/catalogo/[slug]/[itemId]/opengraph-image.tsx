@@ -245,7 +245,7 @@ export default async function Image({ params }: { params: { slug: string; itemId
                 alignSelf: "flex-start",
               }}
             >
-              Ver y cotizar →
+              Ver y consultar →
             </div>
           </div>
         </div>

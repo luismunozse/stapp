@@ -144,7 +144,7 @@ const baseFaqs = [
       {
         question: "¿Puedo emitir presupuestos y remitos?",
         answer:
-          "Sí. Podés generar presupuestos (cotizaciones) desde una orden o desde cero, enviarlos al cliente por WhatsApp o email y convertirlos en orden o venta cuando sean aprobados. La sección de Comprobantes te permite registrar y consultar los remitos emitidos.",
+          "Sí. Podés generar presupuestos desde una orden o desde cero, enviarlos al cliente por WhatsApp o email y convertirlos en orden o venta cuando sean aprobados. La sección de Comprobantes te permite registrar y consultar los remitos emitidos.",
       },
     ],
   },

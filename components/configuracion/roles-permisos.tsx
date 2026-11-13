@@ -47,7 +47,7 @@ const ROLES: { valor: Rol; nombre: string; icono: typeof Wrench; resumen: string
     valor: "TECNICO",
     nombre: "Técnico",
     icono: Wrench,
-    resumen: "Recibe órdenes asignadas, cotiza y cobra comisión por reparación.",
+    resumen: "Recibe órdenes asignadas, arma presupuestos y cobra comisión por reparación.",
   },
   {
     valor: "VENDEDOR",
@@ -71,16 +71,16 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
   {
     rol: "TECNICO",
     campo: "tecnicosOperanPos",
-    titulo: "Vender desde el Punto de Venta",
+    titulo: "Vender desde el punto de venta",
     detalle:
       "Puede vender por el POS y ver sus propias ventas. Sigue siendo técnico: conserva sus órdenes asignadas y sus comisiones de reparación. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones.",
   },
   {
     rol: "TECNICO",
     campo: "tecnicosCobranCotizaciones",
-    titulo: "Cobrar sus propias cotizaciones",
+    titulo: "Cobrar sus propios presupuestos",
     detalle:
-      "Puede convertir en venta las cotizaciones aceptadas que él mismo creó, sin depender de un administrador. No alcanza a las cotizaciones de otros técnicos, ni a eliminarlas, revisarlas o convertirlas en orden de servicio.",
+      "Puede convertir en venta los presupuestos aceptados que él mismo creó, sin depender de un administrador. No alcanza a los presupuestos de otros técnicos, ni a eliminarlos, revisarlos o convertirlos en orden de servicio.",
   },
   {
     rol: "TECNICO",

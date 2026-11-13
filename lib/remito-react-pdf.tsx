@@ -63,8 +63,8 @@ const estadoPagoLabels: Record<string, string> = {
 const metodoPagoFacturaLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
-  TARJETA_DEBITO: "Tarjeta Debito",
-  TARJETA_CREDITO: "Tarjeta Credito",
+  TARJETA_DEBITO: "Tarjeta débito",
+  TARJETA_CREDITO: "Tarjeta crédito",
   MERCADOPAGO: "MercadoPago",
   OTRO: "Otro",
 }

@@ -70,7 +70,7 @@ export function Breadcrumbs() {
         className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
       >
         <Home className="h-4 w-4" />
-        <span>Dashboard</span>
+        <span>Panel</span>
       </Link>
       {crumbs.map((crumb) => (
         <span key={crumb.href} className="flex items-center gap-1">

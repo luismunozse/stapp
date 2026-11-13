@@ -99,11 +99,11 @@ export function LeadsList() {
       {/* Lista */}
       {loading ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground text-sm">Cargando leads...</p>
+          <p className="text-muted-foreground text-sm">Cargando contactos...</p>
         </div>
       ) : leads.length === 0 ? (
         <div className="text-center py-12 border border-dashed rounded-lg">
-          <p className="text-muted-foreground text-sm">No se encontraron leads</p>
+          <p className="text-muted-foreground text-sm">No se encontraron contactos</p>
         </div>
       ) : (
         <>
@@ -142,7 +142,7 @@ export function LeadsList() {
                         {formatDate(lead.created_at)}
                       </td>
                       <td className="p-4">
-                        <Button aria-label="Ver lead" variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
+                        <Button aria-label="Ver contacto" variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
                           <Eye className="w-4 h-4" />
                         </Button>
                       </td>
@@ -167,7 +167,7 @@ export function LeadsList() {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {getEstadoBadge(lead.estado)}
-                      <IconButton label="Ver lead" variant="ghost" className="h-7 w-7" onClick={() => setSelectedLead(lead)}>
+                      <IconButton label="Ver contacto" variant="ghost" className="h-7 w-7" onClick={() => setSelectedLead(lead)}>
                         <Eye className="w-3.5 h-3.5" />
                       </IconButton>
                     </div>

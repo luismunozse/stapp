@@ -119,7 +119,7 @@ export function KioskConfigView() {
       if (!res.ok) {
         const data = await res.json()
         if (data.code === "PREMIUM_REQUIRED") {
-          await showError("Esta función requiere el plan Premium.")
+          await showError("Esta función requiere el plan Profesional.")
         } else {
           await showError(data.error || "Error al crear kiosco")
         }

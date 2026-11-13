@@ -194,7 +194,7 @@ describe("ConfiguracionForm — tabs", () => {
   it("stops sending comisionAplicaSinReparacion from the main form", async () => {
     await renderForm({ initialTab: "empresa" })
 
-    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Guardar cambios/ }))
 
     await waitFor(() => {
       const put = mockFetch.mock.calls.find(([, init]) => init?.method === "PUT")
@@ -207,16 +207,16 @@ describe("ConfiguracionForm — tabs", () => {
     await renderForm()
 
     // Secciones: no save bar
-    expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Guardar cambios/ })).not.toBeInTheDocument()
 
     for (const label of ["Empresa", "IVA y ARCA", "Comprobantes"]) {
       fireEvent.click(screen.getByRole("tab", { name: label }))
-      expect(screen.getByRole("button", { name: /Guardar Cambios/ })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /Guardar cambios/ })).toBeInTheDocument()
     }
 
     for (const label of ["Comisiones", "Avisos", "Seguridad"]) {
       fireEvent.click(screen.getByRole("tab", { name: label }))
-      expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: /Guardar cambios/ })).not.toBeInTheDocument()
     }
   })
 
@@ -224,7 +224,7 @@ describe("ConfiguracionForm — tabs", () => {
     await renderForm({ initialTab: "empresa" })
 
     fireEvent.change(screen.getByLabelText("Nombre de la Empresa"), { target: { value: "Nuevo" } })
-    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Guardar cambios/ }))
 
     const status = await screen.findByText("Configuración guardada exitosamente")
     expect(status.closest("[data-testid='config-save-bar']")).not.toBeNull()

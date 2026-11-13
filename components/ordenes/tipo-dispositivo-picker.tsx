@@ -39,6 +39,7 @@ export function TipoDispositivoPicker({
             <button
               key={tipo.codigo}
               type="button"
+              aria-pressed={value === tipo.codigo}
               onClick={() => onChange(tipo.codigo)}
               className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
                 value === tipo.codigo

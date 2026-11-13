@@ -153,7 +153,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
-              Cerrar Sesión
+              Cerrar sesión
             </Button>
           </div>
         </div>
@@ -244,7 +244,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
-              Cerrar Sesión
+              Cerrar sesión
             </Button>
           </div>
         </div>

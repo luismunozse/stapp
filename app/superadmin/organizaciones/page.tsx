@@ -491,7 +491,7 @@ export default function OrganizacionesPage() {
   return (
     <PageShell
       title="Organizaciones"
-      description="Gestiona todas las organizaciones del sistema"
+      description="Gestioná todas las organizaciones del sistema"
       icon={Building2}
       meta={
         <LastUpdated
@@ -543,7 +543,7 @@ export default function OrganizacionesPage() {
               },
             },
             {
-              title: "Premium",
+              title: "Profesional",
               value: kpis.premium,
               icon: CreditCard,
               description: "Con plan de pago activo",
@@ -568,7 +568,7 @@ export default function OrganizacionesPage() {
               title: "Tasa de conversión",
               value: `${kpis.conversionRate}%`,
               icon: TrendingUp,
-              description: "Free → Premium",
+              description: "Free → Profesional",
               color: "text-cyan-600",
               bgColor: "bg-cyan-100 dark:bg-cyan-950",
               filter: undefined as (() => void) | undefined,
@@ -677,7 +677,7 @@ export default function OrganizacionesPage() {
                 <SelectContent>
                   <SelectItem value="all">Todos los planes</SelectItem>
                   <SelectItem value="free">Free / Trial</SelectItem>
-                  <SelectItem value="premium">Premium (pago)</SelectItem>
+                  <SelectItem value="premium">Profesional (pago)</SelectItem>
                   <SelectItem value="trial_expired">Trial expirado</SelectItem>
                 </SelectContent>
               </Select>

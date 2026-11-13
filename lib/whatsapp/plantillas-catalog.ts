@@ -95,7 +95,7 @@ export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
     category: "ordenes",
     description: "Se envía cuando la orden cambia de estado.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_ESTADO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra {estado}. Puede ver el detalle en el link.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra {estado}. Podés ver el detalle en el link.
 
 Seguimiento: {link_seguimiento}
 
@@ -107,13 +107,13 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente con el monto del presupuesto definido.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_PRESUPUESTO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, ya tenemos el presupuesto para la reparación de su {dispositivo}:
+    defaultText: `Hola {cliente}, ya tenemos el presupuesto para la reparación de tu {dispositivo}:
 
 *Presupuesto: {presupuesto}*
 
 Orden #{numero_orden}
 
-Para avanzar, *apruebe o rechace el presupuesto* desde el link de abajo.
+Para avanzar, *aprobá o rechazá el presupuesto* desde el link de abajo.
 
 Seguimiento: {link_seguimiento}
 
@@ -125,11 +125,11 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Se envía cuando el equipo está reparado y listo para entregar.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le recordamos que su {dispositivo} está listo para retirar.
+    defaultText: `Hola {cliente}, te recordamos que tu {dispositivo} está listo para retirar.
 
 Orden #{numero_orden}
 
-Puede pasar por nuestro local en horario de atención. Lo esperamos!
+Podés pasar por nuestro local en horario de atención. ¡Te esperamos!
 Seguimiento: {link_seguimiento}
 
 {empresa}`,
@@ -140,14 +140,14 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Se envía cuando se entrega el equipo al cliente.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_PDF, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, confirmamos la entrega de su {dispositivo}.
+    defaultText: `Hola {cliente}, confirmamos la entrega de tu {dispositivo}.
 
 *Orden #{numero_orden} - ENTREGADO*
 
 Descargar comprobante: {link_pdf}
 Seguimiento: {link_seguimiento}
 
-Gracias por confiar en nosotros!
+¡Gracias por confiar en nosotros!
 
 {empresa}`,
   },
@@ -178,7 +178,7 @@ Gracias por confiar en nosotros!
       VAR_LINK_PDF,
       VAR_EMPRESA,
     ],
-    defaultText: `Hola {cliente}, le confirmamos la recepción de su equipo:
+    defaultText: `Hola {cliente}, te confirmamos la recepción de tu equipo:
 
 *ORDEN DE SERVICIO {codigo_orden}*
 
@@ -188,8 +188,8 @@ Problema: {problema}{linea_presupuesto}{linea_fecha_prometida}
 Comprobante PDF: {link_pdf}
 Seguimiento en línea: {link_seguimiento}
 
-Conserve este mensaje como comprobante.
-Le avisaremos sobre el avance de la reparación.
+Conservá este mensaje como comprobante.
+Te avisaremos sobre el avance de la reparación.
 
 {empresa}`,
   },
@@ -199,9 +199,9 @@ Le avisaremos sobre el avance de la reparación.
     category: "ordenes",
     description: "Mensaje genérico de seguimiento para una orden.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+    defaultText: `Hola {cliente}, nos comunicamos por tu {dispositivo} (Orden #{numero_orden}).
 
-[Escriba su mensaje aquí]
+[Escribí tu mensaje acá]
 
 Seguimiento: {link_seguimiento}
 
@@ -215,9 +215,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado RECIBIDO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_PDF, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra recibido.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra recibido.
 
-Recibimos su equipo y ya está en cola de diagnóstico. Le avisaremos apenas tengamos novedades.
+Recibimos tu equipo y ya está en cola de diagnóstico. Te avisaremos apenas tengamos novedades.
 
 Comprobante: {link_pdf}
 Seguimiento: {link_seguimiento}
@@ -226,13 +226,13 @@ Seguimiento: {link_seguimiento}
   },
   {
     key: "orden_estado_en_diagnostico",
-    label: "Aviso: En Diagnóstico",
+    label: "Aviso: En diagnóstico",
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado EN_DIAGNOSTICO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en diagnóstico.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra en diagnóstico.
 
-Estamos revisando su equipo para detectar la falla. En breve le enviamos el presupuesto.
+Estamos revisando tu equipo para detectar la falla. En breve te enviamos el presupuesto.
 
 Seguimiento: {link_seguimiento}
 
@@ -244,9 +244,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado PRESUPUESTADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra presupuestado.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra presupuestado.
 
-Para avanzar, *apruebe o rechace el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escríbanos.
+Para avanzar, *aprobá o rechazá el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escribinos.
 
 Seguimiento: {link_seguimiento}
 
@@ -258,9 +258,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado APROBADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra aprobado.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra aprobado.
 
-¡Gracias por aprobar el presupuesto! Su equipo entra en cola de reparación. Le avisamos cuando esté listo.
+¡Gracias por aprobar el presupuesto! Tu equipo entra en cola de reparación. Te avisamos cuando esté listo.
 
 Seguimiento: {link_seguimiento}
 
@@ -268,13 +268,13 @@ Seguimiento: {link_seguimiento}
   },
   {
     key: "orden_estado_en_reparacion",
-    label: "Aviso: En Reparación",
+    label: "Aviso: En reparación",
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado EN_REPARACION.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en reparación.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra en reparación.
 
-Ya estamos reparando su equipo. Le avisamos en cuanto esté terminado.
+Ya estamos reparando tu equipo. Te avisamos en cuanto esté terminado.
 
 Seguimiento: {link_seguimiento}
 
@@ -286,9 +286,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado ESPERANDO_REPUESTO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra esperando repuesto.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra esperando repuesto.
 
-Su reparación está en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos.
+Tu reparación está en pausa esperando un repuesto. Apenas llegue, retomamos y te avisamos.
 
 Seguimiento: {link_seguimiento}
 
@@ -300,9 +300,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado REPARADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra reparado.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra reparado.
 
-Su equipo está reparado y *listo para retirar*. Lo esperamos en horario de atención.
+Tu equipo está reparado y *listo para retirar*. Te esperamos en horario de atención.
 
 Seguimiento: {link_seguimiento}
 
@@ -314,9 +314,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado ENTREGADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra entregado.
 
-Su equipo fue entregado. ¡Gracias por confiar en nosotros! Si necesita algo más, escríbanos.
+Tu equipo fue entregado. ¡Gracias por confiar en nosotros! Si necesitás algo más, escribinos.
 
 Seguimiento: {link_seguimiento}
 
@@ -328,9 +328,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado ENTREGADO_SIN_REPARACION.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra retirado sin reparación.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra retirado sin reparación.
 
-Su equipo fue retirado sin reparación. Gracias por consultarnos; quedamos a disposición.
+Tu equipo fue retirado sin reparación. Gracias por consultarnos; quedamos a disposición.
 
 Seguimiento: {link_seguimiento}
 
@@ -342,9 +342,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado ENTREGADO_SIN_COBRO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado sin cobro.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra entregado sin cobro.
 
-Su equipo fue entregado. ¡Gracias por confiar en nosotros!
+Tu equipo fue entregado. ¡Gracias por confiar en nosotros!
 
 Seguimiento: {link_seguimiento}
 
@@ -356,9 +356,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado CANCELADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra cancelado.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra cancelado.
 
-La orden fue cancelada. Si desea retomar o ingresar un nuevo servicio, escríbanos.
+La orden fue cancelada. Si querés retomar o ingresar un nuevo servicio, escribinos.
 
 Seguimiento: {link_seguimiento}
 
@@ -370,9 +370,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado SIN_REPARACION.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra sin posibilidad de reparación.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra sin posibilidad de reparación.
 
-No fue posible reparar su equipo. Puede pasar a retirarlo en horario de atención. Quedamos a disposición.
+No fue posible reparar tu equipo. Podés pasar a retirarlo en horario de atención. Quedamos a disposición.
 
 Seguimiento: {link_seguimiento}
 
@@ -384,9 +384,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando se revisa el equipo y no se reproduce la falla reportada.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra sin falla detectada.
+    defaultText: `Hola {cliente}, te informamos que tu {dispositivo} (Orden #{numero_orden}) se encuentra sin falla detectada.
 
-Revisamos su equipo y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atención. Quedamos a disposición.
+Revisamos tu equipo y no detectamos la falla reportada. Podés pasar a retirarlo en horario de atención. Quedamos a disposición.
 
 Seguimiento: {link_seguimiento}
 
@@ -398,12 +398,12 @@ Seguimiento: {link_seguimiento}
     category: "operativo",
     description: "Pedido de información adicional al cliente.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+    defaultText: `Hola {cliente}, nos comunicamos por tu {dispositivo} (Orden #{numero_orden}).
 
 Necesitamos información adicional para continuar con el servicio.
-[Detalle lo que necesita: fotos, contraseña, descripción del problema, etc.]
+[Detallá lo que necesitás: fotos, contraseña, descripción del problema, etc.]
 
-Agradecemos su pronta respuesta.
+Agradecemos tu pronta respuesta.
 
 {empresa}`,
   },
@@ -413,13 +413,13 @@ Agradecemos su pronta respuesta.
     category: "operativo",
     description: "Aviso de que el repuesto necesario llegó.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_REPUESTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, buenas noticias!
+    defaultText: `Hola {cliente}, ¡buenas noticias!
 
-El repuesto *{repuesto}* para su {dispositivo} ya está disponible.
+El repuesto *{repuesto}* para tu {dispositivo} ya está disponible.
 
 Orden #{numero_orden}
 
-Retomamos la reparación de inmediato. Le avisaremos cuando esté listo.
+Retomamos la reparación de inmediato. Te avisaremos cuando esté listo.
 
 {empresa}`,
   },
@@ -429,15 +429,15 @@ Retomamos la reparación de inmediato. Le avisaremos cuando esté listo.
     category: "operativo",
     description: "Aviso de que el repuesto no está disponible.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_REPUESTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos sobre su {dispositivo} (Orden #{numero_orden}).
+    defaultText: `Hola {cliente}, te informamos sobre tu {dispositivo} (Orden #{numero_orden}).
 
 Lamentablemente el repuesto *{repuesto}* no se encuentra disponible o está discontinuado.
 
-Podemos ofrecerle:
+Podemos ofrecerte:
 - Buscar un repuesto alternativo compatible
 - Devolver el equipo sin cargo
 
-Por favor indíquenos cómo desea proceder.
+Por favor, indicanos cómo querés seguir.
 
 {empresa}`,
   },
@@ -447,7 +447,7 @@ Por favor indíquenos cómo desea proceder.
     category: "operativo",
     description: "Aviso al cliente cuando la reparación se demora.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_MOTIVO_DEMORA, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que la reparación de su {dispositivo} (Orden #{numero_orden}) está tomando más tiempo del estimado.
+    defaultText: `Hola {cliente}, te informamos que la reparación de tu {dispositivo} (Orden #{numero_orden}) está tomando más tiempo del estimado.
 
 Motivo: {motivo_demora}
 
@@ -461,11 +461,11 @@ Pedimos disculpas por la demora. Estamos trabajando para resolverlo lo antes pos
     category: "operativo",
     description: "Seguimiento cuando el cliente rechazó el presupuesto.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+    defaultText: `Hola {cliente}, nos comunicamos por tu {dispositivo} (Orden #{numero_orden}).
 
-Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Podemos evaluar alternativas para resolver el problema de su equipo.
+Entendemos que el presupuesto anterior no se ajustaba a tus necesidades. Podemos evaluar alternativas para resolver el problema de tu equipo.
 
-Puede responder este mensaje si desea que revisemos otras opciones.
+Podés responder este mensaje si querés que revisemos otras opciones.
 
 {empresa}`,
   },
@@ -477,7 +477,7 @@ Puede responder este mensaje si desea que revisemos otras opciones.
     category: "ordenes",
     description: "Aviso al cliente con los datos de la garantía.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_GARANTIA_DIAS, VAR_GARANTIA_FECHA, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, su reparación cuenta con garantía:
+    defaultText: `Hola {cliente}, tu reparación cuenta con garantía:
 
 *{garantia_dias} días de garantía*
 Válida hasta: {garantia_fecha}
@@ -485,7 +485,7 @@ Válida hasta: {garantia_fecha}
 Orden #{numero_orden}
 Dispositivo: {dispositivo}
 
-Conserve este mensaje como comprobante.
+Conservá este mensaje como comprobante.
 
 {empresa}`,
   },
@@ -530,7 +530,7 @@ Si notás alguna falla, acercate antes de esa fecha con el equipo y tu comproban
     category: "ventas",
     description: "Mensaje completo al compartir un comprobante de venta.",
     variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_ITEMS, VAR_TOTAL, VAR_METODO_PAGO, VAR_GARANTIAS, VAR_EMPRESA, VAR_FECHA],
-    defaultText: `Hola {cliente}, gracias por tu compra!
+    defaultText: `Hola {cliente}, ¡gracias por tu compra!
 
 *COMPROBANTE DE VENTA #{numero_venta}*
 
@@ -541,7 +541,7 @@ Método de pago: {metodo_pago}
 
 {garantias}
 
-Gracias por tu preferencia!
+¡Gracias por tu preferencia!
 {empresa}`,
   },
   {
@@ -550,7 +550,7 @@ Gracias por tu preferencia!
     category: "ventas",
     description: "Mensaje corto que acompaña a la imagen del ticket compartido.",
     variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_TOTAL, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, gracias por tu compra!
+    defaultText: `Hola {cliente}, ¡gracias por tu compra!
 Venta #{numero_venta} por {total}.
 Te enviamos el comprobante como imagen.`,
   },
@@ -560,11 +560,11 @@ Te enviamos el comprobante como imagen.`,
     category: "ventas",
     description: "Aviso con los certificados de garantía de una venta.",
     variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_GARANTIAS, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, su compra (V{numero_venta}) incluye garantía:
+    defaultText: `Hola {cliente}, tu compra (V{numero_venta}) incluye garantía:
 
 {garantias}
 
-Conserve estos certificados como comprobante.
+Conservá estos certificados como comprobante.
 
 {empresa}`,
   },
@@ -574,11 +574,11 @@ Conserve estos certificados como comprobante.
     category: "ventas",
     description: "Mensaje de agradecimiento luego de una venta.",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, gracias por elegirnos!
+    defaultText: `Hola {cliente}, ¡gracias por elegirnos!
 
-Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
+Esperamos que disfrutes tu compra. Si tenés alguna consulta, no dudes en contactarnos.
 
-Lo esperamos pronto!
+¡Te esperamos pronto!
 
 {empresa}`,
   },
@@ -602,9 +602,9 @@ Cualquier consulta, escribinos.
     category: "cobranza",
     description: "Recordatorio de saldo pendiente, con desglose de cuenta corriente y órdenes cuando aplica.",
     variables: [VAR_CLIENTE, VAR_SALDO, VAR_SALDO_FIADO, VAR_SALDO_ORDENES, VAR_LINEA_DESGLOSE_PAGO, VAR_LINEA_ORDEN, VAR_NUMERO_ORDEN, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le recordamos que tiene un saldo pendiente de *{saldo}*.{linea_desglose_pago}{linea_orden}
+    defaultText: `Hola {cliente}, te recordamos que tenés un saldo pendiente de *{saldo}*.{linea_desglose_pago}{linea_orden}
 
-Puede acercarse a nuestro local o consultarnos por medios de pago disponibles.
+Podés acercarte a nuestro local o consultarnos por medios de pago disponibles.
 
 {empresa}`,
   },
@@ -614,11 +614,11 @@ Puede acercarse a nuestro local o consultarnos por medios de pago disponibles.
     category: "cobranza",
     description: "Confirmación de pago recibido.",
     variables: [VAR_CLIENTE, VAR_MONTO_PAGO, VAR_SALDO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, confirmamos la recepción de su pago por *{monto_pago}*.
+    defaultText: `Hola {cliente}, confirmamos la recepción de tu pago por *{monto_pago}*.
 
 Saldo restante: {saldo}
 
-Gracias!
+¡Gracias!
 
 {empresa}`,
   },
@@ -628,7 +628,7 @@ Gracias!
     category: "cobranza",
     description: "Mensaje con link para que el cliente pague.",
     variables: [VAR_CLIENTE, VAR_MONTO_PAGO, VAR_LINK_PAGO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le enviamos el link para realizar el pago:
+    defaultText: `Hola {cliente}, te enviamos el link para realizar el pago:
 
 *Monto: {monto_pago}*
 
@@ -719,11 +719,11 @@ Si querés reagendar, respondé este mensaje.`,
     category: "marketing",
     description: "Mensaje de bienvenida a clientes nuevos.",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, bienvenido/a a {empresa}!
+    defaultText: `Hola {cliente}, ¡bienvenido/a a {empresa}!
 
 Gracias por confiar en nosotros. Somos especialistas en reparación y servicio técnico.
 
-Puede contactarnos por este medio para cualquier consulta.
+Podés contactarnos por este medio para cualquier consulta.
 
 {empresa}`,
   },
@@ -733,11 +733,11 @@ Puede contactarnos por este medio para cualquier consulta.
     category: "marketing",
     description: "Respuesta genérica a una consulta inicial.",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, gracias por su consulta.
+    defaultText: `Hola {cliente}, gracias por tu consulta.
 
-[Detalle su respuesta aquí]
+[Escribí tu respuesta acá]
 
-Si desea traer su equipo para una revisión sin cargo, estamos a su disposición.
+Si querés traer tu equipo para una revisión sin cargo, estamos a tu disposición.
 
 {empresa}`,
   },
@@ -747,26 +747,26 @@ Si desea traer su equipo para una revisión sin cargo, estamos a su disposición
     category: "marketing",
     description: "Aviso para recordar mantenimiento preventivo.",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, desde {empresa} queremos recordarle que es buen momento para un chequeo preventivo de su equipo.
+    defaultText: `Hola {cliente}, desde {empresa} queremos recordarte que es buen momento para un chequeo preventivo de tu equipo.
 
-El mantenimiento preventivo ayuda a evitar fallas y prolongar la vida útil de su equipo.
+El mantenimiento preventivo ayuda a evitar fallas y prolongar la vida útil de tu equipo.
 
-Consulte por turno disponible!
+¡Consultanos por un turno disponible!
 
 {empresa}`,
   },
   {
     key: "promocion",
-    label: "Promoción / Oferta",
+    label: "Promoción / oferta",
     category: "marketing",
     description: "Mensaje para difundir una promoción.",
     variables: [VAR_CLIENTE, VAR_PROMO_TITULO, VAR_PROMO_DESC, VAR_EMPRESA],
-    defaultText: `Hola {cliente}!
+    defaultText: `¡Hola {cliente}!
 
 *{promo_titulo}*
 {promo_descripcion}
 
-No dude en consultarnos!
+¡No dudes en consultarnos!
 
 {empresa}`,
   },
@@ -776,27 +776,27 @@ No dude en consultarnos!
     category: "marketing",
     description: "Pedido de feedback post-servicio.",
     variables: [VAR_CLIENTE, VAR_DISPOSITIVO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, nos importa su opinión!
+    defaultText: `Hola {cliente}, ¡nos importa tu opinión!
 
-Queremos saber cómo fue su experiencia con la reparación de su {dispositivo}.
+Queremos saber cómo fue tu experiencia con la reparación de tu {dispositivo}.
 
-Del 1 al 5, ¿qué tan satisfecho está? (1 = Muy insatisfecho, 5 = Excelente)
+Del 1 al 5, ¿qué tan satisfecho/a estás? (1 = Muy insatisfecho, 5 = Excelente)
 
-Su opinión nos ayuda a mejorar. Gracias!
+Tu opinión nos ayuda a mejorar. ¡Gracias!
 
 {empresa}`,
   },
   {
     key: "felicitacion",
-    label: "Felicitación / Saludo",
+    label: "Felicitación / saludo",
     category: "marketing",
     description: "Saludo personalizado (cumpleaños, fin de año, etc).",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, desde {empresa} queremos desearle un muy feliz día!
+    defaultText: `Hola {cliente}, ¡desde {empresa} queremos desearte un muy feliz día!
 
 Gracias por ser parte de nuestra comunidad de clientes.
 
-Como regalo, tiene un descuento especial en su próximo servicio. Consulte por mensaje!
+Como regalo, tenés un descuento especial en tu próximo servicio. ¡Consultanos por mensaje!
 
 {empresa}`,
   },
@@ -806,13 +806,13 @@ Como regalo, tiene un descuento especial en su próximo servicio. Consulte por m
     category: "marketing",
     description: "Mensaje de reactivación para clientes que no visitan hace tiempo.",
     variables: [VAR_CLIENTE, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, hace tiempo que no nos visita y lo extrañamos!
+    defaultText: `Hola {cliente}, ¡hace tiempo que no nos visitás y te extrañamos!
 
-En {empresa} seguimos a su disposición para cualquier servicio técnico o consulta.
+En {empresa} seguimos a tu disposición para cualquier servicio técnico o consulta.
 
-Recuerde que ofrecemos diagnóstico sin cargo. Traiga su equipo y lo revisamos sin compromiso.
+Recordá que ofrecemos diagnóstico sin cargo. Traé tu equipo y lo revisamos sin compromiso.
 
-Lo esperamos!
+¡Te esperamos!
 
 {empresa}`,
   },
@@ -828,7 +828,7 @@ Lo esperamos!
       { key: "link_catalogo", label: "Link al catálogo", example: "https://miempresa.stapp.com.ar/catalogo/equipos" },
       VAR_EMPRESA,
     ],
-    defaultText: `Hola {cliente}! Te escribo de parte del catálogo. Vi que dejaste estos items pendientes:
+    defaultText: `¡Hola {cliente}! Te escribo de parte del catálogo. Vi que dejaste estos items pendientes:
 
 {items}
 
@@ -850,18 +850,18 @@ Total estimado: {total}.
     key: "catalogo_solicitud_taller",
     label: "Aviso al taller por nueva solicitud (catálogo)",
     category: "operativo",
-    description: "Mensaje pre-armado que el cliente envía al WhatsApp del taller al confirmar una cotización pública desde el catálogo.",
+    description: "Mensaje pre-armado que el cliente envía al WhatsApp del taller al confirmar una solicitud de presupuesto desde el catálogo.",
     variables: [
       { key: "taller", label: "Nombre del taller", example: "Servicio Técnico" },
-      { key: "numero_cotizacion", label: "Número de cotización", example: "C-0042" },
+      { key: "numero_cotizacion", label: "Número de presupuesto", example: "C-0042" },
       { key: "cliente", label: "Nombre del cliente", example: "Juan Pérez" },
       { key: "telefono", label: "Teléfono del cliente", example: "+54 9 11 1234-5678" },
       VAR_ITEMS,
       VAR_TOTAL,
       { key: "linea_cupon", label: "Línea de cupón (auto)", example: "\nCupón: SAVE10 (-$5.000)" },
-      { key: "link_publico", label: "Link público de la cotización", example: "https://miempresa.stapp.com.ar/cotizacion/abc123" },
+      { key: "link_publico", label: "Link público del presupuesto", example: "https://miempresa.stapp.com.ar/cotizacion/abc123" },
     ],
-    defaultText: `Hola {taller}! Acabo de enviar una solicitud desde el catálogo:
+    defaultText: `¡Hola {taller}! Acabo de enviar una solicitud desde el catálogo:
 
 Solicitud N° {numero_cotizacion}
 Cliente: {cliente}

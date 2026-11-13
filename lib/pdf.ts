@@ -15,6 +15,7 @@ import { lineasAvances, recortarAvances } from "@/lib/ordenes/avances"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { bloquesTerminosGarantia } from "@/lib/garantias/config"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+import { dibujarEstadoFisico, hayEstadoFisico, medirEstadoFisico, type EstadoFisicoPDF } from "@/lib/pdf-estado-fisico"
 
 /** Renglones que puede ocupar la sección de avances en la hoja de entrega A4. */
 const AVANCES_MAX_LINEAS_A4 = 6
@@ -266,7 +267,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
   }
 
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
   const cotizacionNumber = safe(data.numeroCotizacion)
@@ -316,7 +317,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   const drawFooter = (pg: ReturnType<typeof pdfDoc.addPage>, pageNum: number, totalPages: number) => {
     drawRule(pg, marginL, pageW - marginR, 45)
     pg.drawText(
-      firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza",
+      firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por tu confianza",
       { x: marginL, y: 32, size: TYPE.small, font: helvetica, color: MONO.faint }
     )
     const brandW = helveticaBold.widthOfTextAtSize(empresaNombre, TYPE.small)
@@ -379,7 +380,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     cantidadItems: Array.isArray(data.items) ? data.items.length : 0,
     veredicto: data.veredicto,
   })
-  const docTitleText = esInformeTecnico ? "INFORME TÉCNICO" : "COTIZACIÓN"
+  const docTitleText = esInformeTecnico ? "INFORME TÉCNICO" : "PRESUPUESTO"
   const docTitleWidth = helveticaBold.widthOfTextAtSize(docTitleText, TYPE.docTitle)
   page.drawText(docTitleText, { x: pageW - marginR - docTitleWidth, y: pageH - 40, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   drawTextRight(page, cotizacionNumber, pageW - marginR, pageH - 62, TYPE.docNumber, helveticaBold, MONO.ink)
@@ -727,7 +728,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   if (fechaVencimiento) {
     const bannerH = 24
     page.drawRectangle({ x: marginL, y: cursor - bannerH, width: contentWidth, height: bannerH, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
-    const validText = `Cotizacion valida hasta el ${fechaVencimiento}`
+    const validText = `Presupuesto válido hasta el ${fechaVencimiento}`
     const validW = helveticaBold.widthOfTextAtSize(validText, TYPE.body)
     page.drawText(validText, { x: marginL + (contentWidth - validW) / 2, y: cursor - bannerH + 8, size: TYPE.body, font: helveticaBold, color: MONO.ink })
     cursor -= bannerH + 10
@@ -1048,6 +1049,8 @@ interface OrdenPDFData {
   timeline?: Array<{ estado: string; fecha: Date }> | null
   /** Avances de la orden marcados "visible para el cliente" (lib/ordenes/avances), del más viejo al más nuevo. Solo salen en la hoja de entrega. */
   avances?: Array<{ fecha: Date; texto: string }> | null
+  /** Diagrama de daños de la recepción. El bloque solo se dibuja si hay pins o "sin daños". */
+  estadoFisico?: EstadoFisicoPDF | null
   /**
    * Hoja de impresion. Sin valor (o cualquier cosa que no sea A5/A6) es A4: el dibujo de
    * siempre, abajo. A5 y A6 usan el layout de una columna de lib/pdf-orden-compact.ts.
@@ -1101,7 +1104,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const colorDisp = safe(data.color)
   const imei = safe(data.imei)
   const tipoDispositivo = safe(data.tipoDispositivo)
-  const problemaReportado = safe(data.problemaReportado) || "Sin descripcion"
+  const problemaReportado = safe(data.problemaReportado) || "Sin descripción"
 
   // ---- Equipo line + identifier label, shared by every render site in the
   // expediente paths (ENTREGA sheet, RECEPCIÓN client part, business stub) ----
@@ -1354,6 +1357,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // name collision confusing readers of this file.
   const ESTADOS_HOJA_ENTREGA = ESTADOS_COMPLETADOS
   const isEntregaSheet = ESTADOS_HOJA_ENTREGA.has(estadoRaw)
+  // Estado físico al ingreso: la hoja ENTREGA es una página fija, así que siempre lo lleva aparte.
+  const estadoFisico = hayEstadoFisico(data.estadoFisico) ? data.estadoFisico : null
+  let estadoFisicoEnPaginaAparte = !!estadoFisico && isEntregaSheet
 
   if (isEntregaSheet) {
     // ============================================================
@@ -2268,6 +2274,26 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
   const zoneCTopTarget = cutYTarget + zoneCH
   const MIN_GAP = 8
+  // Estado físico al ingreso (diagrama de daños): va en la hoja si cabe en el hueco que
+  // reparte esta zona (la hoja es una página fija); si no, en una página aparte al final.
+  if (estadoFisico) {
+    const efFonts = { regular: archivoRegular, bold: archivoBold }
+    const hueco = isPrintSheet ? ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2 : Infinity
+    // Primero a tamaño completo; si no entra, compacto (antes de la firma); si tampoco, página aparte.
+    const efH = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts)
+    if (efH + 8 <= hueco) {
+      dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts)
+      ry -= efH + 8
+    } else {
+      const efHCompacto = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts, { compacto: true })
+      if (efHCompacto + 8 <= hueco) {
+        dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts, { compacto: true })
+        ry -= efHCompacto + 8
+      } else {
+        estadoFisicoEnPaginaAparte = true
+      }
+    }
+  }
   const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0
   const gapTop = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
   const gapBottom = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
@@ -2508,6 +2534,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // "ENTREGADO"`, que ahora siempre cae en la rama isEntregaSheet — así que
   // era código inalcanzable en la rama RECEPCIÓN de todas formas.
 
+  if (estadoFisico && estadoFisicoEnPaginaAparte) {
+    const pageEf = pdfDoc.addPage([595, 842])
+    const efFonts = { regular: archivoRegular, bold: archivoBold }
+    pageEf.drawText(`Orden ${numeroOrdenPadded}`, { x: rxMargin, y: height - rxMargin - 8, size: 8, font: archivoBold, color: MONO.label })
+    dibujarEstadoFisico(pageEf, estadoFisico, { x: rxMargin, y: height - rxMargin - 24, w: rxContentW }, efFonts)
+  }
+
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
 }
@@ -2568,7 +2601,7 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   }
 
   // Extraer datos
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
   const numeroVenta = data.numeroVenta
@@ -2698,7 +2731,7 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   page.drawText("CANT.", { x: margin + 280, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
   page.drawText("P. UNIT.", { x: margin + 330, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
   page.drawText("SUBTOTAL", { x: margin + 410, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-  page.drawText("GARANTIA", { x: margin + 475, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
+  page.drawText("GARANTÍA", { x: margin + 475, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
   y -= 8
   drawRule(page, margin, width - margin, y)
   y -= 17
@@ -2709,7 +2742,7 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
     page.drawText(String(item.cantidad), { x: margin + 285, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-    page.drawText(item.diasGarantia > 0 ? `${item.diasGarantia} dias` : "-", { x: margin + 478, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+    page.drawText(item.diasGarantia > 0 ? `${item.diasGarantia} días` : "-", { x: margin + 478, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     y -= 18
     drawRule(page, margin, width - margin, y + 10)
   }
@@ -2742,8 +2775,8 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   drawRule(page, margin, width - margin, footerY)
 
   page.drawText("Conserve este comprobante como prueba de compra.", { x: margin, y: footerY - 15, size: TYPE.fine, font: helvetica, color: MONO.faint })
-  page.drawText("Los productos con garantia incluyen certificado por separado.", { x: margin, y: footerY - 27, size: TYPE.fine, font: helvetica, color: MONO.faint })
-  page.drawText("Gracias por su compra!", { x: margin, y: footerY - 42, size: 9, font: helveticaBold, color: MONO.ink })
+  page.drawText("Los productos con garantía incluyen certificado por separado.", { x: margin, y: footerY - 27, size: TYPE.fine, font: helvetica, color: MONO.faint })
+  page.drawText("¡Gracias por tu compra!", { x: margin, y: footerY - 42, size: 9, font: helveticaBold, color: MONO.ink })
 
   const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
   page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 42, size: 7, font: helvetica, color: MONO.faint })
@@ -2780,7 +2813,7 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
   const smallLine = 9
 
   // Pre-calculate height
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
   const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
@@ -2903,7 +2936,7 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
 
     if (item.diasGarantia > 0) {
       y -= smallLine
-      page.drawText(`  Garantia: ${item.diasGarantia} dias`, { x: margin, y, size: 6, font, color: gray })
+      page.drawText(`  Garantía: ${item.diasGarantia} días`, { x: margin, y, size: 6, font, color: gray })
     }
 
     y -= lineHeight + 1
@@ -2940,7 +2973,7 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
   y -= 10
 
   // === FOOTER ===
-  drawCenter("Gracias por su compra!", y, 8, fontBold)
+  drawCenter("¡Gracias por tu compra!", y, 8, fontBold)
   y -= 10
   drawCenter("Conserve este ticket", y, 6, font, gray)
   y -= 8
@@ -3075,7 +3108,7 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   }
 
   // Extraer datos
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
   const numeroGarantia = safe(data.numeroGarantia)
@@ -3273,10 +3306,10 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     y -= 2
   } else {
     const condiciones = [
-      "Esta garantia cubre defectos de fabricacion del producto.",
+      "Esta garantía cubre defectos de fabricación del producto.",
       "No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
-      "Para hacer efectiva la garantia, presente este certificado y el producto.",
-      "La garantia no es transferible. El producto sera reparado o reemplazado segun disponibilidad.",
+      "Para hacer efectiva la garantía, presentá este certificado y el producto.",
+      "La garantía no es transferible. El producto será reparado o reemplazado según disponibilidad.",
     ]
 
     for (const condicion of condiciones) {
@@ -3327,7 +3360,7 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   // === FOOTER ===
   const footerY = 40
   drawRule(page, margin, width - margin, footerY + 10)
-  page.drawText("Conserve este certificado junto con su comprobante de compra.", { x: margin, y: footerY - 5, size: TYPE.fine, font: helvetica, color: MONO.faint })
+  page.drawText("Conservá este certificado junto con tu comprobante de compra.", { x: margin, y: footerY - 5, size: TYPE.fine, font: helvetica, color: MONO.faint })
 
   const fechaImpresion = formatDateValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
   page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 5, size: 7, font: helvetica, color: MONO.faint })
@@ -3672,7 +3705,7 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
         "• Al firmar este documento, el cliente confirma haber recibido el equipo en condiciones satisfactorias.",
         data.garantia || data.terminosGarantia
           ? "• La garantía del servicio rige según lo indicado en este comprobante."
-          : "• La garantía del servicio aplica según lo acordado. Consulte las condiciones específicas.",
+          : "• La garantía del servicio aplica según lo acordado. Consultá las condiciones específicas.",
         "• Conserve este comprobante como prueba de entrega del equipo.",
       ]
   let termY = y - 16
@@ -3777,8 +3810,8 @@ const estadoPagoLabels: Record<string, string> = {
 const metodoPagoFacturaLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
-  TARJETA_DEBITO: "Tarjeta Debito",
-  TARJETA_CREDITO: "Tarjeta Credito",
+  TARJETA_DEBITO: "Tarjeta débito",
+  TARJETA_CREDITO: "Tarjeta crédito",
   MERCADOPAGO: "MercadoPago",
   OTRO: "Otro",
 }
@@ -3814,7 +3847,7 @@ export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Bu
     return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
   }
 
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
   // Fiscal emitter identity — accounting-grade remito header extras, each

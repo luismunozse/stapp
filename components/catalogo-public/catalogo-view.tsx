@@ -421,8 +421,8 @@ export function CatalogoView({
                         href={catalogoWhatsAppUrl(
                           data.config.whatsapp,
                           search.trim()
-                            ? `Hola! Estoy buscando "${search.trim()}" pero no lo encuentro en el catálogo. ¿Tienen disponibilidad?`
-                            : `Hola! ¿Pueden ayudarme a encontrar algo en el catálogo?`
+                            ? `¡Hola! Estoy buscando "${search.trim()}" pero no lo encuentro en el catálogo. ¿Tienen disponibilidad?`
+                            : `¡Hola! ¿Pueden ayudarme a encontrar algo en el catálogo?`
                         ) ?? undefined}
                         target="_blank"
                         rel="noreferrer"

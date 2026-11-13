@@ -51,6 +51,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import type { TimelineEvent } from "./visual-timeline"
+import { EstadoFisico, type EstadoFisicoData } from "./estado-fisico"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ESTADO_ORDEN_UI, getEstadoOrdenUi } from "@/lib/estado-orden-ui"
 import { STATUS_TONE_CLASSES } from "@/components/ui/status-pill"
@@ -271,6 +272,7 @@ export function SeguimientoContent({ token }: { token: string }) {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[] | null>(null)
   const [photosData, setPhotosData] = useState<any | null>(null)
   const [warrantyData, setWarrantyData] = useState<any | null>(null)
+  const [danosData, setDanosData] = useState<EstadoFisicoData | null>(null)
 
   const formatDate = (dateStr: string | null | undefined) =>
     formatDateValue(dateStr, data?.zonaHoraria)
@@ -284,6 +286,12 @@ export function SeguimientoContent({ token }: { token: string }) {
     fetch(`/api/public/ordenes/${t}/photos`)
       .then((res) => res.ok ? res.json() : null)
       .then((d) => { if (d) setPhotosData(d) })
+      .catch(() => {})
+
+    // Si falla, la sección simplemente no se muestra.
+    fetch(`/api/public/ordenes/${t}/danos`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => { if (d && Array.isArray(d.danos)) setDanosData(d) })
       .catch(() => {})
 
     fetch(`/api/public/ordenes/${t}/warranty`)
@@ -574,7 +582,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 <Timer className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   Estimado: <strong>{timeRemaining.text}</strong>
-                  {timeRemaining.urgency === "overdue" && " — Contactanos para mas info"}
+                  {timeRemaining.urgency === "overdue" && " — Contactanos para más info"}
                 </span>
               </div>
             )}
@@ -803,6 +811,9 @@ export function SeguimientoContent({ token }: { token: string }) {
       {photosData && (
         <PhotoGallery photos={photosData} />
       )}
+
+      {/* ══════════ ESTADO FÍSICO ══════════ */}
+      {danosData && <EstadoFisico data={danosData} />}
 
       {/* ══════════ DEVICE + DATES ══════════ */}
       <Card>

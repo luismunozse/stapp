@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
 import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
+import { listarDanosOrden } from "@/lib/ordenes/danos-server"
 
 export async function GET(
   request: Request,
@@ -114,6 +115,12 @@ export async function GET(
     // Avances que el taller marcó visibles para el cliente (solo se dibujan en la hoja de entrega).
     const avances = await cargarAvancesVisibles(orden.id, orden.organization_id)
 
+    // Estado físico al ingreso: si la tabla de daños no está disponible, el PDF sale igual sin el bloque.
+    const estadoFisico = await listarDanosOrden(orden.id, orden.organization_id, { incluirAutor: false }).catch((e) => {
+      console.error("No se pudo cargar el estado físico para el PDF:", e)
+      return null
+    })
+
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
       numeroOrden: orden.numero_orden,
@@ -174,6 +181,7 @@ export async function GET(
       diagnostico: orden.diagnostico,
       timeline,
       avances,
+      estadoFisico,
     }
 
     // Resolver terminología configurable y generar PDF

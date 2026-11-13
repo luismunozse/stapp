@@ -87,7 +87,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
 
   const whatsappLink = catalogoWhatsAppUrl(
     config.whatsapp,
-    `Hola! Vi "${item.nombre}" en su catálogo. Quería consultar.`
+    `¡Hola! Vi "${item.nombre}" en el catálogo. Quería consultar.`
   )
 
   const handleAdd = () => {
@@ -106,7 +106,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
 
   const itemUrl = typeof window !== "undefined" ? window.location.href : ""
   const precioTexto = !sinPrecio ? formatPrecio(precioEfectivo!) : "(consultar precio)"
-  const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
+  const shareText = `¡Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
   const shareWhatsAppUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
 
   const handleShare = async () => {

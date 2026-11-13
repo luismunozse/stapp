@@ -96,7 +96,7 @@ const faqData = [
   {
     question: "\u00bfSTApp tiene control de caja y finanzas?",
     answer:
-      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos y un dashboard con los n\u00fameros de tu taller siempre actualizados: cu\u00e1nto entr\u00f3, cu\u00e1nto sali\u00f3 y cu\u00e1nto queda.",
+      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos y un panel con los n\u00fameros de tu taller siempre actualizados: cu\u00e1nto entr\u00f3, cu\u00e1nto sali\u00f3 y cu\u00e1nto queda.",
   },
   {
     question: "\u00bfPuedo cancelar mi suscripci\u00f3n en cualquier momento?",

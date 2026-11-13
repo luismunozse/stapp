@@ -61,7 +61,7 @@ export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFact
       // código. La validación real ocurre server-side en authorize().
       await onVerified(code.trim())
     } catch {
-      setError("Error de conexion. Intenta de nuevo.")
+      setError("Error de conexión. Intentá de nuevo.")
       setLoading(false)
     }
   }
@@ -75,12 +75,12 @@ export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFact
           </div>
         </div>
         <CardTitle className="text-center text-xl">
-          Verificacion en dos pasos
+          Verificación en dos pasos
         </CardTitle>
         <CardDescription className="text-center">
           {useBackupCode
-            ? "Ingresa uno de tus codigos de respaldo"
-            : "Ingresa el codigo de 6 digitos de tu app de autenticacion"
+            ? "Ingresá uno de tus códigos de respaldo"
+            : "Ingresá el código de 6 dígitos de tu app de autenticación"
           }
         </CardDescription>
       </CardHeader>
@@ -94,7 +94,7 @@ export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFact
 
           <div className="space-y-2">
             <Label htmlFor="totp-code">
-              {useBackupCode ? "Codigo de respaldo" : "Codigo de verificacion"}
+              {useBackupCode ? "Código de respaldo" : "Código de verificación"}
             </Label>
             <Input
               ref={inputRef}
@@ -127,8 +127,8 @@ export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFact
               className="text-primary hover:underline"
             >
               {useBackupCode
-                ? "Usar codigo de la app"
-                : "Usar codigo de respaldo"
+                ? "Usar código de la app"
+                : "Usar código de respaldo"
               }
             </button>
 
@@ -138,7 +138,7 @@ export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFact
               className="text-muted-foreground hover:text-foreground flex items-center gap-1"
             >
               <ArrowLeft className="h-3 w-3" />
-              Volver al inicio de sesion
+              Volver al inicio de sesión
             </button>
           </div>
         </form>

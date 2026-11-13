@@ -12,7 +12,7 @@ const ctx = (orden: Record<string, unknown> = {}) => ({
 describe("resolvePlantillaForTipo (catálogo como fuente de verdad)", () => {
   it("CAMBIO_ESTADO sin override → default del catálogo per-estado (accionable + link)", () => {
     const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "PRESUPUESTADO" }), null)!
-    expect(m).toMatch(/apruebe o rechace/i)
+    expect(m).toMatch(/aprobá o rechazá/i)
     expect(m).toMatch(/seguimiento\/tok/)
   })
 
@@ -25,7 +25,7 @@ describe("resolvePlantillaForTipo (catálogo como fuente de verdad)", () => {
 
   it("PRESUPUESTO_DEFINIDO sin override → default orden_presupuesto con monto + CTA", () => {
     const m = resolvePlantillaForTipo("PRESUPUESTO_DEFINIDO", ctx({ presupuesto: 20000 }), null)!
-    expect(m).toMatch(/apruebe o rechace/i)
+    expect(m).toMatch(/aprobá o rechazá/i)
     expect(m).toMatch(/seguimiento\/tok/)
   })
 

@@ -117,7 +117,7 @@ export async function createInstance(creds: EvolutionCredentials): Promise<{
       error: extractError(data) || `HTTP ${status}: ${raw.slice(0, 200)}`,
     }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Error de conexion" }
+    return { success: false, error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -159,7 +159,7 @@ export async function connectInstance(
       pairingCode,
     }
   } catch (err) {
-    return { state: "unknown", error: err instanceof Error ? err.message : "Error de conexion" }
+    return { state: "unknown", error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -238,7 +238,7 @@ export async function fetchInstances(
 
     return { ok: true, instances }
   } catch (err) {
-    return { ok: false, instances: [], error: err instanceof Error ? err.message : "Error de conexion" }
+    return { ok: false, instances: [], error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -272,7 +272,7 @@ export async function getConnectionState(
 
     return { state }
   } catch (err) {
-    return { state: "unknown", error: err instanceof Error ? err.message : "Error de conexion" }
+    return { state: "unknown", error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -286,7 +286,7 @@ export async function logoutInstance(creds: EvolutionCredentials): Promise<{ suc
     if (ok) return { success: true }
     return { success: false, error: extractError(data) || `HTTP ${status}: ${raw.slice(0, 200)}` }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Error de conexion" }
+    return { success: false, error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -300,7 +300,7 @@ export async function deleteInstance(creds: EvolutionCredentials): Promise<{ suc
     if (ok || status === 404) return { success: true }
     return { success: false, error: extractError(data) || `HTTP ${status}: ${raw.slice(0, 200)}` }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Error de conexion" }
+    return { success: false, error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 
@@ -335,7 +335,7 @@ export async function sendText(
       messageId: data?.key?.id || data?.messageId,
     }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Error de conexion" }
+    return { success: false, error: err instanceof Error ? err.message : "Error de conexión" }
   }
 }
 

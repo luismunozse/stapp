@@ -13,7 +13,7 @@ export default function EmailsPage() {
   return (
     <PageShell
       title="Emails"
-      description="Envía emails individuales a clientes, técnicos o vendedores"
+      description="Enviá emails individuales a clientes, técnicos o vendedores"
       actions={
         <>
           <Button

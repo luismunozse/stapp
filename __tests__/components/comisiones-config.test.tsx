@@ -119,7 +119,7 @@ describe("ComisionesConfig", () => {
     const callsBefore = mockFetch.mock.calls.length
 
     fireEvent.change(input, { target: { value: "" } })
-    expect(screen.getByText("Ingrese un porcentaje entre 0 y 100.")).toBeInTheDocument()
+    expect(screen.getByText("Ingresá un porcentaje entre 0 y 100.")).toBeInTheDocument()
     expect(input).toHaveAttribute("aria-invalid", "true")
     expect(input.getAttribute("aria-describedby")).toContain("comision-recepcion-error")
     expect(save).toBeDisabled()
@@ -131,7 +131,7 @@ describe("ComisionesConfig", () => {
 
     mockFetch.mockResolvedValueOnce(respond({ ...SERVER_CONFIG, recepcionPorcentajeDefault: 5 }))
     fireEvent.change(input, { target: { value: "5" } })
-    expect(screen.queryByText("Ingrese un porcentaje entre 0 y 100.")).not.toBeInTheDocument()
+    expect(screen.queryByText("Ingresá un porcentaje entre 0 y 100.")).not.toBeInTheDocument()
     expect(save).toBeEnabled()
     fireEvent.click(save)
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled())

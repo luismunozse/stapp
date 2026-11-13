@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid"
 
 const WHATSAPP_NUMBER = "5491169625733"
 const WHATSAPP_MESSAGE = encodeURIComponent(
-  "Hola! Estuve chateando con Santi en la web y me gustaría hablar con una persona."
+  "¡Hola! Estuve chateando con Santi en la web y me gustaría hablar con una persona."
 )
 
 const LEAD_CAPTURED_KEY = "chatbot-lead-captured"

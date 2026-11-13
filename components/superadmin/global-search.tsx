@@ -160,7 +160,7 @@ export function GlobalSearch() {
             {/* Empty state when query is too short */}
             {query.length < 2 && query.length > 0 && (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Escribe al menos 2 caracteres para buscar
+                Escribí al menos 2 caracteres para buscar
               </div>
             )}
 
@@ -275,7 +275,7 @@ export function GlobalSearch() {
             {/* Initial state */}
             {!results && query.length === 0 && (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Busca organizaciones, usuarios o tickets de soporte
+                Buscá organizaciones, usuarios o tickets de soporte
               </div>
             )}
           </div>

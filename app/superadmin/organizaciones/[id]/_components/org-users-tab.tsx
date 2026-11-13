@@ -197,7 +197,7 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
                           variant="ghost"
                           onClick={() => handleResetPassword(user.id)}
                           disabled={isLoading}
-                          title="Enviar email de reset de contraseña"
+                          title="Enviar email para restablecer la contraseña"
                         >
                           {isLoading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />

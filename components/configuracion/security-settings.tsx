@@ -48,7 +48,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
       setBackupCodes(data.backupCodes)
       setStep("setup")
     } catch {
-      setError("Error de conexion")
+      setError("Error de conexión")
     } finally {
       setLoading(false)
     }
@@ -68,13 +68,13 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || "Codigo incorrecto")
+        setError(data.error || "Código incorrecto")
         return
       }
 
       setStep("backup")
     } catch {
-      setError("Error de conexion")
+      setError("Error de conexión")
     } finally {
       setLoading(false)
     }
@@ -104,7 +104,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || "Codigo incorrecto")
+        setError(data.error || "Código incorrecto")
         return
       }
 
@@ -114,7 +114,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
       setSuccess("2FA desactivado")
       setTimeout(() => setSuccess(""), 5000)
     } catch {
-      setError("Error de conexion")
+      setError("Error de conexión")
     } finally {
       setLoading(false)
     }
@@ -131,10 +131,10 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5" />
-          Autenticacion en dos pasos (2FA)
+          Autenticación en dos pasos (2FA)
         </CardTitle>
         <CardDescription>
-          Agrega una capa extra de seguridad a tu cuenta usando una app de autenticacion
+          Agregá una capa extra de seguridad a tu cuenta usando una app de autenticación
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -165,8 +165,8 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {totpEnabled
-                    ? "Tu cuenta esta protegida con verificacion en dos pasos"
-                    : "Activa 2FA para proteger tu cuenta"
+                    ? "Tu cuenta está protegida con verificación en dos pasos"
+                    : "Activá 2FA para proteger tu cuenta"
                   }
                 </p>
               </div>
@@ -191,13 +191,13 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
           <div className="space-y-4">
             <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">
-                Escanea este codigo QR con tu app de autenticacion (Google Authenticator, Authy, etc.)
+                Escaneá este código QR con tu app de autenticación (Google Authenticator, Authy, etc.)
               </p>
               {qrCode && (
                 <div className="flex justify-center">
                   <Image
                     src={qrCode}
-                    alt="QR Code para 2FA"
+                    alt="Código QR para 2FA"
                     width={200}
                     height={200}
                     className="rounded border"
@@ -207,7 +207,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
               )}
               <details className="text-left">
                 <summary className="text-sm text-primary cursor-pointer">
-                  Ingresar codigo manualmente
+                  Ingresar código manualmente
                 </summary>
                 <code className="block mt-2 p-2 bg-muted rounded text-xs break-all font-mono">
                   {manualSecret}
@@ -216,7 +216,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="verify-code">Ingresa el codigo de 6 digitos</Label>
+              <Label htmlFor="verify-code">Ingresá el código de 6 dígitos</Label>
               <Input
                 id="verify-code"
                 type="text"
@@ -253,8 +253,8 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
         {step === "backup" && (
           <div className="space-y-4">
             <StatusBanner tone="warning" icon={AlertTriangle}>
-              <span className="font-medium">Guarda estos codigos de respaldo.</span>{" "}
-              Usa estos codigos si pierdes acceso a tu app de autenticacion. Cada codigo solo se puede usar una vez.
+              <span className="font-medium">Guardá estos códigos de respaldo.</span>{" "}
+              Usá estos códigos si perdés acceso a tu app de autenticación. Cada código solo se puede usar una vez.
             </StatusBanner>
 
             <div className="bg-muted rounded p-4 font-mono text-sm grid grid-cols-2 gap-2">
@@ -271,12 +271,12 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
               {copied ? (
                 <><Check className="h-4 w-4 mr-2" /> Copiados</>
               ) : (
-                <><Copy className="h-4 w-4 mr-2" /> Copiar codigos</>
+                <><Copy className="h-4 w-4 mr-2" /> Copiar códigos</>
               )}
             </Button>
 
             <Button onClick={handleBackupDone} className="w-full">
-              Ya guarde mis codigos
+              Ya guardé mis códigos
             </Button>
           </div>
         )}
@@ -285,11 +285,11 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
         {step === "disable" && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Ingresa un codigo de tu app de autenticacion para confirmar la desactivacion
+              Ingresá un código de tu app de autenticación para confirmar la desactivación
             </p>
 
             <div className="space-y-2">
-              <Label htmlFor="disable-code">Codigo de verificacion</Label>
+              <Label htmlFor="disable-code">Código de verificación</Label>
               <Input
                 id="disable-code"
                 type="text"
@@ -337,7 +337,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
               }}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Regenerar codigos de respaldo
+              Regenerar códigos de respaldo
             </Button>
           </div>
         )}

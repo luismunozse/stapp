@@ -206,7 +206,7 @@ export function LifecycleEmailsContent() {
               <Mail className="h-5 w-5" />
               Plantillas
             </CardTitle>
-            <CardDescription>Click en "Editar" para abrir el editor o "Preview" para ver el render.</CardDescription>
+            <CardDescription>Hacé clic en "Editar" para abrir el editor o en "Vista previa" para ver cómo queda.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -252,7 +252,7 @@ export function LifecycleEmailsContent() {
                           ) : (
                             <Eye className="h-4 w-4 sm:mr-1" />
                           )}
-                          <span className="hidden sm:inline">Preview</span>
+                          <span className="hidden sm:inline">Vista previa</span>
                         </Button>
                         <Button variant="default" size="sm" onClick={() => handleEdit(t.id)}>
                           <Pencil className="h-4 w-4 sm:mr-1" />
@@ -286,7 +286,7 @@ export function LifecycleEmailsContent() {
                 <iframe
                   srcDoc={previewState.html}
                   className="w-full h-[700px] border-0 border-t bg-white"
-                  title="Email preview"
+                  title="Vista previa del email"
                   sandbox="allow-same-origin"
                 />
               </CardContent>

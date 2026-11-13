@@ -72,7 +72,7 @@ export function FeatureLockedView({
             </Link>
             <Link href="/dashboard" className="sm:w-auto">
               <Button variant="outline" size="lg" className="w-full">
-                Volver al dashboard
+                Volver al inicio
               </Button>
             </Link>
           </div>

@@ -47,7 +47,7 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
   return (
     <Card>
       <CardHeader className="p-4 sm:p-6">
-        <CardTitle className="text-base sm:text-lg">Uso del Plan</CardTitle>
+        <CardTitle className="text-base sm:text-lg">Uso del plan</CardTitle>
         <CardDescription className="text-xs sm:text-sm">
           {planType === "FREE"
             ? "Recursos de tu plan Free"

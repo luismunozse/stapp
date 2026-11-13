@@ -463,7 +463,7 @@ export function EngagementContent() {
             {/* 1. Riesgo Alto */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Riesgo Alto</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Riesgo alto</CardTitle>
                 <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950"><AlertTriangle className="h-4 w-4 text-red-600" /></div>
               </CardHeader>
               <CardContent>
@@ -513,7 +513,7 @@ export function EngagementContent() {
             {/* 4. Churn Rate */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Churn Rate</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Tasa de abandono</CardTitle>
                 <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950"><TrendingUp className="h-4 w-4 text-purple-600" /></div>
               </CardHeader>
               <CardContent>
@@ -560,7 +560,7 @@ export function EngagementContent() {
             {/* 6. Orgs Activas */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Orgs Activas</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Organizaciones activas</CardTitle>
                 <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950"><Users className="h-4 w-4 text-blue-600" /></div>
               </CardHeader>
               <CardContent>
@@ -660,7 +660,7 @@ export function EngagementContent() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Salud por Organización
+                  Salud por organización
                 </CardTitle>
 
                 {/* Filter pills */}

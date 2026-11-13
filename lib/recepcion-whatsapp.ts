@@ -39,7 +39,7 @@ export function construirMensajeRecepcion(params: {
     ``,
     `Comprobante: ${codigoRecepcion}`,
     ``,
-    `Podes seguir el estado de cada uno aca:`,
+    `Podés seguir el estado de cada uno acá:`,
     ...lineas,
     ``,
     `Cualquier novedad te avisamos.`,

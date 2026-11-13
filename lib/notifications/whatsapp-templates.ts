@@ -163,17 +163,17 @@ function applyOverride(
 
 const estadoLabels: Record<EstadoOrden, string> = {
   RECIBIDO: "recibido",
-  EN_DIAGNOSTICO: "en diagnostico",
-  PRESUPUESTADO: "presupuestado - esperando su respuesta",
-  APROBADO: "aprobado - en cola de reparacion",
-  EN_REPARACION: "en reparacion",
+  EN_DIAGNOSTICO: "en diagnóstico",
+  PRESUPUESTADO: "presupuestado - esperando tu respuesta",
+  APROBADO: "aprobado - en cola de reparación",
+  EN_REPARACION: "en reparación",
   ESPERANDO_REPUESTO: "esperando repuesto",
   REPARADO: "listo para retirar",
   ENTREGADO: "entregado",
-  ENTREGADO_SIN_REPARACION: "retirado sin reparacion",
+  ENTREGADO_SIN_REPARACION: "retirado sin reparación",
   ENTREGADO_SIN_COBRO: "entregado sin cobro",
   CANCELADO: "cancelado",
-  SIN_REPARACION: "sin posibilidad de reparacion",
+  SIN_REPARACION: "sin posibilidad de reparación",
   SIN_FALLA_DETECTADA: "sin falla detectada",
 }
 
@@ -230,7 +230,7 @@ export function getWhatsAppTemplates(
   if (ctx.garantia) {
     templates.push({
       id: "garantia",
-      nombre: "Informar garantia",
+      nombre: "Informar garantía",
       mensaje: ov("garantia", generateGarantiaMessage(ctx)),
     })
   }
@@ -267,7 +267,7 @@ export function getWhatsAppTemplates(
     if (ctx.pago.fechaPago || ctx.pago.metodoPago) {
       templates.push({
         id: "confirmacion_pago",
-        nombre: "Confirmacion de pago",
+        nombre: "Confirmación de pago",
         mensaje: ov("confirmacion_pago", generateConfirmacionPagoMessage(ctx)),
       })
     }
@@ -292,14 +292,14 @@ export function getWhatsAppTemplates(
     if (ctx.promocion) {
       templates.push({
         id: "promocion",
-        nombre: "Promocion / Oferta",
+        nombre: "Promoción / oferta",
         mensaje: ov("promocion", generatePromocionMessage(ctx)),
       })
     }
 
     templates.push({
       id: "felicitacion",
-      nombre: "Felicitacion",
+      nombre: "Felicitación",
       mensaje: ov("felicitacion", generateFelicitacionMessage(ctx)),
     })
 
@@ -314,7 +314,7 @@ export function getWhatsAppTemplates(
   if (!ctx.orden || ctx.orden.estado === "ENTREGADO") {
     templates.push({
       id: "encuesta_satisfaccion",
-      nombre: "Encuesta de satisfaccion",
+      nombre: "Encuesta de satisfacción",
       mensaje: ov("encuesta_satisfaccion", generateEncuestaMessage(ctx)),
     })
   }
@@ -323,7 +323,7 @@ export function getWhatsAppTemplates(
   if (ctx.orden) {
     templates.push({
       id: "solicitud_info",
-      nombre: "Solicitar informacion",
+      nombre: "Solicitar información",
       mensaje: ov("solicitud_info", generateSolicitudInfoMessage(ctx)),
     })
 
@@ -355,7 +355,7 @@ export function getWhatsAppTemplates(
     if (ctx.garantia) {
       templates.push({
         id: "reingreso_garantia",
-        nombre: "Re-ingreso por garantia",
+        nombre: "Re-ingreso por garantía",
         mensaje: ov("reingreso_garantia", generateReingresoGarantiaMessage(ctx)),
       })
     }
@@ -374,7 +374,7 @@ export function getWhatsAppTemplates(
   if (ctx.venta) {
     templates.push({
       id: "venta_confirmacion",
-      nombre: "Confirmacion de compra",
+      nombre: "Confirmación de compra",
       mensaje: ov("venta_confirmacion", generateVentaConfirmacionMessage(ctx)),
     })
 
@@ -382,7 +382,7 @@ export function getWhatsAppTemplates(
     if (ctx.venta.garantias.length > 0) {
       templates.push({
         id: "venta_garantia",
-        nombre: "Informar garantias",
+        nombre: "Informar garantías",
         mensaje: ov("venta_garantia", generateVentaGarantiaMessage(ctx)),
       })
     }
@@ -405,44 +405,44 @@ function generateEstadoMessage(ctx: NotificationContext): string {
   const tOrden = t(term, "orden")
   const tReparacion = t(term, "reparacion")
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que su ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}) se encuentra ${label}.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, te informamos que tu ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}) se encuentra ${label}.`
 
   switch (estado) {
     case "RECIBIDO":
-      mensaje += `\n\nRecibimos su ${tEquipo} y ya esta en cola de diagnostico. Le avisaremos apenas tengamos novedades.`
+      mensaje += `\n\nRecibimos tu ${tEquipo} y ya está en cola de diagnóstico. Te avisaremos apenas tengamos novedades.`
       break
     case "EN_DIAGNOSTICO":
-      mensaje += `\n\nEstamos revisando su ${tEquipo} para detectar la falla. En breve le enviamos el presupuesto.`
+      mensaje += `\n\nEstamos revisando tu ${tEquipo} para detectar la falla. En breve te enviamos el presupuesto.`
       break
     case "PRESUPUESTADO":
-      mensaje += "\n\nPara avanzar, *apruebe o rechace el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escribanos."
+      mensaje += "\n\nPara avanzar, *aprobá o rechazá el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escribinos."
       break
     case "APROBADO":
-      mensaje += `\n\nGracias por aprobar el presupuesto! Su ${tEquipo} entra en cola de ${tReparacion.toLowerCase()}. Le avisamos cuando este listo.`
+      mensaje += `\n\n¡Gracias por aprobar el presupuesto! Tu ${tEquipo} entra en cola de ${tReparacion.toLowerCase()}. Te avisamos cuando esté listo.`
       break
     case "EN_REPARACION":
-      mensaje += `\n\nYa estamos trabajando en su ${tEquipo}. Le avisamos en cuanto este terminado.`
+      mensaje += `\n\nYa estamos trabajando en tu ${tEquipo}. Te avisamos en cuanto esté terminado.`
       break
     case "ESPERANDO_REPUESTO":
-      mensaje += `\n\nSu ${tReparacion.toLowerCase()} esta en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos.`
+      mensaje += `\n\nTu ${tReparacion.toLowerCase()} está en pausa esperando un repuesto. Apenas llegue, retomamos y te avisamos.`
       break
     case "REPARADO":
-      mensaje += `\n\nSu ${tEquipo} esta listo y *listo para retirar*. Lo esperamos en horario de atencion. Comprobante en el link.`
+      mensaje += `\n\nTu ${tEquipo} está *listo para retirar*. Te esperamos en horario de atención. Comprobante en el link.`
       break
     case "ENTREGADO":
-      mensaje += `\n\nSu ${tEquipo} fue entregado. Gracias por confiar en nosotros! Si necesita algo mas, escribanos.`
+      mensaje += `\n\nTu ${tEquipo} fue entregado. ¡Gracias por confiar en nosotros! Si necesitás algo más, escribinos.`
       break
     case "ENTREGADO_SIN_REPARACION":
-      mensaje += `\n\nSu ${tEquipo} fue retirado sin ${tReparacion.toLowerCase()}. Gracias por consultarnos; quedamos a disposicion.`
+      mensaje += `\n\nTu ${tEquipo} fue retirado sin ${tReparacion.toLowerCase()}. Gracias por consultarnos; quedamos a disposición.`
       break
     case "CANCELADO":
-      mensaje += `\n\nLa ${tOrden.toLowerCase()} fue cancelada. Si desea retomar o ingresar un nuevo servicio, escribanos.`
+      mensaje += `\n\nLa ${tOrden.toLowerCase()} fue cancelada. Si querés retomar o ingresar un nuevo servicio, escribinos.`
       break
     case "SIN_REPARACION":
-      mensaje += `\n\nNo fue posible completar la ${tReparacion.toLowerCase()} de su ${tEquipo}. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion.`
+      mensaje += `\n\nNo fue posible completar la ${tReparacion.toLowerCase()} de tu ${tEquipo}. Podés pasar a retirarlo en horario de atención. Quedamos a disposición.`
       break
     case "SIN_FALLA_DETECTADA":
-      mensaje += `\n\nRevisamos su ${tEquipo} y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion.`
+      mensaje += `\n\nRevisamos tu ${tEquipo} y no detectamos la falla reportada. Podés pasar a retirarlo en horario de atención. Quedamos a disposición.`
       break
   }
 
@@ -461,13 +461,13 @@ function generatePresupuestoMessage(ctx: NotificationContext): string {
   const tReparacion = t(term, "reparacion").toLowerCase()
   const tOrden = t(term, "orden")
 
-  return `Hola ${ctx.cliente.nombre}, ya tenemos el presupuesto para la ${tReparacion} de su ${ctx.orden!.dispositivo}:
+  return `Hola ${ctx.cliente.nombre}, ya tenemos el presupuesto para la ${tReparacion} de tu ${ctx.orden!.dispositivo}:
 
 *Presupuesto: ${formatCurrency(ctx.orden!.presupuesto || 0)}*
 
 ${tOrden} #${ctx.orden!.numeroOrden}
 
-Para avanzar, *apruebe o rechace el presupuesto* desde el link de abajo.${appendOrdenLinks(links)}
+Para avanzar, *aprobá o rechazá el presupuesto* desde el link de abajo.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -479,17 +479,17 @@ function generateGarantiaMessage(ctx: NotificationContext): string {
   const tOrden = t(term, "orden")
   const tEquipo = t(term, "equipo")
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, su ${tReparacion} ahora cuenta con garantia:
+  let mensaje = `Hola ${ctx.cliente.nombre}, tu ${tReparacion} ahora cuenta con garantía:
 
-*${ctx.garantia!.diasValidez} dias de garantia*
-Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
+*${ctx.garantia!.diasValidez} días de garantía*
+Válida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 
   if (ctx.orden) {
     mensaje += `\n\n${tOrden} #${ctx.orden.numeroOrden}\n${tEquipo}: ${ctx.orden.dispositivo}`
     mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
-  mensaje += `\n\nConserve este mensaje como comprobante.\n\n${ctx.organizationName}`
+  mensaje += `\n\nConservá este mensaje como comprobante.\n\n${ctx.organizationName}`
 
   return mensaje
 }
@@ -499,11 +499,11 @@ function generateRecordatorioMessage(ctx: NotificationContext): string {
   const term = resolveTerminologia(ctx.terminologia ?? null)
   const tOrden = t(term, "orden")
 
-  return `Hola ${ctx.cliente.nombre}, le recordamos que su ${ctx.orden!.dispositivo} esta listo para retirar.
+  return `Hola ${ctx.cliente.nombre}, te recordamos que tu ${ctx.orden!.dispositivo} está listo para retirar.
 
 ${tOrden} #${ctx.orden!.numeroOrden}
 
-Puede pasar por nuestro local en horario de atencion. Lo esperamos!${appendOrdenLinks(links)}
+Podés pasar por nuestro local en horario de atención. ¡Te esperamos!${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -513,9 +513,9 @@ function generateSeguimientoMessage(ctx: NotificationContext): string {
   const term = resolveTerminologia(ctx.terminologia ?? null)
   const tOrden = t(term, "orden")
 
-  return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}).
+  return `Hola ${ctx.cliente.nombre}, nos comunicamos por tu ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}).
 
-[Escriba su mensaje aqui]${appendOrdenLinks(links)}
+[Escribí tu mensaje acá]${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -525,20 +525,20 @@ function generateEntregaCompletadaMessage(ctx: NotificationContext): string {
   const esRetiro = ctx.orden!.estado === "ENTREGADO_SIN_REPARACION"
 
   if (esRetiro) {
-    return `Hola ${ctx.cliente.nombre}, confirmamos el retiro de su ${ctx.orden!.dispositivo} sin reparacion.
+    return `Hola ${ctx.cliente.nombre}, confirmamos el retiro de tu ${ctx.orden!.dispositivo} sin reparación.
 
-*Orden #${ctx.orden!.numeroOrden} - RETIRADO SIN REPARACION*${links ? `\n\nDescargar comprobante:\n${links.pdfUrl}\n\nSeguimiento: ${links.trackingUrl}` : ""}
+*Orden #${ctx.orden!.numeroOrden} - RETIRADO SIN REPARACIÓN*${links ? `\n\nDescargar comprobante:\n${links.pdfUrl}\n\nSeguimiento: ${links.trackingUrl}` : ""}
 
 Gracias por habernos consultado.
 
 ${ctx.organizationName}`
   }
 
-  return `Hola ${ctx.cliente.nombre}, confirmamos la entrega de su ${ctx.orden!.dispositivo}.
+  return `Hola ${ctx.cliente.nombre}, confirmamos la entrega de tu ${ctx.orden!.dispositivo}.
 
 *Orden #${ctx.orden!.numeroOrden} - ENTREGADO*${links ? `\n\nDescargar comprobante:\n${links.pdfUrl}\n\nSeguimiento: ${links.trackingUrl}` : ""}
 
-Gracias por confiar en nosotros!
+¡Gracias por confiar en nosotros!
 
 ${ctx.organizationName}`
 }
@@ -591,9 +591,9 @@ function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
 
   const pdfUrl = `${baseUrl}/api/ventas/${venta.id}/pdf`
 
-  return `Hola ${ctx.cliente.nombre}, gracias por su compra!
+  return `Hola ${ctx.cliente.nombre}, ¡gracias por tu compra!
 
-*Comprobante de Venta ${numeroVenta}*
+*Comprobante de venta ${numeroVenta}*
 
 Productos:
 ${productosTexto}
@@ -617,26 +617,26 @@ function generateVentaGarantiaMessage(ctx: NotificationContext): string {
     .map((g) => {
       const pdfUrl = `${baseUrl}/api/ventas/${venta.id}/garantia/${g.id}/pdf`
       return `*${g.numeroGarantia}*
-${g.diasValidez} dias (hasta ${formatDate(g.fechaVencimiento)})
+${g.diasValidez} días (hasta ${formatDate(g.fechaVencimiento)})
 Descargar: ${pdfUrl}`
     })
     .join("\n\n")
 
-  return `Hola ${ctx.cliente.nombre}, su compra (${numeroVenta}) incluye garantia:
+  return `Hola ${ctx.cliente.nombre}, tu compra (${numeroVenta}) incluye garantía:
 
 ${garantiasTexto}
 
-Conserve estos certificados como comprobante.
+Conservá estos certificados como comprobante.
 
 ${ctx.organizationName}`
 }
 
 function generateVentaAgradecimientoMessage(ctx: NotificationContext): string {
-  return `Hola ${ctx.cliente.nombre}, gracias por elegirnos!
+  return `Hola ${ctx.cliente.nombre}, ¡gracias por elegirnos!
 
-Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
+Esperamos que disfrutes tu compra. Si tenés alguna consulta, no dudes en contactarnos.
 
-Lo esperamos pronto!
+¡Te esperamos pronto!
 
 ${ctx.organizationName}`
 }
@@ -644,21 +644,21 @@ ${ctx.organizationName}`
 // === Funciones generadoras para nuevas plantillas ===
 
 function generateBienvenidaMessage(ctx: NotificationContext): string {
-  return `Hola ${ctx.cliente.nombre}, bienvenido/a a ${ctx.organizationName}!
+  return `Hola ${ctx.cliente.nombre}, ¡bienvenido/a a ${ctx.organizationName}!
 
-Gracias por confiar en nosotros. Somos especialistas en reparacion y servicio tecnico.
+Gracias por confiar en nosotros. Somos especialistas en reparación y servicio técnico.
 
-Puede contactarnos por este medio para cualquier consulta sobre nuestros servicios.
+Podés contactarnos por este medio para cualquier consulta sobre nuestros servicios.
 
 ${ctx.organizationName}`
 }
 
 function generateRespuestaConsultaMessage(ctx: NotificationContext): string {
-  return `Hola ${ctx.cliente.nombre}, gracias por su consulta.
+  return `Hola ${ctx.cliente.nombre}, gracias por tu consulta.
 
-[Detalle su respuesta aqui]
+[Escribí tu respuesta acá]
 
-Si desea traer su equipo para una revision sin cargo, estamos a su disposicion.
+Si querés traer tu equipo para una revisión sin cargo, estamos a tu disposición.
 
 ${ctx.organizationName}`
 }
@@ -672,7 +672,7 @@ function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   const saldo = ctx.pago?.saldoPendiente || 0
-  let mensaje = `Hola ${ctx.cliente.nombre}, le recordamos que tiene un saldo pendiente de *${formatCurrency(saldo)}*.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, te recordamos que tenés un saldo pendiente de *${formatCurrency(saldo)}*.`
 
   if (ctx.pago?.desglose) {
     mensaje += buildDesgloseLines(ctx.pago.desglose, formatCurrency)
@@ -683,7 +683,7 @@ function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
     mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
-  mensaje += `\n\nPuede acercarse a nuestro local o consultarnos por medios de pago disponibles.`
+  mensaje += `\n\nPodés acercarte a nuestro local o consultarnos por medios de pago disponibles.`
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
@@ -693,7 +693,7 @@ function generateConfirmacionPagoMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, confirmamos la recepcion de su pago por *${formatCurrency(ctx.pago?.monto || 0)}*.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, confirmamos la recepción de tu pago por *${formatCurrency(ctx.pago?.monto || 0)}*.`
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
@@ -703,7 +703,7 @@ function generateConfirmacionPagoMessage(ctx: NotificationContext): string {
   if (ctx.pago?.saldoPendiente && ctx.pago.saldoPendiente > 0) {
     mensaje += `\nSaldo restante: ${formatCurrency(ctx.pago.saldoPendiente)}`
   } else {
-    mensaje += `\n\nSu cuenta se encuentra al dia. Gracias!`
+    mensaje += `\n\nTu cuenta se encuentra al día. ¡Gracias!`
   }
 
   mensaje += `\n\n${ctx.organizationName}`
@@ -715,7 +715,7 @@ function generateLinkPagoMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, le enviamos el link para realizar el pago:`
+  let mensaje = `Hola ${ctx.cliente.nombre}, te enviamos el link para realizar el pago:`
 
   if (ctx.pago?.monto) {
     mensaje += `\n\n*Monto: ${formatCurrency(ctx.pago.monto)}*`
@@ -734,19 +734,19 @@ function generateLinkPagoMessage(ctx: NotificationContext): string {
 }
 
 function generateMantenimientoMessage(ctx: NotificationContext): string {
-  let mensaje = `Hola ${ctx.cliente.nombre}, desde ${ctx.organizationName} queremos recordarle que es buen momento para un chequeo preventivo de su equipo.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, desde ${ctx.organizationName} queremos recordarte que es buen momento para un chequeo preventivo de tu equipo.`
 
   if (ctx.mantenimiento?.ultimoServicio) {
     const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
-    mensaje += `\n\nSu ultimo servicio fue el ${formatDate(ctx.mantenimiento.ultimoServicio)}.`
+    mensaje += `\n\nTu último servicio fue el ${formatDate(ctx.mantenimiento.ultimoServicio)}.`
   }
 
   if (ctx.mantenimiento?.tipoServicio) {
     mensaje += ` Servicio realizado: ${ctx.mantenimiento.tipoServicio}.`
   }
 
-  mensaje += `\n\nEl mantenimiento preventivo ayuda a evitar fallas y prolongar la vida util de su equipo.`
-  mensaje += `\n\nConsulte por turno disponible!`
+  mensaje += `\n\nEl mantenimiento preventivo ayuda a evitar fallas y prolongar la vida útil de tu equipo.`
+  mensaje += `\n\n¡Consultanos por un turno disponible!`
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
@@ -755,7 +755,7 @@ function generateMantenimientoMessage(ctx: NotificationContext): string {
 function generatePromocionMessage(ctx: NotificationContext): string {
   const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
 
-  let mensaje = `Hola ${ctx.cliente.nombre}!`
+  let mensaje = `¡Hola ${ctx.cliente.nombre}!`
   mensaje += `\n\n*${ctx.promocion!.titulo}*`
   mensaje += `\n${ctx.promocion!.descripcion}`
 
@@ -764,58 +764,58 @@ function generatePromocionMessage(ctx: NotificationContext): string {
   }
 
   if (ctx.promocion!.validoHasta) {
-    mensaje += `\nValido hasta: ${formatDate(ctx.promocion!.validoHasta)}`
+    mensaje += `\nVálido hasta: ${formatDate(ctx.promocion!.validoHasta)}`
   }
 
-  mensaje += `\n\nNo dude en consultarnos!`
+  mensaje += `\n\n¡No dudes en consultarnos!`
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
 }
 
 function generateEncuestaMessage(ctx: NotificationContext): string {
-  let mensaje = `Hola ${ctx.cliente.nombre}, nos importa su opinion!`
+  let mensaje = `Hola ${ctx.cliente.nombre}, ¡nos importa tu opinión!`
 
   if (ctx.orden) {
-    mensaje += `\n\nQueremos saber como fue su experiencia con la reparacion de su ${ctx.orden.dispositivo} (Orden #${ctx.orden.numeroOrden}).`
+    mensaje += `\n\nQueremos saber cómo fue tu experiencia con la reparación de tu ${ctx.orden.dispositivo} (Orden #${ctx.orden.numeroOrden}).`
   } else {
-    mensaje += `\n\nQueremos saber como fue su experiencia con nuestro servicio.`
+    mensaje += `\n\nQueremos saber cómo fue tu experiencia con nuestro servicio.`
   }
 
-  mensaje += `\n\nDel 1 al 5, que tan satisfecho esta? (1 = Muy insatisfecho, 5 = Excelente)`
+  mensaje += `\n\nDel 1 al 5, ¿qué tan satisfecho/a estás? (1 = Muy insatisfecho, 5 = Excelente)`
 
   if (ctx.encuestaUrl) {
-    mensaje += `\n\nTambien puede completar nuestra encuesta aqui: ${ctx.encuestaUrl}`
+    mensaje += `\n\nTambién podés completar nuestra encuesta acá: ${ctx.encuestaUrl}`
   }
 
-  mensaje += `\n\nSu opinion nos ayuda a mejorar. Gracias!`
+  mensaje += `\n\nTu opinión nos ayuda a mejorar. ¡Gracias!`
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
 }
 
 function generateFelicitacionMessage(ctx: NotificationContext): string {
-  return `Hola ${ctx.cliente.nombre}, desde ${ctx.organizationName} queremos desearle un muy feliz dia!
+  return `Hola ${ctx.cliente.nombre}, ¡desde ${ctx.organizationName} queremos desearte un muy feliz día!
 
 Gracias por ser parte de nuestra comunidad de clientes.
 
-Como regalo, tiene un descuento especial en su proximo servicio. Consulte por mensaje!
+Como regalo, tenés un descuento especial en tu próximo servicio. ¡Consultanos por mensaje!
 
 ${ctx.organizationName}`
 }
 
 function generateSolicitudInfoMessage(ctx: NotificationContext): string {
-  let mensaje = `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`
+  let mensaje = `Hola ${ctx.cliente.nombre}, nos comunicamos por tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`
 
   if (ctx.solicitudInfo) {
     mensaje += `\n\n${ctx.solicitudInfo}`
   } else {
-    mensaje += `\n\nNecesitamos informacion adicional para continuar con el servicio.`
-    mensaje += `\n\n[Detalle lo que necesita: fotos, contrasena, descripcion del problema, etc.]`
+    mensaje += `\n\nNecesitamos información adicional para continuar con el servicio.`
+    mensaje += `\n\n[Detallá lo que necesitás: fotos, contraseña, descripción del problema, etc.]`
   }
 
   mensaje += appendOrdenLinks(getOrdenLinks(ctx))
-  mensaje += `\n\nAgradecemos su pronta respuesta.`
+  mensaje += `\n\nAgradecemos tu pronta respuesta.`
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
@@ -824,13 +824,13 @@ function generateSolicitudInfoMessage(ctx: NotificationContext): string {
 function generateRepuestoDisponibleMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
 
-  return `Hola ${ctx.cliente.nombre}, buenas noticias!
+  return `Hola ${ctx.cliente.nombre}, ¡buenas noticias!
 
-El repuesto *${ctx.repuesto?.nombre || "necesario"}* para su ${ctx.orden!.dispositivo} ya esta disponible.
+El repuesto *${ctx.repuesto?.nombre || "necesario"}* para tu ${ctx.orden!.dispositivo} ya está disponible.
 
 Orden #${ctx.orden!.numeroOrden}
 
-Retomamos la reparacion de inmediato. Le avisaremos cuando este listo.${appendOrdenLinks(links)}
+Retomamos la reparación de inmediato. Te avisaremos cuando esté listo.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -838,15 +838,15 @@ ${ctx.organizationName}`
 function generateRepuestoNoDisponibleMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
 
-  return `Hola ${ctx.cliente.nombre}, le informamos sobre su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
+  return `Hola ${ctx.cliente.nombre}, te informamos sobre tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
-Lamentablemente el repuesto *${ctx.repuesto?.nombre || "necesario"}* no se encuentra disponible o esta discontinuado.
+Lamentablemente el repuesto *${ctx.repuesto?.nombre || "necesario"}* no se encuentra disponible o está discontinuado.
 
-Podemos ofrecerle las siguientes opciones:
+Podemos ofrecerte las siguientes opciones:
 - Buscar un repuesto alternativo compatible
 - Devolver el equipo sin cargo
 
-Por favor indiquenos como desea proceder.${appendOrdenLinks(links)}
+Por favor, indicanos cómo querés seguir.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -854,7 +854,7 @@ ${ctx.organizationName}`
 function generateAvisoDemoraMessage(ctx: NotificationContext): string {
   const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que la reparacion de su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) esta tomando mas tiempo del estimado.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, te informamos que la reparación de tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) está tomando más tiempo del estimado.`
 
   if (ctx.demora?.motivo) {
     mensaje += `\n\nMotivo: ${ctx.demora.motivo}`
@@ -874,11 +874,11 @@ function generateAvisoDemoraMessage(ctx: NotificationContext): string {
 function generateReingresoGarantiaMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
 
-  return `Hola ${ctx.cliente.nombre}, lamentamos que tenga inconvenientes con su ${ctx.orden!.dispositivo}.
+  return `Hola ${ctx.cliente.nombre}, lamentamos que tengas inconvenientes con tu ${ctx.orden!.dispositivo}.
 
-Su reparacion esta cubierta por garantia (valida hasta ${formatDateValue(ctx.garantia!.fechaVencimiento, ctx.zonaHoraria)}).
+Tu reparación está cubierta por garantía (válida hasta ${formatDateValue(ctx.garantia!.fechaVencimiento, ctx.zonaHoraria)}).
 
-Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.
+Podés traer tu equipo para que lo revisemos sin costo adicional. No necesitás turno, solo acercate en horario de atención.
 
 Orden #${ctx.orden!.numeroOrden}${appendOrdenLinks(links)}
 
@@ -886,13 +886,13 @@ ${ctx.organizationName}`
 }
 
 function generateClienteInactivoMessage(ctx: NotificationContext): string {
-  return `Hola ${ctx.cliente.nombre}, hace tiempo que no nos visita y lo extraniamos!
+  return `Hola ${ctx.cliente.nombre}, ¡hace tiempo que no nos visitás y te extrañamos!
 
-En ${ctx.organizationName} seguimos a su disposicion para cualquier servicio tecnico o consulta que necesite.
+En ${ctx.organizationName} seguimos a tu disposición para cualquier servicio técnico o consulta que necesites.
 
-Recuerde que ofrecemos diagnostico sin cargo. Traiga su equipo y lo revisamos sin compromiso.
+Recordá que ofrecemos diagnóstico sin cargo. Traé tu equipo y lo revisamos sin compromiso.
 
-Lo esperamos!
+¡Te esperamos!
 
 ${ctx.organizationName}`
 }
@@ -900,11 +900,11 @@ ${ctx.organizationName}`
 function generateSeguimientoPresupuestoRechazadoMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
 
-  return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
+  return `Hola ${ctx.cliente.nombre}, nos comunicamos por tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
-Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Queremos informarle que podemos evaluar alternativas para resolver el problema de su equipo.
+Entendemos que el presupuesto anterior no se ajustaba a tus necesidades. Queremos contarte que podemos evaluar alternativas para resolver el problema de tu equipo.
 
-Puede responder este mensaje si desea que revisemos otras opciones.${appendOrdenLinks(links)}
+Podés responder este mensaje si querés que revisemos otras opciones.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
