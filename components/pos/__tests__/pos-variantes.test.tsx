@@ -302,7 +302,7 @@ describe("POS: productos con precio en divisa en el buscador", () => {
     const tarjeta = (await screen.findAllByText("Funda importada"))[0].closest("button") as HTMLButtonElement
     expect(tarjeta).toBeDisabled()
     expect(tarjeta.textContent).toContain("Moneda extranjera deshabilitada")
-    expect(tarjeta.textContent).toContain("$10.00")
+    expect(tarjeta.textContent).toContain("US$ 10")
     expect(primera("Pantalla").closest("button")).toBeEnabled()
   })
 })

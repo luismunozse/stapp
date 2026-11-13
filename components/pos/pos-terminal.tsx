@@ -58,7 +58,8 @@ import { useMoneda } from "@/hooks/use-moneda"
 import { ChipCotizacion } from "@/components/moneda/chip-cotizacion"
 import { convertirALocal, unidadRedondeo } from "@/lib/currency/convert"
 import { aplicarCotizacionLineas, mensajeNoVendible, motivoNoVendible } from "@/lib/currency/venta-divisa"
-import { formatDivisa, motivoCorto, reconvertirApartada } from "./pos-divisa"
+import { formatDivisa } from "@/lib/currency/formato-divisa"
+import { motivoCorto, reconvertirApartada } from "./pos-divisa"
 
 const HELD_SALES_KEY = "pos_held_sales"
 

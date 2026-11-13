@@ -1,7 +1,7 @@
 "use client"
 
 import { useCurrency } from "@/contexts/currency-context"
-import { formatCurrencyValue } from "@/lib/currency"
+import { formatDivisa } from "@/lib/currency/formato-divisa"
 import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 
 interface PrecioEnMonedaProps {
@@ -13,5 +13,5 @@ interface PrecioEnMonedaProps {
 export function PrecioEnMoneda({ monto, moneda }: PrecioEnMonedaProps) {
   const { formatPrice } = useCurrency()
   if (monto === null) return <>—</>
-  return <>{moneda === null ? formatPrice(monto) : formatCurrencyValue(monto, moneda)}</>
+  return <>{moneda === null ? formatPrice(monto) : formatDivisa(monto, moneda)}</>
 }

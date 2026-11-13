@@ -45,7 +45,7 @@ describe("motivoNoVendible", () => {
 describe("mensajeNoVendible", () => {
   it("textos", () => {
     const m = mensajeNoVendible("SIN_COTIZACION", "Funda", "USD")
-    expect(m).toContain("Configuración → Operativa")
+    expect(m).toContain("Configuración → Moneda extranjera")
     expect(m).toContain('"Funda"')
     expect(mensajeNoVendible("DESHABILITADA", "Funda", "USD")).toBe(
       '"Funda" tiene precio en USD y la moneda extranjera está deshabilitada.'

@@ -30,7 +30,7 @@ import { autoSelectSeries, computeVentaTotals } from "./pos-types"
 import type { PosCartItem, PosCliente, SerieDisponible, DescuentoConfig, TipoDescuento, FiscalConfig } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TotalRow } from "@/components/pos/total-row"
-import { formatDivisa } from "./pos-divisa"
+import { formatDivisa } from "@/lib/currency/formato-divisa"
 
 interface PosCartProps {
   items: PosCartItem[]

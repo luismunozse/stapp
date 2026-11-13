@@ -30,7 +30,7 @@ export function mensajeNoVendible(motivo: MotivoNoVendible, nombre: string, mone
     case "OTRA_DIVISA":
       return `"${nombre}" tiene precio en ${moneda}, que ya no es la divisa de la organización.`
     case "SIN_COTIZACION":
-      return `No hay cotización de ${moneda} disponible para vender "${nombre}". Cargá una manual en Configuración → Operativa.`
+      return `No hay cotización de ${moneda} disponible para vender "${nombre}". Cargá una manual en Configuración → Moneda extranjera.`
   }
 }
 

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { SWRConfig } from "swr"
 import { InventarioList } from "@/components/inventario/inventario-list"
-import { formatCurrencyValue } from "@/lib/currency"
 
 // Radix Select needs these in jsdom; a keyboard open is what it honours without PointerEvent.
 Element.prototype.hasPointerCapture = () => false
@@ -114,7 +113,7 @@ describe("InventarioList: moneda del precio", () => {
       items = [item({ moneda: "USD" })]
       renderList()
       await waitFor(() => expect(screen.getAllByText("Pantalla").length).toBeGreaterThan(0))
-      expect(screen.getAllByText(formatCurrencyValue(50, "USD")).length).toBeGreaterThan(0)
+      expect(screen.getAllByText("US$ 50").length).toBeGreaterThan(0)
       expect(screen.getAllByText(/≈ ARS 60\.000 hoy/).length).toBeGreaterThan(0)
       expect(screen.queryByText("ARS 50")).not.toBeInTheDocument()
     })

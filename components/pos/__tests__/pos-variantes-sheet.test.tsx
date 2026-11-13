@@ -109,7 +109,7 @@ describe("PosVariantesSheet: precios en divisa", () => {
     const azul = screen.getByText("Azul").closest("button")!
     expect(azul).toBeDisabled()
     expect(azul.textContent).toContain("Sin cotización de USD")
-    expect(azul.textContent).toContain("$10.00")
+    expect(azul.textContent).toContain("US$ 10")
     expect(screen.getByText("Rojo").closest("button")).toBeEnabled()
   })
 })
