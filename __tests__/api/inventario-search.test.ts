@@ -76,6 +76,23 @@ describe("GET /api/inventario/search", () => {
     expect(body[0].trackeaSeries).toBe(true)
   })
 
+  it("devuelve moneda: USD para una fila en divisa y null para una local", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const invChain = createChainMock([
+      { id: "i1", codigo: "C1", nombre: "Dolar", stock: 5, stock_reservado: 0,
+        precio_venta: 10, precio_compra: 6, trackea_series: false, moneda: "USD" },
+      { id: "i2", codigo: "C2", nombre: "Local", stock: 5, stock_reservado: 0,
+        precio_venta: 100, precio_compra: 60, trackea_series: false },
+    ])
+    mockSupabaseFrom({ inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=x"))
+    const { body } = await parseResponse(res)
+
+    expect(body[0].moneda).toBe("USD")
+    expect(body[1].moneda).toBeNull()
+  })
+
   it("usa ILIKE substring sobre nombre Y codigo (no full-text) para queries >= 3 chars", async () => {
     mockAuthSuccess()
     const invChain = createChainMock([])

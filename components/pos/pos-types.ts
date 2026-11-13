@@ -21,6 +21,9 @@ export interface PosCartItem {
   trackeaSeries: boolean
   serieIds: string[]
   costo?: number
+  // Línea en divisa: `precioUnitario` es el local ya convertido; `precioOrigen` el precio en `moneda`.
+  moneda?: "USD" | "EUR" | null
+  precioOrigen?: number | null
   // Descuento por línea (opcional; ausente = sin descuento). MONTO = `descuento`
   // ($ off de la línea); PORCENTAJE = `porcentajeDescuento` (% sobre el bruto).
   tipoDescuento?: TipoDescuento
@@ -78,6 +81,8 @@ export interface InventarioResult {
   precioVenta: number
   trackeaSeries?: boolean
   diasGarantiaDefault?: number | null
+  /** Divisa del precio de lista; null/ausente = moneda local. */
+  moneda?: "USD" | "EUR" | null
   // Variant fields (additive): present only on a variant, absent on a standalone item and while
   // migration 355 is not applied. `etiqueta` is e.g. "Azul / M"; `grupoNombre` is the group's base name.
   grupoId?: string | null
