@@ -13,7 +13,7 @@ import {
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { useTerminologia } from "@/contexts/currency-context"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import {
@@ -254,7 +254,7 @@ ${styles}
       try {
         await waitForImages()
         try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
-        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
+        ajustarPaginaImpresion(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {

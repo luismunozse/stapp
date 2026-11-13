@@ -238,6 +238,7 @@ export const manualSections: ManualSection[] = [
         steps: [
           "Abrí las preferencias de impresión de la impresora térmica y, en el tamaño de papel, elegí uno de rollo o \"Receipt\" (largo variable) en lugar de uno de largo fijo. El nombre exacto cambia según la marca",
           "En la ventana de impresión del navegador, abrí \"Más opciones\" y destildá \"Encabezados y pies de página\", para que no salgan la fecha y la dirección web",
+          "Si la impresora solo ofrece tamaños de largo fijo y el blanco queda arriba del comprobante, activá \"Alinear arriba\" debajo de los botones de impresión. Se guarda en esa computadora y vale para todos los comprobantes térmicos",
           "Si la impresora está conectada por USB, podés usar \"Imprimir térmica\": corta donde termina el comprobante y no depende de esa configuración",
         ],
         tip: "Vale para el comprobante de la orden, el de recepción, el ticket de venta y el de la nota de crédito.",

@@ -12,7 +12,7 @@ import {
 import { Receipt, Printer } from "lucide-react"
 import { useTerminologia } from "@/contexts/currency-context"
 import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import {
   readAncho,
   saveAncho,
@@ -149,7 +149,7 @@ ${styles}
         } catch {
           /* measurement falls back to current metrics */
         }
-        fitPrintPageToContent(doc, doc.getElementById("recepcion-receipt-print-area"), ancho)
+        ajustarPaginaImpresion(doc, doc.getElementById("recepcion-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
