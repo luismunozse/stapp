@@ -32,13 +32,17 @@ export async function POST(request: Request) {
     // mismo query para no exponer la existencia de ids de otras organizaciones
     // (timing/respuesta diferenciada permitiría enumerar ids cross-tenant).
     // Si faltan rows, respondemos 404 sin distinguir "no existe" de "ajeno".
-    // También se lee `grupo_id` (migración de variantes): sin esa columna se vuelve a leer sin ella.
+    // También se leen `grupo_id` (migración de variantes) y `moneda` (365): sin esas columnas se
+    // vuelve a leer sin ellas.
     const leer = selectConFallback(
       (columnas: string) =>
         supabaseAdmin.from("inventario").select(columnas).eq("organization_id", organizationId!).in("id", [sourceId, targetId]),
-      ["id, grupo_id", "id"]
+      ["id, grupo_id, moneda", "id, grupo_id", "id"]
     )
-    const { data: checkRows, error: checkErr } = (await leer()) as { data: { id: string; grupo_id?: string | null }[] | null; error: unknown }
+    const { data: checkRows, error: checkErr } = (await leer()) as {
+      data: { id: string; grupo_id?: string | null; moneda?: string | null }[] | null
+      error: unknown
+    }
 
     if (checkErr) throw checkErr
     if (!checkRows || checkRows.length !== 2) {
@@ -53,6 +57,15 @@ export async function POST(request: Request) {
           error: "Un producto con variantes no se puede consolidar. Desagrupalo primero si querés unirlo con otro",
           code: "PRODUCTO_CON_VARIANTES",
         },
+        { status: 400 }
+      )
+    }
+
+    // El stock del origen pasa al destino, que conserva su precio: con monedas distintas el costo
+    // de esas unidades quedaría expresado en otra moneda.
+    if ((checkRows[0].moneda ?? null) !== (checkRows[1].moneda ?? null)) {
+      return NextResponse.json(
+        { error: "No se pueden unificar productos con monedas distintas", code: "MONEDAS_DISTINTAS" },
         { status: 400 }
       )
     }

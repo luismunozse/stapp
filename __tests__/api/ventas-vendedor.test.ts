@@ -34,6 +34,7 @@ function buildTableMocks() {
   depositosChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
 
   mockSupabaseFrom({
+    inventario: createChainMock([]), // sin ítems en divisa
     organizations: createChainMock({ iva_regimen: "EXENTO" }),
     sucursales: sucursalesChain,
     depositos: depositosChain,

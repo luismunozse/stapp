@@ -206,10 +206,10 @@ describe("OrdenForm — borrador local", () => {
     await renderForm()
 
     expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "iPhone 13 Restaurado",
     )
-    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue(
+    expect(screen.getByPlaceholderText("Describí el problema del equipo...")).toHaveValue(
       "Pantalla rota",
     )
   })
@@ -218,14 +218,14 @@ describe("OrdenForm — borrador local", () => {
     window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
 
     await renderForm()
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "iPhone 13 Restaurado",
     )
 
     await descartarBorrador()
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue("")
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
@@ -307,7 +307,7 @@ describe("OrdenForm — borrador local", () => {
       </ModalProvider>,
     )
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
         "Samsung A54 del turno",
       )
     })
@@ -321,7 +321,7 @@ describe("OrdenForm — borrador local", () => {
     )
 
     await screen.findByText(/se restauró un borrador no guardado/i)
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "iPhone 13 Restaurado",
     )
   })
@@ -349,7 +349,7 @@ describe("OrdenForm — borrador local", () => {
         <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-1" />
       </ModalProvider>,
     )
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "Borrador del turno 1",
     )
 
@@ -360,7 +360,7 @@ describe("OrdenForm — borrador local", () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
         "Borrador del turno 2",
       )
     })
@@ -416,7 +416,7 @@ describe("OrdenForm — borrador local", () => {
 
     await renderForm()
 
-    expect(screen.getByText("Sector / Area")).toBeInTheDocument()
+    expect(screen.getByText("Sector / área")).toBeInTheDocument()
   })
 })
 
@@ -445,7 +445,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await renderForm()
     await settle(100)
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G restaurable" },
     })
     await settle()
@@ -467,7 +467,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
       </ModalProvider>,
     )
     await settle()
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "Samsung A54 del turno",
     )
 
@@ -478,10 +478,10 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     )
     await settle()
 
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue("")
-    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Describí el problema del equipo...")).toHaveValue("")
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G de mostrador" },
     })
     await settle()
@@ -525,7 +525,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     // aca es silencioso: el aviso dice que se restauro y el checklist no se
     // guarda. Se verifica sobre el borrador reescrito porque es el unico lugar
     // donde ese estado (fuera de react-hook-form) es observable.
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado" },
     })
     await settle()
@@ -556,7 +556,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await renderForm()
     await settle()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado" },
     })
     await settle()
@@ -588,7 +588,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await renderForm()
     await settle()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado" },
     })
     await settle()
@@ -639,7 +639,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await renderForm()
     await settle()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado" },
     })
     await settle()
@@ -696,7 +696,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await settle()
 
     // Dentro de la ventana: el template del tipo todavia no llego.
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado en la ventana" },
     })
     await settle()
@@ -718,7 +718,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     } as Response)
     await settle()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "iPhone 13 editado despues" },
     })
     await settle()
@@ -757,7 +757,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await settle(100)
     await descartarBorrador()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Equipo nuevo" },
     })
     await settle()
@@ -783,7 +783,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     await settle(100)
     await descartarBorrador()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Equipo nuevo" },
     })
     await settle()
@@ -830,11 +830,11 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
     await renderForm({ fromTurnoId: "t-1" })
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
         "Samsung A54 del turno",
       )
     })
-    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue(
+    expect(screen.getByPlaceholderText("Describí el problema del equipo...")).toHaveValue(
       "No carga",
     )
   })
@@ -848,7 +848,7 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
     await waitFor(() => {
       expect(screen.getByText(/Origen: turno agendado/)).toBeInTheDocument()
     })
-    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+    expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
       "Lo que el operador venia cargando",
     )
   })
@@ -866,11 +866,11 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
     await descartarBorrador()
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      expect(screen.getByPlaceholderText("Modelo o descripción del equipo")).toHaveValue(
         "Samsung A54 del turno",
       )
     })
-    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue(
+    expect(screen.getByPlaceholderText("Describí el problema del equipo...")).toHaveValue(
       "No carga",
     )
     expect(window.localStorage.getItem(TURNO_DRAFT_KEY)).toBeNull()
@@ -887,11 +887,11 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
 
     await descartarBorrador()
 
-    // "Sector / Area" solo aparece cuando el formulario tiene el clienteId Y el
+    // "Sector / área" solo aparece cuando el formulario tiene el clienteId Y el
     // objeto del cliente (que es una empresa): es la senal de que el deep-link
     // volvio a aplicarse entero.
     await waitFor(() => {
-      expect(screen.getByText("Sector / Area")).toBeInTheDocument()
+      expect(screen.getByText("Sector / área")).toBeInTheDocument()
     })
   })
 })
@@ -919,7 +919,7 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
     await renderForm()
     await settle(100)
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G" },
     })
     await settle()
@@ -933,7 +933,7 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
     await renderForm()
     await settle(100)
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G" },
     })
     await settle()
@@ -946,7 +946,7 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
     await renderForm()
     await settle(100)
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G" },
     })
     await settle()
@@ -959,7 +959,7 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
     await renderForm({ initialClienteId: "cli-1" })
     await settle()
 
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G" },
     })
     await settle()

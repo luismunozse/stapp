@@ -160,7 +160,7 @@ describe("RecepcionForm — borrador local", () => {
     await renderForm()
 
     expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("1122334455")
+    expect(screen.getByPlaceholderText("Número alternativo")).toHaveValue("1122334455")
     expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue("iPhone 13")
   })
 
@@ -224,8 +224,8 @@ describe("RecepcionForm — borrador local", () => {
     await renderForm()
     expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue("iPhone 13")
 
-    fireEvent.click(screen.getByLabelText(/El cliente acepta los terminos/i))
-    fireEvent.click(screen.getByRole("button", { name: /Crear recepcion/i }))
+    fireEvent.click(screen.getByLabelText(/El cliente acepta los términos/i))
+    fireEvent.click(screen.getByRole("button", { name: /Crear recepción/i }))
     await act(async () => {})
 
     // Lo cargado sigue en disco: el operador tiene con que verificar y, si hace
@@ -275,12 +275,12 @@ describe("RecepcionForm — borrador local", () => {
     )
 
     await renderForm()
-    expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("1122334455")
+    expect(screen.getByPlaceholderText("Número alternativo")).toHaveValue("1122334455")
 
     await descartarBorrador()
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Número alternativo")).toHaveValue("")
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
@@ -303,7 +303,7 @@ describe("RecepcionForm — borrador local", () => {
         <RecepcionForm />
       </ModalProvider>,
     )
-    expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Número alternativo")).toHaveValue("")
 
     sesion.actual = null
     rerender(

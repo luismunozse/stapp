@@ -184,7 +184,7 @@ describe("OrdenDetail: device label carries the workshop", () => {
     render(<OrdenDetail ordenId="ord-1" />)
 
     fireEvent.click(await screen.findByRole("button", { name: /^Etiqueta$/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Etiqueta Reparado/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Etiqueta reparado/ }))
 
     const calls = vi.mocked(printDeviceLabel).mock.calls.map((c) => c[0])
     expect(calls).toHaveLength(2)

@@ -75,6 +75,9 @@ import { WipeInventarioDialog } from "./wipe-inventario-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
+import { useMoneda } from "@/hooks/use-moneda"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import { EquivalenteLocal } from "@/components/moneda/equivalente-local"
 import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
@@ -124,6 +127,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatPrice } = useCurrency()
+  const { config: configMoneda } = useMoneda()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
   const { data: proveedores = [] } = useSWR<ProveedorLite[]>(
     "/api/proveedores",
@@ -140,6 +144,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [tipoDispositivo, setTipoDispositivo] = useState<TipoDispositivo | "">("")
   const [proveedorId, setProveedorId] = useState<string>("")
   const [bajoStock, setBajoStock] = useState(false)
+  /** Currency filter: "" all, "local" or "divisa" (the API's ?moneda=). */
+  const [monedaFiltro, setMonedaFiltro] = useState<"" | "local" | "divisa">("")
   const [showForm, setShowForm] = useState(false)
   const [showBulkForm, setShowBulkForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -211,7 +217,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // la página actual; perder la selección por reordenar es UX molesta.
   useEffect(() => {
     setSelectedKeys([])
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, monedaFiltro, includeArchived, page])
 
   // Fetch configurable stock threshold
   useEffect(() => {
@@ -263,6 +269,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
     if (proveedorId) params.append("proveedorId", proveedorId)
     if (bajoStock) params.append("bajoStock", "true")
+    if (monedaFiltro) params.append("moneda", monedaFiltro)
     if (includeArchived) params.append("includeArchived", "true")
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
@@ -270,7 +277,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     params.append("sortOrder", sortOrder)
     params.append("_r", refreshKey.toString())
     return `/api/inventario?${params.toString()}`
-  }, [debouncedSearch, categoria, tipoDispositivo, proveedorId, bajoStock, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
+  }, [debouncedSearch, categoria, tipoDispositivo, proveedorId, bajoStock, monedaFiltro, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
 
   // SWR for fetching with cache
   const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
@@ -282,6 +289,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // Extract data from response
   const items: Inventario[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
+  // The currency filter: with the feature on, or while some loaded item is priced in a foreign
+  // currency (the feature may have been turned off since), or while it is in use.
+  const mostrarFiltroMoneda =
+    !!configMoneda && (configMoneda.habilitada || monedaFiltro !== "" || items.some((i) => (i.moneda ?? null) !== null))
 
   // Detección client-side de duplicados en la página actual.
   // Clave: nombre normalizado + tipo + categoría. Marca como duplicado cualquier
@@ -482,10 +493,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         ) : item.precioCompra === 0 ? (
           <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" title="Costo en $0 — el margen puede no ser real">
             <AlertCircle className="h-3.5 w-3.5" />
-            {formatPrice(0)}
+            <PrecioEnMoneda monto={0} moneda={item.moneda ?? null} />
           </span>
         ) : (
-          <span className="text-muted-foreground">{formatPrice(item.precioCompra)}</span>
+          <span className="text-muted-foreground"><PrecioEnMoneda monto={item.precioCompra} moneda={item.moneda ?? null} /></span>
         )
       ),
     },
@@ -495,7 +506,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       sortable: true,
       className: "text-right",
       headerClassName: "text-right",
-      render: (item) => <span className="font-medium">{formatPrice(item.precioVenta)}</span>,
+      render: (item) => (
+        <div>
+          <span className="font-medium"><PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} /></span>
+          {item.moneda && <EquivalenteLocal monto={item.precioVenta} moneda={item.moneda} />}
+        </div>
+      ),
     },
     {
       key: "margen",
@@ -510,9 +526,9 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         }
         const margen = item.precioVenta - item.precioCompra
         if (item.precioCompra === 0 && item.precioVenta > 0) {
-          return <span className="text-amber-500 text-xs font-medium" title="Sin costo cargado">~{formatPrice(margen)}</span>
+          return <span className="text-amber-500 text-xs font-medium" title="Sin costo cargado">~<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} /></span>
         }
-        return margen > 0 ? <span className="text-emerald-600 text-xs font-medium">+{formatPrice(margen)}</span> : <span className="text-muted-foreground text-xs">-</span>
+        return margen > 0 ? <span className="text-emerald-600 text-xs font-medium">+<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} /></span> : <span className="text-muted-foreground text-xs">-</span>
       },
     },
     {
@@ -632,7 +648,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         onFilterBajoStock={() => { setBajoStock(true); setPage(1) }}
       />
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${mostrarFiltroMoneda ? "lg:grid-cols-6" : "lg:grid-cols-5"} gap-2`}>
           <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -704,6 +720,21 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               ))}
             </SelectContent>
           </Select>
+          {mostrarFiltroMoneda && configMoneda && (
+            <Select
+              value={monedaFiltro || "all"}
+              onValueChange={(value) => { setMonedaFiltro(value === "all" ? "" : (value as "local" | "divisa")); setPage(1) }}
+            >
+              <SelectTrigger className="w-full" aria-label="Moneda">
+                <SelectValue placeholder="Todas las monedas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las monedas</SelectItem>
+                <SelectItem value="local">Moneda local</SelectItem>
+                <SelectItem value="divisa">{configMoneda.monedaExtranjera}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
         {proveedorId && (
           <InventarioProveedorStats
@@ -1100,6 +1131,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         <InventarioBulkBar
           selectedCount={selectedKeys.length}
           selectedIds={selectedKeys}
+          selectedMonedas={items.filter((i) => selectedKeys.includes(i.id)).map((i) => i.moneda ?? null)}
+          monedaLocal={configMoneda?.monedaLocal}
           categoriasDisponibles={categoriasDisponibles}
           proveedores={proveedoresActivos}
           onClear={() => setSelectedKeys([])}
@@ -1172,11 +1205,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       </div>
                       <div className="text-xs text-muted-foreground truncate">{item.codigo}</div>
                       <div className="mt-1.5 flex items-center gap-2 text-sm">
-                        <span className="font-semibold">{formatPrice(item.precioVenta)}</span>
+                        <span className="font-semibold"><PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} /></span>
                         {margen !== null && margen > 0 && (
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400">+{formatPrice(margen)}</span>
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400">+<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} /></span>
                         )}
                       </div>
+                      {item.moneda && <EquivalenteLocal monto={item.precioVenta} moneda={item.moneda} />}
                     </div>
                     <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                       {item.deletedAt ? (
@@ -1349,7 +1383,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             <div className="text-center border-x border-border/50">
                               <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
                               <div className="text-sm font-medium leading-none text-muted-foreground">
-                                {formatPrice(item.precioCompra)}
+                                <PrecioEnMoneda monto={item.precioCompra} moneda={item.moneda ?? null} />
                               </div>
                             </div>
                           )}
@@ -1357,13 +1391,14 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <div className="text-center">
                             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
                             <div className="text-sm font-bold leading-none">
-                              {formatPrice(item.precioVenta)}
+                              <PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} />
                             </div>
                             {margen !== null && margen > 0 && (
                               <div className="text-xs text-emerald-600 font-medium mt-0.5">
-                                +{formatPrice(margen)}
+                                +<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} />
                               </div>
                             )}
+                            {item.moneda && <EquivalenteLocal monto={item.precioVenta} moneda={item.moneda} />}
                           </div>
                         </div>
 

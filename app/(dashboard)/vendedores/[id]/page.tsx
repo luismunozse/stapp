@@ -106,7 +106,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      title: "Eliminar Vendedor",
+      title: "Eliminar vendedor",
       description: "¿Estás seguro de eliminar este vendedor? Si tiene historial (ventas, órdenes o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -210,7 +210,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Total Ventas</span>
+              <span className="hidden sm:inline">Total ventas</span>
               <span className="sm:hidden">Ventas</span>
             </CardTitle>
           </CardHeader>
@@ -235,7 +235,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Monto Total</span>
+              <span className="hidden sm:inline">Monto total</span>
               <span className="sm:hidden">Monto</span>
             </CardTitle>
           </CardHeader>
@@ -325,7 +325,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
       {/* Historial de Ventas */}
       <Card>
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Historial de Ventas</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Historial de ventas</CardTitle>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
           {vendedor.ventas.length === 0 ? (

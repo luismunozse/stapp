@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
@@ -334,6 +335,13 @@ export async function POST(request: Request) {
     )
 
     // Crear venta atómicamente
+    // Hasta que la conversión llegue a las ventas, un ítem con precio en divisa no entra.
+    const enDivisa = await rechazarItemsEnDivisa({
+      organizationId: organizationId!,
+      inventarioIds: data.items.map((i) => i.inventarioId),
+    })
+    if (enDivisa) return enDivisa
+
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
       p_vendedor_id: vendedorId,

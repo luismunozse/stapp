@@ -54,6 +54,8 @@ function mockVenta(venta: Record<string, unknown>, extra: Record<string, any> = 
   mockSupabaseFrom({
     ventas: createChainMock({ ...ventaBase, ...venta }),
     organizations: createChainMock({ iva_regimen: "EXENTO" }),
+    // The foreign-currency guard of the PUT reads the new lines' items: all local here.
+    inventario: createChainMock([{ id: "i1", nombre: "Mouse", moneda: null }]),
     ...extra,
   })
 }

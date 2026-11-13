@@ -431,7 +431,7 @@ export default async function DashboardPage() {
   // Admin: only secondary KPIs — hero income + action concerns render separately.
   const adminStats: StatCardProps[] = [
     {
-      title: "Órdenes Pendientes",
+      title: "Órdenes pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
@@ -453,7 +453,7 @@ export default async function DashboardPage() {
 
   const vendedorStats: StatCardProps[] = [
     {
-      title: "Órdenes Pendientes",
+      title: "Órdenes pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
@@ -469,7 +469,7 @@ export default async function DashboardPage() {
       href: "/clientes",
     },
     {
-      title: "Mis Ventas Hoy",
+      title: "Mis ventas de hoy",
       value: formatCurrency(misVentasHoyTotal, moneda),
       description: `${misVentasHoyCount} venta${misVentasHoyCount !== 1 ? "s" : ""}`,
       icon: ShoppingCart,
@@ -477,7 +477,7 @@ export default async function DashboardPage() {
       href: "/ventas",
     },
     {
-      title: "Mis Ventas del Mes",
+      title: "Mis ventas del mes",
       value: formatCurrency(misVentasMesTotal, moneda),
       description: `${misVentasMesCount} ventas completadas`,
       icon: TrendingUp,
@@ -488,7 +488,7 @@ export default async function DashboardPage() {
 
   const tecnicoStats: StatCardProps[] = [
     {
-      title: "Mis Órdenes Activas",
+      title: "Mis órdenes activas",
       value: misOrdenesActivas.toString(),
       description: "Asignadas a mí",
       icon: ClipboardList,
@@ -496,7 +496,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ filtro: "activas" }),
     },
     {
-      title: "Sin Diagnóstico",
+      title: "Sin diagnóstico",
       value: misSinDiagnostico.toString(),
       description: "Requieren atención",
       icon: AlertTriangle,
@@ -505,7 +505,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ estado: "RECIBIDO" }),
     },
     {
-      title: "Esperando Repuesto",
+      title: "Esperando repuesto",
       value: misEsperandoRepuesto.toString(),
       description: "En espera de piezas",
       icon: Clock,
@@ -513,7 +513,7 @@ export default async function DashboardPage() {
       href: ordenesHref({ estado: "ESPERANDO_REPUESTO" }),
     },
     {
-      title: "Completadas (Mes)",
+      title: "Completadas (mes)",
       value: misOrdenesCompletadas.toString(),
       description: avgDiasResolucion !== null ? `Prom. ${avgDiasResolucion} día${avgDiasResolucion !== 1 ? "s" : ""}` : "Reparadas/entregadas",
       icon: CheckCircle,
@@ -635,7 +635,7 @@ export default async function DashboardPage() {
                   tone="warning"
                   icon={Package}
                   href="/inventario"
-                  title={`${itemsBajoStock} items con stock bajo`}
+                  title={`${itemsBajoStock} ítems con stock bajo`}
                 />
               )}
               {!isTecnico && ordenesPendientes > 0 && (

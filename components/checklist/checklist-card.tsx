@@ -128,14 +128,14 @@ export function ChecklistCard({ ordenId }: ChecklistCardProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" />
-            Checklist de Recepcion
+            Checklist de recepción
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-4">
-            No hay un template de checklist configurado.
+            No hay una plantilla de checklist configurada.
             <br />
-            Configure uno en Configuracion &gt; Checklist.
+            Configurá una en Configuración &gt; Checklist.
           </p>
         </CardContent>
       </Card>
@@ -148,7 +148,7 @@ export function ChecklistCard({ ordenId }: ChecklistCardProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ClipboardCheck className="h-5 w-5" />
-          Checklist de Recepcion
+          Checklist de recepción
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -158,7 +158,7 @@ export function ChecklistCard({ ordenId }: ChecklistCardProps) {
           </p>
           <Button onClick={() => setShowForm(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Crear Checklist
+            Crear checklist
           </Button>
         </div>
       </CardContent>

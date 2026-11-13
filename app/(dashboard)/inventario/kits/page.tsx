@@ -51,11 +51,18 @@ interface KitRow {
   cantidadComponentes: number
   /** Suma del precio_compra de los componentes: mismo permiso que precioCompra. */
   costoCalculado: number | null
+  /** true: el rol ve costos pero algún componente no tiene equivalente local (falta cotización). */
+  costoNoDisponible?: boolean
+}
+
+function mensajeCostoNoDisponible(moneda: string | null | undefined): string {
+  return moneda ? `Costo no disponible: falta la cotización de ${moneda}` : "Costo no disponible"
 }
 
 interface KitsResp {
   data: KitRow[]
   total: number
+  monedaExtranjera?: string | null
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -180,7 +187,7 @@ export default function KitsPage() {
                     costos: se oculta la celda entera. formatPrice(null)
                     devuelve "", que dejaba el label sin valor. */}
                 <div
-                  className={`grid ${k.costoCalculado !== null ? "grid-cols-2" : "grid-cols-1"} gap-2 text-xs`}
+                  className={`grid ${k.costoCalculado !== null || k.costoNoDisponible ? "grid-cols-2" : "grid-cols-1"} gap-2 text-xs`}
                 >
                   <div>
                     <div className="text-xs uppercase text-muted-foreground">
@@ -196,6 +203,11 @@ export default function KitsPage() {
                       <div className="font-semibold">
                         {formatPrice(k.costoCalculado)}
                       </div>
+                    </div>
+                  )}
+                  {k.costoCalculado === null && k.costoNoDisponible && (
+                    <div className="text-xs text-muted-foreground">
+                      {mensajeCostoNoDisponible(data?.monedaExtranjera)}
                     </div>
                   )}
                 </div>
@@ -289,6 +301,7 @@ function NuevoKitDialog({
           stock: 0,
           precioCompra: 0,
           precioVenta: Number(precioVenta) || 0,
+          moneda: null,
         }),
       })
       if (!createRes.ok) {

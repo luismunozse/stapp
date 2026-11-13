@@ -88,7 +88,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
       if (!nuevoServicio.servicioId || nuevoServicio.cantidad < 1) {
         await alert({
           title: "Datos incompletos",
-          description: "Selecciona un servicio y cantidad",
+          description: "Seleccioná un servicio y cantidad",
           variant: "warning",
         })
         return
@@ -97,7 +97,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
       if (!nuevoServicio.nombre.trim() || nuevoServicio.cantidad < 1 || nuevoServicio.precioUnitario < 0) {
         await alert({
           title: "Datos incompletos",
-          description: "Completa nombre, cantidad y precio",
+          description: "Completá nombre, cantidad y precio",
           variant: "warning",
         })
         return
@@ -268,7 +268,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Servicios Realizados</CardTitle>
+          <CardTitle className="text-base">Servicios realizados</CardTitle>
           {!showAddServicio && (
             <Button size="sm" variant="outline" onClick={() => setShowAddServicio(true)}>
               <Plus className="h-4 w-4 mr-1" />
@@ -284,7 +284,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
             <div className="flex-1">
               <div className="font-medium mb-1">El {etiquetaMonto} no coincide con el subtotal de servicios</div>
               <div>
-                Subtotal Servicios: {formatPrice(subtotalServicios)} — {campoVivo === "presupuesto" ? "Presupuesto" : "Costo final"} actual: {formatPrice(montoVivoNum)}
+                Subtotal servicios: {formatPrice(subtotalServicios)} — {campoVivo === "presupuesto" ? "Presupuesto" : "Costo final"} actual: {formatPrice(montoVivoNum)}
                 {totalCobrado > 0 && <> — Cobrado: {formatPrice(totalCobrado)}</>}
               </div>
             </div>
@@ -424,7 +424,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
                     onChange={(e) => setNuevoServicio({ ...nuevoServicio, guardarEnCatalogo: e.target.checked })}
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
-                  <span className="text-xs text-muted-foreground">Guardar en Servicios</span>
+                  <span className="text-xs text-muted-foreground">Guardar en servicios</span>
                 </label>
               </div>
             )}
@@ -481,7 +481,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
               </div>
             ))}
             <div className="flex justify-between pt-3 border-t font-semibold">
-              <span>Subtotal Servicios</span>
+              <span>Subtotal servicios</span>
               <span>{formatPrice(subtotalServicios)}</span>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
+import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 
@@ -74,6 +75,12 @@ export async function POST(
         return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 })
       }
 
+      const enDivisa = await rechazarItemsEnDivisa({
+        organizationId: organizationId!,
+        servicioIds: [servicio.id],
+      })
+      if (enDivisa) return enDivisa
+
       servicioId = servicio.id
       nombre = servicio.nombre
       precioUnitario = parsed.precioUnitario ?? Number(servicio.precio)
@@ -113,6 +120,7 @@ export async function POST(
         codigo: `SRV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         nombre,
         precio: precioUnitario,
+        moneda: null,
       })
       if (catalogoError) console.error("Error guardando en catalogo:", catalogoError)
     }

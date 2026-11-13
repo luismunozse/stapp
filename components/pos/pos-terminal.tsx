@@ -33,7 +33,7 @@ import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
 import { emitirComprobanteArca } from "@/lib/facturacion/emitir-comprobante-client"
-import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { ajustarPaginaImpresion } from "@/lib/print-fit-page"
 import { buildTicketHTML } from "./ticket-html"
 import type {
   PosCartItem,
@@ -623,7 +623,7 @@ export function PosTerminal() {
       const doc = printWindow.document
       const triggerPrint = async () => {
         try { await doc.fonts.ready } catch { /* fall back to current metrics */ }
-        fitPrintPageToContent(doc, doc.body, printerWidth)
+        ajustarPaginaImpresion(doc, doc.body, printerWidth)
         printWindow.focus()
         printWindow.print()
       }

@@ -124,7 +124,7 @@ export function CamposExtraFields({ campos, values, config, onChange }: CamposEx
     }`}>
       <h4 className="font-medium text-sm flex items-center gap-2">
         {config.infoSectionIcon && <span>{config.infoSectionIcon}</span>}
-        {config.infoSectionTitle || "Informacion Adicional"}
+        {config.infoSectionTitle || "Información adicional"}
       </h4>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {visibles.map(renderCampoExtra)}

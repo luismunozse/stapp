@@ -92,6 +92,21 @@ describe("AnalisisInventario — costo por item nulo", () => {
     expect(screen.getByText("13 uds")).toBeInTheDocument()
   })
 
+  it("con acceso a costo, un ítem en divisa sin cotización muestra — y no $0", async () => {
+    const base = payload(100, 1000)
+    stubFetch({
+      ...base,
+      masValiosos: [{ ...base.masValiosos[0], precioCompra: null, valorEnStock: null }],
+    })
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Pantalla")).toBeInTheDocument())
+
+    expect(screen.getByText("13 uds x —")).toBeInTheDocument()
+    expect(screen.queryByText("$0")).not.toBeInTheDocument()
+  })
+
   it("muestra el costo unitario y el valor en stock cuando el rol puede verlos", async () => {
     stubFetch(payload(100, 1000))
 

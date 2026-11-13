@@ -78,7 +78,7 @@ export function ClienteCotizaciones({ clienteId }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Cotizaciones</CardTitle>
+        <CardTitle className="text-base">Presupuestos</CardTitle>
       </CardHeader>
       <CardContent className="p-0 sm:p-6 sm:pt-0">
         <DataTable
@@ -86,7 +86,7 @@ export function ClienteCotizaciones({ clienteId }: Props) {
           columns={columns}
           keyExtractor={(c) => c.id}
           loading={isLoading}
-          emptyMessage="Sin cotizaciones registradas"
+          emptyMessage="Sin presupuestos registrados"
           onRowClick={(c) => router.push(`/cotizaciones/${c.id}`)}
           renderMobileCard={(c) => (
             <div className="space-y-1.5">

@@ -95,7 +95,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
 
   const handleDelete = async (fotoId: string) => {
     const confirmed = await confirm({
-      title: "Eliminar Foto",
+      title: "Eliminar foto",
       description: "¿Estás seguro de eliminar esta foto? Esta acción no se puede deshacer.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -161,7 +161,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
             {!showUpload && (
               <Button size="sm" onClick={() => setShowUpload(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Foto
+                Agregar foto
               </Button>
             )}
           </div>

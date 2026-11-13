@@ -1,3 +1,5 @@
+import { readAlinearArriba } from "@/lib/thermal-paper"
+
 /**
  * Fits a print document's `@page` height to its rendered content.
  *
@@ -21,4 +23,22 @@ export function fitPrintPageToContent(doc: Document, el: HTMLElement | null, wid
   const pageStyle = doc.createElement("style")
   pageStyle.textContent = `@page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }`
   doc.head.appendChild(pageStyle)
+}
+
+/**
+ * Prepara el `@page` de un comprobante térmico según la preferencia del
+ * dispositivo. Por defecto ajusta la página al alto del contenido. Con
+ * "Alinear arriba" deja el tamaño de hoja del driver: cuando el driver solo
+ * ofrece largos fijos, el navegador centra una página más corta en esa hoja y
+ * queda blanco antes del comprobante; sin achicarla, el contenido arranca en
+ * el borde superior.
+ */
+export function ajustarPaginaImpresion(doc: Document, el: HTMLElement | null, widthMm: number): void {
+  if (readAlinearArriba()) {
+    const pageStyle = doc.createElement("style")
+    pageStyle.textContent = "@page { size: auto; margin: 0; }"
+    doc.head.appendChild(pageStyle)
+    return
+  }
+  fitPrintPageToContent(doc, el, widthMm)
 }

@@ -280,6 +280,7 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
     })
@@ -312,6 +313,7 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
     } as any)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-principal" }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
@@ -334,6 +336,7 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
       error: { code: "23505", message: "duplicate key ventas_idempotency_key_unique" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v-existing", numero_venta: 7, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
     })
@@ -382,6 +385,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       if (table === "depositos") return depositosChain as any
       if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
       if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      if (table === "inventario") return createChainMock([]) as any
       return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
@@ -410,6 +414,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       if (table === "depositos") return depositosChain as any
       if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
       if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      if (table === "inventario") return createChainMock([]) as any
       return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
@@ -445,6 +450,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       if (table === "depositos") return depositosChain as any
       if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
       if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      if (table === "inventario") return createChainMock([]) as any
       return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
@@ -466,6 +472,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-p" }),
       depositos: (() => {
         const c: any = {}
@@ -489,6 +496,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
       depositos: (() => {
         const c: any = {}
@@ -512,6 +520,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
       depositos: (() => {
         const c: any = {}
@@ -539,6 +548,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
       depositos: (() => {
         const c: any = {}
@@ -569,6 +579,7 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
       error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       sucursales: createChainMock({ id: "suc-p" }),
       depositos: (() => {
         const c: any = {}
@@ -664,6 +675,7 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -680,6 +692,7 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -712,6 +725,7 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
       error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: dep-2" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -730,6 +744,7 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
       error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
     } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
     })
 
@@ -771,6 +786,7 @@ describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
       clientes: createChainMock({ id: "cliente-1" }),
@@ -808,6 +824,7 @@ describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
     })
@@ -832,6 +849,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
     })
@@ -917,6 +935,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 21, redondeo_efectivo: 0 }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })
@@ -929,6 +948,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "ADITIVO", iva_tasa: 21, redondeo_efectivo: 0 }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })
@@ -941,6 +961,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "INCLUIDO", iva_tasa: 21, redondeo_efectivo: 0 }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })
@@ -953,6 +974,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 21, redondeo_efectivo: 50 }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })
@@ -965,6 +987,7 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock({ nombre: "Org" }), // sin columnas iva_*
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })
@@ -983,6 +1006,7 @@ describe("POST /api/ventas — IVA sin tasa propia: la resuelve el pais de la or
 
   const venderPor100 = async (org: Record<string, unknown>) => {
     mockSupabaseFrom({
+      inventario: createChainMock([]), // sin ítems en divisa
       organizations: createChainMock(org),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
     })

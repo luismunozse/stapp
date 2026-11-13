@@ -35,7 +35,7 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Órdenes por Técnico</CardTitle>
+          <CardTitle className="text-base">Órdenes por técnico</CardTitle>
           <CardDescription>Carga de trabajo actual</CardDescription>
         </CardHeader>
         <CardContent>
@@ -50,7 +50,7 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
   return (
     <Card>
       <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
-        <CardTitle className="text-sm sm:text-base">Órdenes por Técnico</CardTitle>
+        <CardTitle className="text-sm sm:text-base">Órdenes por técnico</CardTitle>
         <CardDescription className="text-xs sm:text-sm">Carga de trabajo actual (Top 5)</CardDescription>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0">

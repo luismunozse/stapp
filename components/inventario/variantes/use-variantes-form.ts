@@ -45,6 +45,8 @@ export interface DatosDeGuardado {
   compartidos: CompartidosForm
   compartidosPrevios: CompartidosForm | null
   depositoId?: string | null
+  /** Currency of the whole group (null = local); undefined leaves it as it is. */
+  moneda?: "USD" | "EUR" | null
 }
 
 /** What the save came to; "rechazado" means the body was refused before any request (a blank or repeated code). */
@@ -167,13 +169,15 @@ export function useVariantesForm(p: ParametrosVariantesForm): VariantesDelForm {
   }
 
   const guardar = async (datos: DatosDeGuardado): Promise<SalidaDePut> => {
-    const construido = construirCuerpoGrupo({ estado, original, ...datos })
+    const { moneda, ...resto } = datos
+    const construido = construirCuerpoGrupo({ estado, original, ...resto })
     if (!construido.ok) return { tipo: "rechazado", mensaje: construido.motivo }
+    const cuerpo: CuerpoGrupo = moneda === undefined ? construido.cuerpo : { ...construido.cuerpo, moneda }
     try {
-      let salida = await enviar(construido.cuerpo)
+      let salida = await enviar(cuerpo)
       if (salida.tipo === "codigo-duplicado") {
         // A generated code clashed with another product: the next free suffix, once.
-        const otro = reasignarCodigosDuplicados(construido.cuerpo, estado, salida.codigos)
+        const otro = reasignarCodigosDuplicados(cuerpo, estado, salida.codigos)
         if (otro) salida = await enviar(otro)
       }
       if (salida.tipo === "pendiente") {

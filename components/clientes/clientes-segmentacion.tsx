@@ -40,8 +40,8 @@ const SEGMENT_CONFIG = {
 type SegmentKey = keyof typeof SEGMENT_CONFIG
 
 const TABS = [
-  { id: "top", label: "Top Clientes", icon: Star },
-  { id: "riesgo", label: "En Riesgo", icon: AlertTriangle },
+  { id: "top", label: "Top clientes", icon: Star },
+  { id: "riesgo", label: "En riesgo", icon: AlertTriangle },
   { id: "adquisicion", label: "Adquisición", icon: Users },
   { id: "frecuencia", label: "Frecuencia", icon: BarChart3 },
 ] as const
@@ -73,7 +73,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-5xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Segmentación de Clientes</DialogTitle>
+          <DialogTitle>Segmentación de clientes</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
@@ -181,8 +181,8 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Cliente</th>
                           <th className="pb-2 pr-2 text-right">Compras</th>
                           <th className="pb-2 pr-2 text-right">Total</th>
-                          <th className="pb-2 pr-2 text-right">Ticket Prom.</th>
-                          <th className="pb-2 text-right">Última Compra</th>
+                          <th className="pb-2 pr-2 text-right">Ticket prom.</th>
+                          <th className="pb-2 text-right">Última compra</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -229,7 +229,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Teléfono</th>
                           <th className="pb-2 pr-2 text-right">Compras</th>
                           <th className="pb-2 pr-2 text-right">Total</th>
-                          <th className="pb-2 pr-2 text-right">Días Inactivo</th>
+                          <th className="pb-2 pr-2 text-right">Días inactivo</th>
                           <th className="pb-2 text-center">Acción</th>
                         </tr>
                       </thead>

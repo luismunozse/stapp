@@ -52,7 +52,7 @@ export function OrdenTecnicoCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Wrench className="h-4 w-4" />
-          Técnico Asignado
+          Técnico asignado
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

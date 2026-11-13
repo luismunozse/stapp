@@ -42,14 +42,14 @@ interface Template {
 }
 
 const categoriaOptions = [
-  { value: "CONDICION_FISICA", label: "Condicion Fisica" },
+  { value: "CONDICION_FISICA", label: "Condición física" },
   { value: "ACCESORIOS", label: "Accesorios" },
-  { value: "FUNCIONAL", label: "Estado Funcional" },
+  { value: "FUNCIONAL", label: "Estado funcional" },
   { value: "OTRO", label: "Otros" },
 ]
 
 const tipoOptions = [
-  { value: "BOOLEAN", label: "Si/No" },
+  { value: "BOOLEAN", label: "Sí/No" },
   { value: "TEXT", label: "Texto libre" },
   { value: "SELECT", label: "Opciones" },
 ]
@@ -108,7 +108,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al crear template")
+        await showError(error.error || "Error al crear la plantilla")
         return
       }
 
@@ -131,7 +131,7 @@ export function TemplateEditor() {
       setNewTemplateDeviceType("")
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al crear template")
+      await showError("Error al crear la plantilla")
     } finally {
       setCreatingTemplate(false)
     }
@@ -167,7 +167,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al agregar item")
+        await showError(error.error || "Error al agregar el ítem")
         return
       }
 
@@ -188,7 +188,7 @@ export function TemplateEditor() {
       setNewItemRequerido(false)
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al agregar item")
+      await showError("Error al agregar el ítem")
     } finally {
       setSaving(false)
     }
@@ -198,8 +198,8 @@ export function TemplateEditor() {
     if (!selectedTemplate) return
 
     const confirmed = await confirm({
-      title: "Eliminar Item",
-      description: "¿Eliminar este item del checklist?",
+      title: "Eliminar ítem",
+      description: "¿Eliminar este ítem del checklist?",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -215,7 +215,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({}))
-        await showError(error.error || "Error al eliminar item")
+        await showError(error.error || "Error al eliminar el ítem")
         return
       }
 
@@ -280,8 +280,8 @@ export function TemplateEditor() {
     if (!selectedTemplate) return
 
     const confirmed = await confirm({
-      title: "Eliminar Template",
-      description: `¿Eliminar el template "${selectedTemplate.nombre}"? Esta acción no se puede deshacer.`,
+      title: "Eliminar plantilla",
+      description: `¿Eliminar la plantilla "${selectedTemplate.nombre}"? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -297,7 +297,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({}))
-        await showError(error.error || "Error al eliminar template")
+        await showError(error.error || "Error al eliminar la plantilla")
         return
       }
 
@@ -327,10 +327,10 @@ export function TemplateEditor() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="h-5 w-5" />
-                Templates de Checklist
+                Plantillas de checklist
               </CardTitle>
               <CardDescription>
-                Configure los items que apareceran en el checklist de recepcion
+                Configurá los ítems que van a aparecer en el checklist de recepción
               </CardDescription>
             </div>
             <Button
@@ -338,7 +338,7 @@ export function TemplateEditor() {
               onClick={() => setShowNewTemplateForm(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Nuevo Template
+              Nueva plantilla
             </Button>
           </div>
         </CardHeader>
@@ -350,7 +350,7 @@ export function TemplateEditor() {
             >
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
-                  placeholder="Nombre del template..."
+                  placeholder="Nombre de la plantilla..."
                   value={newTemplateName}
                   onChange={(e) => setNewTemplateName(e.target.value)}
                   disabled={creatingTemplate}
@@ -391,7 +391,7 @@ export function TemplateEditor() {
 
           {templates.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No hay templates configurados. Cree uno para comenzar.
+              No hay plantillas configuradas. Creá una para empezar.
             </p>
           ) : (
             <div className="flex gap-2 flex-wrap">
@@ -435,7 +435,7 @@ export function TemplateEditor() {
               <div>
                 <CardTitle>{selectedTemplate.nombre}</CardTitle>
                 <CardDescription>
-                  {selectedTemplate.items.length} items configurados
+                  {selectedTemplate.items.length} ítems configurados
                   {selectedTemplate._count?.checklists
                     ? ` - Usado en ${selectedTemplate._count.checklists} orden(es)`
                     : ""}
@@ -448,7 +448,7 @@ export function TemplateEditor() {
                 disabled={selectedTemplate._count?.checklists! > 0}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar Template
+                Eliminar plantilla
               </Button>
             </div>
           </CardHeader>
@@ -518,7 +518,7 @@ export function TemplateEditor() {
               onSubmit={handleAddItem}
               className="space-y-4 p-4 border rounded-lg bg-muted/50"
             >
-              <h4 className="font-medium">Agregar nuevo item</h4>
+              <h4 className="font-medium">Agregar nuevo ítem</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="col-span-1 sm:col-span-2">
                   <Label htmlFor="label">Etiqueta</Label>
@@ -550,7 +550,7 @@ export function TemplateEditor() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="categoria">Categoria</Label>
+                  <Label htmlFor="categoria">Categoría</Label>
                   <Select
                     value={newItemCategoria}
                     onValueChange={setNewItemCategoria}
@@ -602,7 +602,7 @@ export function TemplateEditor() {
                 ) : (
                   <Plus className="mr-2 h-4 w-4" />
                 )}
-                Agregar Item
+                Agregar ítem
               </Button>
             </form>
           </CardContent>

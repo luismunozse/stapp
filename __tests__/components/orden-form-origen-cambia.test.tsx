@@ -199,14 +199,14 @@ describe("OrdenForm — el origen cambia sin remontar el formulario", () => {
     })
     // ...y el bloque de empresa solo aparece cuando el objeto del cliente
     // corresponde a ese mismo id.
-    expect(screen.getByText("Sector / Area")).toBeInTheDocument()
+    expect(screen.getByText("Sector / área")).toBeInTheDocument()
 
     // Se carga el equipo de Beta y se crea la orden.
     fireEvent.click(screen.getByRole("button", { name: "Celular" }))
-    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
       target: { value: "Moto G de Beta" },
     })
-    fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+    fireEvent.change(screen.getByPlaceholderText("Describí el problema del equipo..."), {
       target: { value: "Bateria" },
     })
     await irAlPaso3()
