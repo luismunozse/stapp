@@ -368,6 +368,23 @@ describe("PosTerminal — productos con precio en divisa", () => {
       expect(textoCarrito()).toMatch(/TOTAL\$ 500/)
     })
 
+    it("si la organización pasó de USD a EUR, la línea en USD se quita con el aviso de otra divisa", async () => {
+      apartar([lineaUsd, lineaLocal])
+      setMoneda({ monedaExtranjera: "EUR" }, { ...tcVivo(1400), moneda: "EUR" })
+      render(<PosTerminal />)
+
+      fireEvent.click(screen.getByTestId("recuperar"))
+
+      await waitFor(() =>
+        expect(showError).toHaveBeenCalledWith(
+          expect.stringContaining('"Funda" tiene precio en USD, que ya no es la divisa de la organización.')
+        )
+      )
+      expect(textoCarrito()).toMatch(/Mano de obra/)
+      expect(textoCarrito()).not.toMatch(/Funda/)
+      expect(textoCarrito()).toMatch(/TOTAL\$ 500/)
+    })
+
     it("mientras carga la configuración de moneda no se recupera ni se pierde la línea en divisa", async () => {
       apartar([lineaUsd, lineaLocal])
       useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: undefined })
