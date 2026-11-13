@@ -56,4 +56,17 @@ describe("useMoneda", () => {
     expect(mockFetch).not.toHaveBeenCalledWith("/api/moneda/tipo-cambio", expect.anything())
     expect(mockFetch.mock.calls.map((c) => c[0])).toEqual(["/api/configuracion/moneda"])
   })
+
+  it("expone el error de la cotización", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url === "/api/configuracion/moneda"
+        ? respond({ config: { ...CONFIG, habilitada: true }, itemsEnDivisa: null })
+        : { ok: false, status: 500, json: async () => ({}) },
+    )
+    const { useMoneda } = await import("@/hooks/use-moneda")
+    const { result } = renderHook(() => useMoneda(), { wrapper })
+
+    await waitFor(() => expect(result.current.tipoCambioError).toBeInstanceOf(Error))
+    expect(result.current.tipoCambio).toBeUndefined()
+  })
 })

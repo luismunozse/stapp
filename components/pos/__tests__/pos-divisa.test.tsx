@@ -245,6 +245,24 @@ describe("PosTerminal — productos con precio en divisa", () => {
     )
   })
 
+  it("con la función habilitada y la cotización todavía en camino no agrega y pide reintentar", async () => {
+    useMonedaMock.mockReturnValue({ config: CONFIG, tipoCambio: undefined, error: undefined, tipoCambioError: undefined })
+    render(<PosTerminal />)
+    await agregarUsd()
+
+    await waitFor(() => expect(showError).toHaveBeenCalledWith(CARGANDO))
+    expect(textoCarrito()).toMatch(/Carrito vacío/)
+  })
+
+  it("si la cotización no se pudo pedir, agregar avisa que no hay cotización (no queda cargando)", async () => {
+    useMonedaMock.mockReturnValue({ config: CONFIG, tipoCambio: undefined, error: undefined, tipoCambioError: new Error("500") })
+    render(<PosTerminal />)
+    await agregarUsd()
+
+    await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringMatching(/^No hay cotización de USD disponible para vender "Funda"/)))
+    expect(showError).not.toHaveBeenCalledWith(CARGANDO)
+  })
+
   it("una línea escaneada usa la cotización vigente cuando llega la respuesta, no la del momento del escaneo", async () => {
     let soltar: () => void = () => {}
     barcodePendiente = new Promise<void>((r) => { soltar = r })
@@ -309,6 +327,18 @@ describe("PosTerminal — productos con precio en divisa", () => {
     it("mientras carga la configuración de moneda no se recupera ni se pierde la línea en divisa", async () => {
       apartar([lineaUsd, lineaLocal])
       useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: undefined })
+      render(<PosTerminal />)
+
+      fireEvent.click(screen.getByTestId("recuperar"))
+
+      await waitFor(() => expect(showError).toHaveBeenCalledWith(CARGANDO))
+      expect(textoCarrito()).toMatch(/Carrito vacío/)
+      expect(JSON.parse(localStorage.getItem("pos_held_sales")!)[0].items).toHaveLength(2)
+    })
+
+    it("con la cotización todavía en camino no se recupera y la apartada queda", async () => {
+      apartar([lineaUsd, lineaLocal])
+      useMonedaMock.mockReturnValue({ config: CONFIG, tipoCambio: undefined, error: undefined, tipoCambioError: undefined })
       render(<PosTerminal />)
 
       fireEvent.click(screen.getByTestId("recuperar"))

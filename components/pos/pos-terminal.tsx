@@ -119,9 +119,12 @@ export function PosTerminal() {
   // Multimoneda: la cotización en uso del carrito (`tcCarrito`) arranca con la del hook y se
   // reemplaza cuando el hook trae otra o el servidor responde 409 COTIZACION_CAMBIO. Cada cambio
   // reconvierte las líneas en divisa. Con la función apagada el hook no pide la cotización.
-  const { config: configMoneda, tipoCambio, error: errorMoneda } = useMoneda()
+  const { config: configMoneda, tipoCambio, error: errorMoneda, tipoCambioError } = useMoneda()
+  // Con la función habilitada y la cotización todavía en camino (sin dato ni error), tampoco se
+  // decide: rechazar la línea por "sin cotización" sería falso.
+  const tipoCambioCargando = configMoneda?.habilitada === true && tipoCambio === undefined && !tipoCambioError
   // Sin config ni error todavía: la decisión sobre una línea en divisa se posterga (no se rechaza).
-  const monedaCargando = !configMoneda && !errorMoneda
+  const monedaCargando = (!configMoneda && !errorMoneda) || tipoCambioCargando
   const unidadConversion = configMoneda ? unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal) : 0
   const tcHook = tipoCambio?.disponible ? tipoCambio.valor : null
   const [tcCarrito, setTcCarrito] = useState<number | null>(tcHook)
@@ -598,9 +601,10 @@ export function PosTerminal() {
     (id: string) => {
       const sale = heldSales.find((s) => s.id === id)
       if (!sale) return
-      // Sin la config de moneda (cargando o con error) no se puede decidir si sus líneas en divisa
-      // se venden: la apartada queda guardada en vez de perder esas líneas.
-      if (!configMoneda && sale.items.some((i) => i.moneda)) {
+      // Sin la config de moneda (cargando o con error) o con la cotización en camino no se puede
+      // decidir si sus líneas en divisa se venden: la apartada queda guardada en vez de perder
+      // esas líneas.
+      if ((!configMoneda || tipoCambioCargando) && sale.items.some((i) => i.moneda)) {
         void showError(MONEDA_CARGANDO)
         return
       }
@@ -644,7 +648,7 @@ export function PosTerminal() {
         await avisarCambiosApartada(restoredItems)
       })()
     },
-    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada, configMoneda, tipoCambio, tcCarrito, tcHook, unidadConversion, showError]
+    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada, configMoneda, tipoCambio, tipoCambioCargando, tcCarrito, tcHook, unidadConversion, showError]
   )
 
 

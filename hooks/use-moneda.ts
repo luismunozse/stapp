@@ -39,6 +39,7 @@ export function useMoneda() {
     await Promise.all([configSwr.mutate(), tipoCambioSwr.mutate()])
   }
 
+
   return {
     // Una respuesta sin `config` (error de la ruta, forma inesperada) se trata como sin datos.
     config: configSwr.data?.config as ConfigMoneda | undefined,
@@ -46,6 +47,8 @@ export function useMoneda() {
     itemsEnDivisa: configSwr.data?.itemsEnDivisa ?? null,
     isLoading: configSwr.isLoading,
     error: configSwr.error as Error | undefined,
+    /** Error al pedir la cotización (con la función habilitada). */
+    tipoCambioError: tipoCambioSwr.error as Error | undefined,
     mutate,
   }
 }
