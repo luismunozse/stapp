@@ -368,9 +368,16 @@ export function PosCheckoutDialog({
         const error = await res.json()
         // La cotización cambió en el servidor: el carrito se reconvierte con la nueva y el
         // diálogo queda abierto con el total recalculado (misma idempotencyKey) para confirmar.
+        // Los pagos se vuelven a sembrar como al abrir: una línea por el total, sin pago parcial
+        // ni monto recibido. Sembrada con el total de este render; cuando llegan los ítems
+        // reconvertidos el total cambia y el efecto de re-siembra de una línea pone el nuevo.
+        // Así el segundo confirmar no lleva montos viejos ni convierte la diferencia en deuda.
         // DIVISA_NO_DISPONIBLE solo se avisa: el cajero decide qué quitar.
         if (res.status === 409 && error?.code === "COTIZACION_CAMBIO" && error.nueva?.disponible === true && typeof error.nueva.valor === "number") {
           onCotizacionCambiada?.(error.nueva.valor)
+          setPagosLines([createPagoLine(totalEfectivo)])
+          setMontoRecibido(null)
+          setPagoParcial(false)
         }
         await showError(error.error || "Error al crear la venta")
         return
