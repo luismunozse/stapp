@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
 import { resolverContextoValuacion } from "@/lib/currency/valuacion.server"
 import { montoLocal } from "@/lib/currency/valuacion.server"
 import type { MonedaCatalogo } from "@/lib/currency/catalogo"
@@ -87,13 +88,16 @@ export async function GET(request: Request) {
     const idsRpc = new Set(rowsRpc.map((r) => r.inventarioId))
     const monedaPorId = new Map<string, { moneda: MonedaCatalogo; pc: number | null; pv: number | null }>()
     if (idsRpc.size > 0) {
-      const { data: precios, error: preciosErr } = await supabaseAdmin
-        .from("inventario")
-        .select("id, moneda, precio_compra, precio_venta")
-        .eq("organization_id", organizationId!)
-        .not("moneda", "is", null)
-      if (preciosErr) throw preciosErr
-      for (const p of precios || []) {
+      // Paginado: un select suelto se corta en silencio a 1000 filas y el resto pasaría por local.
+      const precios = await fetchAllRows<{
+        id: string
+        moneda: string | null
+        precio_compra: number | string | null
+        precio_venta: number | string | null
+      }>("inventario", "id, moneda, precio_compra, precio_venta", (q) =>
+        q.eq("organization_id", organizationId!).not("moneda", "is", null)
+      )
+      for (const p of precios) {
         if (p.moneda != null && idsRpc.has(p.id)) {
           monedaPorId.set(p.id, {
             moneda: p.moneda as MonedaCatalogo,

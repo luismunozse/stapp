@@ -283,6 +283,8 @@ describe("GET /api/inventario/analisis-abc", () => {
     expect(inv.in).not.toHaveBeenCalled()
     expect(inv.eq).toHaveBeenCalledWith("organization_id", "org-1")
     expect(inv.not).toHaveBeenCalledWith("moneda", "is", null)
+    // paginado: un select suelto se corta en 1000 filas sin error
+    expect(inv.range).toHaveBeenCalledWith(0, 999)
     expect(body.data).toHaveLength(2)
     expect(body.data.find((r: any) => r.inventarioId === "b").capitalInmovilizado).toBe(12000)
     expect(body.data.find((r: any) => r.inventarioId === "a").capitalInmovilizado).toBe(10)
