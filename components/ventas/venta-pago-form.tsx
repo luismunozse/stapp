@@ -70,7 +70,7 @@ export function VentaPagoForm({
 
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      await showError("Debe registrar al menos un pago")
+      await showError("Registrá al menos un pago")
       return
     }
     if (totalPagos > pendiente + 0.01) {
@@ -138,7 +138,7 @@ export function VentaPagoForm({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
             <DollarSign className="h-5 w-5" />
-            Registrar Pago
+            Registrar pago
           </CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -194,7 +194,7 @@ export function VentaPagoForm({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Registrando..." : "Registrar Pago"}
+              {loading ? "Registrando..." : "Registrar pago"}
             </Button>
           </div>
         </form>

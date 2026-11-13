@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge"
 import { DollarSign, FileText, Lock } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
@@ -154,8 +154,10 @@ export function OrdenCostosCard({
             )}
             <div className="flex justify-between items-center font-semibold">
               <span>Saldo</span>
+              {/* Saldada: "$0" y no la píldora "Cobrado", que repetiría la línea
+                  del total cobrado de arriba (que además dice cuánto). */}
               {pendienteReal <= 0 ? (
-                <PaymentStatusBadge status="PAGADO" />
+                <span className="text-lg text-success-text">{formatPrice(0)}</span>
               ) : (
                 <span className="text-lg">{formatPrice(pendienteReal)}</span>
               )}

@@ -219,15 +219,15 @@ describe("InventarioForm: sección de variantes", () => {
       await screen.findByLabelText("Nombre *")
       expect(screen.queryByRole("switch", { name: /variantes/i })).not.toBeInTheDocument()
       expect(screen.queryByText("Variantes")).not.toBeInTheDocument()
-      fireEvent.click(screen.getByText("Tracking avanzado"))
-      expect(screen.getByText("Trackear lotes / vencimientos")).toBeInTheDocument()
+      fireEvent.click(screen.getByText("Seguimiento avanzado"))
+      expect(screen.getByText("Seguir lotes y vencimientos")).toBeInTheDocument()
       expect(screen.queryByText("Tiene variantes")).not.toBeInTheDocument()
     })
 
     it("con la prop la sección existe y la casilla vieja sigue sin existir", async () => {
       renderForm({ item: itemSuelto(), permiteVariantes: true })
       expect(await interruptor()).toBeInTheDocument()
-      fireEvent.click(screen.getByText("Tracking avanzado"))
+      fireEvent.click(screen.getByText("Seguimiento avanzado"))
       expect(screen.queryByText("Tiene variantes")).not.toBeInTheDocument()
     })
 
@@ -242,7 +242,7 @@ describe("InventarioForm: sección de variantes", () => {
     it("con variantes prendidas el kit queda bloqueado", async () => {
       renderForm({ item: itemSuelto(), permiteVariantes: true })
       fireEvent.click(await interruptor())
-      fireEvent.click(screen.getByText("Tracking avanzado"))
+      fireEvent.click(screen.getByText("Seguimiento avanzado"))
       expect(screen.getByRole("checkbox", { name: /es kit/i })).toBeDisabled()
     })
 
@@ -266,7 +266,7 @@ describe("InventarioForm: sección de variantes", () => {
       await waitFor(() => expect((screen.getByLabelText("Stock total") as HTMLInputElement).value).toBe("7"))
       expect(screen.getByLabelText("Precio base")).toBeInTheDocument()
       expect(screen.getByLabelText("Costo base")).toBeInTheDocument()
-      expect(screen.queryByLabelText("Código de Barras")).not.toBeInTheDocument()
+      expect(screen.queryByLabelText("Código de barras")).not.toBeInTheDocument()
       expect(screen.queryByLabelText(/Ubicación en depósito/)).not.toBeInTheDocument()
       expect(screen.queryByText("Configuración de stock")).not.toBeInTheDocument()
       expect(screen.queryByText("Imagen")).not.toBeInTheDocument()
@@ -276,8 +276,8 @@ describe("InventarioForm: sección de variantes", () => {
       await nuevoConColor()
       fireEvent.click(await interruptor())
       expect(screen.getByLabelText("Stock *")).toBeInTheDocument()
-      expect(screen.getByLabelText("Código de Barras")).toBeInTheDocument()
-      expect(screen.getByLabelText("Precio Venta *")).toBeInTheDocument()
+      expect(screen.getByLabelText("Código de barras")).toBeInTheDocument()
+      expect(screen.getByLabelText("Precio de venta *")).toBeInTheDocument()
     })
 
     it("cambiar el precio base reprecia las filas sin tocar", async () => {
@@ -331,7 +331,7 @@ describe("InventarioForm: sección de variantes", () => {
       fireEvent.click(await interruptor())
       const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
       fireEvent.change(input, { target: { files: [new File(["x"], "p.png", { type: "image/png" })] } })
-      await waitFor(() => expect(screen.getByAltText("Preview")).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByAltText("Vista previa")).toBeInTheDocument())
       fireEvent.click(await interruptor())
       await waitFor(() => expect(guardar()).not.toBeDisabled())
       fireEvent.click(guardar())

@@ -56,7 +56,7 @@ export function VentasDashboard() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <SectionHeader title="Dashboard de ventas" />
+        <SectionHeader title="Resumen de ventas" />
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
@@ -76,7 +76,7 @@ export function VentasDashboard() {
   return (
     <div className="space-y-4">
       <SectionHeader
-        title="Dashboard de ventas"
+        title="Resumen de ventas"
         actions={
           <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -90,7 +90,7 @@ export function VentasDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Ventas Hoy</span>
+              <span className="text-xs font-medium text-muted-foreground">Ventas de hoy</span>
               <ShoppingCart className="h-4 w-4 text-primary" />
             </div>
             <div className="text-xl font-bold">{formatPrice(data.ventasHoy.total)}</div>
@@ -101,7 +101,7 @@ export function VentasDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Ventas del Mes</span>
+              <span className="text-xs font-medium text-muted-foreground">Ventas del mes</span>
               <Calendar className="h-4 w-4 text-info-text" />
             </div>
             <div className="text-xl font-bold">{formatPrice(data.ventasMes.total)}</div>
@@ -112,7 +112,7 @@ export function VentasDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Ticket Promedio</span>
+              <span className="text-xs font-medium text-muted-foreground">Ticket promedio</span>
               <Receipt className="h-4 w-4 text-purple-500" />
             </div>
             <div className="text-xl font-bold">{formatPrice(data.ticketPromedio)}</div>
@@ -127,7 +127,7 @@ export function VentasDashboard() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Margen Bruto</span>
+                <span className="text-xs font-medium text-muted-foreground">Margen bruto</span>
                 <TrendingUp className="h-4 w-4 text-success-text" />
               </div>
               <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success-text" : "text-destructive-text"}`}>
@@ -208,7 +208,7 @@ export function VentasDashboard() {
           <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Métodos de Pago</CardTitle>
+                <CardTitle className="text-sm font-medium">Métodos de pago</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="space-y-2">
@@ -235,7 +235,7 @@ export function VentasDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-1.5">
                   <Percent className="h-3.5 w-3.5" />
-                  Descuentos del Mes
+                  Descuentos del mes
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
@@ -259,7 +259,7 @@ export function VentasDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-1.5">
                   <XCircle className="h-3.5 w-3.5" />
-                  Tasa de Anulación
+                  Tasa de anulación
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">

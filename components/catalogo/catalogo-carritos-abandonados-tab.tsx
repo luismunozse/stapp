@@ -343,7 +343,7 @@ export function CatalogoCarritosAbandonadosTab() {
         open={discardId != null}
         onOpenChange={(open) => !open && setDiscardId(null)}
         title="Descartar carrito"
-        description="Se pierde este lead y no se podrá recuperar."
+        description="Se pierde este contacto y no se podrá recuperar."
         confirmText="Descartar"
         variant="danger"
         loading={actingId != null && actingId === discardId}

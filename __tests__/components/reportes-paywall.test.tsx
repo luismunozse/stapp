@@ -132,7 +132,7 @@ describe("FallasComunesChart — respuesta de la API (defensa en profundidad)", 
 
     fireEvent.click(screen.getByRole("button", { name: /reintentar/i }))
 
-    await waitFor(() => expect(screen.getByText(/fallas mas comunes/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/fallas más comunes/i)).toBeInTheDocument())
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

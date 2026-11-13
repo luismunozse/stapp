@@ -74,8 +74,8 @@ describe("InventarioAnalytics — costo por item nulo en stock muerto", () => {
   }
 
   async function openStockMuerto() {
-    await waitFor(() => expect(screen.getByText("Stock Muerto")).toBeInTheDocument())
-    screen.getByText("Stock Muerto").click()
+    await waitFor(() => expect(screen.getByText("Stock muerto")).toBeInTheDocument())
+    screen.getByText("Stock muerto").click()
     await waitFor(() => expect(screen.getByText("Pantalla muerta")).toBeInTheDocument())
   }
 
@@ -87,7 +87,7 @@ describe("InventarioAnalytics — costo por item nulo en stock muerto", () => {
 
     expect(screen.queryByText(/inmovilizado/)).not.toBeInTheDocument()
     expect(screen.queryByText("P. Costo")).not.toBeInTheDocument()
-    expect(screen.queryByText("Capital Inmovilizado")).not.toBeInTheDocument()
+    expect(screen.queryByText("Capital inmovilizado")).not.toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
     // Lo que no es costo sigue disponible.
     expect(screen.getByText("13")).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe("InventarioAnalytics — costo por item nulo en stock muerto", () => {
 
     expect(screen.getByText("$1950 inmovilizado")).toBeInTheDocument()
     expect(screen.getByText("P. Costo")).toBeInTheDocument()
-    expect(screen.getByText("Capital Inmovilizado")).toBeInTheDocument()
+    expect(screen.getByText("Capital inmovilizado")).toBeInTheDocument()
     expect(screen.getByText("$150")).toBeInTheDocument()
   })
 })
@@ -145,8 +145,8 @@ describe("InventarioAnalytics — agregados de costo nulos", () => {
   }
 
   async function openCategorias() {
-    await waitFor(() => expect(screen.getByText("Por Categoría")).toBeInTheDocument())
-    screen.getByText("Por Categoría").click()
+    await waitFor(() => expect(screen.getByText("Por categoría")).toBeInTheDocument())
+    screen.getByText("Por categoría").click()
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
   }
 
@@ -156,7 +156,7 @@ describe("InventarioAnalytics — agregados de costo nulos", () => {
     renderAnalytics()
     await openCategorias()
 
-    expect(screen.queryByText("Valor Costo")).not.toBeInTheDocument()
+    expect(screen.queryByText("Valor costo")).not.toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
     // Lo que no es costo por categoría sigue disponible.
     expect(screen.getAllByText("$9999").length).toBeGreaterThan(0)
@@ -169,8 +169,8 @@ describe("InventarioAnalytics — agregados de costo nulos", () => {
     renderAnalytics()
     await openCategorias()
 
-    expect(screen.queryByText("Capital Invertido")).not.toBeInTheDocument()
-    expect(screen.queryByText("Margen Potencial")).not.toBeInTheDocument()
+    expect(screen.queryByText("Capital invertido")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen potencial")).not.toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
     expect(screen.queryByText(/sobre costo/)).not.toBeInTheDocument()
   })
@@ -182,9 +182,9 @@ describe("InventarioAnalytics — agregados de costo nulos", () => {
     renderAnalytics()
     await openCategorias()
 
-    expect(screen.getByText("Valor en Venta")).toBeInTheDocument()
+    expect(screen.getByText("Valor en venta")).toBeInTheDocument()
     expect(screen.getByText("$8888")).toBeInTheDocument()
-    expect(screen.getByText("Stock Total")).toBeInTheDocument()
+    expect(screen.getByText("Stock total")).toBeInTheDocument()
     expect(screen.getByText("3 productos")).toBeInTheDocument()
   })
 
@@ -194,11 +194,11 @@ describe("InventarioAnalytics — agregados de costo nulos", () => {
     renderAnalytics()
     await openCategorias()
 
-    expect(screen.getByText("Valor Costo")).toBeInTheDocument()
+    expect(screen.getByText("Valor costo")).toBeInTheDocument()
     expect(screen.getAllByText("$5555").length).toBeGreaterThan(0)
-    expect(screen.getByText("Capital Invertido")).toBeInTheDocument()
+    expect(screen.getByText("Capital invertido")).toBeInTheDocument()
     expect(screen.getByText("$7777")).toBeInTheDocument()
-    expect(screen.getByText("Margen Potencial")).toBeInTheDocument()
+    expect(screen.getByText("Margen potencial")).toBeInTheDocument()
     expect(screen.getByText("$1111")).toBeInTheDocument()
   })
 })

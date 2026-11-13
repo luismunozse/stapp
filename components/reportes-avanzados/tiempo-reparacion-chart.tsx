@@ -66,7 +66,7 @@ export function TiempoReparacionChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tiempo Promedio de Reparacion</CardTitle>
+        <CardTitle>Tiempo promedio de reparación</CardTitle>
         <CardDescription>
           Tiempo promedio desde ingreso hasta completado, por tipo de dispositivo
         </CardDescription>

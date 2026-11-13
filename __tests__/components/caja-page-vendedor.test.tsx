@@ -90,7 +90,7 @@ describe("Pantalla de caja — vendedor habilitado", () => {
     // todavia no termino de pintar. Adentro del waitFor las dos reintentan.
     await waitFor(() => {
       expect(screen.getByTestId("session-banner")).toBeTruthy()
-      expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
+      expect(screen.getByText("Movimientos manuales")).toBeTruthy()
     })
   })
 
@@ -100,7 +100,7 @@ describe("Pantalla de caja — vendedor habilitado", () => {
     render(<CajaPage />)
 
     await waitFor(() => expect(screen.getByTestId("session-banner")).toBeTruthy())
-    expect(screen.queryByText("Historial de Cierres")).toBeNull()
+    expect(screen.queryByText("Historial de cierres")).toBeNull()
     expect(screen.queryByTestId("export")).toBeNull()
   })
 
@@ -111,7 +111,7 @@ describe("Pantalla de caja — vendedor habilitado", () => {
 
     await waitFor(() => expect(screen.getByTestId("resumen")).toBeTruthy())
     expect(screen.queryByTestId("session-banner")).toBeNull()
-    expect(screen.queryByText("Movimientos Manuales")).toBeNull()
+    expect(screen.queryByText("Movimientos manuales")).toBeNull()
   })
 
   it("si el permiso no se puede leer queda afuera: fail-closed", async () => {
@@ -147,8 +147,8 @@ describe("Pantalla de caja — vendedor habilitado", () => {
     // Misma carrera que arriba, y esta es la que fallo de verdad en CI.
     await waitFor(() => {
       expect(screen.getByTestId("session-banner")).toBeTruthy()
-      expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
-      expect(screen.getByText("Historial de Cierres")).toBeTruthy()
+      expect(screen.getByText("Movimientos manuales")).toBeTruthy()
+      expect(screen.getByText("Historial de cierres")).toBeTruthy()
       expect(screen.getByTestId("export")).toBeTruthy()
     })
   })

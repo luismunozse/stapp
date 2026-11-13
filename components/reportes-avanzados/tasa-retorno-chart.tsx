@@ -56,7 +56,7 @@ export function TasaRetornoChart() {
 
   const pieData = [
     { name: "Recurrentes", value: data.clientesRecurrentes },
-    { name: "Unicos", value: data.totalClientes - data.clientesRecurrentes },
+    { name: "Únicos", value: data.totalClientes - data.clientesRecurrentes },
   ]
 
   const COLORS = [chartSeriesColor(0), CHART_CONCEPT_COLORS.neutral]
@@ -65,7 +65,7 @@ export function TasaRetornoChart() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Tasa de Retorno de Clientes</CardTitle>
+          <CardTitle>Tasa de retorno de clientes</CardTitle>
           <CardDescription>
             Porcentaje de clientes que vuelven dentro de 6 meses
           </CardDescription>
@@ -111,7 +111,7 @@ export function TasaRetornoChart() {
       {data.topClientes.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Top Clientes Recurrentes</CardTitle>
+            <CardTitle className="text-lg">Clientes más recurrentes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">

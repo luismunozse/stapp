@@ -53,6 +53,6 @@ describe("Badge", () => {
 
   it("PaymentStatusBadge usa variantes soft", () => {
     render(<PaymentStatusBadge status="PAGADO" />)
-    expect(screen.getByText("Pagado").className).toContain("text-success-700")
+    expect(screen.getByText("Cobrado").className).toContain("text-success-700")
   })
 })

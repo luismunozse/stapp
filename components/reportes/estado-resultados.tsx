@@ -118,7 +118,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
 
       // Encabezado
       doc.setFontSize(16)
-      doc.text("Estado de Resultados", 14, 18)
+      doc.text("Estado de resultados", 14, 18)
       doc.setFontSize(10)
       doc.setTextColor(120)
       doc.text(`Período: ${fechaTexto}`, 14, 25)
@@ -310,7 +310,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
           <div className="max-w-3xl">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Estado de Resultados</CardTitle>
+                <CardTitle className="text-base">Estado de resultados</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <Row label="Ventas de productos" value={formatPrice(data.ingresos.ventas)} />
@@ -378,7 +378,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
 
           {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
             <StatusBanner tone="info" icon={Info}>
-              Los Ingresos de este estado incluyen{" "}
+              Los ingresos de este estado incluyen{" "}
               <strong>{formatPrice(data.ingresos.serviciosAdelantos!)}</strong> de cobros adelantados
               de órdenes aún abiertas. Por eso el total puede diferir del de la pestaña{" "}
               <strong>Ingresos</strong>, que cuenta solo servicios ya facturados/cobrados y ventas

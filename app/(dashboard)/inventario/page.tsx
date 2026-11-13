@@ -203,7 +203,7 @@ export default function InventarioPage() {
     return (
       <PageShell
         title="Inventario"
-        description="Gestiona el stock de repuestos, accesorios y productos"
+        description="Gestioná el stock de repuestos, accesorios y productos"
       >
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -216,7 +216,7 @@ export default function InventarioPage() {
   return (
     <PageShell
       title="Inventario"
-      description="Gestiona el stock de repuestos, accesorios y productos"
+      description="Gestioná el stock de repuestos, accesorios y productos"
       actions={
         <Button variant="outline" onClick={() => setShowAnalytics(true)} className="gap-1.5 flex-1 sm:flex-none">
           <BarChart3 className="h-4 w-4" />

@@ -240,21 +240,21 @@ export function PerformanceVendedores() {
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
         <StatCard
-          title="Total Ventas"
+          title="Total de ventas"
           value={String(data.totales.totalCompletadas)}
           description={data.totales.totalAnuladas > 0 ? `${data.totales.totalAnuladas} anuladas` : "En el periodo"}
           icon={TrendingUp}
           tone="default"
         />
         <StatCard
-          title="Monto Total"
+          title="Monto total"
           value={formatCurrency(data.totales.montoTotal)}
           description="Ventas completadas"
           icon={DollarSign}
           tone="success"
         />
         <StatCard
-          title="Ticket Prom."
+          title="Ticket prom."
           value={data.totales.ticketPromedioGeneral !== null ? formatCurrency(data.totales.ticketPromedioGeneral) : "-"}
           description="Por venta"
           icon={CheckCircle}
@@ -266,7 +266,7 @@ export function PerformanceVendedores() {
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Ventas por Vendedor</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Ventas por vendedor</CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               Monto total y cantidad de ventas
             </CardDescription>
@@ -297,7 +297,7 @@ export function PerformanceVendedores() {
       {/* Lista de Vendedores */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Detalle por Vendedor</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Detalle por vendedor</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             Métricas individuales de rendimiento
           </CardDescription>

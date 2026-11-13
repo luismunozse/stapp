@@ -179,7 +179,7 @@ export function CotizacionPublica({ token }: { token: string }) {
         setData(await refreshRes.json())
       }
     } catch {
-      setApproveError("Error al aprobar el presupuesto")
+      setApproveError("No se pudo aprobar el presupuesto")
     } finally {
       setApproving(false)
     }
@@ -205,7 +205,7 @@ export function CotizacionPublica({ token }: { token: string }) {
         setData(await refreshRes.json())
       }
     } catch {
-      setApproveError("Error al rechazar el presupuesto")
+      setApproveError("No se pudo rechazar el presupuesto")
     } finally {
       setRejecting(false)
     }
@@ -659,7 +659,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               <p className="font-medium text-warning-700">Presupuesto vencido</p>
               <p className="text-sm text-warning-600">
                 Este presupuesto venció el {formatDate(data.fechaVencimiento)}.
-                Contactá al servicio técnico para pedir uno nuevo.
+                Contactá al servicio técnico para pedir un presupuesto nuevo.
               </p>
             </div>
           </CardContent>
@@ -710,7 +710,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                 </p>
               )}
               <p className="text-sm text-destructive-text mt-1">
-                Contactá al servicio técnico si querés un nuevo presupuesto.
+                Contactá al servicio técnico si querés un presupuesto nuevo.
               </p>
             </div>
           </CardContent>

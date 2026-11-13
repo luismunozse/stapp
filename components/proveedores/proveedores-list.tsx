@@ -219,7 +219,7 @@ export function ProveedoresList() {
         </div>
         <Button onClick={() => { setEditingProveedor(null); setShowForm(true) }}>
           <Plus className="mr-2 h-4 w-4" />
-          Nuevo Proveedor
+          Nuevo proveedor
         </Button>
       </div>
 

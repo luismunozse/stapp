@@ -44,7 +44,7 @@ export function CotizacionApprovalDialog({
 
   const handleApprove = async () => {
     if (!firma || !firmaMime) {
-      setError("La firma es requerida para aprobar la cotizacion")
+      setError("La firma es obligatoria para aprobar el presupuesto")
       return
     }
 
@@ -63,7 +63,7 @@ export function CotizacionApprovalDialog({
 
       if (!res.ok) {
         const data = await res.json()
-        setError(data.error || "Error al aprobar cotizacion")
+        setError(data.error || "No se pudo aprobar el presupuesto")
         return
       }
 
@@ -71,7 +71,7 @@ export function CotizacionApprovalDialog({
       onClose()
     } catch (err) {
       console.error("Error:", err)
-      setError("Error al aprobar cotizacion")
+      setError("No se pudo aprobar el presupuesto")
     } finally {
       setLoading(false)
     }
@@ -90,19 +90,19 @@ export function CotizacionApprovalDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Aprobar Cotizacion</DialogTitle>
+          <DialogTitle>Aprobar presupuesto</DialogTitle>
           <DialogDescription>
-            Cotizacion {cotizacion.numeroCotizacion} por {formatPrice(cotizacion.total)}
+            Presupuesto {cotizacion.numeroCotizacion} por {formatPrice(cotizacion.total)}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Capture la firma del cliente para confirmar la aprobacion del presupuesto.
+            Pedile al cliente que firme para confirmar la aprobación del presupuesto.
           </p>
 
           <SignaturePad
-            label="Firma de Aprobacion"
+            label="Firma de aprobación"
             onSignatureChange={handleSignatureChange}
             disabled={loading}
           />
@@ -125,7 +125,7 @@ export function CotizacionApprovalDialog({
               loading={loading}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
-              Aprobar Cotizacion
+              Aprobar presupuesto
             </Button>
           </div>
         </div>

@@ -93,7 +93,7 @@ export function CierreDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Cerrar Caja - Arqueo</DialogTitle>
+          <DialogTitle>Cerrar caja - Arqueo</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {/* Resumen de efectivo */}
@@ -203,7 +203,7 @@ export function CierreDialog({
             Cancelar
           </Button>
           <Button onClick={handleSubmit} loading={loading}>
-            Cerrar Caja
+            Cerrar caja
           </Button>
         </DialogFooter>
       </DialogContent>

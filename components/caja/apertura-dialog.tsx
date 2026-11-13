@@ -58,7 +58,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Abrir Caja</DialogTitle>
+          <DialogTitle>Abrir caja</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -84,7 +84,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
             Cancelar
           </Button>
           <Button onClick={handleSubmit} loading={loading}>
-            Abrir Caja
+            Abrir caja
           </Button>
         </DialogFooter>
       </DialogContent>

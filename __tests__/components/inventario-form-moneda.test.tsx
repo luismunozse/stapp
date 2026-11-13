@@ -165,7 +165,7 @@ describe("InventarioForm: moneda del precio", () => {
   }
 
   const selector = () => screen.getByLabelText("Moneda del precio") as HTMLSelectElement
-  const venta = () => screen.getByLabelText(/^(Precio Venta \*|Precio base)$/) as HTMLInputElement
+  const venta = () => screen.getByLabelText(/^(Precio de venta \*|Precio base)$/) as HTMLInputElement
   const costo = () => screen.getByLabelText(/^(Costo \*|Costo base)$/) as HTMLInputElement
   const guardar = () => screen.getByRole("button", { name: "Guardar" })
   const elegir = (moneda: string) => fireEvent.change(selector(), { target: { value: moneda } })

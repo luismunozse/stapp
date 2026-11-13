@@ -785,7 +785,7 @@ function ThermalConfig({
               {templates.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.nombre} ({Number(t.ancho_mm)}×{Number(t.alto_mm)}mm @ {t.dpi}dpi)
-                  {t.es_default ? " — default" : ""}
+                  {t.es_default ? " — predeterminada" : ""}
                 </SelectItem>
               ))}
             </SelectContent>

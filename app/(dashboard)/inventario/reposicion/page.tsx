@@ -183,7 +183,7 @@ export default function ReposicionPage() {
   return (
     <PageShell
       title="Reposición sugerida"
-      description="Sugerencias basadas en stock, umbrales, demanda 30d y lead time del proveedor."
+      description="Sugerencias basadas en stock, umbrales, demanda de 30 días y demora de entrega del proveedor."
       icon={Sparkles}
       backHref="/inventario"
       className="space-y-4"

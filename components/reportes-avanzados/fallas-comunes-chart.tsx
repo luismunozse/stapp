@@ -52,9 +52,9 @@ export function FallasComunesChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Fallas Mas Comunes</CardTitle>
+        <CardTitle>Fallas más comunes</CardTitle>
         <CardDescription>
-          Ranking de problemas reportados mas frecuentes
+          Ranking de los problemas reportados más frecuentes
         </CardDescription>
       </CardHeader>
       <CardContent>
