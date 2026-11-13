@@ -1,75 +1,18 @@
--- ============================================================================
--- 410 (multimoneda S5): el POS vende productos con precio en divisa. La venta
--- guarda la foto de origen de cada linea y la cotizacion de la venta, y nunca
--- guarda un precio_compra en divisa como costo local.
--- ============================================================================
--- Prerrequisito: 365 (items_venta.moneda_origen / precio_origen / tipo_cambio,
--- ventas.tipo_cambio / tipo_cambio_fuente, inventario.moneda). El chequeo 0 corta
--- antes de reemplazar nada si faltan.
+-- Rollback of 412 (multimoneda S5): crear_venta_atomica y editar_venta_atomica vuelven a ser las de
+-- la 406 y la 372, copiadas tal cual (vitest las compara).
 --
--- Cuerpos de partida: crear_venta_atomica de la 406 (vigente) y
--- editar_venta_atomica de la 372 (vigente). Todo lo demas queda igual linea por
--- linea (vitest lo compara). Montos de siempre (precio_unitario, subtotal, total,
--- costo_unitario_snapshot, pagos) SIEMPRE en moneda local.
+-- LO QUE SE PIERDE: nada guardado. Las ventas ya creadas conservan moneda_origen / precio_origen /
+-- tipo_cambio en items_venta y tipo_cambio / tipo_cambio_fuente en ventas (columnas de la 365).
+-- Despues de esto, una venta nueva no guarda la foto de origen, editar una venta borra la foto de
+-- sus lineas, y un producto cargado en divisa vuelve a guardar su precio_compra crudo como costo.
+-- Por eso: revertir primero el codigo de S5 que vende lineas en divisa.
 --
--- Contrato nuevo de p_items (claves opcionales por item; un item sin
--- monedaOrigen es local y se comporta como antes, salvo la regla de costo):
---   monedaOrigen 'USD'|'EUR', precioOrigen numeric, tipoCambio numeric > 0,
---   tipoCambioFuente text, costoUnitario numeric LOCAL (puede faltar o ser null).
---
---   1. crear_venta_atomica
---      * Antes de todo: las lineas que traen monedaOrigen tienen que tener la
---        misma moneda y la misma tipoCambio > 0; si no, 22023 TIPO_CAMBIO_MIXTO.
---        La primera fija ventas.tipo_cambio y tipo_cambio_fuente (NULL sin
---        lineas en divisa).
---      * Costo de una linea en divisa: costoUnitario (ya convertido por la app),
---        sin mirar el inventario. Linea local: como antes, pero si el producto
---        tiene inventario.moneda (cargado en divisa) el costo queda NULL y no se
---        toma el `costo` del item.
---      * items_venta recibe moneda_origen, precio_origen y tipo_cambio en las
---        lineas en divisa (NULL en las locales).
---   2. editar_venta_atomica
---      * Junto a los costos viejos arma v_origenes (misma clave: producto o
---        descripcion) con la foto de las lineas viejas en divisa. Al reinsertar,
---        la foto sigue si el precio unitario nuevo es igual al viejo; si cambio,
---        la linea queda sin foto (NULL).
---      * El costo de fallback desde el inventario sigue la regla de 1.
---      * ventas.tipo_cambio / tipo_cambio_fuente no se tocan.
---   convertir_cotizacion_venta_atomica (406) no cambia: llama a
---   crear_venta_atomica con la misma firma posicional.
---
--- Mismas firmas que hoy: CREATE OR REPLACE, sin DROP, sin cambios de owner,
--- grants ni modo de seguridad. Re-ejecutable.
--- ORDEN: aplicar ANTES de mergear el codigo de S5 (el codigo nuevo manda costos
--- convertidos que la funcion vieja ignoraria y guardaria el precio_compra crudo
--- en divisa).
---
+-- Mismas firmas: el owner y los privilegios quedan como estan (sin GRANT ni REVOKE).
 -- No BEGIN/COMMIT: scripts/db-run.mjs envuelve el archivo (dry-run por defecto).
--- LOCKS: ninguno sobre tablas; reemplazar una funcion toma un lock corto sobre
--- esa funcion. lock_timeout acota la espera; si aborta, no se aplico nada:
--- volver a correrlo.
---
--- Rollback: rollback/410_rollback.sql. Probes: verify/410_probes.sql.
--- ============================================================================
+-- LOCKS: ninguno sobre tablas; lock_timeout acota la espera; si aborta, no se aplico nada.
 
 SET LOCAL lock_timeout = '3s';
 
--- 0. Precondicion: columnas de la 365.
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_schema = 'public' AND table_name = 'items_venta' AND column_name = 'moneda_origen')
-     OR NOT EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_schema = 'public' AND table_name = 'ventas' AND column_name = 'tipo_cambio_fuente')
-     OR NOT EXISTS (SELECT 1 FROM information_schema.columns
-                 WHERE table_schema = 'public' AND table_name = 'inventario' AND column_name = 'moneda') THEN
-    RAISE EXCEPTION 'Abort: faltan columnas de la 365 (items_venta.moneda_origen, ventas.tipo_cambio_fuente, inventario.moneda). Aplicar la 365 antes de la 410.';
-  END IF;
-END $$;
-
--- ----------------------------------------------------------------------------
--- 1. crear_venta_atomica: la de la 406 con la foto de origen y la cotizacion.
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.crear_venta_atomica(p_org_id text, p_vendedor_id text, p_cliente_id text, p_cliente_nombre text, p_cliente_telefono text, p_subtotal numeric, p_descuento numeric, p_tipo_descuento text, p_porcentaje_descuento numeric, p_total numeric, p_metodo_pago text, p_observaciones text, p_numero_referencia text, p_cuotas integer, p_recargo_porcentaje numeric, p_monto_original numeric, p_items jsonb, p_pagos jsonb DEFAULT NULL::jsonb, p_idempotency_key text DEFAULT NULL::text, p_deposito_id text DEFAULT NULL::text, p_sucursal_id text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -104,11 +47,6 @@ DECLARE
   v_dep_objetivo TEXT;
   -- 332: costo financiero de cada pago
   v_cf_pct DECIMAL;
-  -- 410: foto de origen de las lineas en divisa (una moneda y una cotizacion por venta)
-  v_moneda_origen TEXT;
-  v_tc DECIMAL;
-  v_tc_fuente TEXT;
-  v_inv_moneda TEXT;
 BEGIN
   v_metodo := p_metodo_pago::metodo_pago_venta;
 
@@ -129,26 +67,6 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Para cobrar con saldo a favor la venta tiene que tener un cliente';
   END IF;
-
-  -- 410: las lineas en divisa (las que traen monedaOrigen) de una venta comparten
-  -- moneda y cotizacion, y la cotizacion es > 0. La primera fija v_tc / v_tc_fuente,
-  -- que van a la cabecera; sin lineas en divisa quedan NULL. Las lineas locales no
-  -- se miran.
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-  LOOP
-    CONTINUE WHEN NULLIF(v_item->>'monedaOrigen', '') IS NULL;
-    IF v_moneda_origen IS NULL THEN
-      v_moneda_origen := v_item->>'monedaOrigen';
-      v_tc := NULLIF(v_item->>'tipoCambio', '')::DECIMAL;
-      v_tc_fuente := NULLIF(v_item->>'tipoCambioFuente', '');
-      IF v_tc IS NULL OR v_tc <= 0 THEN
-        RAISE EXCEPTION 'TIPO_CAMBIO_MIXTO' USING ERRCODE = '22023';
-      END IF;
-    ELSIF (v_item->>'monedaOrigen') IS DISTINCT FROM v_moneda_origen
-       OR NULLIF(v_item->>'tipoCambio', '')::DECIMAL IS DISTINCT FROM v_tc THEN
-      RAISE EXCEPTION 'TIPO_CAMBIO_MIXTO' USING ERRCODE = '22023';
-    END IF;
-  END LOOP;
 
   -- Resolver el deposito objetivo: explicito, o el principal de la sucursal.
   v_dep_objetivo := COALESCE(p_deposito_id, get_deposito_de_sucursal(p_sucursal_id));
@@ -205,7 +123,7 @@ BEGIN
     numero_venta, cliente_id, cliente_nombre, cliente_telefono,
     vendedor_id, subtotal, descuento, tipo_descuento, porcentaje_descuento,
     total, metodo_pago, monto_abonado, estado_pago, observaciones, organization_id,
-    idempotency_key, sucursal_id, tipo_cambio, tipo_cambio_fuente
+    idempotency_key, sucursal_id
   ) VALUES (
     v_numero_venta,
     NULLIF(p_cliente_id, ''),
@@ -223,9 +141,7 @@ BEGIN
     NULLIF(p_observaciones, ''),
     p_org_id,
     NULLIF(p_idempotency_key, ''),
-    p_sucursal_id,
-    v_tc,
-    v_tc_fuente
+    p_sucursal_id
   ) RETURNING id INTO v_venta_id;
 
   IF p_pagos IS NOT NULL AND jsonb_array_length(p_pagos) > 0 THEN
@@ -279,32 +195,20 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
     v_inv_costo := NULL;
-    v_inv_moneda := NULL;
-    IF NULLIF(v_item->>'monedaOrigen', '') IS NOT NULL THEN
-      -- 410: linea en divisa. El costo llega ya convertido a moneda local con la
-      -- misma cotizacion (costoUnitario, puede faltar); precio_compra del
-      -- inventario esta en divisa y no se usa.
-      v_inv_costo := NULLIF(v_item->>'costoUnitario', '')::DECIMAL;
-    ELSE
-      IF (v_item->>'inventarioId') IS NOT NULL AND (v_item->>'inventarioId') != '' THEN
-        SELECT precio_compra, moneda INTO v_inv_costo, v_inv_moneda
-        FROM inventario
-        WHERE id = (v_item->>'inventarioId');
-      END IF;
+    IF (v_item->>'inventarioId') IS NOT NULL AND (v_item->>'inventarioId') != '' THEN
+      SELECT precio_compra INTO v_inv_costo
+      FROM inventario
+      WHERE id = (v_item->>'inventarioId');
+    END IF;
 
-      -- 410: un producto cargado en divisa vendido sin foto de origen no tiene
-      -- costo local conocido: NULL, nunca el precio_compra crudo ni el costo del item.
-      IF v_inv_moneda IS NOT NULL THEN
-        v_inv_costo := NULL;
-      ELSIF v_inv_costo IS NULL AND (v_item ? 'costo') AND (v_item->>'costo') IS NOT NULL THEN
-        v_inv_costo := (v_item->>'costo')::DECIMAL;
-      END IF;
+    IF v_inv_costo IS NULL AND (v_item ? 'costo') AND (v_item->>'costo') IS NOT NULL THEN
+      v_inv_costo := (v_item->>'costo')::DECIMAL;
     END IF;
 
     INSERT INTO items_venta (
       venta_id, inventario_id, descripcion, cantidad, precio_unitario, subtotal,
       dias_garantia, descuento, tipo_descuento, porcentaje_descuento,
-      costo_unitario_snapshot, moneda_origen, precio_origen, tipo_cambio
+      costo_unitario_snapshot
     ) VALUES (
       v_venta_id,
       NULLIF(v_item->>'inventarioId', ''),
@@ -316,12 +220,7 @@ BEGIN
       COALESCE((v_item->>'descuento')::DECIMAL, 0),
       COALESCE(v_item->>'tipoDescuento', 'MONTO'),
       COALESCE((v_item->>'porcentajeDescuento')::DECIMAL, 0),
-      v_inv_costo,
-      -- 410: foto de origen, solo en lineas en divisa (validadas arriba)
-      NULLIF(v_item->>'monedaOrigen', ''),
-      CASE WHEN NULLIF(v_item->>'monedaOrigen', '') IS NOT NULL
-           THEN NULLIF(v_item->>'precioOrigen', '')::DECIMAL END,
-      CASE WHEN NULLIF(v_item->>'monedaOrigen', '') IS NOT NULL THEN v_tc END
+      v_inv_costo
     ) RETURNING id INTO v_item_id;
 
     v_items_ids := v_items_ids || to_jsonb(v_item_id);
@@ -488,9 +387,6 @@ END;
 $function$
 ;
 
--- ----------------------------------------------------------------------------
--- 2. editar_venta_atomica: la de la 372 conservando la foto de origen.
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION editar_venta_atomica(
   p_org_id TEXT,
   p_user_id TEXT,
@@ -537,10 +433,6 @@ DECLARE
   v_costos JSONB;
   v_numeros JSONB;
   v_lista JSONB;
-  -- 410: foto de origen de las lineas viejas en divisa
-  v_origenes JSONB;
-  v_origen JSONB;
-  v_inv_moneda TEXT;
 BEGIN
   v_metodo := p_metodo_pago::metodo_pago_venta;
   v_cliente_id := NULLIF(p_cliente_id, '');
@@ -643,22 +535,6 @@ BEGIN
     WHERE iv.venta_id = p_venta_id AND iv.costo_unitario_snapshot IS NOT NULL
     ORDER BY 1, iv.id
   ) c;
-
-  -- 410: la foto de origen de las lineas en divisa, con la misma clave. Se
-  -- conserva al reinsertar solo si el precio unitario (local) no cambio.
-  SELECT COALESCE(jsonb_object_agg(clave, origen), '{}'::JSONB) INTO v_origenes
-  FROM (
-    SELECT DISTINCT ON (1)
-      COALESCE(iv.inventario_id, 'desc:' || lower(COALESCE(iv.descripcion, ''))) AS clave,
-      jsonb_build_object(
-        'moneda_origen', iv.moneda_origen,
-        'precio_origen', iv.precio_origen,
-        'tipo_cambio', iv.tipo_cambio,
-        'precio_unitario', iv.precio_unitario) AS origen
-    FROM items_venta iv
-    WHERE iv.venta_id = p_venta_id AND iv.moneda_origen IS NOT NULL
-    ORDER BY 1, iv.id
-  ) o;
 
   SELECT COALESCE(jsonb_object_agg(clave, numeros), '{}'::JSONB) INTO v_numeros
   FROM (
@@ -764,22 +640,14 @@ BEGIN
 
     v_inv_costo := (v_costos->>v_clave)::DECIMAL;
     IF v_inv_costo IS NULL AND NULLIF(v_item->>'inventarioId', '') IS NOT NULL THEN
-      SELECT precio_compra, moneda INTO v_inv_costo, v_inv_moneda
+      SELECT precio_compra INTO v_inv_costo
       FROM inventario WHERE id = (v_item->>'inventarioId');
-      -- 410: precio_compra en divisa no es un costo local.
-      IF v_inv_moneda IS NOT NULL THEN v_inv_costo := NULL; END IF;
-    END IF;
-
-    -- 410: la foto de origen sigue solo si el precio unitario no cambio.
-    v_origen := v_origenes->v_clave;
-    IF (v_item->>'precioUnitario')::DECIMAL IS DISTINCT FROM (v_origen->>'precio_unitario')::DECIMAL THEN
-      v_origen := NULL;
     END IF;
 
     INSERT INTO items_venta (
       venta_id, inventario_id, descripcion, cantidad, precio_unitario, subtotal,
       dias_garantia, descuento, tipo_descuento, porcentaje_descuento,
-      costo_unitario_snapshot, moneda_origen, precio_origen, tipo_cambio
+      costo_unitario_snapshot
     ) VALUES (
       p_venta_id,
       NULLIF(v_item->>'inventarioId', ''),
@@ -791,10 +659,7 @@ BEGIN
       COALESCE((v_item->>'descuento')::DECIMAL, 0),
       COALESCE(v_item->>'tipoDescuento', 'MONTO'),
       COALESCE((v_item->>'porcentajeDescuento')::DECIMAL, 0),
-      v_inv_costo,
-      v_origen->>'moneda_origen',
-      (v_origen->>'precio_origen')::DECIMAL,
-      (v_origen->>'tipo_cambio')::DECIMAL
+      v_inv_costo
     ) RETURNING id INTO v_item_id;
 
     IF NULLIF(v_item->>'inventarioId', '') IS NOT NULL THEN
