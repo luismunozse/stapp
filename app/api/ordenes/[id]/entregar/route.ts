@@ -12,6 +12,7 @@ import { notasGarantiaConAlcance } from "@/lib/garantias/condiciones"
 import { notificarGarantiaCreada } from "@/lib/garantias/notificar"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
+import { registrarCambioTotal } from "@/lib/ordenes/cambio-total"
 
 const entregarSchema = z.object({
   firmaClienteEntrega: z.string().optional().nullable(),
@@ -193,6 +194,19 @@ export async function POST(
         )
       }
       throw updateError
+    }
+
+    // Quién cambió el total al entregar y desde qué monto (historial interno).
+    if (costoFinalConfirmado !== null) {
+      await registrarCambioTotal({
+        ordenId: id,
+        organizationId: organizationId!,
+        userId: userId!,
+        rol: role,
+        antes: orden.costo_final,
+        despues: costoFinalConfirmado,
+        origen: "ENTREGA",
+      })
     }
 
     // Registrar evento en orden_eventos para timeline público (fire-and-forget;
