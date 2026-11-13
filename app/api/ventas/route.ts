@@ -208,6 +208,38 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * La venta ya registrada con esa clave de idempotencia, como la devuelve un alta (201), o null si
+ * no hay ninguna visible todavía.
+ */
+async function ventaIdempotente(organizationId: string, idempotencyKey: string): Promise<NextResponse | null> {
+  const { data: existente } = await supabaseAdmin
+    .from("ventas")
+    .select(`
+      *,
+      clientes (*),
+      users:vendedor_id (id, nombre),
+      items_venta (*, inventario (*)),
+      garantias_venta (*),
+      pagos_venta (*),
+      devoluciones_venta (*, items_devolucion(*))
+    `)
+    .eq("organization_id", organizationId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (!existente) return null
+
+  const { data: org } = await supabaseAdmin
+    .from("organizations")
+    .select("nombre, nombre_mostrar")
+    .eq("id", organizationId)
+    .single()
+  return NextResponse.json({
+    ...formatVenta(existente),
+    organizationName: org?.nombre_mostrar || org?.nombre || null,
+  }, { status: 201 })
+}
+
 export async function POST(request: Request) {
   try {
     const { error, organizationId, userId, role, session, tecnicosOperanPos } = await requirePosAccess()
@@ -308,6 +340,13 @@ export async function POST(request: Request) {
     let tc: ResultadoTipoCambio | null = null
     let divisa: Extract<ReturnType<typeof resolverLineasDivisa>, { ok: true }> | null = null
     if (catalogo.size > 0) {
+      // Reintento idempotente de una venta ya registrada: se devuelve la original antes de
+      // mirar la cotización o la divisa, que pueden haber cambiado desde que se cobró (si no,
+      // el reintento recibía un 409 por una venta que ya existe).
+      if (data.idempotencyKey) {
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        if (existente) return existente
+      }
       configMoneda = (await cargarConfigMoneda(organizationId!)).config
       tc = await resolverTipoCambio(organizationId!)
       const r = resolverLineasDivisa({ lineas: data.items, catalogo, config: configMoneda, tc })
@@ -476,32 +515,8 @@ export async function POST(request: Request) {
       // 23505: violación del índice único de idempotencia → la venta ya existe.
       // Reintento idempotente: devolver la venta original sin duplicar.
       if ((rpcError as any).code === "23505" && data.idempotencyKey) {
-        const { data: existente } = await supabaseAdmin
-          .from("ventas")
-          .select(`
-            *,
-            clientes (*),
-            users:vendedor_id (id, nombre),
-            items_venta (*, inventario (*)),
-            garantias_venta (*),
-            pagos_venta (*),
-            devoluciones_venta (*, items_devolucion(*))
-          `)
-          .eq("organization_id", organizationId!)
-          .eq("idempotency_key", data.idempotencyKey)
-          .maybeSingle()
-
-        if (existente) {
-          const { data: org } = await supabaseAdmin
-            .from("organizations")
-            .select("nombre, nombre_mostrar")
-            .eq("id", organizationId!)
-            .single()
-          return NextResponse.json({
-            ...formatVenta(existente),
-            organizationName: org?.nombre_mostrar || org?.nombre || null,
-          }, { status: 201 })
-        }
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        if (existente) return existente
 
         // 23505 de idempotencia pero la venta original aún no es visible
         // (carrera de commit). No es un error del usuario; pedir reintento.
