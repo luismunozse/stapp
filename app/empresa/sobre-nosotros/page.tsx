@@ -7,7 +7,7 @@ import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 export const metadata = {
   title: "Sobre Nosotros - Equipo detr\u00e1s del Software de Servicio T\u00e9cnico",
   description:
-    "Conoce al equipo de STApp dedicado a transformar la gesti\u00f3n de talleres de reparaci\u00f3n de celulares en Latinoam\u00e9rica. Nuestra misi\u00f3n, valores e historia.",
+    "Conocé al equipo de STApp dedicado a transformar la gesti\u00f3n de talleres de reparaci\u00f3n de celulares en Latinoam\u00e9rica. Nuestra misi\u00f3n, valores e historia.",
   keywords: [
     "sobre STApp",
     "equipo STApp",
@@ -46,7 +46,7 @@ export default function SobreNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
-              Sobre Nosotros
+              Sobre nosotros
             </h1>
             <p className="text-xl text-muted-foreground">
               Somos un equipo apasionado por facilitar la gestión de talleres de
@@ -60,7 +60,7 @@ export default function SobreNosotrosPage() {
       <section className="py-16 bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-foreground mb-8">Nuestra Historia</h2>
+            <h2 className="text-3xl font-bold text-foreground mb-8">Nuestra historia</h2>
             <div className="prose prose-lg dark:prose-invert max-w-none">
               <p className="text-muted-foreground mb-6">
                 STApp nació de la experiencia directa en la industria de reparación de
@@ -89,7 +89,7 @@ export default function SobreNosotrosPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-5xl mx-auto">
             <h2 className="text-3xl font-bold text-foreground mb-12 text-center">
-              Nuestros Valores
+              Nuestros valores
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
               <div className="text-center">
@@ -97,7 +97,7 @@ export default function SobreNosotrosPage() {
                   <Users className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-foreground mb-3">
-                  Orientados al Cliente
+                  Orientados al cliente
                 </h3>
                 <p className="text-muted-foreground">
                   Escuchamos las necesidades de nuestros usuarios y desarrollamos
@@ -110,7 +110,7 @@ export default function SobreNosotrosPage() {
                   <Target className="h-8 w-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-foreground mb-3">
-                  Innovación Constante
+                  Innovación constante
                 </h3>
                 <p className="text-muted-foreground">
                   Mejoramos continuamente nuestra plataforma con nuevas funcionalidades
@@ -152,7 +152,7 @@ export default function SobreNosotrosPage() {
       <section className="py-16 bg-primary/5">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-foreground mb-6">Nuestra Misión</h2>
+            <h2 className="text-3xl font-bold text-foreground mb-6">Nuestra misión</h2>
             <p className="text-xl text-muted-foreground mb-8">
               Empoderar a los talleres de reparación de dispositivos electrónicos con
               herramientas tecnológicas que simplifiquen su operación, mejoren la
@@ -160,7 +160,7 @@ export default function SobreNosotrosPage() {
             </p>
             <Button asChild size="lg" className="gap-2">
               <Link href="/registro">
-                Únete a STApp
+                Sumate a STApp
               </Link>
             </Button>
           </div>

@@ -109,8 +109,8 @@ interface CotizacionData {
 const etiquetaCliente: Record<string, string> = {
   BORRADOR: "Borrador",
   ENVIADA: "Pendiente de aprobación",
-  ACEPTADA: "Aprobada",
-  RECHAZADA: "Rechazada",
+  ACEPTADA: "Aprobado",
+  RECHAZADA: "Rechazado",
 }
 
 export function CotizacionPublica({ token }: { token: string }) {
@@ -179,7 +179,7 @@ export function CotizacionPublica({ token }: { token: string }) {
         setData(await refreshRes.json())
       }
     } catch {
-      setApproveError("Error al aprobar la cotizacion")
+      setApproveError("Error al aprobar el presupuesto")
     } finally {
       setApproving(false)
     }
@@ -205,7 +205,7 @@ export function CotizacionPublica({ token }: { token: string }) {
         setData(await refreshRes.json())
       }
     } catch {
-      setApproveError("Error al rechazar la cotizacion")
+      setApproveError("Error al rechazar el presupuesto")
     } finally {
       setRejecting(false)
     }
@@ -215,7 +215,7 @@ export function CotizacionPublica({ token }: { token: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground">Cargando cotizacion...</p>
+        <p className="text-muted-foreground">Cargando presupuesto...</p>
       </div>
     )
   }
@@ -226,9 +226,9 @@ export function CotizacionPublica({ token }: { token: string }) {
         <CardContent className="flex flex-col items-center gap-4">
           <AlertCircle className="h-12 w-12 text-muted-foreground" />
           <div>
-            <h2 className="text-xl font-semibold">Cotizacion no encontrada</h2>
+            <h2 className="text-xl font-semibold">Presupuesto no encontrado</h2>
             <p className="text-muted-foreground mt-1">
-              El enlace no es valido o la cotizacion ya no existe.
+              El enlace no es válido o el presupuesto ya no existe.
             </p>
           </div>
         </CardContent>
@@ -273,10 +273,10 @@ export function CotizacionPublica({ token }: { token: string }) {
           />
         ) : null}
         <h1 className="text-xl font-bold">
-          {data.organizacion.nombre || "Servicio Tecnico"}
+          {data.organizacion.nombre || "Servicio Técnico"}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {data.tipo === "PRESUPUESTO" ? "Presupuesto" : "Cotización de servicio"}
+          {data.tipo === "PRESUPUESTO" ? "Presupuesto" : "Presupuesto de servicio"}
         </p>
       </div>
 
@@ -286,7 +286,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardContent className="flex items-center gap-3 py-4">
             <CheckCircle className="h-6 w-6 text-success-600 flex-shrink-0" />
             <div>
-              <p className="font-medium text-success-700">Cotizacion aprobada</p>
+              <p className="font-medium text-success-700">Presupuesto aprobado</p>
               <p className="text-sm text-success-600">
                 La firma fue registrada correctamente.
               </p>
@@ -314,10 +314,10 @@ export function CotizacionPublica({ token }: { token: string }) {
             </div>
             {data.fechaVencimiento && (
               <div>
-                <p className="text-muted-foreground">Valida hasta</p>
+                <p className="text-muted-foreground">Válido hasta</p>
                 <p className={`font-medium ${isExpired ? "text-destructive-text" : ""}`}>
                   {formatDate(data.fechaVencimiento)}
-                  {isExpired && " (Vencida)"}
+                  {isExpired && " (Vencido)"}
                 </p>
               </div>
             )}
@@ -545,7 +545,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <div className="space-y-0">
             {/* Header */}
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground pb-2 border-b">
-              <div className="col-span-4">Descripcion</div>
+              <div className="col-span-4">Descripción</div>
               <div className="col-span-2 text-center">Cant.</div>
               <div className="col-span-2 text-right">P. Unit.</div>
               <div className="col-span-1 text-center">Dto.</div>
@@ -644,7 +644,7 @@ export function CotizacionPublica({ token }: { token: string }) {
       {data.terminos && (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground mb-1">Terminos y Condiciones</p>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Términos y condiciones</p>
             <p className="text-sm whitespace-pre-wrap">{data.terminos}</p>
           </CardContent>
         </Card>
@@ -656,10 +656,10 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardContent className="flex items-center gap-3 py-4">
             <CalendarClock className="h-6 w-6 text-warning-600 flex-shrink-0" />
             <div>
-              <p className="font-medium text-warning-700">Cotizacion vencida</p>
+              <p className="font-medium text-warning-700">Presupuesto vencido</p>
               <p className="text-sm text-warning-600">
-                Esta cotizacion vencio el {formatDate(data.fechaVencimiento)}.
-                Contacte al servicio tecnico para una nueva cotizacion.
+                Este presupuesto venció el {formatDate(data.fechaVencimiento)}.
+                Contactá al servicio técnico para pedir uno nuevo.
               </p>
             </div>
           </CardContent>
@@ -672,7 +672,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2 text-success-700">
               <CheckCircle className="h-5 w-5" />
-              {data.tipo === "PRESUPUESTO" ? "Presupuesto aprobado" : "Cotización aprobada"}
+              Presupuesto aprobado
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -690,7 +690,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             )}
             {data.fechaAprobacion && (
               <p className="text-sm text-muted-foreground text-center">
-                Aprobada el {formatDate(data.fechaAprobacion)}
+                Aprobado el {formatDate(data.fechaAprobacion)}
               </p>
             )}
           </CardContent>
@@ -703,14 +703,14 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardContent className="flex items-start gap-3 py-4">
             <XCircle className="h-6 w-6 text-destructive-text flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-destructive-text">Cotizacion rechazada</p>
+              <p className="font-medium text-destructive-text">Presupuesto rechazado</p>
               {(data as any).motivoRechazo && (
                 <p className="text-sm text-destructive-text mt-1">
                   Motivo: {(data as any).motivoRechazo}
                 </p>
               )}
               <p className="text-sm text-destructive-text mt-1">
-                Contacte al servicio tecnico si desea una nueva cotizacion.
+                Contactá al servicio técnico si querés un nuevo presupuesto.
               </p>
             </div>
           </CardContent>
@@ -740,7 +740,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               onClick={() => setShowApproval(true)}
             >
               <PenTool className="mr-2 h-4 w-4" />
-              Aprobar cotizacion
+              Aprobar presupuesto
             </Button>
             <Button
               variant="outline"
@@ -748,7 +748,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               onClick={() => setShowReject(true)}
             >
               <XCircle className="mr-2 h-4 w-4" />
-              Rechazar cotizacion
+              Rechazar presupuesto
             </Button>
           </>
         )}
@@ -758,9 +758,9 @@ export function CotizacionPublica({ token }: { token: string }) {
       {showReject && (
         <Card className="border-destructive/25">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-destructive-text">Rechazar cotizacion</CardTitle>
+            <CardTitle className="text-lg text-destructive-text">Rechazar presupuesto</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Indique el motivo del rechazo (opcional).
+              Indicá el motivo del rechazo (opcional).
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -802,12 +802,12 @@ export function CotizacionPublica({ token }: { token: string }) {
         <Card className="border-primary">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">
-              {data.tipo === "PRESUPUESTO" ? "Aprobar presupuesto" : "Aprobar cotización"}
+              Aprobar presupuesto
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               {data.tipo === "PRESUPUESTO"
-                ? `Confirme la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}. La firma es opcional.`
-                : `Firme a continuación para confirmar la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}.`}
+                ? `Confirmá la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}. La firma es opcional.`
+                : `Firmá a continuación para confirmar la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">

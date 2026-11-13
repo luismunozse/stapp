@@ -442,7 +442,7 @@ export function Cabecera({
 
   const nombre = truncateToWidth(
     metrics.bold,
-    safe(emisor.nombreEmpresa) || "Servicio Tecnico",
+    safe(emisor.nombreEmpresa) || "Servicio Técnico",
     TYPE.body,
     presupuestoNombre
   )

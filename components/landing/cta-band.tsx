@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 
 const WHATSAPP_DEMO_URL =
   "https://wa.me/5491169625733?text=" +
-  encodeURIComponent("Hola! Quiero agendar una demo de STApp para mi taller.")
+  encodeURIComponent("¡Hola! Quiero agendar una demo de STApp para mi taller.")
 
 // Cierre de la página: última oportunidad de conversión, con la promesa
 // de transformación (no una lista de features).

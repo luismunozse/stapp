@@ -62,7 +62,7 @@ export default async function PreciosPage() {
           <FAQ faqs={pricingFaqs} />
         </div>
         <Footer />
-        <WhatsAppFloat message="Hola! Tengo una consulta sobre los planes de STApp." />
+        <WhatsAppFloat message="¡Hola! Tengo una consulta sobre los planes de STApp." />
       </main>
     </>
   )

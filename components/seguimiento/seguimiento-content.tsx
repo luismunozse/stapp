@@ -582,7 +582,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                 <Timer className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   Estimado: <strong>{timeRemaining.text}</strong>
-                  {timeRemaining.urgency === "overdue" && " — Contactanos para mas info"}
+                  {timeRemaining.urgency === "overdue" && " — Contactanos para más info"}
                 </span>
               </div>
             )}

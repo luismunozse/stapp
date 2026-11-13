@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Cotizacion | STApp",
-  description: "Presupuesto de servicio tecnico",
+  title: "Presupuesto | STApp",
+  description: "Presupuesto de servicio técnico",
   robots: { index: false, follow: false },
 }
 

@@ -25,7 +25,7 @@ describe("EliminarCuentaForm", () => {
   it("vacío: pide el subdominio", () => {
     render(<EliminarCuentaForm />)
     fireEvent.click(screen.getByRole("button", { name: /ir a mi cuenta/i }))
-    expect(screen.getByRole("alert")).toHaveTextContent(/ingrese/i)
+    expect(screen.getByRole("alert")).toHaveTextContent(/ingresá/i)
     expect(window.location.href).toBe("")
   })
 })

@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { KioskDisplay } from "@/components/kiosco/kiosk-display"
 
 export const metadata: Metadata = {
-  title: "Modo Kiosco - STApp",
+  title: "Modo kiosco - STApp",
   // Token-addressed screen: keep it out of the index. No robots.txt
   // disallow on purpose — a blocked page is never crawled, so this
   // noindex would never be read.

@@ -5,7 +5,7 @@ import { OG_IMAGES } from "@/lib/og/metadata"
 export const metadata: Metadata = {
   title: "Contacto - Soporte para Software de Servicio T\u00e9cnico",
   description:
-    "Contacta con el equipo de STApp. Soporte t\u00e9cnico, consultas comerciales y ayuda para nuestro software de gesti\u00f3n de talleres de reparaci\u00f3n. Respuesta r\u00e1pida por email, tel\u00e9fono o WhatsApp.",
+    "Contactá al equipo de STApp. Soporte t\u00e9cnico, consultas comerciales y ayuda para nuestro software de gesti\u00f3n de talleres de reparaci\u00f3n. Respuesta r\u00e1pida por email, tel\u00e9fono o WhatsApp.",
   keywords: [
     "contacto STApp",
     "soporte t\u00e9cnico software reparaciones",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     images: OG_IMAGES,
     title: "Contacto - STApp Software de Servicio T\u00e9cnico",
     description:
-      "Contacta con el equipo de STApp. Soporte por email, tel\u00e9fono y WhatsApp para tu taller de reparaci\u00f3n.",
+      "Contactá al equipo de STApp. Soporte por email, tel\u00e9fono y WhatsApp para tu taller de reparaci\u00f3n.",
     url: "https://stapp.com.ar/empresa/contacto",
   },
   alternates: {

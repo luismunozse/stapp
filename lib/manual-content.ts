@@ -66,8 +66,8 @@ export const manualSections: ManualSection[] = [
         body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo a todas las funciones. El Técnico puede gestionar órdenes asignadas, ver clientes y presupuestos. El Vendedor puede gestionar ventas, clientes, POS y proveedores.",
         steps: [
           "Administrador (ADMIN): acceso total — órdenes, inventario, comprobantes, reportes, configuración, técnicos, vendedores, caja y más",
-          "Técnico (TECNICO): órdenes asignadas, clientes, presupuestos e inicio",
-          "Vendedor (VENDEDOR): ventas, POS, clientes (puede crearlos y editarlos, pero no eliminarlos), proveedores, reportes de ventas e inicio",
+          "Técnico (TECNICO): órdenes asignadas, clientes, presupuestos e Inicio",
+          "Vendedor (VENDEDOR): ventas, POS, clientes (puede crearlos y editarlos, pero no eliminarlos), proveedores, reportes de ventas e Inicio",
         ],
         tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema. Algunos permisos extra de técnicos y vendedores (por ejemplo tomar órdenes sin asignar, o abrir y cerrar la caja) se activan en Configuración > Secciones > Roles y permisos.",
       },
@@ -686,7 +686,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Convertir a remito",
-        body: "Una vez aceptada, podés convertir el presupuesto en remito con un solo clic, trasladando todos los items y montos automáticamente.",
+        body: "Una vez aceptado, podés convertir el presupuesto en remito con un solo clic, trasladando todos los items y montos automáticamente.",
         roles: ["ADMIN"],
         seeAlso: ["facturacion"],
       },

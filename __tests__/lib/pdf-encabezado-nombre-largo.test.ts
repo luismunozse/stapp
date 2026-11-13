@@ -71,7 +71,7 @@ const generadores: Record<string, { titulo: string; generar: (nombre: string) =>
       } as any),
   },
   cotizacion: {
-    titulo: "COTIZACIÓN",
+    titulo: "PRESUPUESTO",
     generar: (n) => generateCotizacionPDF({ ...(buildCotizacionPresupuestoFixture() as any), ...empresa(n) }),
   },
 }

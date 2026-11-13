@@ -19,8 +19,8 @@ export default function CookiesPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">1. ¿Qué son las Cookies?</h2>
         <p className="text-gray-600 mb-4">
-          Las cookies son pequeños archivos de texto que se almacenan en su dispositivo (computadora, tablet
-          o móvil) cuando visita un sitio web. Las cookies son ampliamente utilizadas para hacer que los
+          Las cookies son pequeños archivos de texto que se almacenan en tu dispositivo (computadora, tablet
+          o móvil) cuando visitás un sitio web. Las cookies son ampliamente utilizadas para hacer que los
           sitios web funcionen de manera más eficiente y proporcionar información a los propietarios del sitio.
         </p>
       </section>
@@ -31,9 +31,9 @@ export default function CookiesPage() {
           STApp utiliza cookies y tecnologías similares para varios propósitos:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li>Mantener su sesión iniciada</li>
-          <li>Recordar sus preferencias y configuraciones</li>
-          <li>Entender cómo utiliza nuestro Servicio</li>
+          <li>Mantener tu sesión iniciada</li>
+          <li>Recordar tus preferencias y configuraciones</li>
+          <li>Entender cómo utilizás nuestro Servicio</li>
           <li>Mejorar el rendimiento y la funcionalidad</li>
           <li>Proporcionar contenido personalizado</li>
         </ul>
@@ -59,7 +59,7 @@ export default function CookiesPage() {
               </tr>
               <tr>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">Funcionales</td>
-                <td className="px-4 py-3 text-sm text-gray-600">Recuerdan sus preferencias (idioma, tema, configuración)</td>
+                <td className="px-4 py-3 text-sm text-gray-600">Recuerdan tus preferencias (idioma, tema, configuración)</td>
                 <td className="px-4 py-3 text-sm text-gray-600">1 año</td>
               </tr>
               <tr>
@@ -82,16 +82,16 @@ export default function CookiesPage() {
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-3">Cookies Esenciales</h3>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li><strong>session_token:</strong> Mantiene su sesión iniciada de forma segura</li>
+          <li><strong>session_token:</strong> Mantiene tu sesión iniciada de forma segura</li>
           <li><strong>csrf_token:</strong> Protección contra ataques de falsificación de solicitudes</li>
-          <li><strong>tenant_id:</strong> Identifica su cuenta de negocio</li>
+          <li><strong>tenant_id:</strong> Identifica tu cuenta de negocio</li>
         </ul>
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-3">Cookies Funcionales</h3>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li><strong>user_preferences:</strong> Almacena sus preferencias de visualización</li>
+          <li><strong>user_preferences:</strong> Almacena tus preferencias de visualización</li>
           <li><strong>sidebar_state:</strong> Recuerda el estado de la barra lateral</li>
-          <li><strong>theme:</strong> Recuerda su preferencia de tema (claro/oscuro)</li>
+          <li><strong>theme:</strong> Recuerda tu preferencia de tema (claro/oscuro)</li>
         </ul>
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-3">Cookies Analíticas</h3>
@@ -112,22 +112,22 @@ export default function CookiesPage() {
           <li><strong>Intercom/Chat:</strong> Para soporte al cliente en tiempo real</li>
         </ul>
         <p className="text-gray-600 mt-4">
-          Estos terceros tienen sus propias políticas de privacidad que le recomendamos revisar.
+          Estos terceros tienen sus propias políticas de privacidad que te recomendamos revisar.
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">6. Cómo Gestionar las Cookies</h2>
         <p className="text-gray-600 mb-4">
-          Puede controlar y gestionar las cookies de varias formas:
+          Podés controlar y gestionar las cookies de varias formas:
         </p>
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-3">Configuración del Navegador</h3>
         <p className="text-gray-600 mb-4">
-          La mayoría de los navegadores le permiten:
+          La mayoría de los navegadores te permiten:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li>Ver qué cookies tiene y eliminarlas individualmente</li>
+          <li>Ver qué cookies tenés y eliminarlas individualmente</li>
           <li>Bloquear cookies de terceros</li>
           <li>Bloquear cookies de sitios específicos</li>
           <li>Bloquear todas las cookies</li>
@@ -144,8 +144,8 @@ export default function CookiesPage() {
 
         <div className="bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-6">
           <p className="text-yellow-800 dark:text-yellow-300 text-sm">
-            <strong>Nota:</strong> Si deshabilita las cookies esenciales, es posible que algunas funciones
-            del Servicio no funcionen correctamente y no pueda iniciar sesión en su cuenta.
+            <strong>Nota:</strong> Si deshabilitás las cookies esenciales, es posible que algunas funciones
+            del Servicio no funcionen correctamente y no puedas iniciar sesión en tu cuenta.
           </p>
         </div>
       </section>
@@ -156,8 +156,8 @@ export default function CookiesPage() {
           Además de las cookies, podemos utilizar otras tecnologías similares:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li><strong>Local Storage:</strong> Almacena datos en su navegador para mejorar el rendimiento</li>
-          <li><strong>Session Storage:</strong> Almacena datos temporales durante su sesión</li>
+          <li><strong>Local Storage:</strong> Almacena datos en tu navegador para mejorar el rendimiento</li>
+          <li><strong>Session Storage:</strong> Almacena datos temporales durante tu sesión</li>
           <li><strong>Web Beacons:</strong> Pequeñas imágenes para rastrear interacciones en emails</li>
         </ul>
       </section>
@@ -166,7 +166,7 @@ export default function CookiesPage() {
         <h2 className="text-xl font-semibold text-gray-900 mb-4">8. Actualizaciones de esta Política</h2>
         <p className="text-gray-600 mb-4">
           Podemos actualizar esta Política de Cookies periódicamente para reflejar cambios en nuestras
-          prácticas o por razones operativas, legales o regulatorias. Le recomendamos revisar esta página
+          prácticas o por razones operativas, legales o regulatorias. Te recomendamos revisar esta página
           regularmente para estar informado sobre nuestro uso de cookies.
         </p>
       </section>

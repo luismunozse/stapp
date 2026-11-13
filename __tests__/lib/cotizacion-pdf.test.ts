@@ -27,12 +27,12 @@ describe("generateCotizacionPDF — tipo ORDEN", () => {
     const buffer = await generateCotizacionPDF(buildCotizacionOrdenFixture())
     const text = await extractPdfText(buffer)
 
-    expect(text).toContain("COTIZACIÓN")
+    expect(text).toContain("PRESUPUESTO")
     expect(text).toContain("Roberto Gómez")
     expect(text).toContain("iPhone 12")
     expect(text).toContain("PANTALLA IPHONE 12 OLED")
-    expect(text).toContain("Cotizacion valida hasta") // vencimiento banner
-    expect(text).toContain("Gracias por su confianza") // footer, no firma
+    expect(text).toContain("Presupuesto válido hasta") // vencimiento banner
+    expect(text).toContain("Gracias por tu confianza") // footer, no firma
     expect(buffer.length).toBeGreaterThan(1000)
   })
 })
@@ -42,7 +42,7 @@ describe("generateCotizacionPDF — tipo PRESUPUESTO", () => {
     const buffer = await generateCotizacionPDF(buildCotizacionPresupuestoFixture())
     const text = await extractPdfText(buffer)
 
-    expect(text).toContain("COTIZACIÓN")
+    expect(text).toContain("PRESUPUESTO")
     expect(text).toContain("Valentina Ríos")
     expect(text).toContain("Samsung Galaxy S22")
     expect(text).toContain("358400123456999") // IMEI
@@ -107,7 +107,7 @@ describe("generateCotizacionPDF — informe tecnico", () => {
     expect(text).toContain("La Segunda ART")
   })
 
-  it("con items mantiene el titulo COTIZACION y dibuja la tabla", async () => {
+  it("con items mantiene el titulo PRESUPUESTO y dibuja la tabla", async () => {
     const buffer = await generateCotizacionPDF({
       ...BASE_INFORME,
       veredicto: "REPARABLE",
@@ -117,7 +117,7 @@ describe("generateCotizacionPDF — informe tecnico", () => {
     } as any)
     const text = await extractPdfText(buffer)
 
-    expect(text).toContain("COTIZACIÓN")
+    expect(text).toContain("PRESUPUESTO")
     expect(text).toContain("DETALLE DE ITEMS")
     expect(text).toContain("Reparable")
   })

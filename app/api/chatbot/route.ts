@@ -308,7 +308,7 @@ Detalle del plan Profesional:
 - Vendedores ilimitados
 - Clientes ilimitados
 - Punto de venta con garantías por producto y soporte para impresoras térmicas
-- Cotizaciones con aprobación/rechazo online y firma digital
+- Presupuestos con aprobación/rechazo online y firma digital
 - Portal de seguimiento para clientes (link público)
 - Modo kiosco para mostrar estado de reparaciones en el local
 - Reportes avanzados (rentabilidad, performance de técnicos y vendedores, predicción de repuestos por consumo, fallas comunes y más)
@@ -337,7 +337,7 @@ CARACTERÍSTICAS PRINCIPALES:
 - Orden de Retiro (Sin Reparación): cuando un equipo no se puede reparar, se genera una orden de retiro especial. El cliente firma la recepción del equipo sin reparar y se genera un comprobante PDF de retiro. El estado pasa de "sin reparación" a "entregado sin reparación"
 - Impresión de Etiquetas: generación de etiquetas para identificar equipos con el logo del taller, código de orden, cliente, teléfono, IMEI o número de serie, problema reportado y fecha de ingreso. El link de seguimiento le llega al cliente por el comprobante y WhatsApp, no va en la etiqueta. Se imprimen por el driver de cualquier impresora térmica: etiquetas de 40x30, 50x30, 50x40 o 60x40 mm, o rollos de 58 y 80 mm
 - Impresión de Órdenes: PDF de la orden en hoja A4, A5 o A6, con el logo del taller y la firma del cliente. En A5/A6 se suma una copia para el local con el código de acceso del equipo (la copia del cliente nunca lo lleva)
-- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
+- Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviado, aceptado, rechazado. Exportación a PDF y envío por WhatsApp
 - Fotos por Etapa: documentación visual en 5 etapas (ingreso, diagnóstico, componentes, reparación y entrega). Protección ante reclamos con evidencia fotográfica almacenada en la nube. Cámara integrada en la app móvil
 - Portal de Seguimiento Público: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, timeline visual, fotos, garantía, puede aprobar o rechazar presupuestos y descargar el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
 - Firma Digital: captura de firma del cliente en la recepción del equipo, en la entrega y en la orden de retiro. Respaldo legal ante cualquier reclamo
@@ -465,7 +465,7 @@ PAÍSES:
 - La factura electrónica es solo para Argentina; en los demás países los comprobantes de STApp no reemplazan una factura legal.
 
 CATÁLOGO ONLINE Y E-COMMERCE:
-- Catálogo público por organización con link propio, cupones de descuento, recuperación de carritos abandonados y cotización online desde el catálogo. Checkout con MercadoPago.
+- Catálogo público por organización con link propio, cupones de descuento, recuperación de carritos abandonados y pedido de presupuesto online desde el catálogo. Checkout con MercadoPago.
 
 AGENDA Y TURNOS:
 - Gestión de turnos con disponibilidad y recordatorios automáticos al cliente.

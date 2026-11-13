@@ -52,10 +52,10 @@ const estadoLabels: Record<EstadoOrden, string> = {
   RECIBIDO: "Recibido",
   EN_DIAGNOSTICO: "En diagnóstico",
   PRESUPUESTADO: "Presupuesto enviado",
-  APROBADO: "Aprobado - En cola de reparación",
+  APROBADO: "Aprobado - en cola de reparación",
   EN_REPARACION: "En reparación",
   ESPERANDO_REPUESTO: "Esperando repuesto",
-  REPARADO: "Reparado - Listo para retirar",
+  REPARADO: "Reparado - listo para retirar",
   ENTREGADO: "Entregado",
   ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
   ENTREGADO_SIN_COBRO: "Entregado sin cobro",
@@ -94,7 +94,7 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
               Hola ${ctx.cliente.nombre},
             </h2>
 
-            <p>Le informamos que su orden de servicio ha sido actualizada:</p>
+            <p>Te informamos que tu orden de servicio fue actualizada:</p>
 
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
               <table style="width: 100%; border-collapse: collapse;">
@@ -122,8 +122,8 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
                 ? `
               <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 0; color: #1e40af;">
-                  <strong>Su ${tEquipo} esta listo!</strong><br>
-                  Puede pasar a retirarlo en nuestro local en horario de atencion.
+                  <strong>¡Tu ${tEquipo} está listo!</strong><br>
+                  Podés pasar a retirarlo por nuestro local en horario de atención.
                 </p>
               </div>
             `
@@ -131,13 +131,13 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
             }
 
             <p style="color: #6b7280; font-size: 14px;">
-              Si tiene alguna consulta, no dude en contactarnos.
+              Si tenés alguna consulta, no dudes en contactarnos.
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
             <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              Este correo fue enviado automaticamente desde ${ctx.organizationName}.
+              Este correo fue enviado automáticamente desde ${ctx.organizationName}.
             </p>
           </div>
         </body>
@@ -171,7 +171,7 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
               Hola ${ctx.cliente.nombre},
             </h2>
 
-            <p>Hemos definido el presupuesto para la ${tReparacion.toLowerCase()} de su ${t(term, "equipo")}:</p>
+            <p>Definimos el presupuesto para la ${tReparacion.toLowerCase()} de tu ${t(term, "equipo")}:</p>
 
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0; text-align: center;">
               <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Presupuesto estimado</p>
@@ -186,13 +186,13 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
             </div>
 
             <p style="margin-top: 20px;">
-              Por favor confirme si desea proceder con la reparacion contactandonos.
+              Por favor, contactanos para confirmar si querés seguir con la reparación.
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
             <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              Este correo fue enviado automaticamente desde ${ctx.organizationName}.
+              Este correo fue enviado automáticamente desde ${ctx.organizationName}.
             </p>
           </div>
         </body>
@@ -210,7 +210,7 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
   const tReparacion = t(term, "reparacion")
 
   return {
-    subject: `Garantia activada - Orden #${ctx.orden!.numeroOrden}`,
+    subject: `Garantía activada - Orden #${ctx.orden!.numeroOrden}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -225,15 +225,15 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
               Hola ${ctx.cliente.nombre},
             </h2>
 
-            <p>Su ${tReparacion.toLowerCase()} cuenta ahora con garantia:</p>
+            <p>Tu ${tReparacion.toLowerCase()} ahora cuenta con garantía:</p>
 
             <div style="background: #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <div style="text-align: center;">
                 <p style="color: #166534; margin: 0; font-size: 24px; font-weight: bold;">
-                  ${ctx.garantia!.diasValidez} dias de garantia
+                  ${ctx.garantia!.diasValidez} días de garantía
                 </p>
                 <p style="color: #166534; margin: 8px 0 0 0;">
-                  Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}
+                  Válida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}
                 </p>
               </div>
             </div>
@@ -244,14 +244,14 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
             </div>
 
             <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
-              Conserve este correo como comprobante de garantia. Ante cualquier inconveniente
-              dentro del periodo de garantia, contactenos.
+              Conservá este correo como comprobante de garantía. Ante cualquier inconveniente
+              dentro del período de garantía, contactanos.
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
             <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              Este correo fue enviado automaticamente desde ${ctx.organizationName}.
+              Este correo fue enviado automáticamente desde ${ctx.organizationName}.
             </p>
           </div>
         </body>
@@ -271,7 +271,7 @@ export function generateRecordatorioEmail(
   const tEquipo = t(term, "equipo")
 
   return {
-    subject: `Recordatorio: Tu ${tEquipo} esta listo para retirar - Orden #${ctx.orden!.numeroOrden}`,
+    subject: `Recordatorio: tu ${tEquipo.toLowerCase()} está listo para retirar - Orden #${ctx.orden!.numeroOrden}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -288,10 +288,10 @@ export function generateRecordatorioEmail(
 
             <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <p style="color: #92400e; margin: 0; font-weight: bold;">
-                Le recordamos que su ${tEquipo.toLowerCase()} esta listo para retirar
+                Te recordamos que tu ${tEquipo.toLowerCase()} está listo para retirar
               </p>
               <p style="color: #92400e; margin: 8px 0 0 0;">
-                Han pasado ${diasCompletado} dia${diasCompletado > 1 ? "s" : ""} desde que fue completada la ${t(term, "reparacion").toLowerCase()}.
+                Pasaron ${diasCompletado} ${diasCompletado > 1 ? "días" : "día"} desde que se completó la ${t(term, "reparacion").toLowerCase()}.
               </p>
             </div>
 
@@ -301,13 +301,13 @@ export function generateRecordatorioEmail(
             </div>
 
             <p style="margin-top: 20px;">
-              Puede pasar a retirarlo en nuestro local en horario de atencion.
+              Podés pasar a retirarlo por nuestro local en horario de atención.
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
             <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              Este correo fue enviado automaticamente desde ${ctx.organizationName}.
+              Este correo fue enviado automáticamente desde ${ctx.organizationName}.
             </p>
           </div>
         </body>
@@ -354,13 +354,13 @@ function generateGenericEmail(
             ${body}
 
             <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
-              Si tiene alguna consulta, no dude en contactarnos.
+              Si tenés alguna consulta, no dudes en contactarnos.
             </p>
 
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
             <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-              Este correo fue enviado automaticamente desde ${ctx.organizationName}.
+              Este correo fue enviado automáticamente desde ${ctx.organizationName}.
             </p>
           </div>
         </body>
@@ -375,17 +375,17 @@ export function generateBienvenidaEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Bienvenido/a a ${ctx.organizationName}`,
-    "Gracias por confiar en nosotros. Somos especialistas en reparacion y servicio tecnico.",
-    `<p>Puede contactarnos para cualquier consulta sobre nuestros servicios. Estamos a su disposicion.</p>`
+    "Gracias por confiar en nosotros. Somos especialistas en reparación y servicio técnico.",
+    `<p>Podés contactarnos para cualquier consulta sobre nuestros servicios. Estamos a tu disposición.</p>`
   )
 }
 
 export function generateRespuestaConsultaEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Respuesta a su consulta - ${ctx.organizationName}`,
-    "Gracias por su consulta.",
-    `<p>Si desea traer su equipo para una revision sin cargo, estamos a su disposicion.</p>`
+    `Respuesta a tu consulta - ${ctx.organizationName}`,
+    "Gracias por tu consulta.",
+    `<p>Si querés traer tu equipo para una revisión sin cargo, estamos a tu disposición.</p>`
   )
 }
 
@@ -400,14 +400,14 @@ export function generateRecordatorioPagoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Recordatorio de pago pendiente - ${ctx.organizationName}`,
-    "Le recordamos que tiene un saldo pendiente.",
+    "Te recordamos que tenés un saldo pendiente.",
     `${ctx.orden ? `
     <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
       <p style="margin: 0;"><strong>Orden:</strong> #${ctx.orden.numeroOrden}</p>
       <p style="margin: 8px 0 0 0;"><strong>Dispositivo:</strong> ${ctx.orden.dispositivo}</p>
     </div>
     ` : ""}
-    <p>Puede acercarse a nuestro local o consultarnos por medios de pago disponibles.</p>`,
+    <p>Podés acercarte a nuestro local o consultarnos por medios de pago disponibles.</p>`,
     { text: `Saldo pendiente: ${formatCurrency(saldo)}`, color: "#92400e", bgColor: "#fef3c7" }
   )
 }
@@ -421,15 +421,15 @@ export function generateConfirmacionPagoEmail(ctx: NotificationContext) {
 
   return generateGenericEmail(
     ctx,
-    `Confirmacion de pago - ${ctx.organizationName}`,
-    "Confirmamos la recepcion de su pago.",
+    `Confirmación de pago - ${ctx.organizationName}`,
+    "Confirmamos la recepción de tu pago.",
     `${ctx.orden ? `
     <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
       <p style="margin: 0;"><strong>Orden:</strong> #${ctx.orden.numeroOrden}</p>
       <p style="margin: 8px 0 0 0;"><strong>Dispositivo:</strong> ${ctx.orden.dispositivo}</p>
     </div>
     ` : ""}
-    ${saldoRestante > 0 ? `<p>Saldo restante: <strong>${formatCurrency(saldoRestante)}</strong></p>` : "<p>Su cuenta se encuentra al dia. Gracias!</p>"}`,
+    ${saldoRestante > 0 ? `<p>Saldo restante: <strong>${formatCurrency(saldoRestante)}</strong></p>` : "<p>Tu cuenta se encuentra al día. ¡Gracias!</p>"}`,
     { text: `Pago recibido: ${formatCurrency(monto)}`, color: "#166534", bgColor: "#dcfce7" }
   )
 }
@@ -441,7 +441,7 @@ export function generateLinkPagoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Link de pago - ${ctx.organizationName}`,
-    "Le enviamos el link para realizar el pago.",
+    "Te enviamos el link para realizar el pago.",
     `${ctx.pago?.linkPago ? `
     <div style="text-align: center; margin: 20px 0;">
       <a href="${ctx.pago.linkPago}" style="background: #3b82f6; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
@@ -462,9 +462,9 @@ export function generateMantenimientoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Recordatorio de mantenimiento - ${ctx.organizationName}`,
-    "Le recordamos que es buen momento para un chequeo preventivo de su equipo.",
-    `${ctx.mantenimiento?.ultimoServicio ? `<p>Su ultimo servicio fue el <strong>${formatDate(ctx.mantenimiento.ultimoServicio)}</strong>.${ctx.mantenimiento.tipoServicio ? ` Servicio realizado: ${ctx.mantenimiento.tipoServicio}.` : ""}</p>` : ""}
-    <p>El mantenimiento preventivo ayuda a evitar fallas y prolongar la vida util de su equipo. Consulte por turno disponible.</p>`
+    "Te recordamos que es buen momento para un chequeo preventivo de tu equipo.",
+    `${ctx.mantenimiento?.ultimoServicio ? `<p>Tu último servicio fue el <strong>${formatDate(ctx.mantenimiento.ultimoServicio)}</strong>.${ctx.mantenimiento.tipoServicio ? ` Servicio realizado: ${ctx.mantenimiento.tipoServicio}.` : ""}</p>` : ""}
+    <p>El mantenimiento preventivo ayuda a evitar fallas y prolongar la vida útil de tu equipo. Consultanos por un turno disponible.</p>`
   )
 }
 
@@ -473,9 +473,9 @@ export function generatePromocionEmail(ctx: NotificationContext) {
 
   return generateGenericEmail(
     ctx,
-    `${ctx.promocion?.titulo || "Promocion"} - ${ctx.organizationName}`,
+    `${ctx.promocion?.titulo || "Promoción"} - ${ctx.organizationName}`,
     ctx.promocion?.descripcion || "",
-    `${ctx.promocion?.validoHasta ? `<p style="color: #6b7280;">Valido hasta: ${formatDate(ctx.promocion.validoHasta)}</p>` : ""}`,
+    `${ctx.promocion?.validoHasta ? `<p style="color: #6b7280;">Válido hasta: ${formatDate(ctx.promocion.validoHasta)}</p>` : ""}`,
     ctx.promocion?.descuento ? { text: ctx.promocion.descuento, color: "#166534", bgColor: "#dcfce7" } : undefined
   )
 }
@@ -483,11 +483,11 @@ export function generatePromocionEmail(ctx: NotificationContext) {
 export function generateEncuestaEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Nos importa su opinion - ${ctx.organizationName}`,
+    `Nos importa tu opinión - ${ctx.organizationName}`,
     ctx.orden
-      ? `Queremos saber como fue su experiencia con la reparacion de su ${ctx.orden.dispositivo} (Orden #${ctx.orden.numeroOrden}).`
-      : "Queremos saber como fue su experiencia con nuestro servicio.",
-    `<p>Del 1 al 5, que tan satisfecho esta? (1 = Muy insatisfecho, 5 = Excelente)</p>
+      ? `Queremos saber cómo fue tu experiencia con la reparación de tu ${ctx.orden.dispositivo} (Orden #${ctx.orden.numeroOrden}).`
+      : "Queremos saber cómo fue tu experiencia con nuestro servicio.",
+    `<p>Del 1 al 5, ¿qué tan satisfecho/a estás? (1 = Muy insatisfecho, 5 = Excelente)</p>
     ${ctx.encuestaUrl ? `
     <div style="text-align: center; margin: 20px 0;">
       <a href="${ctx.encuestaUrl}" style="background: #3b82f6; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
@@ -495,17 +495,17 @@ export function generateEncuestaEmail(ctx: NotificationContext) {
       </a>
     </div>
     ` : ""}
-    <p>Su opinion nos ayuda a mejorar. Gracias!</p>`
+    <p>Tu opinión nos ayuda a mejorar. ¡Gracias!</p>`
   )
 }
 
 export function generateFelicitacionEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Feliz dia! - ${ctx.organizationName}`,
-    "Queremos desearle un muy feliz dia!",
-    `<p>Gracias por ser parte de nuestra comunidad de clientes. Como regalo, tiene un descuento especial en su proximo servicio. Consulte por mensaje!</p>`,
-    { text: "Descuento especial en su proximo servicio", color: "#166534", bgColor: "#dcfce7" }
+    `¡Feliz día! - ${ctx.organizationName}`,
+    "¡Queremos desearte un muy feliz día!",
+    `<p>Gracias por ser parte de nuestra comunidad de clientes. Como regalo, tenés un descuento especial en tu próximo servicio. ¡Consultanos por mensaje!</p>`,
+    { text: "Descuento especial en tu próximo servicio", color: "#166534", bgColor: "#dcfce7" }
   )
 }
 
@@ -514,10 +514,10 @@ export function generateFelicitacionEmail(ctx: NotificationContext) {
 export function generateSolicitudInfoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Necesitamos informacion - Orden #${ctx.orden!.numeroOrden}`,
-    `Nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
-    `<p>${ctx.solicitudInfo || "Necesitamos informacion adicional para continuar con el servicio."}</p>
-    <p>Agradecemos su pronta respuesta.</p>`
+    `Necesitamos información - Orden #${ctx.orden!.numeroOrden}`,
+    `Nos comunicamos por tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
+    `<p>${ctx.solicitudInfo || "Necesitamos información adicional para continuar con el servicio."}</p>
+    <p>Agradecemos tu pronta respuesta.</p>`
   )
 }
 
@@ -525,13 +525,13 @@ export function generateRepuestoDisponibleEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Repuesto disponible - Orden #${ctx.orden!.numeroOrden}`,
-    "Buenas noticias!",
+    "¡Buenas noticias!",
     `<div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
       <p style="margin: 0;"><strong>Orden:</strong> #${ctx.orden!.numeroOrden}</p>
       <p style="margin: 8px 0 0 0;"><strong>Dispositivo:</strong> ${ctx.orden!.dispositivo}</p>
     </div>
-    <p>Retomamos la reparacion de inmediato. Le avisaremos cuando este listo.</p>`,
-    { text: `El repuesto "${ctx.repuesto?.nombre || "necesario"}" ya esta disponible`, color: "#166534", bgColor: "#dcfce7" }
+    <p>Retomamos la reparación de inmediato. Te avisaremos cuando esté listo.</p>`,
+    { text: `El repuesto "${ctx.repuesto?.nombre || "necesario"}" ya está disponible`, color: "#166534", bgColor: "#dcfce7" }
   )
 }
 
@@ -539,13 +539,13 @@ export function generateRepuestoNoDisponibleEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Repuesto no disponible - Orden #${ctx.orden!.numeroOrden}`,
-    `Le informamos sobre su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
-    `<p>Podemos ofrecerle las siguientes opciones:</p>
+    `Te informamos sobre tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
+    `<p>Podemos ofrecerte las siguientes opciones:</p>
     <ul>
       <li>Buscar un repuesto alternativo compatible</li>
       <li>Devolver el equipo sin cargo</li>
     </ul>
-    <p>Por favor indiquenos como desea proceder.</p>`,
+    <p>Por favor, indicanos cómo querés seguir.</p>`,
     { text: `El repuesto "${ctx.repuesto?.nombre || "necesario"}" no se encuentra disponible`, color: "#92400e", bgColor: "#fef3c7" }
   )
 }
@@ -556,11 +556,11 @@ export function generateAvisoDemoraEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
     `Aviso de demora - Orden #${ctx.orden!.numeroOrden}`,
-    `La reparacion de su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) esta tomando mas tiempo del estimado.`,
+    `La reparación de tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) está tomando más tiempo del estimado.`,
     `${ctx.demora?.motivo ? `<p><strong>Motivo:</strong> ${ctx.demora.motivo}</p>` : ""}
     ${ctx.demora?.nuevaFechaEstimada ? `<p><strong>Nueva fecha estimada:</strong> ${formatDate(ctx.demora.nuevaFechaEstimada)}</p>` : ""}
     <p>Pedimos disculpas por la demora. Estamos trabajando para resolverlo lo antes posible.</p>`,
-    { text: "Demora en reparacion", color: "#92400e", bgColor: "#fef3c7" }
+    { text: "Demora en reparación", color: "#92400e", bgColor: "#fef3c7" }
   )
 }
 
@@ -569,14 +569,14 @@ export function generateReingresoGarantiaEmail(ctx: NotificationContext) {
 
   return generateGenericEmail(
     ctx,
-    `Re-ingreso por garantia - Orden #${ctx.orden!.numeroOrden}`,
-    `Lamentamos que tenga inconvenientes con su ${ctx.orden!.dispositivo}.`,
+    `Re-ingreso por garantía - Orden #${ctx.orden!.numeroOrden}`,
+    `Lamentamos que tengas inconvenientes con tu ${ctx.orden!.dispositivo}.`,
     `<div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
       <p style="margin: 0;"><strong>Orden:</strong> #${ctx.orden!.numeroOrden}</p>
-      <p style="margin: 8px 0 0 0;"><strong>Garantia valida hasta:</strong> ${formatDate(ctx.garantia!.fechaVencimiento)}</p>
+      <p style="margin: 8px 0 0 0;"><strong>Garantía válida hasta:</strong> ${formatDate(ctx.garantia!.fechaVencimiento)}</p>
     </div>
-    <p>Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.</p>`,
-    { text: "Su reparacion esta cubierta por garantia", color: "#166534", bgColor: "#dcfce7" }
+    <p>Podés traer tu equipo para que lo revisemos sin costo adicional. No necesitás turno, solo acercate en horario de atención.</p>`,
+    { text: "Tu reparación está cubierta por garantía", color: "#166534", bgColor: "#dcfce7" }
   )
 }
 
@@ -597,21 +597,21 @@ export function generateGarantiaPorVencerEmail(ctx: NotificationContext) {
 export function generateClienteInactivoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Lo extranamos! - ${ctx.organizationName}`,
-    "Hace tiempo que no nos visita!",
-    `<p>En ${ctx.organizationName} seguimos a su disposicion para cualquier servicio tecnico o consulta que necesite.</p>
-    <p>Recuerde que ofrecemos diagnostico sin cargo. Traiga su equipo y lo revisamos sin compromiso.</p>
-    <p>Lo esperamos!</p>`
+    `¡Te extrañamos! - ${ctx.organizationName}`,
+    "¡Hace tiempo que no nos visitás!",
+    `<p>En ${ctx.organizationName} seguimos a tu disposición para cualquier servicio técnico o consulta que necesites.</p>
+    <p>Recordá que ofrecemos diagnóstico sin cargo. Traé tu equipo y lo revisamos sin compromiso.</p>
+    <p>¡Te esperamos!</p>`
   )
 }
 
 export function generateSeguimientoPresupuestoRechazadoEmail(ctx: NotificationContext) {
   return generateGenericEmail(
     ctx,
-    `Alternativas para su ${ctx.orden!.dispositivo} - ${ctx.organizationName}`,
-    `Nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
-    `<p>Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Queremos informarle que podemos evaluar alternativas para resolver el problema de su equipo.</p>
-    <p>Puede responder este correo si desea que revisemos otras opciones.</p>`
+    `Alternativas para tu ${ctx.orden!.dispositivo} - ${ctx.organizationName}`,
+    `Nos comunicamos por tu ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`,
+    `<p>Entendemos que el presupuesto anterior no se ajustaba a tus necesidades. Queremos contarte que podemos evaluar alternativas para resolver el problema de tu equipo.</p>
+    <p>Podés responder este correo si querés que revisemos otras opciones.</p>`
   )
 }
 

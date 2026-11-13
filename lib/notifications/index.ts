@@ -89,7 +89,7 @@ export class NotificationService {
       return {
         success: false,
         channel: "EMAIL",
-        error: `Tipo de notificacion "${type}" no tiene plantilla de email`,
+        error: `Tipo de notificación "${type}" no tiene plantilla de email`,
       }
     }
 

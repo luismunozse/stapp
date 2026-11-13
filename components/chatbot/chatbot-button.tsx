@@ -53,7 +53,7 @@ export function ChatbotButton() {
 
           {/* Tooltip al hacer hover */}
           <span className="absolute bottom-full mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap pointer-events-none">
-            Hola! Soy Santi 👋
+            ¡Hola! Soy Santi 👋
           </span>
         </button>
       )}

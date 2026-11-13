@@ -90,7 +90,7 @@ export default function ContactoPage() {
       title: "WhatsApp",
       description: "Respuesta rápida",
       value: CONTACT_PHONE_DISPLAY,
-      href: whatsAppUrl("Hola! Necesito ayuda con STApp."),
+      href: whatsAppUrl("¡Hola! Necesito ayuda con STApp."),
       color: "text-emerald-600 dark:text-emerald-400",
       bgColor: "bg-emerald-50 dark:bg-emerald-950/50",
     },
@@ -115,10 +115,10 @@ export default function ContactoPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
-              Contáctanos
+              Contactanos
             </h1>
             <p className="text-xl text-muted-foreground">
-              ¿Tienes preguntas? Estamos aquí para ayudarte. Envíanos un mensaje y
+              ¿Tenés preguntas? Estamos acá para ayudarte. Envianos un mensaje y
               te responderemos lo antes posible.
             </p>
           </div>
@@ -171,7 +171,7 @@ export default function ContactoPage() {
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Envíanos un mensaje</CardTitle>
+                  <CardTitle>Envianos un mensaje</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {submitted && (
@@ -182,7 +182,7 @@ export default function ContactoPage() {
                           ¡Mensaje enviado exitosamente!
                         </p>
                         <p className="text-green-700 dark:text-green-400 text-sm mt-1">
-                          Nos pondremos en contacto contigo pronto.
+                          Nos vamos a contactar con vos pronto.
                         </p>
                       </div>
                     </div>
@@ -252,7 +252,7 @@ export default function ContactoPage() {
                         onChange={handleChange}
                         required
                         rows={6}
-                        placeholder="Cuéntanos más sobre tu consulta..."
+                        placeholder="Contanos más sobre tu consulta..."
                         className="mt-1"
                       />
                     </div>
@@ -279,20 +279,20 @@ export default function ContactoPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Horarios de Atención</CardTitle>
+                  <CardTitle className="text-lg">Horarios de atención</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium text-foreground">Lunes a Viernes</p>
+                      <p className="font-medium text-foreground">Lunes a viernes</p>
                       <p className="text-sm text-muted-foreground">9:00 AM - 6:00 PM (ART)</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium text-foreground">Fin de Semana</p>
+                      <p className="font-medium text-foreground">Fin de semana</p>
                       <p className="text-sm text-muted-foreground">Cerrado</p>
                     </div>
                   </div>
@@ -319,15 +319,15 @@ export default function ContactoPage() {
               <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="pt-6">
                   <h3 className="font-semibold text-foreground mb-2">
-                    ¿Necesitas ayuda inmediata?
+                    ¿Necesitás ayuda inmediata?
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Consulta nuestra sección de preguntas frecuentes o inicia una
+                    Consultá nuestra sección de preguntas frecuentes o empezá una
                     prueba gratuita.
                   </p>
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full" asChild>
-                      <Link href="/#faq">Ver FAQ</Link>
+                      <Link href="/#faq">Ver preguntas frecuentes</Link>
                     </Button>
                     <Button className="w-full" asChild>
                       <Link href="/registro">Probar gratis</Link>

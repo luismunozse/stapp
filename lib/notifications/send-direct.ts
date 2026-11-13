@@ -324,8 +324,8 @@ function generateInAppContent(
       }
     case "GARANTIA_CREADA":
       return {
-        title: `Garantia creada - Orden #${context.orden?.numeroOrden}`,
-        body: `${context.cliente.nombre} - ${context.garantia?.diasValidez} dias`,
+        title: `Garantía creada - Orden #${context.orden?.numeroOrden}`,
+        body: `${context.cliente.nombre} - ${context.garantia?.diasValidez} días`,
         icon: "shield",
       }
     case "REINGRESO_GARANTIA":
@@ -347,7 +347,7 @@ function generateInAppContent(
         icon: "clock",
       }
     default:
-      return { title: "Nueva notificacion", body: context.cliente.nombre, icon: "bell" }
+      return { title: "Nueva notificación", body: context.cliente.nombre, icon: "bell" }
   }
 }
 
@@ -400,7 +400,7 @@ export function generateEmailContent(
               <strong>Dispositivo:</strong> ${dispositivo}<br>
               <strong>Presupuesto:</strong> $${context.orden?.presupuesto?.toLocaleString()}
             </p>
-            <p>Por favor confirma si deseas proceder con la reparación.</p>
+            <p>Por favor, confirmá si querés seguir con la reparación.</p>
             <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,
@@ -418,7 +418,7 @@ export function generateEmailContent(
               <strong>Días de garantía:</strong> ${context.garantia?.diasValidez}<br>
               <strong>Vencimiento:</strong> ${fechaVencimiento}
             </p>
-            <p>Guarda este correo como comprobante de tu garantía.</p>
+            <p>Guardá este correo como comprobante de tu garantía.</p>
             <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,
@@ -460,7 +460,7 @@ export function generateEmailContent(
     }
     case "RECORDATORIO_RETIRO":
       return {
-        subject: `Recordatorio: Tu dispositivo está listo para retirar`,
+        subject: `Recordatorio: tu dispositivo está listo para retirar`,
         html: `
           <div style="${baseStyle}">
             <h2>Hola ${nombre}</h2>
@@ -476,7 +476,7 @@ export function generateEmailContent(
     default:
       return {
         subject: `Notificación de ${orgName}`,
-        html: `<div style="${baseStyle}"><p>Tienes una nueva notificación.</p></div>`,
+        html: `<div style="${baseStyle}"><p>Tenés una nueva notificación.</p></div>`,
       }
   }
 }

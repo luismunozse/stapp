@@ -41,7 +41,7 @@ describe("generateWhatsAppMessage (fallback genérico)", () => {
 describe("resolvePlantillaForTipo (copy por estado — catálogo como fuente de verdad)", () => {
   it("CAMBIO_ESTADO PRESUPUESTADO sin override → default del catálogo con CTA aprobar/rechazar + link", () => {
     const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "PRESUPUESTADO", presupuesto: 15000 }), null)!
-    expect(m).toMatch(/apruebe o rechace/i)
+    expect(m).toMatch(/aprobá o rechazá/i)
     expect(m).toMatch(/seguimiento\/tok/)
   })
 
@@ -58,7 +58,7 @@ describe("resolvePlantillaForTipo (copy por estado — catálogo como fuente de 
 
   it("PRESUPUESTO_DEFINIDO sin override → default orden_presupuesto con CTA + link, sin 'responda SI'", () => {
     const m = resolvePlantillaForTipo("PRESUPUESTO_DEFINIDO", ctx({ presupuesto: 20000 }), null)!
-    expect(m).toMatch(/apruebe o rechace/i)
+    expect(m).toMatch(/aprobá o rechazá/i)
     expect(m).toMatch(/seguimiento\/tok/)
     expect(m).not.toMatch(/responda\s+\*?si\*?/i)
   })

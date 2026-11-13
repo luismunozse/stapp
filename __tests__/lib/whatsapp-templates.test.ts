@@ -154,14 +154,14 @@ describe("copy accionable por estado", () => {
     getWhatsAppTemplates(ctxOrden({ estado, ...extra })).find((t) => t.id === "estado_actual")!.mensaje
 
   it("copy PRESUPUESTADO es accionable (aprobar/rechazar)", () => {
-    expect(estadoMsg("PRESUPUESTADO")).toMatch(/apruebe o rechace/i)
+    expect(estadoMsg("PRESUPUESTADO")).toMatch(/aprobá o rechazá/i)
   })
 
   it("sin override usa el defaultText del catalogo (PRESUPUESTADO accionable)", () => {
     // The catalog defaultText does NOT add the extended label 'presupuestado - esperando su respuesta'
     // that the old generator injected. RED until applyOverride uses catalog defaultText.
     const msg = estadoMsg("PRESUPUESTADO")
-    expect(msg).toMatch(/apruebe o rechace/i)
+    expect(msg).toMatch(/aprobá o rechazá/i)
     expect(msg).not.toContain("presupuestado - esperando su respuesta")
   })
   it("override per-estado gana sobre el catalogo", () => {
@@ -178,7 +178,7 @@ describe("copy accionable por estado", () => {
   })
   it("mensaje de presupuesto incluye monto y CTA aprobar/rechazar", () => {
     const t = getWhatsAppTemplates(ctxOrden({ presupuesto: 1000 })).find((x) => x.id === "presupuesto")!.mensaje
-    expect(t).toMatch(/apruebe o rechace/i)
+    expect(t).toMatch(/aprobá o rechazá/i)
     expect(t).toMatch(/Presupuesto:/i)
   })
 })
