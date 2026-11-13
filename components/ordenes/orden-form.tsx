@@ -45,6 +45,13 @@ import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
 import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
 import { CamposExtraFields } from "./campos-extra-fields"
+import {
+  EstadoFisicoRecepcion,
+  ESTADO_FISICO_FOCO_ID,
+  type EstadoFisicoValor,
+} from "./danos/estado-fisico-recepcion"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
+import { danoInputSchema, validarDanosParaTipo, type DanoInput } from "@/lib/ordenes/danos"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -76,6 +83,31 @@ function checklistItemFaltante(tipo: string, value: boolean | string | null | un
 }
 
 const CHECKLIST_ITEM_REQUERIDO_MSG = "Completá este ítem obligatorio"
+
+const ESTADO_FISICO_REQUERIDO_MSG = "Marcá el estado físico del equipo o indicá «Sin daños visibles»"
+
+const ESTADO_FISICO_VACIO: EstadoFisicoValor = { danos: [], sinDanos: false }
+
+/** El estado fisico que trae un borrador, saneado: cada pin pasa por el mismo
+ *  schema que valida la API (los que no, se tiran), y si los que quedan no
+ *  corresponden al dibujo del tipo de equipo restaurado se tira la lista entera
+ *  -- un pin sobre otro dibujo marca un lugar que no existe en este. Nunca
+ *  tira: un borrador viejo o tocado a mano tiene que poder restaurarse igual. */
+function sanearEstadoFisicoBorrador(raw: unknown, codigoTipo: string | null): EstadoFisicoValor {
+  if (!raw || typeof raw !== "object") return ESTADO_FISICO_VACIO
+  const { danos: rawDanos, sinDanos } = raw as { danos?: unknown; sinDanos?: unknown }
+  const danos: DanoInput[] = []
+  if (Array.isArray(rawDanos)) {
+    for (const item of rawDanos) {
+      const parsed = danoInputSchema.safeParse(item)
+      if (parsed.success) danos.push(parsed.data)
+    }
+  }
+  if (danos.length > 0 && validarDanosParaTipo(danos, codigoTipo).ok) {
+    return { danos, sinDanos: false }
+  }
+  return { danos: [], sinDanos: sinDanos === true }
+}
 
 /** Valores base del formulario. Vive afuera del componente (sin dependencias
  *  de hooks) para que useForm(defaultValues) y el discard del borrador usen
@@ -177,6 +209,10 @@ interface OrdenDraftValue {
    *  campo existiera, que se tratan como "de otro template". */
   checklistTemplateId?: string | null
   checklistNotas: string
+  /** Pins del estado fisico de recepcion (locales, sin numero) o "sin daños".
+   *  Opcional para los borradores escritos antes de que existiera; se sanea
+   *  al restaurar (ver sanearEstadoFisicoBorrador). */
+  estadoFisico?: EstadoFisicoValor
 }
 
 interface OrdenFormProps {
@@ -219,13 +255,14 @@ interface OrdenCreadaData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  estadoFisico?: EstadoFisicoPDF | null
 }
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
   const term = useTerminologia()
-  const { pais } = useCurrency()
+  const { pais, danosRecepcionObligatorio } = useCurrency()
   const { offlineFetch } = useOffline()
-  const { showError, showInfo } = useModal()
+  const { showError, showInfo, confirm } = useModal()
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
   const [loading, setLoading] = useState(false)
@@ -286,12 +323,18 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   /** Se prende al primer "Crear orden" con items requeridos sin responder:
    *  desde ahi cada item requerido vacio muestra su aviso debajo. */
   const [checklistIntentoEnviar, setChecklistIntentoEnviar] = useState(false)
+  const [estadoFisico, setEstadoFisico] = useState<EstadoFisicoValor>(ESTADO_FISICO_VACIO)
+  /** Igual que `checklistIntentoEnviar`: el aviso de estado fisico obligatorio
+   *  sale recien despues del primer "Crear orden" sin marcarlo. */
+  const [estadoFisicoIntentoEnviar, setEstadoFisicoIntentoEnviar] = useState(false)
+  const estadoFisicoFaltante =
+    danosRecepcionObligatorio && estadoFisico.danos.length === 0 && !estadoFisico.sinDanos
   /** Campo a enfocar cuando el paso que lo contiene ya este en pantalla. El
    *  IMEI vive en el paso 1 y se valida tambien desde el submit (que puede salir
    *  de cualquier paso): sin esperar al render, el input todavia no existe y el
    *  foco se pierde. Lo mismo el checklist, que vive en el paso 3. */
   const [enfocarPendiente, setEnfocarPendiente] = useState<
-    { tipo: "imei" } | { tipo: "checklist"; itemId: string } | null
+    { tipo: "imei" } | { tipo: "checklist"; itemId: string } | { tipo: "estadoFisico" } | null
   >(null)
   /** Origen de las respuestas del checklist que restauro un borrador, mientras
    *  todavia no se resolvio el template contra el que hay que compararlas. Ver
@@ -455,6 +498,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           ? checklistDelBorrador.templateId
           : (checklistTemplate?.id ?? null),
         checklistNotas,
+        estadoFisico,
       }
     },
   })
@@ -514,6 +558,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setChecklistValores({})
     setChecklistNotas("")
     setChecklistIntentoEnviar(false)
+    setEstadoFisico(ESTADO_FISICO_VACIO)
+    setEstadoFisicoIntentoEnviar(false)
     // Ya no hay respuestas restauradas que comparar contra ningun template.
     setChecklistDelBorrador(null)
     setCurrentStep(1)
@@ -597,6 +643,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
       setChecklistValores(draft.checklistValores)
       setChecklistNotas(draft.checklistNotas)
+      setEstadoFisico(sanearEstadoFisicoBorrador(draft.estadoFisico, draft.form.tipoDispositivo ?? null))
+      setEstadoFisicoIntentoEnviar(false)
       // No se puede comparar todavia: el template se re-pide por tipo de equipo
       // y la lista de tipos aun no resolvio. Queda pendiente para el efecto que
       // descarta las respuestas huerfanas.
@@ -780,7 +828,20 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }
 
   // Clear fields when device type changes
-  const handleTipoChange = (nuevoTipo: string) => {
+  const handleTipoChange = async (nuevoTipo: string) => {
+    // Los pins estan marcados sobre el dibujo del tipo actual: con otro tipo
+    // marcarian lugares de otro dibujo. Se pregunta antes de tocar nada; si el
+    // operador se arrepiente, el tipo (y todo lo que se limpia abajo) queda.
+    if (estadoFisico.danos.length > 0 && nuevoTipo !== getValues("tipoDispositivo")) {
+      const ok = await confirm({
+        title: "¿Cambiar el tipo de equipo?",
+        description: "Cambiar el tipo de equipo borra los daños marcados",
+        confirmText: "Cambiar tipo",
+        variant: "warning",
+      })
+      if (!ok) return
+      setEstadoFisico((prev) => ({ ...prev, danos: [] }))
+    }
     setValue("tipoDispositivo", nuevoTipo, { shouldValidate: true })
     if (nuevoTipo) clearErrors("tipoDispositivo")
     setAccesoriosSeleccionados([])
@@ -1142,6 +1203,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       toast.error(`Revisá el ${imeiLabel}: tiene que tener exactamente 15 dígitos`)
       return
     }
+    if (estadoFisicoFaltante) {
+      setEstadoFisicoIntentoEnviar(true)
+      setCurrentStep(totalSteps)
+      setEnfocarPendiente({ tipo: "estadoFisico" })
+      toast.error(ESTADO_FISICO_REQUERIDO_MSG)
+      return
+    }
     const faltantes = checklistItemsRequeridosFaltantes()
     if (faltantes.length > 0) {
       setChecklistIntentoEnviar(true)
@@ -1201,7 +1269,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         tecnicoId: !isTecnicoRole && tecnicoElegido ? tecnicoElegido : undefined,
         recibidoPorId: selectedRecibidoPorId || undefined,
         fromTurnoId: fromTurnoId || undefined,
+        // El estado guarda DanoInput: el numero de cada pin es solo de pantalla.
+        danos: estadoFisico.danos.length > 0 ? estadoFisico.danos : undefined,
+        recepcionSinDanos: estadoFisico.danos.length === 0 && estadoFisico.sinDanos,
       }
+      const estadoFisicoEnviado = estadoFisico.danos.length > 0 || estadoFisico.sinDanos
 
       const res = await offlineFetch("/api/ordenes", {
         method: "POST",
@@ -1232,6 +1304,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       }
 
       const nuevaOrden = await res.json()
+      // Sin obligatoriedad, la API crea la orden aunque el estado fisico no se
+      // pueda registrar: avisarlo, porque no queda guardado en ningun lado.
+      if (estadoFisicoEnviado && nuevaOrden.estadoFisicoGuardado === false) {
+        toast.warning("La orden se creó, pero el estado físico no se pudo guardar")
+      }
       // El borrador se da de baja siempre, incluso cuando el checklist se queda
       // afuera (ver mas abajo): la orden YA existe, asi que conservarlo dejaria
       // la apertura siguiente restaurando una carga que ya se convirtio en
@@ -1325,6 +1402,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         organizationTelefono: nuevaOrden.organizationTelefono ?? null,
         organizationDireccion: nuevaOrden.organizationDireccion ?? null,
         organizationComprobanteTerminos: nuevaOrden.organizationComprobanteTerminos ?? null,
+        // Solo si quedó guardado: el ticket no debe mostrar lo que la orden no tiene.
+        estadoFisico:
+          estadoFisicoEnviado && nuevaOrden.estadoFisicoGuardado !== false
+            ? {
+                diagrama: estadoFisico.danos[0]?.diagrama ?? "",
+                sinDanos: estadoFisico.danos.length === 0 && estadoFisico.sinDanos,
+                danos: estadoFisico.danos.map((d, i) => ({ ...d, numero: i + 1, momento: "recepcion" as const })),
+              }
+            : null,
       })
       setShowOrdenCreadaModal(true)
     } catch (error) {
@@ -1407,6 +1493,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // Por id y no con setFocus: al volver del paso 3 el input se monta de
       // nuevo y la ref que guarda react-hook-form sigue apuntando al anterior.
       document.getElementById("imei")?.focus()
+    } else if (enfocarPendiente.tipo === "estadoFisico") {
+      if (currentStep !== totalSteps) return
+      const el = document.getElementById(ESTADO_FISICO_FOCO_ID)
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" })
+      el?.focus()
     } else {
       if (currentStep !== totalSteps || !checklistOpen) return
       const el = document.getElementById(`checklist-item-${enfocarPendiente.itemId}`)
@@ -2039,6 +2130,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           </>)}
 
           {currentStep === 3 && (<>
+          {/* Estado fisico del equipo al recibirlo */}
+          <EstadoFisicoRecepcion
+            codigoTipo={tipoDispositivo || null}
+            valor={estadoFisico}
+            onChange={setEstadoFisico}
+            obligatorio={danosRecepcionObligatorio}
+            error={estadoFisicoIntentoEnviar && estadoFisicoFaltante ? ESTADO_FISICO_REQUERIDO_MSG : undefined}
+          />
+
           {/* Fotos de ingreso */}
           <FotosIngreso
             label={`Fotos del ${term("equipo")} (Ingreso)`}

@@ -29,6 +29,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useModal } from "@/contexts/modal-context"
 import type { OrdenServicio } from "@/types"
+import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 
 interface OrdenCreadaData {
   id: string
@@ -60,6 +61,8 @@ interface OrdenCreadaData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  /** Estado físico registrado en la recepción, para el ticket térmico. */
+  estadoFisico?: EstadoFisicoPDF | null
 }
 
 interface OrdenCreadaModalProps {
@@ -101,12 +104,14 @@ function buildThermalOrden(orden: OrdenCreadaData) {
     organizationTelefono: orden.organizationTelefono ?? null,
     organizationDireccion: orden.organizationDireccion ?? null,
     organizationComprobanteTerminos: orden.organizationComprobanteTerminos ?? null,
+    estadoFisico: orden.estadoFisico ?? null,
   } as unknown as OrdenServicio & {
     organizationName?: string | null
     organizationLogoUrl?: string | null
     organizationTelefono?: string | null
     organizationDireccion?: string | null
     organizationComprobanteTerminos?: string | null
+    estadoFisico?: EstadoFisicoPDF | null
   }
 }
 

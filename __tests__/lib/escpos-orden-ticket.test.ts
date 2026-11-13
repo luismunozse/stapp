@@ -79,3 +79,27 @@ describe("generateOrdenTicketCommands — seccion dispositivo", () => {
     expect(modeloLine!.length).toBeLessThanOrEqual(33) // 32 chars + posible \r
   })
 })
+
+describe("generateOrdenTicketCommands — estado físico", () => {
+  it("textToBytes mapea los guiones largos a '-'", async () => {
+    const { textToBytes } = await import("@/lib/escpos")
+    expect(textToBytes("–")).toEqual([0x2d])
+    expect(textToBytes("—")).toEqual([0x2d])
+  })
+  it("imprime la lista de pins sin '?' en lugar del guion", async () => {
+    const { lineasEstadoFisico } = await import("@/lib/ordenes/estado-fisico-lineas")
+    const lineas = lineasEstadoFisico(
+      {
+        diagrama: "celular@1",
+        sinDanos: false,
+        danos: [{ numero: 1, vista: "frente", x: 0.3, y: 0.4, tipo: "golpe", nota: "pantalla", momento: "recepcion" }],
+      },
+      "recepcion",
+    )
+    const bytes = generateOrdenTicketCommands({ ...baseData, estadoFisico: lineas }, 80)
+    const text = decode(bytes)
+    expect(text).toContain("Estado fisico:")
+    expect(text).toContain("1. Golpe (frente) - pantalla")
+    expect(text).not.toContain("(frente) ?")
+  })
+})

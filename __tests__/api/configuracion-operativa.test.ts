@@ -126,4 +126,13 @@ describe("GET /api/configuracion/operativa", () => {
     const res = await GET()
     expect(res.status).toBe(401)
   })
+
+  it("danosRecepcionObligatorio: false si la columna no existe, true si está activa", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    mockSupabaseFrom({ organizations: createChainMock(orgAditivo) })
+    expect((await parseResponse(await GET())).body.danosRecepcionObligatorio).toBe(false)
+
+    mockSupabaseFrom({ organizations: createChainMock({ ...orgAditivo, danos_recepcion_obligatorio: true }) })
+    expect((await parseResponse(await GET())).body.danosRecepcionObligatorio).toBe(true)
+  })
 })

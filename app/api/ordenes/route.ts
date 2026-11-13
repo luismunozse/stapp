@@ -37,6 +37,7 @@ import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { danoInputSchema, validarDanosParaTipo, MAX_DANOS_POR_ORDEN, mensajeErrorDanos } from "@/lib/ordenes/danos"
 import { ESTADOS_ACTIVOS, COBRO_PENDIENTE_ESTADOS_COBRO, COBRO_PENDIENTE_ESTADOS_ORDEN } from "@/lib/ordenes/filtros-url"
 
 // Generar token público único
@@ -78,6 +79,9 @@ const ordenSchema = z.object({
   // se vincula y el turno pasa a estado 'orden_generada' (trigger SQL).
   fromTurnoId: z.string().optional(),
   recibidoPorId: z.string().nullable().optional(),
+  // Estado físico en la recepción: pins de daño, o la confirmación de "sin daños visibles".
+  danos: z.array(danoInputSchema).max(MAX_DANOS_POR_ORDEN, `Máximo ${MAX_DANOS_POR_ORDEN} daños por orden`).optional(),
+  recepcionSinDanos: z.boolean().optional(),
 })
 
 export async function GET(request: Request) {
@@ -428,6 +432,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: errorReferencia }, { status: 400 })
     }
 
+    // Estado físico de la recepción: se valida antes de insertar para no quemar un número de orden.
+    const danos = data.danos ?? []
+    if (danos.length > 0 && data.recepcionSinDanos === true) {
+      return NextResponse.json(
+        { error: "No podés marcar daños y «Sin daños visibles» a la vez" },
+        { status: 400 },
+      )
+    }
+    const validacionDanos = validarDanosParaTipo(danos, data.tipoDispositivo)
+    if (!validacionDanos.ok) {
+      return NextResponse.json({ error: validacionDanos.error }, { status: 400 })
+    }
+    const registraEstadoFisico = danos.length > 0 || data.recepcionSinDanos === true
+    // select("*"): la columna puede no existir todavía en algunas bases; se lee tolerante.
+    const { data: orgDanos } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId!)
+      .single()
+    const danosObligatorios = (orgDanos as { danos_recepcion_obligatorio?: boolean } | null)?.danos_recepcion_obligatorio === true
+    if (danosObligatorios && !registraEstadoFisico) {
+      return NextResponse.json(
+        { error: "Marcá el estado físico del equipo o indicá «Sin daños visibles»" },
+        { status: 422 },
+      )
+    }
+
     // Si la orden se origina en un turno: validar que pertenece a la org y que
     // todavía no fue vinculado a otra orden.
     let turnoOrigen: { id: string; tecnico_id: string | null } | null = null
@@ -564,6 +595,42 @@ export async function POST(request: Request) {
         return planLimitErrorResponse(dbError)
       }
       throw dbError
+    }
+
+    // Estado físico de la recepción: atómico vía RPC, justo después del insert y antes de
+    // cualquier efecto secundario (turno, cobros, fotos, eventos, notificaciones).
+    let estadoFisicoGuardado = false
+    if (registraEstadoFisico) {
+      const { error: danosError } = await supabaseAdmin.rpc("registrar_estado_fisico_recepcion", {
+        p_orden_id: orden.id,
+        p_organization_id: organizationId!,
+        p_danos: danos,
+        p_sin_danos: data.recepcionSinDanos === true,
+        p_user_id: userId!,
+      })
+      if (danosError) {
+        console.error("Error registrando estado físico de recepción:", danosError)
+        if (danosObligatorios) {
+          // Compensación: se borra la orden (los hijos caen en cascada). Puede dejar un hueco
+          // en la numeración, lo cual el spec acepta.
+          const { error: compensacionError } = await supabaseAdmin
+            .from("ordenes_servicio")
+            .delete()
+            .eq("id", orden.id)
+            .eq("organization_id", organizationId!)
+          if (compensacionError) {
+            console.error("Error borrando la orden tras fallar el estado físico:", {
+              ordenId: orden.id,
+              organizationId,
+              error: compensacionError,
+            })
+          }
+          const { status, error: mensaje } = mensajeErrorDanos(danosError)
+          return NextResponse.json({ error: mensaje }, { status })
+        }
+      } else {
+        estadoFisicoGuardado = true
+      }
     }
 
     // Atomic claim: update turno.orden_id only if it is still null (TOCTOU-safe)
@@ -732,7 +799,7 @@ export async function POST(request: Request) {
       }).catch((err) => console.error("Error queueing notification (orden creada):", err))
     }
 
-    return NextResponse.json(ordenFormatted, { status: 201 })
+    return NextResponse.json({ ...ordenFormatted, estadoFisicoGuardado }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -59,6 +59,7 @@ import { parseRecepcionTerminos } from "@/lib/terminos"
 import { resolveTerminologia, t } from "@/lib/terminologia"
 import { ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { lineasAvances } from "@/lib/ordenes/avances"
+import { hayEstadoFisico, lineasEstadoFisico } from "@/lib/ordenes/estado-fisico-lineas"
 
 export type CompactPapel = "A5" | "A6"
 
@@ -459,6 +460,27 @@ export async function generateOrdenCompactPDF(
   }
   const checklistSplit = classifyChecklist(checklist)
   const checklistLines = [...checklistGroups].map(([cat, items]) => ({ title: CATEGORIAS[cat] || cat, text: items.join(" · ") }))
+
+  // Estado físico al ingreso, solo texto (sin dibujo), en la hoja de recepción: hasta MAX_LINEAS_EF
+  // renglones recortados; el resto se resume en una línea para que la hoja nunca desborde.
+  const estadoFisicoLineas: Array<{ text: string; titulo?: boolean }> = []
+  if (!isEntrega && hayEstadoFisico(data.estadoFisico)) {
+    const MAX_LINEAS_EF = 10
+    const recep = lineasEstadoFisico(data.estadoFisico, "recepcion")
+    const diag = lineasEstadoFisico(data.estadoFisico, "diagnostico")
+    const todas: Array<{ text: string; titulo?: boolean }> = [...recep.map((text) => ({ text })), ...(diag.length ? [{ text: "Detectados en diagnóstico", titulo: true }, ...diag.map((text) => ({ text }))] : [])]
+    let usados = 0
+    let omitidos = 0
+    for (const l of todas) {
+      if (l.titulo) {
+        estadoFisicoLineas.push(l)
+      } else if (usados < MAX_LINEAS_EF) {
+        estadoFisicoLineas.push({ text: cutText(l.text, 90) })
+        usados += 1
+      } else omitidos += 1
+    }
+    if (omitidos > 0) estadoFisicoLineas.push({ text: `… y ${omitidos} más` })
+  }
 
   const terminos = parseRecepcionTerminos(data.recepcionTerminos)
 
@@ -872,6 +894,11 @@ export async function generateOrdenCompactPDF(
     const acc = cap("accesorios", accesorios)
     if (acc) para(acc, reg, F.body, MONO.ink)
     else para("—", reg, F.body, MONO.faint)
+
+    if (estadoFisicoLineas.length > 0) {
+      section("Estado físico al ingreso")
+      for (const l of estadoFisicoLineas) para(l.text, l.titulo ? bold : reg, F.small, l.titulo ? MONO.label : MONO.ink)
+    }
 
     // ============================================================
     // MONEY

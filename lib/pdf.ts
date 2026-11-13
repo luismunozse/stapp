@@ -15,6 +15,7 @@ import { lineasAvances, recortarAvances } from "@/lib/ordenes/avances"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { bloquesTerminosGarantia } from "@/lib/garantias/config"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+import { dibujarEstadoFisico, hayEstadoFisico, medirEstadoFisico, type EstadoFisicoPDF } from "@/lib/pdf-estado-fisico"
 
 /** Renglones que puede ocupar la sección de avances en la hoja de entrega A4. */
 const AVANCES_MAX_LINEAS_A4 = 6
@@ -1048,6 +1049,8 @@ interface OrdenPDFData {
   timeline?: Array<{ estado: string; fecha: Date }> | null
   /** Avances de la orden marcados "visible para el cliente" (lib/ordenes/avances), del más viejo al más nuevo. Solo salen en la hoja de entrega. */
   avances?: Array<{ fecha: Date; texto: string }> | null
+  /** Diagrama de daños de la recepción. El bloque solo se dibuja si hay pins o "sin daños". */
+  estadoFisico?: EstadoFisicoPDF | null
   /**
    * Hoja de impresion. Sin valor (o cualquier cosa que no sea A5/A6) es A4: el dibujo de
    * siempre, abajo. A5 y A6 usan el layout de una columna de lib/pdf-orden-compact.ts.
@@ -1354,6 +1357,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // name collision confusing readers of this file.
   const ESTADOS_HOJA_ENTREGA = ESTADOS_COMPLETADOS
   const isEntregaSheet = ESTADOS_HOJA_ENTREGA.has(estadoRaw)
+  // Estado físico al ingreso: la hoja ENTREGA es una página fija, así que siempre lo lleva aparte.
+  const estadoFisico = hayEstadoFisico(data.estadoFisico) ? data.estadoFisico : null
+  let estadoFisicoEnPaginaAparte = !!estadoFisico && isEntregaSheet
 
   if (isEntregaSheet) {
     // ============================================================
@@ -2268,6 +2274,26 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
   const zoneCTopTarget = cutYTarget + zoneCH
   const MIN_GAP = 8
+  // Estado físico al ingreso (diagrama de daños): va en la hoja si cabe en el hueco que
+  // reparte esta zona (la hoja es una página fija); si no, en una página aparte al final.
+  if (estadoFisico) {
+    const efFonts = { regular: archivoRegular, bold: archivoBold }
+    const hueco = isPrintSheet ? ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2 : Infinity
+    // Primero a tamaño completo; si no entra, compacto (antes de la firma); si tampoco, página aparte.
+    const efH = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts)
+    if (efH + 8 <= hueco) {
+      dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts)
+      ry -= efH + 8
+    } else {
+      const efHCompacto = medirEstadoFisico(pdfDoc, estadoFisico, rxContentW, efFonts, { compacto: true })
+      if (efHCompacto + 8 <= hueco) {
+        dibujarEstadoFisico(page, estadoFisico, { x: rxMargin, y: ry, w: rxContentW }, efFonts, { compacto: true })
+        ry -= efHCompacto + 8
+      } else {
+        estadoFisicoEnPaginaAparte = true
+      }
+    }
+  }
   const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0
   const gapTop = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
   const gapBottom = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
@@ -2507,6 +2533,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // página. Este bloque solo se ejecutaba cuando `data.estado ===
   // "ENTREGADO"`, que ahora siempre cae en la rama isEntregaSheet — así que
   // era código inalcanzable en la rama RECEPCIÓN de todas formas.
+
+  if (estadoFisico && estadoFisicoEnPaginaAparte) {
+    const pageEf = pdfDoc.addPage([595, 842])
+    const efFonts = { regular: archivoRegular, bold: archivoBold }
+    pageEf.drawText(`Orden ${numeroOrdenPadded}`, { x: rxMargin, y: height - rxMargin - 8, size: 8, font: archivoBold, color: MONO.label })
+    dibujarEstadoFisico(pageEf, estadoFisico, { x: rxMargin, y: height - rxMargin - 24, w: rxContentW }, efFonts)
+  }
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

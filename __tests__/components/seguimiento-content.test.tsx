@@ -58,6 +58,7 @@ const fetchMock = vi.fn((input: RequestInfo | URL) => {
   if (url.endsWith("/timeline")) return jsonResponse(200, timelinePayload)
   if (url.endsWith("/photos")) return jsonResponse(200, { INGRESO: [], REPARACION: [], ENTREGA: [] })
   if (url.endsWith("/warranty")) return jsonResponse(200, { garantia: null })
+  if (url.endsWith("/danos")) return jsonResponse(200, { danos: [], sinDanos: false, diagrama: "celular" })
   const r = ordenRespuestas.length > 1 ? ordenRespuestas.shift()! : ordenRespuestas[0]
   if (r === "network") return Promise.reject(new TypeError("Failed to fetch"))
   return jsonResponse(r.status, r.body ?? {})

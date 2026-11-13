@@ -633,6 +633,13 @@ lib/
 - [ ] Soporte multi-idioma
 - [ ] App móvil nativa (React Native/Expo)
 
+### Diagrama de daños en la recepción
+Spec: `docs/superpowers/specs/2026-11-12-diagrama-danos-design.md`. Responde a "Diagramas y anotaciones" de Gestioo.
+- [ ] **v1:** marcar daños sobre el dibujo del equipo al recibirlo (electrónicos base y genérico), recepción bloqueada, daños detectados en diagnóstico, PDF y seguimiento
+- [ ] **Fase 2 — Fotos por pin:** vincular fotos de `fotos_orden` a cada daño marcado, como prueba ante reclamos
+- [ ] **Fase 3 — Estadísticas de daños:** daños más comunes por marca y modelo, porcentaje de equipos con daños al ingreso, daños que se escaparon en la recepción por vendedor
+- [ ] **Fase 4 — Dibujos propios por taller:** subir la imagen o esquema de cualquier tipo de equipo; abre la función a automotor, electrodomésticos, motos y relojería
+
 ### Largo plazo
 - [ ] API pública para integraciones
 - [ ] Marketplace de repuestos

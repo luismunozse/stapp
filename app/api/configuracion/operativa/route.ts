@@ -67,6 +67,9 @@ export async function GET() {
       // Paper size of the printed order (migration orden_formato_papel). select("*") leaves a
       // missing column undefined; anything that is not a known size reads A4.
       ordenFormatoPapel: normalizeOrdenPapel(org.orden_formato_papel),
+      // Estado físico obligatorio al crear una orden (migración 408). select("*") deja
+      // la columna sin correr como undefined: se lee como false.
+      danosRecepcionObligatorio: org.danos_recepcion_obligatorio === true,
       facturacionElectronicaDisponible,
     })
   } catch (error) {
