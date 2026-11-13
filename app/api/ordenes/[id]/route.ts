@@ -5,6 +5,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { MENSAJE_TECNICO_OTRA_SUCURSAL, puedeAsignarTecnicoOrden, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
+import { registrarCambioTotal } from "@/lib/ordenes/cambio-total"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
@@ -492,6 +493,19 @@ export async function PUT(
 
     if (updateError) {
       throw updateError
+    }
+
+    // Quién cambió el total y desde qué monto (historial interno de la orden).
+    if (updateData.costo_final !== undefined) {
+      await registrarCambioTotal({
+        ordenId: id,
+        organizationId: organizationId!,
+        userId: userId!,
+        rol: role,
+        antes: orden.costo_final,
+        despues: updateData.costo_final,
+        origen: "EDICION",
+      })
     }
 
     // Registrar evento en orden_eventos para timeline público (fire-and-forget)

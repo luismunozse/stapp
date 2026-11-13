@@ -48,10 +48,11 @@ import { CamposExtraFields } from "./campos-extra-fields"
 import {
   EstadoFisicoRecepcion,
   ESTADO_FISICO_FOCO_ID,
+  ESTADO_FISICO_VACIO,
+  sanearEstadoFisicoBorrador,
   type EstadoFisicoValor,
 } from "./danos/estado-fisico-recepcion"
 import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
-import { danoInputSchema, validarDanosParaTipo, type DanoInput } from "@/lib/ordenes/danos"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -85,29 +86,6 @@ function checklistItemFaltante(tipo: string, value: boolean | string | null | un
 const CHECKLIST_ITEM_REQUERIDO_MSG = "Completá este ítem obligatorio"
 
 const ESTADO_FISICO_REQUERIDO_MSG = "Marcá el estado físico del equipo o indicá «Sin daños visibles»"
-
-const ESTADO_FISICO_VACIO: EstadoFisicoValor = { danos: [], sinDanos: false }
-
-/** El estado fisico que trae un borrador, saneado: cada pin pasa por el mismo
- *  schema que valida la API (los que no, se tiran), y si los que quedan no
- *  corresponden al dibujo del tipo de equipo restaurado se tira la lista entera
- *  -- un pin sobre otro dibujo marca un lugar que no existe en este. Nunca
- *  tira: un borrador viejo o tocado a mano tiene que poder restaurarse igual. */
-function sanearEstadoFisicoBorrador(raw: unknown, codigoTipo: string | null): EstadoFisicoValor {
-  if (!raw || typeof raw !== "object") return ESTADO_FISICO_VACIO
-  const { danos: rawDanos, sinDanos } = raw as { danos?: unknown; sinDanos?: unknown }
-  const danos: DanoInput[] = []
-  if (Array.isArray(rawDanos)) {
-    for (const item of rawDanos) {
-      const parsed = danoInputSchema.safeParse(item)
-      if (parsed.success) danos.push(parsed.data)
-    }
-  }
-  if (danos.length > 0 && validarDanosParaTipo(danos, codigoTipo).ok) {
-    return { danos, sinDanos: false }
-  }
-  return { danos: [], sinDanos: sinDanos === true }
-}
 
 /** Valores base del formulario. Vive afuera del componente (sin dependencias
  *  de hooks) para que useForm(defaultValues) y el discard del borrador usen
