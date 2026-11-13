@@ -71,7 +71,7 @@ export function NpsSurvey() {
           <>
             <DialogHeader className="text-center sm:text-center">
               <DialogTitle className="text-lg">
-                Del 0 al 10, que tan probable es que recomiendes STApp?
+                Del 0 al 10, ¿qué tan probable es que recomiendes STApp?
               </DialogTitle>
             </DialogHeader>
 
@@ -123,16 +123,16 @@ export function NpsSurvey() {
             <DialogHeader className="text-center sm:text-center">
               <DialogTitle className="text-lg">
                 {score !== null && score <= 6
-                  ? "Que podriamos mejorar?"
+                  ? "¿Qué podríamos mejorar?"
                   : score !== null && score <= 8
-                    ? "Que te gustaria que agreguemos?"
-                    : "Que es lo que mas te gusta de STApp?"}
+                    ? "¿Qué te gustaría que agreguemos?"
+                    : "¿Qué es lo que más te gusta de STApp?"}
               </DialogTitle>
             </DialogHeader>
 
             <div className="py-4">
               <Textarea
-                placeholder="Tu opinion nos ayuda a mejorar (opcional)..."
+                placeholder="Tu opinión nos ayuda a mejorar (opcional)..."
                 value={comentario}
                 onChange={(e) => setComentario(e.target.value)}
                 rows={3}
@@ -156,9 +156,9 @@ export function NpsSurvey() {
             <div className="text-4xl mb-4">
               {score !== null && score >= 9 ? "🎉" : score !== null && score >= 7 ? "👍" : "💪"}
             </div>
-            <p className="text-lg font-semibold">Gracias por tu respuesta!</p>
+            <p className="text-lg font-semibold">¡Gracias por tu respuesta!</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Tu opinion nos ayuda a seguir mejorando STApp.
+              Tu opinión nos ayuda a seguir mejorando STApp.
             </p>
           </div>
         )}

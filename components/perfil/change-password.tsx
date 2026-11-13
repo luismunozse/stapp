@@ -19,9 +19,9 @@ export function ChangePassword() {
 
   const requirements = [
     { label: "Al menos 8 caracteres", met: newPassword.length >= 8 },
-    { label: "Una letra mayuscula", met: /[A-Z]/.test(newPassword) },
-    { label: "Una letra minuscula", met: /[a-z]/.test(newPassword) },
-    { label: "Un numero", met: /\d/.test(newPassword) },
+    { label: "Una letra mayúscula", met: /[A-Z]/.test(newPassword) },
+    { label: "Una letra minúscula", met: /[a-z]/.test(newPassword) },
+    { label: "Un número", met: /\d/.test(newPassword) },
   ]
 
   const allMet = requirements.every((r) => r.met)
@@ -65,7 +65,7 @@ export function ChangePassword() {
           Cambiar contraseña
         </CardTitle>
         <CardDescription>
-          Actualiza tu contraseña de acceso
+          Actualizá tu contraseña de acceso
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -78,7 +78,7 @@ export function ChangePassword() {
                 type={showCurrent ? "text" : "password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Ingresa tu contraseña actual"
+                placeholder="Ingresá tu contraseña actual"
               />
               <Button
                 aria-label={showCurrent ? "Ocultar contraseña" : "Mostrar contraseña"}
@@ -101,7 +101,7 @@ export function ChangePassword() {
                 type={showNew ? "text" : "password"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Ingresa tu nueva contraseña"
+                placeholder="Ingresá tu nueva contraseña"
               />
               <Button
                 aria-label={showNew ? "Ocultar contraseña" : "Mostrar contraseña"}
@@ -140,7 +140,7 @@ export function ChangePassword() {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repite tu nueva contraseña"
+              placeholder="Repetí tu nueva contraseña"
             />
             {confirmPassword && !passwordsMatch && (
               <p className="text-xs text-destructive-text">Las contraseñas no coinciden</p>

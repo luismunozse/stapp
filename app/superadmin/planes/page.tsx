@@ -62,13 +62,13 @@ export default function PlanesPage() {
   return (
     <PageShell
       title="Gestión de planes"
-      description="Administra los planes de suscripción del sistema"
+      description="Administrá los planes de suscripción del sistema"
       icon={Package}
       actions={
         <Button asChild className="gap-2">
           <Link href="/superadmin/planes/nuevo">
             <Plus className="h-4 w-4" />
-            Crear Plan
+            Crear plan
           </Link>
         </Button>
       }
@@ -78,7 +78,7 @@ export default function PlanesPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Planes</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de planes</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -106,7 +106,7 @@ export default function PlanesPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Suscripciones Activas</CardTitle>
+            <CardTitle className="text-sm font-medium">Suscripciones activas</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -244,7 +244,7 @@ export default function PlanesPage() {
               {/* Feature Flags */}
               {plan.feature_flags && Object.keys(plan.feature_flags).length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">Feature Flags:</div>
+                  <div className="text-sm font-medium">Feature flags:</div>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(plan.feature_flags)
                       .filter(([, v]) => v === true)
@@ -328,12 +328,12 @@ export default function PlanesPage() {
             <Package className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg font-medium">No hay planes creados</p>
             <p className="text-sm text-muted-foreground mb-4">
-              Crea tu primer plan de suscripción
+              Creá tu primer plan de suscripción
             </p>
             <Link href="/superadmin/planes/nuevo">
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Crear Plan
+                Crear plan
               </Button>
             </Link>
           </CardContent>

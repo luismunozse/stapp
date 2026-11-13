@@ -11,7 +11,7 @@ export default async function KioskConfigPage() {
   return (
     <PageShell
       title="Modo kiosco"
-      description="Configura pantallas de estado para mostrar en tu local."
+      description="Configurá pantallas de estado para mostrar en tu local."
       backHref="/configuracion"
       backLabel="Volver a configuración"
     >

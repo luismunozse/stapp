@@ -92,7 +92,7 @@ export function FeatureUsageContent() {
 
   // Los datos los calcula el cron diario: sin ninguna corrida no hay lastUpdate.
   const sinDatosMsg = data && !data.summary.lastUpdate
-    ? "Todavía no hay datos: el cron diario de feature usage no corrió."
+    ? "Todavía no hay datos: el cron diario de uso de funciones no corrió."
     : "Sin organizaciones activas para analizar."
 
   const filteredOrgs = (data?.organizations || [])
@@ -209,7 +209,7 @@ export function FeatureUsageContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Puzzle className="h-5 w-5" />
-              Adopción por Feature
+              Adopción por función
             </CardTitle>
             <CardDescription>% de orgs que usan cada funcionalidad</CardDescription>
           </CardHeader>
@@ -249,7 +249,7 @@ export function FeatureUsageContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Puzzle className="h-5 w-5" />
-                Adopción por Organización
+                Adopción por organización
               </CardTitle>
               <div className="flex gap-2 mt-2">
                 <div className="relative flex-1">

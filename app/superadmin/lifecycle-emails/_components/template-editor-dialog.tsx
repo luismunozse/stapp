@@ -251,7 +251,7 @@ export function TemplateEditorDialog({ id, onClose }: Props) {
                   )}
                   onClick={() => setTab("preview")}
                 >
-                  Preview
+                  Vista previa
                 </button>
               </div>
             </div>
@@ -360,7 +360,7 @@ export function TemplateEditorDialog({ id, onClose }: Props) {
                           "w-full border-0",
                           viewMode === "mobile" ? "h-[600px]" : "h-[600px]"
                         )}
-                        title="Preview"
+                        title="Vista previa"
                         sandbox="allow-same-origin"
                       />
                     </div>

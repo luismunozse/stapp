@@ -83,11 +83,11 @@ export function TicketList() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
               <Headset className="h-5 w-5" />
-              Mis Tickets
+              Mis tickets
             </CardTitle>
             <Button onClick={() => setShowCreate(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Ticket
+              Nuevo ticket
             </Button>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 mt-3">

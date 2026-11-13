@@ -130,7 +130,7 @@ export function CookieConsent() {
                   </h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     Utilizamos cookies esenciales para el funcionamiento del sitio y cookies
-                    opcionales para mejorar tu experiencia. Puedes elegir qué cookies aceptar.{" "}
+                    opcionales para mejorar tu experiencia. Podés elegir qué cookies aceptar.{" "}
                     <Link
                       href="/legal/cookies"
                       className="text-primary hover:text-primary/80 underline font-medium"

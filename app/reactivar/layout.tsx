@@ -7,7 +7,7 @@ import type { Metadata } from "next"
 // `alternates.canonical` from the root layout and tells Google its canonical
 // version is the home page. Internal/token-addressed screens must not index.
 export const metadata: Metadata = {
-  title: "Reactivar suscripcion | STApp",
+  title: "Reactivar suscripción | STApp",
   robots: { index: false, follow: false },
 }
 

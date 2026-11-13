@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 
 const WHATSAPP_NUMBER = "5491169625733"
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-  "Hola! Necesito ayuda con STApp."
+  "¡Hola! Necesito ayuda con STApp."
 )}`
 
 export function WhatsAppSoporteCard() {

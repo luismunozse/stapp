@@ -24,7 +24,7 @@ const ALL_FEATURE_FLAGS = [
   { key: "data_export", label: "Exportar datos" },
   { key: "custom_logo", label: "Logo personalizado" },
   { key: "cuenta_corriente", label: "Cuenta corriente" },
-  { key: "cotizaciones_online", label: "Cotizaciones online" },
+  { key: "cotizaciones_online", label: "Presupuestos online" },
   { key: "gestion_proveedores", label: "Gestión proveedores" },
   { key: "import_export", label: "Import/export datos" },
   { key: "firma_digital", label: "Firma digital" },
@@ -140,10 +140,10 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Información Básica */}
+      {/* Información básica */}
       <Card>
         <CardHeader>
-          <CardTitle>Información Básica</CardTitle>
+          <CardTitle>Información básica</CardTitle>
           <CardDescription>
             Datos principales del plan de suscripción
           </CardDescription>
@@ -151,7 +151,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre del Plan *</Label>
+              <Label htmlFor="nombre">Nombre del plan *</Label>
               <Input
                 id="nombre"
                 required
@@ -161,12 +161,12 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
                 onChange={(e) =>
                   setFormData({ ...formData, nombre: e.target.value })
                 }
-                placeholder="Ej: Plan Básico"
+                placeholder="Ej.: Plan básico"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tipo">Tipo de Plan *</Label>
+              <Label htmlFor="tipo">Tipo de plan *</Label>
               <Select
                 value={formData.tipo}
                 onValueChange={(value: PlanType) =>
@@ -218,13 +218,13 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
           <CardDescription>
             {isFree
               ? "Plan FREE: los precios deben ser 0"
-              : "Define los precios mensuales y anuales en ARS"}
+              : "Definí los precios mensuales y anuales en ARS"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="precio_mensual">Precio Mensual (ARS) *</Label>
+              <Label htmlFor="precio_mensual">Precio mensual (ARS) *</Label>
               <Input
                 id="precio_mensual"
                 type="number"
@@ -243,7 +243,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="precio_anual">Precio Anual (ARS) *</Label>
+              <Label htmlFor="precio_anual">Precio anual (ARS) *</Label>
               <Input
                 id="precio_anual"
                 type="number"
@@ -273,7 +273,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="precio_mensual_usd">Precio Mensual (USD)</Label>
+              <Label htmlFor="precio_mensual_usd">Precio mensual (USD)</Label>
               <Input
                 id="precio_mensual_usd"
                 type="number"
@@ -291,7 +291,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="precio_anual_usd">Precio Anual (USD)</Label>
+              <Label htmlFor="precio_anual_usd">Precio anual (USD)</Label>
               <Input
                 id="precio_anual_usd"
                 type="number"
@@ -314,7 +314,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
       {/* Límites */}
       <Card>
         <CardHeader>
-          <CardTitle>Límites del Plan</CardTitle>
+          <CardTitle>Límites del plan</CardTitle>
           <CardDescription>
             Deja en blanco o 0 para límites ilimitados
           </CardDescription>
@@ -395,7 +395,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
       {/* Feature Flags */}
       <Card>
         <CardHeader>
-          <CardTitle>Feature Flags</CardTitle>
+          <CardTitle>Feature flags</CardTitle>
           <CardDescription>
             Funcionalidades habilitadas para este plan. Los usuarios Free no deberían tener ninguna activada.
           </CardDescription>
@@ -480,7 +480,7 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
           ) : (
             <>
               <Save className="h-4 w-4" />
-              {mode === "create" ? "Crear Plan" : "Guardar Cambios"}
+              {mode === "create" ? "Crear plan" : "Guardar cambios"}
             </>
           )}
         </Button>

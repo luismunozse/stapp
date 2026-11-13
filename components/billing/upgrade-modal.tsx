@@ -126,7 +126,7 @@ export function UpgradeModal({
       }
     } catch (error) {
       console.error("Error starting checkout:", error)
-      await showError("Error al iniciar el proceso de pago. Intenta de nuevo.")
+      await showError("Error al iniciar el proceso de pago. Intentá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -137,8 +137,8 @@ export function UpgradeModal({
     { icon: Zap, text: "Clientes ILIMITADOS (vs 200)" },
     { icon: Zap, text: "Técnicos y vendedores ilimitados" },
     { icon: Zap, text: "Notificaciones WhatsApp automáticas" },
-    { icon: Zap, text: "Reportes avanzados (rentabilidad, etc)" },
-    { icon: Zap, text: "Import/Export masivo" },
+    { icon: Zap, text: "Reportes avanzados (rentabilidad, etc.)" },
+    { icon: Zap, text: "Importación y exportación masiva" },
     { icon: Zap, text: "Logo personalizado en órdenes" },
     { icon: Zap, text: "Cuenta corriente clientes" },
     { icon: Zap, text: "Garantías y firma digital" },
@@ -294,7 +294,7 @@ export function UpgradeModal({
               <span>Pago seguro</span>
             </div>
             <span className="text-muted-foreground/30">|</span>
-            <span>Cancela cuando quieras</span>
+            <span>Cancelá cuando quieras</span>
             <span className="text-muted-foreground/30">|</span>
             <span>Garantía 30 días</span>
           </div>

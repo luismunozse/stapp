@@ -74,9 +74,9 @@ export default function LogoPreviewPage() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Alternativas de Logo</h1>
+        <h1 className="text-3xl font-bold mb-2">Alternativas de logo</h1>
         <p className="text-muted-foreground">
-          Selecciona el logo que mejor represente a STApp. Cada opción está diseñada para funcionar en diferentes tamaños y fondos.
+          Seleccioná el logo que mejor represente a STApp. Cada opción está diseñada para funcionar en diferentes tamaños y fondos.
         </p>
       </div>
 
@@ -215,7 +215,7 @@ export default function LogoPreviewPage() {
                   return Logo ? <Logo size="md" variant="full" /> : null
                 })()}
                 <div className="flex-1" />
-                <span className="text-sm text-muted-foreground">Dashboard</span>
+                <span className="text-sm text-muted-foreground">Inicio</span>
                 <span className="text-sm text-muted-foreground">Órdenes</span>
                 <span className="text-sm text-muted-foreground">Clientes</span>
               </div>
