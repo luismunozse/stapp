@@ -45,6 +45,7 @@ import {
 } from "@/lib/ventas/totales"
 import { buildVentaPayload } from "./pos-payload"
 import { TotalRow } from "@/components/pos/total-row"
+import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
 
 interface PosCheckoutDialogProps {
   open: boolean
@@ -58,8 +59,8 @@ interface PosCheckoutDialogProps {
   fiscal?: FiscalConfig | null
   /** Cotización con la que el carrito convirtió las líneas en divisa (viaja en el payload). */
   tipoCambio?: number | null
-  /** 409 COTIZACION_CAMBIO: el terminal adopta la nueva y reconvierte el carrito. */
-  onCotizacionCambiada?: (nueva: number) => void
+  /** 409 COTIZACION_CAMBIO: el terminal adopta la nueva (valor y resultado completo) y reconvierte el carrito. */
+  onCotizacionCambiada?: (nueva: number, resultado: ResultadoTipoCambio) => void
 }
 
 export function PosCheckoutDialog({
@@ -378,7 +379,7 @@ export function PosCheckoutDialog({
         // El monto recibido solo se borra en efectivo, porque el vuelto cambia.
         // DIVISA_NO_DISPONIBLE solo se avisa: el cajero decide qué quitar.
         if (res.status === 409 && error?.code === "COTIZACION_CAMBIO" && error.nueva?.disponible === true && typeof error.nueva.valor === "number") {
-          onCotizacionCambiada?.(error.nueva.valor)
+          onCotizacionCambiada?.(error.nueva.valor, error.nueva as ResultadoTipoCambio)
           if (!pagoParcial && pagosLines.length === 1) {
             const primera = pagosLines[0]
             setPagosLines([

@@ -55,6 +55,7 @@ import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useOffline } from "@/contexts/offline-context"
 import { useSession } from "next-auth/react"
 import { useMoneda } from "@/hooks/use-moneda"
+import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
 import { ChipCotizacion } from "@/components/moneda/chip-cotizacion"
 import { convertirALocal, unidadRedondeo } from "@/lib/currency/convert"
 import { aplicarCotizacionLineas, mensajeNoVendible, motivoNoVendible } from "@/lib/currency/venta-divisa"
@@ -119,7 +120,7 @@ export function PosTerminal() {
   // Multimoneda: la cotización en uso del carrito (`tcCarrito`) arranca con la del hook y se
   // reemplaza cuando el hook trae otra o el servidor responde 409 COTIZACION_CAMBIO. Cada cambio
   // reconvierte las líneas en divisa. Con la función apagada el hook no pide la cotización.
-  const { config: configMoneda, tipoCambio, error: errorMoneda, tipoCambioError } = useMoneda()
+  const { config: configMoneda, tipoCambio, error: errorMoneda, tipoCambioError, fijarTipoCambio } = useMoneda()
   // Con la función habilitada y la cotización todavía en camino (sin dato ni error), tampoco se
   // decide: rechazar la línea por "sin cotización" sería falso.
   const tipoCambioCargando = configMoneda?.habilitada === true && tipoCambio === undefined && !tipoCambioError
@@ -140,9 +141,14 @@ export function PosTerminal() {
     const tc = monedaVista.tc !== tcHook && tcHook !== null ? tcHook : tcCarrito
     if (tc !== null) cambiarCotizacion(tc, unidadConversion)
   }
+  // 409 COTIZACION_CAMBIO: además de reconvertir, la cotización del servidor pasa al cache del
+  // hook para que el chip muestre la misma que usan las líneas (si no, quedaba la vieja).
   const onCotizacionCambiada = useCallback(
-    (nueva: number) => cambiarCotizacion(nueva, unidadConversion),
-    [cambiarCotizacion, unidadConversion]
+    (nueva: number, resultado?: ResultadoTipoCambio) => {
+      cambiarCotizacion(nueva, unidadConversion)
+      if (resultado) void fijarTipoCambio(resultado)
+    },
+    [cambiarCotizacion, unidadConversion, fijarTipoCambio]
   )
   // Lo que necesita `addProduct` se lee de un ref: el escaneo lo llama después de un fetch y una
   // closure vieja convertiría con la cotización del momento del escaneo, no la vigente.

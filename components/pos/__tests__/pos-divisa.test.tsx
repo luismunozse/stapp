@@ -70,8 +70,9 @@ const CONFIG = {
 function tcVivo(valor: number) {
   return { disponible: true, valor, fuente: "BLUE", moneda: "USD", en: new Date().toISOString(), estado: "vivo" }
 }
+const fijarTipoCambio = vi.fn().mockResolvedValue(undefined)
 function setMoneda(config: object, tipoCambio: object | undefined) {
-  useMonedaMock.mockReturnValue({ config: { ...CONFIG, ...config }, tipoCambio })
+  useMonedaMock.mockReturnValue({ config: { ...CONFIG, ...config }, tipoCambio, fijarTipoCambio })
 }
 
 type Respuesta = { status: number; body: unknown }
@@ -120,6 +121,7 @@ async function agregarUsd() {
 describe("PosTerminal — productos con precio en divisa", () => {
   beforeEach(() => {
     showError.mockClear()
+    fijarTipoCambio.mockClear()
     ventasRespuestas = []
     monedasCheckStock = { u1: "USD" }
     barcodePendiente = null
@@ -198,6 +200,9 @@ describe("PosTerminal — productos con precio en divisa", () => {
 
     const dialogo = screen.getByRole("dialog")
     await waitFor(() => expect(within(dialogo).getByText("$ 13.000", { selector: "span" })).toBeInTheDocument())
+
+    // El chip pasa a mostrar la cotización con la que quedaron las líneas.
+    expect(fijarTipoCambio).toHaveBeenCalledWith(expect.objectContaining({ disponible: true, valor: 1300, fuente: "BLUE" }))
 
     fireEvent.click(await botonConfirmarListo())
     await waitFor(() => expect(ventasBodies).toHaveLength(2))

@@ -57,6 +57,20 @@ describe("useMoneda", () => {
     expect(mockFetch.mock.calls.map((c) => c[0])).toEqual(["/api/configuracion/moneda"])
   })
 
+  it("fijarTipoCambio pone la cotización del servidor en el cache sin volver a pedirla", async () => {
+    route(true)
+    const { useMoneda } = await import("@/hooks/use-moneda")
+    const { result } = renderHook(() => useMoneda(), { wrapper })
+    await waitFor(() => expect(result.current.tipoCambio).toEqual(TC))
+    const pedidos = mockFetch.mock.calls.length
+
+    const nueva = { ...TC, valor: 1300 }
+    await result.current.fijarTipoCambio(nueva as any)
+
+    await waitFor(() => expect(result.current.tipoCambio).toEqual(nueva))
+    expect(mockFetch.mock.calls.length).toBe(pedidos)
+  })
+
   it("expone el error de la cotización", async () => {
     mockFetch.mockImplementation(async (url: string) =>
       url === "/api/configuracion/moneda"
