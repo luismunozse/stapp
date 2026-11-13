@@ -27,6 +27,7 @@ const useMonedaMock = vi.hoisted(() => vi.fn())
 vi.mock("@/hooks/use-moneda", () => ({ useMoneda: useMonedaMock }))
 
 const USD_10: InventarioResult = { id: "u1", codigo: "U1", nombre: "Funda", stock: 5, precioVenta: 10, moneda: "USD" }
+const CABLE_LOCAL: InventarioResult = { id: "c9", codigo: "C9", nombre: "Cable", stock: 5, precioVenta: 500 }
 
 // El buscador real no importa acá: un botón que agrega el producto en USD.
 vi.mock("@/components/pos/pos-product-search", async () => {
@@ -35,9 +36,14 @@ vi.mock("@/components/pos/pos-product-search", async () => {
     PosProductSearch: forwardRef((props: any, ref: any) => {
       useImperativeHandle(ref, () => ({ focusSearch: () => {}, openManual: () => {} }))
       return (
-        <button type="button" data-testid="agregar-usd" onClick={() => props.onAddProduct(USD_10)}>
-          agregar
-        </button>
+        <>
+          <button type="button" data-testid="agregar-usd" onClick={() => props.onAddProduct(USD_10)}>
+            agregar
+          </button>
+          <button type="button" data-testid="agregar-local" onClick={() => props.onAddProduct(CABLE_LOCAL)}>
+            agregar local
+          </button>
+        </>
       )
     }),
   }
@@ -94,7 +100,7 @@ function stubFetch() {
       if (url.startsWith("/api/configuracion/recargos-metodo")) return json(200, { recargos: [] })
       if (url.startsWith("/api/operadores")) return json(200, [])
       if (url.startsWith("/api/inventario/check-stock")) {
-        return json(200, { stock: { u1: 5 }, precios: { u1: 10 }, monedas: monedasCheckStock })
+        return json(200, { stock: { u1: 5, c9: 5 }, precios: { u1: 10 }, monedas: monedasCheckStock })
       }
       if (url.startsWith("/api/inventario/barcode")) {
         if (barcodePendiente) await barcodePendiente
@@ -229,6 +235,39 @@ describe("PosTerminal — productos con precio en divisa", () => {
     await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringMatching(/No hay cotización de USD/)))
     expect(screen.getByRole("dialog")).toBeInTheDocument()
     expect(screen.queryByTestId("exito")).not.toBeInTheDocument()
+  })
+
+  it("409 con una línea local cuyo producto pasó a divisa: pide quitarla y volver a agregarla", async () => {
+    setMoneda({}, tcVivo(1200))
+    ventasRespuestas = [
+      {
+        status: 409,
+        body: {
+          error: "La venta necesita la cotización vigente ($ 1.200,00). Revisá el total y confirmá de nuevo.",
+          code: "COTIZACION_CAMBIO",
+          anterior: null,
+          nueva: tcVivo(1200),
+          inventarioIdsEnDivisa: ["c9", "u1"],
+        },
+      },
+    ]
+    render(<PosTerminal />)
+    fireEvent.click(screen.getAllByTestId("agregar-local")[0])
+    await agregarUsd()
+    await waitFor(() => expect(textoCarrito()).toMatch(/Cable/))
+    await waitFor(() => expect(textoCarrito()).toMatch(/US\$ 10/))
+
+    const cobrar = screen.getAllByRole("button", { name: /cobrar \(f8\)/i })[0]
+    await waitFor(() => expect(cobrar).toBeEnabled())
+    fireEvent.click(cobrar)
+    fireEvent.click(await botonConfirmarListo())
+
+    await waitFor(() => expect(showError).toHaveBeenCalledTimes(1))
+    const mensaje = showError.mock.calls[0][0] as string
+    expect(mensaje).toContain("La venta necesita la cotización vigente")
+    expect(mensaje).toContain('"Cable" ahora tiene precio en divisa: quitala y volvé a agregarla.')
+    // La línea que ya está en USD no se nombra.
+    expect(mensaje).not.toContain('"Funda"')
   })
 
   it("mientras carga la configuración de moneda no agrega y pide reintentar", async () => {

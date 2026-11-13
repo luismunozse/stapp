@@ -347,12 +347,15 @@ export async function POST(request: Request) {
         const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
         if (existente) return existente
       }
+      // Ids de las líneas del request cuyo producto tiene precio en divisa: el POS los usa para
+      // avisar de una línea que agregó como local y que mientras tanto pasó a divisa.
+      const inventarioIdsEnDivisa = [...catalogo.keys()]
       configMoneda = (await cargarConfigMoneda(organizationId!)).config
       tc = await resolverTipoCambio(organizationId!)
       const r = resolverLineasDivisa({ lineas: data.items, catalogo, config: configMoneda, tc })
       if (!r.ok) {
         return NextResponse.json(
-          { error: r.mensaje, code: "DIVISA_NO_DISPONIBLE", motivo: r.motivo },
+          { error: r.mensaje, code: "DIVISA_NO_DISPONIBLE", motivo: r.motivo, inventarioIdsEnDivisa },
           { status: 409 }
         )
       }
@@ -368,6 +371,7 @@ export async function POST(request: Request) {
             code: "COTIZACION_CAMBIO",
             anterior,
             nueva: tc,
+            inventarioIdsEnDivisa,
           },
           { status: 409 }
         )

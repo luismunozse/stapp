@@ -44,6 +44,7 @@ import {
   round2,
 } from "@/lib/ventas/totales"
 import { buildVentaPayload } from "./pos-payload"
+import { avisoLineasAhoraEnDivisa } from "./pos-divisa"
 import { TotalRow } from "@/components/pos/total-row"
 import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
 
@@ -394,7 +395,11 @@ export function PosCheckoutDialog({
           }
           if (isCashOnly) setMontoRecibido(null)
         }
-        await showError(error.error || "Error al crear la venta")
+        // Una línea que se agregó como local y cuyo producto pasó a divisa vuelve a dar 409 en
+        // cada confirmar: se avisa cuáles son para que el cajero las quite y las vuelva a agregar.
+        const aviso = res.status === 409 ? avisoLineasAhoraEnDivisa(items, error?.inventarioIdsEnDivisa) : null
+        const mensaje = error?.error || "Error al crear la venta"
+        await showError(aviso ? `${mensaje}\n\n${aviso}` : mensaje)
         return
       }
 

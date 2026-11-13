@@ -157,6 +157,20 @@ describe("POST /api/ventas con líneas en divisa", () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  it("los 409 traen los ids de las líneas cuyo producto está en divisa", async () => {
+    wire([itemUsd, itemLocal])
+    const items = [linea({ inventarioId: "u" }), linea({ inventarioId: "l", precioUnitario: 500 }), linea({})]
+    const cambio = await parseResponse(await post(venta(items, { tipoCambio: 1100 })))
+    expect(cambio.status).toBe(409)
+    expect(cambio.body.code).toBe("COTIZACION_CAMBIO")
+    expect(cambio.body.inventarioIdsEnDivisa).toEqual(["u"])
+
+    vi.mocked(resolverTipoCambio).mockResolvedValue({ disponible: false, motivo: "SIN_COTIZACION" } as any)
+    const sinTc = await parseResponse(await post(venta(items, { tipoCambio: 1200 })))
+    expect(sinTc.body.code).toBe("DIVISA_NO_DISPONIBLE")
+    expect(sinTc.body.inventarioIdsEnDivisa).toEqual(["u"])
+  })
+
   it("reintento idempotente con otra cotización tras el alta: devuelve la venta original, sin 409 ni RPC", async () => {
     wire([itemUsd], { id: "v-orig", numero_venta: 7, total: "12000", subtotal: "12000", descuento: "0" })
     const { status, body } = await parseResponse(
