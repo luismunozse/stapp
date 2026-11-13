@@ -19,15 +19,27 @@ import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 import { useFormDraft } from "@/hooks/use-form-draft"
-import { useTerminologia } from "@/contexts/currency-context"
+import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import { FALLBACK_CONFIG } from "@/lib/tipos-dispositivo-defaults"
 import type { Cliente, CampoExtra, AccesorioConfig, TipoDispositivoCustom } from "@/types"
 import type { FotoPreview } from "./fotos-ingreso"
-import { RecepcionEquipoCard, equipoFormSchema, type EquipoFormValues } from "./recepcion-equipo-card"
+import {
+  RecepcionEquipoCard,
+  equipoFormSchema,
+  estadoFisicoFocoIdEquipo,
+  type EquipoFormValues,
+} from "./recepcion-equipo-card"
 import { RecepcionCreadaModal, type EquipoRecepcionEnviado } from "./recepcion-creada-modal"
+import {
+  ESTADO_FISICO_VACIO,
+  estadoFisicoParaComprobante,
+  sanearEstadoFisicoBorrador,
+  type EstadoFisicoValor,
+} from "./danos/estado-fisico-recepcion"
+import type { DanoInput } from "@/lib/ordenes/danos"
 
 const recepcionFormSchema = z.object({
   clienteId: z.string().min(1, "Elegí el cliente"),
@@ -44,6 +56,8 @@ export interface EquipoSideState {
   otroAccesorio: string
   camposExtraValues: Record<string, any>
   fotos: FotoPreview[]
+  /** Pins sobre el dibujo del tipo de ESTE equipo, o "Sin daños visibles". */
+  estadoFisico: EstadoFisicoValor
 }
 
 const equipoSideStateVacio = (): EquipoSideState => ({
@@ -51,7 +65,17 @@ const equipoSideStateVacio = (): EquipoSideState => ({
   otroAccesorio: "",
   camposExtraValues: {},
   fotos: [],
+  estadoFisico: ESTADO_FISICO_VACIO,
 })
+
+/** Aviso del estado fisico obligatorio en la card de un equipo (mismo texto
+ *  que devuelve POST /api/recepciones). */
+const estadoFisicoRequeridoMsg = (index: number) =>
+  `Equipo ${index + 1}: marcá los daños o «Sin daños visibles»`
+
+function sinEstadoFisico(valor: EstadoFisicoValor | undefined): boolean {
+  return !valor || (valor.danos.length === 0 && !valor.sinDanos)
+}
 
 /** Snapshot de EquipoSideState sin `fotos`: los File/preview base64 no son
  *  serializables de forma segura para localStorage (ver useFormDraft). Las
@@ -113,6 +137,8 @@ export type EquipoPayload = EquipoFormValues & {
   accesorios?: string
   metadata?: Record<string, any>
   fotos?: Array<{ data: string; mime: string; descripcion?: string }>
+  danos?: DanoInput[]
+  recepcionSinDanos: boolean
 }
 
 /**
@@ -152,6 +178,8 @@ export function resolverAccesoriosDisponibles(
  *   corrupta sin ningun error visible en ningun lado.
  * - No se envia `tipo` en cada foto: el endpoint fija `tipo: "INGRESO"` el
  *   mismo (ver app/api/recepciones/route.ts).
+ * - Estado fisico: los pins van como DanoInput (el numero es solo de
+ *   pantalla) y "sin daños" solo cuenta si no hay pins, igual que orden-form.
  */
 export function construirEquipoPayload(
   equipo: EquipoFormValues,
@@ -163,6 +191,8 @@ export function construirEquipoPayload(
     const acc = disponibles.find((a) => a.id === id)
     return acc ? acc.label : id
   })
+
+  const estadoFisico = side.estadoFisico ?? ESTADO_FISICO_VACIO
 
   const metadata: Record<string, any> = {}
   for (const [key, val] of Object.entries(side.camposExtraValues)) {
@@ -187,6 +217,8 @@ export function construirEquipoPayload(
     accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
     metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     fotos: fotos.length > 0 ? fotos : undefined,
+    danos: estadoFisico.danos.length > 0 ? estadoFisico.danos : undefined,
+    recepcionSinDanos: estadoFisico.danos.length === 0 && estadoFisico.sinDanos,
   }
 }
 
@@ -216,7 +248,8 @@ export function RecepcionForm() {
   const term = useTerminologia()
   const router = useRouter()
   const { offlineFetch } = useOffline()
-  const { showError, showInfo } = useModal()
+  const { showError, showInfo, confirm } = useModal()
+  const { danosRecepcionObligatorio } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
   const isMobile = useIsMobileViewport()
 
@@ -254,6 +287,9 @@ export function RecepcionForm() {
   const [terminosAceptados, setTerminosAceptados] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
+  /** Como en orden-form: el aviso de estado fisico obligatorio sale recien
+   *  despues del primer intento de crear la recepcion. */
+  const [estadoFisicoIntentoEnviar, setEstadoFisicoIntentoEnviar] = useState(false)
 
   // Al tener valor, se abre RecepcionCreadaModal con este resultado. Ver el
   // seam mas abajo, despues del submit.
@@ -382,11 +418,18 @@ export function RecepcionForm() {
         })),
       })
       setSideState(
-        draft.form.equipos.map((_, i) => ({
+        draft.form.equipos.map((equipo, i) => ({
           ...equipoSideStateVacio(),
           ...draft.sideState[i],
+          // Saneado igual que orden-form: pins que no pasan el schema de la API
+          // o que no son del dibujo del tipo restaurado se descartan.
+          estadoFisico: sanearEstadoFisicoBorrador(
+            draft.sideState[i]?.estadoFisico,
+            equipo?.tipoDispositivo || null
+          ),
         }))
       )
+      setEstadoFisicoIntentoEnviar(false)
       // La conformidad NO se restaura. Su evidencia es la firma del cliente, que
       // este borrador no persiste a proposito (dato binario), y el POST manda
       // `terminosAceptados: true` con `firmaCliente: undefined`: quedaria una
@@ -413,6 +456,7 @@ export function RecepcionForm() {
     clearDraft()
     reset(recepcionFormDefaults())
     setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
+    setEstadoFisicoIntentoEnviar(false)
     setTerminosAceptados(false)
     setSelectedCliente(null)
     // La firma no se persiste, asi que no viene del borrador -- pero si sigue
@@ -445,11 +489,40 @@ export function RecepcionForm() {
 
   // --- Handlers por equipo ---------------------------------------------------
 
-  const handleTipoChange = (index: number, nuevoTipo: string) => {
+  const handleTipoChange = async (index: number, nuevoTipo: string) => {
+    // Los pins estan marcados sobre el dibujo del tipo actual de ESTE equipo:
+    // se pregunta antes de tocar nada, igual que en el alta clasica.
+    const danosMarcados = sideState[index]?.estadoFisico.danos.length ?? 0
+    const cambiaTipo = nuevoTipo !== getValues(`equipos.${index}.tipoDispositivo`)
+    if (danosMarcados > 0 && cambiaTipo) {
+      const ok = await confirm({
+        title: "¿Cambiar el tipo de equipo?",
+        description: "Cambiar el tipo de equipo borra los daños marcados",
+        confirmText: "Cambiar tipo",
+        variant: "warning",
+      })
+      if (!ok) return
+    }
     setValue(`equipos.${index}.tipoDispositivo`, nuevoTipo, { shouldValidate: true })
     // Igual que en el alta clasica: cambiar de tipo limpia accesorios y
-    // campos extra, porque pertenecen a la config del tipo anterior.
-    actualizarSide(index, { accesoriosSeleccionados: [], camposExtraValues: {} })
+    // campos extra, porque pertenecen a la config del tipo anterior. Los pins
+    // tambien (el "sin daños" no depende del dibujo y queda).
+    setSideState((prev) =>
+      prev.map((s, i) =>
+        i === index
+          ? {
+              ...s,
+              accesoriosSeleccionados: [],
+              camposExtraValues: {},
+              estadoFisico: cambiaTipo ? { ...s.estadoFisico, danos: [] } : s.estadoFisico,
+            }
+          : s
+      )
+    )
+  }
+
+  const setEstadoFisico = (index: number, valor: EstadoFisicoValor) => {
+    actualizarSide(index, { estadoFisico: valor })
   }
 
   const handleCampoExtraChange = (index: number, campo: CampoExtra, value: any) => {
@@ -564,6 +637,18 @@ export function RecepcionForm() {
   }
 
   const onSubmit = async (data: RecepcionFormData) => {
+    if (danosRecepcionObligatorio) {
+      const faltante = data.equipos.findIndex((_, i) => sinEstadoFisico(sideState[i]?.estadoFisico))
+      if (faltante !== -1) {
+        // El aviso sale en la card de ese equipo; se lleva el foco a su boton
+        // "Sin daños visibles" (id unico por equipo).
+        setEstadoFisicoIntentoEnviar(true)
+        const el = document.getElementById(estadoFisicoFocoIdEquipo(faltante))
+        el?.scrollIntoView?.({ behavior: "smooth", block: "center" })
+        el?.focus()
+        return
+      }
+    }
     if (!terminosAceptados) {
       await showError("El cliente tiene que aceptar los términos de recepción")
       return
@@ -624,13 +709,16 @@ export function RecepcionForm() {
       // POST /api/ordenes), asi que el modal los necesita de aca, alineados
       // por indice con creada.ordenes.
       setEquiposEnviados(
-        equiposPayload.map((equipo) => ({
+        equiposPayload.map((equipo, i) => ({
           problemaReportado: equipo.problemaReportado,
           tipoDispositivo: equipo.tipoDispositivo,
           marca: equipo.marca || null,
           color: equipo.color || null,
           imei: equipo.imei || null,
           accesorios: equipo.accesorios ?? null,
+          // La RPC registra el estado fisico en la misma transaccion: si la
+          // recepcion se creo, quedo guardado tal cual se mando.
+          estadoFisico: sideState[i] ? estadoFisicoParaComprobante(sideState[i].estadoFisico) : null,
         }))
       )
       // Al setear `resultado`, RecepcionCreadaModal se abre con
@@ -716,6 +804,16 @@ export function RecepcionForm() {
                 codigoAcceso={watch(`equipos.${index}.codigoAccesoDispositivo`) || ""}
                 onCodigoAccesoChange={(value) =>
                   setValue(`equipos.${index}.codigoAccesoDispositivo`, value)
+                }
+                estadoFisico={sideState[index]?.estadoFisico ?? ESTADO_FISICO_VACIO}
+                onEstadoFisicoChange={(valor) => setEstadoFisico(index, valor)}
+                estadoFisicoObligatorio={danosRecepcionObligatorio}
+                estadoFisicoError={
+                  estadoFisicoIntentoEnviar &&
+                  danosRecepcionObligatorio &&
+                  sinEstadoFisico(sideState[index]?.estadoFisico)
+                    ? estadoFisicoRequeridoMsg(index)
+                    : undefined
                 }
               />
             ))}

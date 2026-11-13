@@ -12,6 +12,7 @@ import { resolveOperador } from "@/lib/operadores"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { danoInputSchema, validarDanosParaTipo, MAX_DANOS_POR_ORDEN, mensajeErrorDanos } from "@/lib/ordenes/danos"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -32,6 +33,9 @@ const equipoSchema = z.object({
   codigoAccesoDispositivo: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   fotos: z.array(fotoSchema).optional(),
+  // Estado físico al recibirlo, igual que en POST /api/ordenes.
+  danos: z.array(danoInputSchema).max(MAX_DANOS_POR_ORDEN, `Máximo ${MAX_DANOS_POR_ORDEN} daños por orden`).optional(),
+  recepcionSinDanos: z.boolean().optional(),
 })
 
 const recepcionSchema = z.object({
@@ -88,6 +92,43 @@ export async function POST(request: Request) {
       }
     }
 
+    // Estado físico de cada equipo: mismas reglas que el alta clásica, validadas
+    // antes de la RPC para no quemar números de orden. La RPC lo registra en su
+    // misma transacción, así que cualquier fallo ahí deshace la recepción entera.
+    for (let i = 0; i < data.equipos.length; i++) {
+      const equipo = data.equipos[i]
+      const danos = equipo.danos ?? []
+      if (danos.length > 0 && equipo.recepcionSinDanos === true) {
+        return NextResponse.json(
+          { error: `Equipo ${i + 1}: no podés marcar daños y «Sin daños visibles» a la vez` },
+          { status: 400 },
+        )
+      }
+      const validacion = validarDanosParaTipo(danos, equipo.tipoDispositivo)
+      if (!validacion.ok) {
+        return NextResponse.json({ error: `Equipo ${i + 1}: ${validacion.error}` }, { status: 400 })
+      }
+    }
+    // select("*"): la columna puede no existir todavía en algunas bases; se lee tolerante.
+    const { data: orgDanos } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId!)
+      .single()
+    const danosObligatorios =
+      (orgDanos as { danos_recepcion_obligatorio?: boolean } | null)?.danos_recepcion_obligatorio === true
+    if (danosObligatorios) {
+      const faltante = data.equipos.findIndex(
+        (equipo) => (equipo.danos ?? []).length === 0 && equipo.recepcionSinDanos !== true,
+      )
+      if (faltante !== -1) {
+        return NextResponse.json(
+          { error: `Equipo ${faltante + 1}: marcá los daños o «Sin daños visibles»` },
+          { status: 400 },
+        )
+      }
+    }
+
     // El cliente tiene que ser de esta organización: la RPC inserta con
     // service_role y no lo comprueba.
     const { data: cliente, error: clienteError } = await supabaseAdmin
@@ -119,6 +160,8 @@ export async function POST(request: Request) {
       accesorios: equipo.accesorios ?? null,
       codigoAccesoDispositivo: equipo.codigoAccesoDispositivo ?? null,
       metadata: equipo.metadata ?? {},
+      danos: equipo.danos ?? [],
+      recepcionSinDanos: equipo.recepcionSinDanos === true,
       publicToken: generatePublicToken(),
     }))
 
@@ -139,6 +182,11 @@ export async function POST(request: Request) {
     if (rpcError) {
       if (isPlanLimitError(rpcError)) return planLimitErrorResponse(rpcError)
       console.error("Error en crear_recepcion_multiple:", rpcError)
+      // Errores del estado físico (registrar_estado_fisico_recepcion, migración 410).
+      if (typeof rpcError.message === "string" && rpcError.message.includes("DANOS_")) {
+        const { status, error: mensaje } = mensajeErrorDanos(rpcError)
+        return NextResponse.json({ error: mensaje }, { status })
+      }
       return NextResponse.json({ error: "Error al crear la recepcion" }, { status: 500 })
     }
 
