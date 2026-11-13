@@ -320,7 +320,7 @@ export function TecnicosList() {
               </Button>
               <Button onClick={() => setFormOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Nuevo Técnico
+                Nuevo técnico
               </Button>
             </div>
           )}

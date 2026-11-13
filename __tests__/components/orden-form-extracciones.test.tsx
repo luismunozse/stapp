@@ -101,17 +101,17 @@ describe("OrdenForm — componentes extraidos se renderizan al avanzar el wizard
       // Completar lo minimo que pide el paso 1 para poder avanzar.
       fireEvent.click(screen.getByRole("button", { name: "Elegir cliente de prueba" }))
       fireEvent.click(screen.getByRole("button", { name: "Celular" }))
-      fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      fireEvent.change(screen.getByPlaceholderText("Modelo o descripción del equipo"), {
         target: { value: "Notebook X" },
       })
-      fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+      fireEvent.change(screen.getByPlaceholderText("Describí el problema del equipo..."), {
         target: { value: "No prende" },
       })
 
       fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
 
       // Paso 2: AccesoriosPicker.
-      expect(await screen.findByText("Accesorios Recibidos")).toBeInTheDocument()
+      expect(await screen.findByText("Accesorios recibidos")).toBeInTheDocument()
       expect(screen.getByText("Cargador")).toBeInTheDocument()
       const otroAccesorioInput = screen.getByPlaceholderText("Otro accesorio...")
       expect(otroAccesorioInput).toBeInTheDocument()

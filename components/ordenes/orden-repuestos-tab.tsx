@@ -139,7 +139,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
       if (!nuevoRepuesto.nombre.trim() || nuevoRepuesto.cantidad < 1 || nuevoRepuesto.precioUnitario < 0) {
         await alert({
           title: "Datos incompletos",
-          description: "Completa nombre, cantidad y precio",
+          description: "Completá nombre, cantidad y precio",
           variant: "warning",
         })
         return
@@ -312,7 +312,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Repuestos Utilizados</CardTitle>
+          <CardTitle className="text-base">Repuestos utilizados</CardTitle>
           {!showAddRepuesto && (
             <Button size="sm" variant="outline" onClick={() => setShowAddRepuesto(true)}>
               <Plus className="h-4 w-4 mr-1" />
@@ -568,7 +568,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
             <div className="pt-3 border-t space-y-1">
               {subtotalCompleto && (
                 <div className="flex justify-between font-semibold">
-                  <span>Subtotal Repuestos</span>
+                  <span>Subtotal repuestos</span>
                   <span>{formatPrice(subtotalRepuestos)}</span>
                 </div>
               )}

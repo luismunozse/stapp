@@ -24,7 +24,7 @@ export function AccesoriosPicker({
 }: AccesoriosPickerProps) {
   return (
     <div>
-      <Label>Accesorios Recibidos</Label>
+      <Label>Accesorios recibidos</Label>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
         {disponibles.map((acc) => (
           <label

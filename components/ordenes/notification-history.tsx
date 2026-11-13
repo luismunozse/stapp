@@ -149,7 +149,7 @@ export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <History className="h-5 w-5" />
-            Historial de la Orden
+            Historial de la orden
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -164,7 +164,7 @@ export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <History className="h-5 w-5" />
-          Historial de la Orden
+          Historial de la orden
         </CardTitle>
       </CardHeader>
       <CardContent>

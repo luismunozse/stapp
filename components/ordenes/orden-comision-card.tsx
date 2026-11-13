@@ -151,7 +151,7 @@ export function OrdenComisionCard({
                     )}
                     {pctInvalido && !readOnly && !fila.pagado && esTecnico && (
                       <p role="alert" className="mt-1 text-xs text-destructive-text">
-                        Ingrese un porcentaje entre 0 y 100.
+                        Ingresá un porcentaje entre 0 y 100.
                       </p>
                     )}
                   </div>

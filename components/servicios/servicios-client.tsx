@@ -113,7 +113,7 @@ export function ServiciosClient() {
     if (!form.codigo.trim() || !form.nombre.trim() || form.precio < 0) {
       await alert({
         title: "Datos incompletos",
-        description: "Completa código, nombre y precio",
+        description: "Completá código, nombre y precio",
         variant: "warning",
       })
       return

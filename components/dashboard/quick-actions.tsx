@@ -10,7 +10,7 @@ interface QuickActionsProps {
 export function QuickActions({ cobrosPendientesCount }: QuickActionsProps) {
   const actions = [
     {
-      label: "Nueva Orden",
+      label: "Nueva orden",
       href: "/ordenes?nueva=1",
       icon: Plus,
       className: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -22,14 +22,14 @@ export function QuickActions({ cobrosPendientesCount }: QuickActionsProps) {
       className: "bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600",
     },
     {
-      label: "Ver Cobros Pendientes",
+      label: "Ver cobros pendientes",
       href: ordenesHref({ filtro: "pendientesCobro" }),
       icon: AlertTriangle,
       className: "bg-amber-500 text-amber-950 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500",
       badge: cobrosPendientesCount > 0 ? cobrosPendientesCount : undefined,
     },
     {
-      label: "Abrir Caja del Día",
+      label: "Abrir caja del día",
       href: "/caja",
       icon: Landmark,
       className: "bg-muted text-foreground hover:bg-muted/80 border border-border",

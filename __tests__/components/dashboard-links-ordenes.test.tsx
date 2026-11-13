@@ -36,9 +36,9 @@ describe("links del dashboard a la lista de órdenes", () => {
     entiendeLaLista(href("sla"))
   })
 
-  it("quick actions: 'Ver Cobros Pendientes' llega filtrado", () => {
+  it("quick actions: 'Ver cobros pendientes' llega filtrado", () => {
     render(<QuickActions cobrosPendientesCount={2} />)
-    const link = screen.getByRole("link", { name: /Ver Cobros Pendientes/ })
+    const link = screen.getByRole("link", { name: /Ver cobros pendientes/ })
     expect(link).toHaveAttribute("href", "/ordenes?filtro=pendientesCobro")
   })
 

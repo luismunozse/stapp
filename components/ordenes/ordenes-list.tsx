@@ -88,7 +88,7 @@ const SEARCH_PLACEHOLDERS = [
   "Buscar por dispositivo: Galaxy A55...",
   "Buscar por teléfono: 351789...",
   "Buscar por IMEI: 358273...",
-  "Buscar por N° de Serie: SN12345...",
+  "Buscar por N° de serie: SN12345...",
 ]
 
 type QuickFilterKey = FiltroRapido
@@ -465,8 +465,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     e.stopPropagation()
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
     const confirmed = await confirm({
-      title: "Eliminar Orden",
-      description: `¿Estás seguro de eliminar la Orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
+      title: "Eliminar orden",
+      description: `¿Estás seguro de eliminar la orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -628,7 +628,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     },
     {
       key: "fechaIngreso",
-      header: "Fecha Ingreso",
+      header: "Fecha de ingreso",
       sortable: true,
       hideOnTablet: true,
       className: "min-w-[110px]",
@@ -1151,7 +1151,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
           columns={visibleColumns}
           keyExtractor={(orden) => orden.id}
           loading={isLoading}
-          emptyMessage="No hay órdenes registradas. Crea tu primera orden con el botón + Nueva"
+          emptyMessage="No hay órdenes registradas. Creá tu primera orden con el botón + Nueva"
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSort={handleSort}

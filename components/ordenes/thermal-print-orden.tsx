@@ -87,7 +87,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       ? `${window.location.origin}/seguimiento/${orden.publicToken}`
       : null
     return {
-      nombreEmpresa: orden.organizationName || "Servicio Tecnico",
+      nombreEmpresa: orden.organizationName || "Servicio Técnico",
       telefonoEmpresa: orden.organizationTelefono ?? null,
       direccionEmpresa: orden.organizationDireccion ?? null,
       logoUrl: orden.organizationLogoUrl ?? null,
@@ -464,7 +464,7 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
       {qrDataUrl && (
         <>
           <div className="text-center font-bold mt-2">SEGUIMIENTO ONLINE</div>
-          <div className="text-center text-[10px]">Escanea para ver el estado</div>
+          <div className="text-center text-[10px]">Escaneá para ver el estado</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrDataUrl} alt="QR seguimiento" className="mx-auto my-1" style={{ width: "150px", height: "150px" }} />
           <Sep />
@@ -473,13 +473,13 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
 
       {data.terminosCondiciones && (
         <>
-          <div className="font-bold">TERMINOS Y CONDICIONES</div>
+          <div className="font-bold">TÉRMINOS Y CONDICIONES</div>
           <div className="whitespace-pre-wrap break-words text-[10px]">{data.terminosCondiciones}</div>
           <Sep />
         </>
       )}
 
-      <div className="text-center font-bold mt-1">Conserve este comprobante</div>
+      <div className="text-center font-bold mt-1">Conservá este comprobante</div>
       {data.telefonoEmpresa && (
         <div className="text-center">Consultas: {data.telefonoEmpresa}</div>
       )}

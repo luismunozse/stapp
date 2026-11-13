@@ -127,7 +127,7 @@ export function CobrarOrdenDialog({
   const handleCobrar = async () => {
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      await showError("Debe registrar al menos un pago")
+      await showError("Registrá al menos un pago")
       return
     }
     if (totalPagos > pendiente + 0.01) {
@@ -164,7 +164,7 @@ export function CobrarOrdenDialog({
       }, { store: STORES.COBROS, description: `Cobro orden #${orden.numeroOrden}` })
 
       if (res.status === 202) {
-        await showInfo("Cobro guardado offline. Se sincronizará automáticamente.")
+        await showInfo("Cobro guardado sin conexión. Se va a sincronizar automáticamente.")
         onSuccess()
         onOpenChange(false)
         return
@@ -194,7 +194,7 @@ export function CobrarOrdenDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Cobrar Orden {ordenLabel}
+            Cobrar orden {ordenLabel}
             {orden.clienteNombre && (
               <span className="text-sm font-normal text-muted-foreground">
                 - {orden.clienteNombre}
@@ -207,7 +207,7 @@ export function CobrarOrdenDialog({
         <div className="p-3 bg-muted rounded-lg space-y-2">
           <div className="grid grid-cols-3 gap-2 text-sm">
             <div>
-              <span className="text-muted-foreground text-xs">Costo Final</span>
+              <span className="text-muted-foreground text-xs">Costo final</span>
               <div className="font-semibold">{formatPrice(orden.costoFinal)}</div>
             </div>
             <div>

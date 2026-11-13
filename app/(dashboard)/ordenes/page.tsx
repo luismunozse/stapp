@@ -11,8 +11,8 @@ export default async function OrdenesPage() {
 
   return (
     <PageShell
-      title="Órdenes de Servicio"
-      description="Gestiona las órdenes de servicio y su estado"
+      title="Órdenes de servicio"
+      description="Gestioná las órdenes de servicio y su estado"
     >
       <OrdenesList canRecepcionMultiple={canRecepcionMultiple} />
     </PageShell>
