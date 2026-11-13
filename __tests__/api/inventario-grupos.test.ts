@@ -5,6 +5,8 @@ import { requireInventarioAccess } from "@/lib/auth-utils"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { depositoPermitido, depositoPorDefecto } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
+import { resolverConfigMoneda } from "@/lib/currency/config-moneda"
 import { nombreVariante } from "@/lib/variantes"
 import { mockAuthSuccess, mockAuthError, parseResponse } from "./helpers"
 
@@ -19,6 +21,7 @@ vi.mock("@/lib/audit", async (importActual) => ({
 }))
 vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }))
+vi.mock("@/lib/currency/tipo-cambio.server", () => ({ cargarConfigMoneda: vi.fn() }))
 // Wrapped so one test can make the answer fail to build; it calls the real function otherwise.
 vi.mock("@/lib/db-utils", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/db-utils")>()
@@ -94,8 +97,10 @@ function datos() {
 
 interface Consulta {
   tabla: string
-  op: "select" | "delete"
+  op: "select" | "delete" | "update"
   filtros: [string, unknown][]
+  /** The payload of an update. */
+  cambios?: Fila
 }
 
 const MISSING = {
@@ -218,6 +223,17 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
     const inyectado = rpcErrores.shift()
     if (inyectado) return falloRpc(inyectado.code, inyectado.message)
     if ("rpcDatos" in opciones) return { data: opciones.rpcDatos, error: null }
+    if (nombre === "guardar_grupo_variantes_moneda") {
+      // Migration 409: the same save, then the currency of every row of that group in p_org, in one
+      // transaction (an error above leaves the store untouched).
+      const { p_moneda, ...resto } = args
+      const r = guardarGrupoFalso(tablas as unknown as Record<string, Fila[]>, resto)
+      if (r.error) return r
+      for (const f of tablas.inventario as Fila[]) {
+        if (f.grupo_id === resto.p_grupo.id && f.organization_id === resto.p_org) f.moneda = p_moneda
+      }
+      return r
+    }
     return guardarGrupoFalso(tablas as unknown as Record<string, Fila[]>, args)
   }) as any)
 
@@ -249,6 +265,10 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
         .filter((f) => (en ?? []).every(([col, vals]) => vals.includes(f[col])))
         .sort((x, y) => orden.map((o) => String(x[o]).localeCompare(String(y[o]))).find((n) => n !== 0) ?? 0)
       if (c.op === "delete") (tablas as Record<string, Fila[]>)[tabla] = todas.filter((f) => !filas.includes(f))
+      if (c.op === "update") {
+        for (const f of filas) Object.assign(f, c.cambios)
+        return { data: null, error: null }
+      }
       // supabase-js returns no rows for a DELETE unless .select() was chained after it.
       if (c.op === "delete" && !conSelect) return { data: null, error: null }
       const pedidas = columnas.split(",").map((s) => s.trim())
@@ -260,9 +280,11 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
     const api: any = {
       select: (cols: string) => ((columnas = cols), (conSelect = true), api),
       delete: () => ((c.op = "delete"), api),
+      update: (cambios: Fila) => ((c.op = "update"), (c.cambios = cambios), api),
       eq: (col: string, val: unknown) => (c.filtros.push([col, val]), api),
       in: (col: string, vals: unknown[]) => ((en = [...(en ?? []), [col, vals]]), api),
       order: (col: string) => (orden.push(col), api),
+      limit: () => api,
       maybeSingle: async () => ejecutar("maybe"),
       single: async () => ejecutar("single"),
       then: (resolve: any, reject?: any) => Promise.resolve(ejecutar(null)).then(resolve, reject),
@@ -287,6 +309,10 @@ beforeEach(() => {
   vi.mocked(emitWebhookEvent).mockResolvedValue(undefined)
   vi.mocked(depositoPermitido).mockResolvedValue(true)
   vi.mocked(depositoPorDefecto).mockResolvedValue(null)
+  vi.mocked(cargarConfigMoneda).mockResolvedValue({
+    config: resolverConfigMoneda({ multimoneda_habilitada: true, moneda_extranjera: "USD" } as any, "AR"),
+    fila: null,
+  } as any)
 })
 
 describe("GET /api/inventario/grupos/[id]", () => {
@@ -990,7 +1016,7 @@ describe("PUT /api/inventario/grupos/[id]: snapshot, events and response", () =>
       "inventario.created",
       {
         id: cid(101), codigo: "NX-RO", nombre: "Nueva - Rojo", categoria: "Fundas", tipoDispositivo: undefined, stock: 5,
-        precioVenta: 1000, precioCompra: 400, proveedorId: undefined, barcode: null,
+        precioVenta: 1000, precioCompra: 400, proveedorId: undefined, barcode: null, moneda: null,
       },
     ])
     expect(auditoria.create.mock.calls.map((c) => [c[0], c[1]])).toEqual([["inventario", cid(101)], ["inventario", cid(102)]])
@@ -2082,5 +2108,155 @@ describe("PUT /api/inventario/grupos/[id]: agrupar existentes (fuenteCompartidos
 
     expect((await putReq(cid(200), cuerpoAgrupar())).status).toBe(403)
     expect(rpcCalls).toEqual([])
+  })
+})
+
+describe("PUT /api/inventario/grupos/[id]: moneda", () => {
+  const monedas = (tablas: { inventario: Fila[] }, grupo: string) =>
+    tablas.inventario.filter((f) => f.grupo_id === grupo).map((f) => [f.id, f.organization_id, f.moneda ?? null])
+
+  it("without moneda it neither reads the config nor writes the column", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { consultas } = instalarBase()
+
+    expect((await putReq("g-1", cuerpoG1())).status).toBe(200)
+
+    expect(cargarConfigMoneda).not.toHaveBeenCalled()
+    expect(consultas.filter((c) => c.op === "update")).toEqual([])
+  })
+
+  it("a currency change goes through the wrapper RPC with p_moneda: one transaction, no UPDATE from the route", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas, consultas, rpcCalls } = instalarBase()
+
+    const { status } = await parseResponse(await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } })))
+
+    expect(status).toBe(200)
+    expect(rpcCalls.map((c) => c.nombre)).toEqual(["guardar_grupo_variantes_moneda"])
+    expect(rpcCalls[0].args.p_moneda).toBe("USD")
+    expect(rpcCalls[0].args.p_org).toBe("org-1")
+    expect(rpcCalls[0].args.p_grupo.id).toBe("g-1")
+    // The route writes nothing itself.
+    expect(consultas.filter((c) => c.op === "update")).toEqual([])
+    expect(monedas(tablas, "g-1").filter(([, org]) => org === "org-1").every(([, , m]) => m === "USD")).toBe(true)
+    // Another organization's row that points at g-1 keeps its currency.
+    expect(monedas(tablas, "g-1").find(([id]) => id === "leak")).toEqual(["leak", "org-2", null])
+  })
+
+  it("the wrapper gets the same save arguments as the plain RPC, plus p_moneda", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls } = instalarBase()
+    await putReq("g-1", cuerpoG1())
+    const segundo = instalarBase()
+    await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } }))
+    const { p_moneda, ...resto } = segundo.rpcCalls[0].args
+    expect(p_moneda).toBe("USD")
+    expect(resto).toStrictEqual(rpcCalls[0].args)
+  })
+
+  it("moneda null moves a USD group back to the local currency through the wrapper", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas, rpcCalls } = instalarBase()
+    for (const f of tablas.inventario) if (f.grupo_id === "g-1" && f.organization_id === "org-1") f.moneda = "USD"
+
+    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: null } }))).status).toBe(200)
+
+    expect(rpcCalls.map((c) => c.nombre)).toEqual(["guardar_grupo_variantes_moneda"])
+    expect(rpcCalls[0].args.p_moneda).toBeNull()
+    expect(monedas(tablas, "g-1").filter(([, org]) => org === "org-1").every(([, , m]) => m === null)).toBe(true)
+    expect(cargarConfigMoneda).not.toHaveBeenCalled()
+  })
+
+  it("the same currency the group already has is a plain save", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls } = instalarBase()
+
+    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: null } }))).status).toBe(200)
+
+    expect(rpcCalls.map((c) => c.nombre)).toEqual(["guardar_grupo_variantes"])
+    expect(JSON.stringify(rpcCalls[0].args)).not.toContain("moneda")
+  })
+
+  it("moneda USD with the feature off is a 400 that saves nothing", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue({
+      config: resolverConfigMoneda({ multimoneda_habilitada: false, moneda_extranjera: "USD" } as any, "AR"),
+      fila: null,
+    } as any)
+    const { consultas } = instalarBase()
+
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } })))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("La moneda extranjera está deshabilitada")
+    expect(vi.mocked(supabaseAdmin.rpc)).not.toHaveBeenCalled()
+    expect(consultas.filter((c) => c.op === "update")).toEqual([])
+  })
+
+  it("the group's current currency is kept even with the feature off (a plain save)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue({
+      config: resolverConfigMoneda({ multimoneda_habilitada: false, moneda_extranjera: "USD" } as any, "AR"),
+      fila: null,
+    } as any)
+    const { tablas, rpcCalls } = instalarBase()
+    for (const f of tablas.inventario) if (f.grupo_id === "g-1" && f.organization_id === "org-1") f.moneda = "USD"
+
+    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } }))).status).toBe(200)
+    expect(rpcCalls.map((c) => c.nombre)).toEqual(["guardar_grupo_variantes"])
+  })
+
+  it("an RPC error that carries MONEDA_GRUPO_MIXTA is a 400 with the message", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { consultas } = instalarBase({}, { rpcErrores: [{ code: "P0036", message: "MONEDA_GRUPO_MIXTA: grupo g-1" }] })
+
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1()))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("No se pueden agrupar productos con monedas distintas")
+    expect(consultas.filter((c) => c.op === "update")).toEqual([])
+  })
+
+  it("a failing wrapper saves nothing: no half-applied save, no events, no cache bump", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { tablas } = instalarBase({}, { rpcErrores: [{ code: "XX000", message: "boom" }] })
+    const antes = structuredClone(tablas.inventario)
+
+    const res = await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 }, extra: { moneda: "USD" } }))
+
+    expect(res.status).toBe(500)
+    expect(tablas.inventario).toEqual(antes)
+    expect(revalidateTag).not.toHaveBeenCalled()
+    expect(eventos()).toEqual([])
+  })
+
+  it("a MONEDA_GRUPO_MIXTA from the wrapper is the same 400", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase({}, { rpcErrores: [{ code: "23514", message: "MONEDA_GRUPO_MIXTA" }] })
+
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } })))
+
+    expect(status).toBe(400)
+    expect(body.code).toBe("MONEDA_GRUPO_MIXTA")
+  })
+
+  it("the current currency is read from the database: only new variants in the payload still keep it with the feature off", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(cargarConfigMoneda).mockResolvedValue({
+      config: resolverConfigMoneda({ multimoneda_habilitada: false, moneda_extranjera: "USD" } as any, "AR"),
+      fila: null,
+    } as any)
+    const { tablas, log } = instalarBase()
+    for (const f of tablas.inventario) if (f.grupo_id === "g-1" && f.organization_id === "org-1") f.moneda = "USD"
+    expect((await putReq("g-1", cuerpoG1({ extra: { moneda: "USD" } }))).status).toBe(200)
+    // A dedicated read of the group's members (by grupo_id + organization), not the payload snapshot.
+    expect(
+      log.some(
+        (e) =>
+          e.tipo === "consulta" && e.tabla === "inventario" && e.columnas === "moneda" &&
+          JSON.stringify(e.filtros) === JSON.stringify([["grupo_id", "g-1"], ["organization_id", "org-1"]])
+      )
+    ).toBe(true)
   })
 })

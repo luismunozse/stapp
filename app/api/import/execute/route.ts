@@ -3,12 +3,13 @@ import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPorDefecto, moverStockInicialLote } from "@/lib/depositos"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
+import { validateCSVHeaders, normalizeHeaders, normalizeRow, generateCodigo } from "@/lib/csv-validator"
 import { validateImportRows, compactRow } from "@/lib/import-rows"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { buildInventarioPayload } from "@/lib/import-inventario-payload"
 import { z } from "zod"
 
 const executeSchema = z.object({
@@ -23,21 +24,6 @@ const executeSchema = z.object({
 export const maxDuration = 60
 
 const BATCH_SIZE = 500
-
-function buildInventarioPayload(d: any, codigo: string, organizationId: string) {
-  return {
-    codigo,
-    nombre: d.nombre,
-    descripcion: d.descripcion || null,
-    categoria: d.categoria || 'GENERAL',
-    tipo_dispositivo: resolveTipoDispositivo(d.tipoDispositivo),
-    stock: d.stock,
-    precio_compra: d.precioCompra ?? 0,
-    precio_venta: d.precioVenta,
-    proveedor: d.proveedor || d.marca || null,
-    organization_id: organizationId,
-  }
-}
 
 async function batchInsert(
   client: typeof supabaseAdmin,

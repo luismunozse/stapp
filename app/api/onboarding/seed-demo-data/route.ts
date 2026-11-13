@@ -92,6 +92,7 @@ export async function POST() {
         precio_compra: 2500,
         precio_venta: 6500,
         proveedor: "Demo Proveedor",
+        moneda: null,
         organization_id: organizationId!,
       },
       {
@@ -104,6 +105,7 @@ export async function POST() {
         precio_compra: 800,
         precio_venta: 2500,
         proveedor: "Demo Proveedor",
+        moneda: null,
         organization_id: organizationId!,
       },
       {
@@ -116,6 +118,7 @@ export async function POST() {
         precio_compra: 7500,
         precio_venta: 18000,
         proveedor: "Demo Proveedor",
+        moneda: null,
         organization_id: organizationId!,
       },
       {
@@ -128,6 +131,7 @@ export async function POST() {
         precio_compra: 1500,
         precio_venta: 4000,
         proveedor: "Demo Proveedor",
+        moneda: null,
         organization_id: organizationId!,
       },
       {
@@ -140,6 +144,7 @@ export async function POST() {
         precio_compra: 1800,
         precio_venta: 4500,
         proveedor: "Demo Proveedor",
+        moneda: null,
         organization_id: organizationId!,
       },
     ]

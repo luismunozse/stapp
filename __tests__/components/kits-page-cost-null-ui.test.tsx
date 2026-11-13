@@ -31,7 +31,11 @@ describe("KitsPage — costo de receta nulo", () => {
     vi.unstubAllGlobals()
   })
 
-  function stubFetch(costoCalculado: number | null, precioCompra: number | null) {
+  function stubFetch(
+    costoCalculado: number | null,
+    precioCompra: number | null,
+    extra: { costoNoDisponible?: boolean; monedaExtranjera?: string | null } = {},
+  ) {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -53,9 +57,11 @@ describe("KitsPage — costo de receta nulo", () => {
                 tipoDispositivo: "Kit",
                 cantidadComponentes: 4,
                 costoCalculado,
+                costoNoDisponible: extra.costoNoDisponible ?? false,
               },
             ],
             total: 1,
+            monedaExtranjera: extra.monedaExtranjera ?? null,
           }),
         } as Response),
       ),
@@ -91,5 +97,24 @@ describe("KitsPage — costo de receta nulo", () => {
 
     expect(screen.getByText("Costo receta")).toBeInTheDocument()
     expect(screen.getByText("$1200")).toBeInTheDocument()
+  })
+
+  it("avisa que el costo no está disponible cuando falta la cotización", async () => {
+    stubFetch(null, 900, { costoNoDisponible: true, monedaExtranjera: "USD" })
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Kit reparacion")).toBeInTheDocument())
+
+    expect(screen.getByText("Costo no disponible: falta la cotización de USD")).toBeInTheDocument()
+    expect(screen.queryByText("Costo receta")).not.toBeInTheDocument()
+  })
+
+  it("sin acceso a costos no muestra el aviso de costo no disponible", async () => {
+    stubFetch(null, null, { costoNoDisponible: false, monedaExtranjera: "USD" })
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText("Kit reparacion")).toBeInTheDocument())
+
+    expect(screen.queryByText(/Costo no disponible/)).not.toBeInTheDocument()
   })
 })

@@ -35,6 +35,8 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 
 interface Componente {
   id: string // id del row inventario_kit_items
@@ -56,7 +58,10 @@ interface Componente {
     imagenUrl: string | null
     esKit: boolean
     tipoKit: string | null
+    /** null = moneda local; si no, la divisa en que está el precio de compra. */
+    moneda: MonedaCatalogo
   } | null
+  /** En la moneda propia del componente. */
   subtotalCosto: number | null
 }
 
@@ -69,6 +74,7 @@ interface ExplosionadoRow {
   costoSubtotal: number | null
   esKit: boolean
   profundidad: number
+  moneda?: MonedaCatalogo
 }
 
 interface KitData {
@@ -86,6 +92,9 @@ interface KitData {
   }
   componentes: Componente[]
   costoCalculado: number | null
+  /** true: el rol ve costos pero algún componente no tiene equivalente local. */
+  costoNoDisponible?: boolean
+  monedaExtranjera?: string | null
   explosionado: ExplosionadoRow[] | null
 }
 
@@ -95,6 +104,7 @@ interface SearchResultItem {
   nombre: string
   stock: number
   precioCompra: number | null
+  moneda: MonedaCatalogo
   imagenUrl: string | null
 }
 
@@ -219,6 +229,7 @@ export function KitDialog({
           nombre: string
           stock: number
           precioCompra: number | null
+          moneda?: MonedaCatalogo
           imagenUrl: string | null
         }>
         // Excluir el propio kit + los ya agregados
@@ -236,6 +247,7 @@ export function KitDialog({
               stock: r.stock ?? 0,
               // No colapsar a 0: null significa "sin permiso", no "gratis".
               precioCompra: r.precioCompra == null ? null : Number(r.precioCompra),
+              moneda: r.moneda ?? null,
               imagenUrl: r.imagenUrl ?? null,
             }))
         )
@@ -469,6 +481,13 @@ export function KitDialog({
                   </div>
                 </div>
               )}
+              {data.costoCalculado === null && data.costoNoDisponible && (
+                <div className="text-right text-xs text-muted-foreground">
+                  {data.monedaExtranjera
+                    ? `Costo no disponible: falta la cotización de ${data.monedaExtranjera}`
+                    : "Costo no disponible"}
+                </div>
+              )}
             </div>
 
             <p className="text-xs text-muted-foreground">
@@ -529,7 +548,12 @@ export function KitDialog({
                               <div className="font-medium truncate">{r.nombre}</div>
                               <div className="text-xs text-muted-foreground">
                                 {r.codigo} · Stock {r.stock}
-                                {r.precioCompra !== null && ` · ${formatPrice(r.precioCompra)}`}
+                                {r.precioCompra !== null && (
+                                  <>
+                                    {" · "}
+                                    <PrecioEnMoneda monto={r.precioCompra} moneda={r.moneda} />
+                                  </>
+                                )}
                               </div>
                             </div>
                           </button>
@@ -579,8 +603,15 @@ export function KitDialog({
                             <div className="text-xs text-muted-foreground">
                               {c.componente.codigo} · Disp.{" "}
                               {c.componente.disponible}
-                              {c.componente.precioCompra !== null &&
-                                ` · Costo ${formatPrice(c.componente.precioCompra)}`}
+                              {c.componente.precioCompra !== null && (
+                                <>
+                                  {" · Costo "}
+                                  <PrecioEnMoneda
+                                    monto={c.componente.precioCompra}
+                                    moneda={c.componente.moneda ?? null}
+                                  />
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -603,7 +634,10 @@ export function KitDialog({
 
                           {c.subtotalCosto !== null && (
                             <div className="w-24 text-right text-xs shrink-0">
-                              {formatPrice(c.subtotalCosto)}
+                              <PrecioEnMoneda
+                                monto={c.subtotalCosto}
+                                moneda={c.componente?.moneda ?? null}
+                              />
                             </div>
                           )}
 
@@ -790,7 +824,7 @@ export function KitDialog({
                           </div>
                           {r.costoSubtotal !== null && (
                             <div className="text-xs text-muted-foreground">
-                              {formatPrice(r.costoSubtotal)}
+                              <PrecioEnMoneda monto={r.costoSubtotal} moneda={r.moneda ?? null} />
                             </div>
                           )}
                         </div>

@@ -44,6 +44,7 @@ const fila = (extra: Record<string, unknown> = {}) => ({
   punto_reorden: 2,
   barcode: "7790001",
   ubicacion: "A1",
+  moneda: "USD",
   stock: 5,
   deleted_at: null,
   imagen_url: null,
@@ -61,13 +62,13 @@ beforeEach(() => {
 })
 
 describe("pickAudited", () => {
-  it("keeps exactly the 14 audited fields", () => {
-    expect(AUDITED_FIELDS).toHaveLength(14)
+  it("keeps exactly the 15 audited fields (moneda since multimoneda S4)", () => {
+    expect(AUDITED_FIELDS).toHaveLength(15)
     expect(Object.keys(pickAudited(fila()))).toEqual([...AUDITED_FIELDS])
     expect(pickAudited(fila())).toEqual({
       codigo: "FX-1", nombre: "Funda X - Rojo", descripcion: "Funda", categoria: "Fundas", tipo_dispositivo: "CELULAR",
       precio_compra: 300, precio_venta: 900, proveedor: "Acme", proveedor_id: "p1", stock_minimo: 1, stock_maximo: 10,
-      punto_reorden: 2, barcode: "7790001", ubicacion: "A1",
+      punto_reorden: 2, barcode: "7790001", ubicacion: "A1", moneda: "USD",
     })
   })
 
@@ -89,7 +90,7 @@ describe("registrarCreacion", () => {
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.created", {
       id: "i1", codigo: "FX-1", nombre: "Funda X - Rojo", categoria: "Fundas", tipoDispositivo: "CELULAR", stock: 5,
-      precioVenta: 900, precioCompra: 300, proveedorId: "p1", barcode: "7790001",
+      precioVenta: 900, precioCompra: 300, proveedorId: "p1", barcode: "7790001", moneda: "USD",
     })
   })
 

@@ -33,6 +33,7 @@ describe("POST /api/cotizaciones — ítems del catálogo de servicios", () => {
       organizations: createChainMock({ zona_horaria: "America/Argentina/Buenos_Aires" }),
       cotizaciones: createChainMock({ id: "cot-1", numero_cotizacion: "COT-0001" }),
       items_cotizacion: items,
+      servicios: createChainMock([]),
     })
   }
 
@@ -98,6 +99,7 @@ describe("PUT /api/cotizaciones/[id] — ítems del catálogo de servicios", () 
         items_cotizacion: [],
       }),
       items_cotizacion: items,
+      servicios: createChainMock([]),
     })
 
     await editarCotizacion(

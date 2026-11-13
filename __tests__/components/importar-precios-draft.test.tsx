@@ -526,3 +526,59 @@ describe("ImportarPreciosPage — lo que nunca se persiste", () => {
     expect(data.headerRow).toBe(1)
   })
 })
+
+describe("ImportarPreciosPage — moneda de cada fila", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("muestra la moneda de cada fila y aclara cómo se interpretan los precios", async () => {
+    window.localStorage.clear()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        const href = String(url)
+        if (href.includes("/precios/parse")) {
+          return Promise.resolve({ ok: true, json: async () => ({ sheets: SHEETS }) } as Response)
+        }
+        if (href.includes("/precios/preview")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              summary: { totalRows: 1, matched: 1, sinCambios: 0, unmatched: 0, errors: 0 },
+              updates: [
+                {
+                  id: "inv-1",
+                  codigo: "B1",
+                  nombre: "Producto B",
+                  precioCompraActual: 1,
+                  precioVentaActual: 2,
+                  precioCompraNuevo: 1,
+                  precioVentaNuevo: 3,
+                  moneda: "USD",
+                  cambia: true,
+                },
+              ],
+              unmatched: [],
+              errors: [],
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) } as unknown as Response)
+      }),
+    )
+    seedDraft(draftDelAsistente())
+
+    renderPage()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    await subirArchivo()
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
+    fireEvent.click(await screen.findByRole("button", { name: /ver cambios/i }))
+
+    expect(
+      await screen.findByText("Los precios se interpretan en la moneda actual de cada producto"),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("columnheader", { name: "Moneda" })).toBeInTheDocument()
+    expect(screen.getByText("USD", { selector: "td" })).toBeInTheDocument()
+  })
+})

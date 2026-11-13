@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   // Cargar items de inventario (validando pertenencia al tenant)
   const { data: inv, error: invErr } = await supabaseAdmin
     .from("inventario")
-    .select("id, nombre, descripcion, precio_venta")
+    .select("id, nombre, descripcion, precio_venta, moneda")
     .in("id", inventarioIds)
     .eq("organization_id", orgId)
 
@@ -77,6 +77,12 @@ export async function POST(req: Request) {
 
   let nextOrden = (maxOrden?.orden ?? -1) + 1
 
+  // The public catalog has no currency: a price in USD/EUR copied as is would be shown (and quoted)
+  // as local. A foreign-currency item comes in without a price ("consultar"), which the public
+  // quote refuses to price, until the catalog supports currencies.
+  const enDivisa = (it: { moneda?: string | null }) => it.moneda != null
+  const sinPrecioPorDivisa = aImportar.filter(enDivisa).length
+
   const rows = aImportar.map((it) => ({
     organization_id: orgId,
     tipo: "PRODUCTO" as const,
@@ -84,7 +90,7 @@ export async function POST(req: Request) {
     descripcion: it.descripcion ?? null,
     categoria_id: categoriaId ?? null,
     inventario_id: it.id,
-    precio: it.precio_venta != null ? Number(it.precio_venta) : null,
+    precio: enDivisa(it) || it.precio_venta == null ? null : Number(it.precio_venta),
     precio_hasta: null,
     imagen_url: null,
     imagenes: [],
@@ -107,5 +113,6 @@ export async function POST(req: Request) {
     ok: true,
     creados: creados?.length ?? 0,
     saltados: inv.length - aImportar.length,
+    sinPrecioPorDivisa,
   })
 }

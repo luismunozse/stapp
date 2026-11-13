@@ -104,10 +104,12 @@ export function CatalogoImportInventarioDialog({ open, onClose, onImported, cate
 
       const creados = data.creados ?? 0
       const saltados = data.saltados ?? 0
+      const sinPrecio = data.sinPrecioPorDivisa ?? 0
       if (creados > 0) {
         toast.success(
           `${creados} item${creados > 1 ? "s" : ""} importado${creados > 1 ? "s" : ""}` +
-            (saltados > 0 ? ` · ${saltados} ya estaban` : "")
+            (saltados > 0 ? ` · ${saltados} ya estaban` : "") +
+            (sinPrecio > 0 ? ` · ${sinPrecio} en moneda extranjera quedaron como "consultar precio"` : "")
         )
         onImported()
         onClose()

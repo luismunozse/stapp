@@ -19,6 +19,8 @@ import {
   type ContextoEventos,
 } from "@/lib/inventario-eventos"
 import { imagenRespaldoDe } from "@/lib/variantes"
+import { validarMonedaEscritura, type MonedaCatalogo } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { argumentosGuardarGrupo, compartidosDeFila, validarGuardarGrupo } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
@@ -26,6 +28,14 @@ type Contexto = { params: Promise<{ id: string }> }
 type Fila = Record<string, any>
 
 const GRUPO_NO_ENCONTRADO = "Grupo no encontrado"
+
+// Migration 409 raises this when items of different currencies end up in one group.
+const MONEDA_GRUPO_MIXTA = "MONEDA_GRUPO_MIXTA"
+const MENSAJE_MONEDA_MIXTA = "No se pueden agrupar productos con monedas distintas"
+const esMonedaMixta = (e: unknown) =>
+  !!e && typeof e === "object" && String((e as { message?: unknown }).message ?? "").includes(MONEDA_GRUPO_MIXTA)
+const respuestaMonedaMixta = () =>
+  NextResponse.json({ error: MENSAJE_MONEDA_MIXTA, code: MONEDA_GRUPO_MIXTA }, { status: 400 })
 
 // A role without cost access gets NO precioCompra key (not even null): formatInventario
 // emits `precioCompra: null` for it, which this endpoint drops.
@@ -288,6 +298,34 @@ export async function PUT(request: Request, { params }: Contexto) {
       }
     }
 
+    // Currency of the group: validated BEFORE the save against the group's current currency, read
+    // from the database (any member, archived included), not from the payload: a save that lists
+    // only new variants still has the existing members' currency to keep. The config is read only
+    // when a foreign currency is asked for.
+    let monedaNueva: MonedaCatalogo | undefined
+    if (datos.moneda !== undefined) {
+      const { data: miembro, error: miembroError } = await supabaseAdmin
+        .from("inventario")
+        .select("moneda")
+        .eq("grupo_id", id)
+        .eq("organization_id", organizationId!)
+        .limit(1)
+        .maybeSingle()
+      if (miembroError) throw miembroError
+      const actual: MonedaCatalogo = miembro?.moneda === "USD" || miembro?.moneda === "EUR" ? miembro.moneda : null
+      let pedida: MonedaCatalogo = null
+      if (datos.moneda !== null) {
+        const { config } = await cargarConfigMoneda(organizationId!)
+        const validacion = validarMonedaEscritura(datos.moneda, actual, config)
+        if (!validacion.ok) {
+          return NextResponse.json({ error: validacion.error, code: "PAYLOAD_INVALIDO", campo: "moneda" }, { status: 400 })
+        }
+        pedida = validacion.moneda
+      }
+      // Only a real change goes through the wrapper; the same currency is a plain save.
+      if (pedida !== actual) monedaNueva = pedida
+    }
+
     const args = argumentosGuardarGrupo({
       organizationId: organizationId!,
       userId: userId ?? null,
@@ -296,10 +334,16 @@ export async function PUT(request: Request, { params }: Contexto) {
       canViewCost,
       datos,
     })
+    // A currency change runs through guardar_grupo_variantes_moneda (migration 409): the save and the
+    // new currency of every member (active and archived) commit in ONE transaction, so converted
+    // prices are never stored under the old currency label.
     const { data: resultado, error: rpcError } = await conReintento(() =>
-      supabaseAdmin.rpc("guardar_grupo_variantes", args)
+      monedaNueva === undefined
+        ? supabaseAdmin.rpc("guardar_grupo_variantes", args)
+        : supabaseAdmin.rpc("guardar_grupo_variantes_moneda", { ...args, p_moneda: monedaNueva })
     )
     if (rpcError) {
+      if (esMonedaMixta(rpcError)) return respuestaMonedaMixta()
       const respuesta = respuestaDeError(rpcError)
       if (respuesta) return respuesta
       throw rpcError
@@ -335,13 +379,18 @@ export async function PUT(request: Request, { params }: Contexto) {
     }
     if (lectura?.tipo === "ok") {
       try {
-        return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+        const cuerpo = cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost)
+        return NextResponse.json(cuerpo)
       } catch (respuestaError) {
         console.error("Error armando la respuesta del grupo guardado:", respuestaError)
       }
     }
     // Saved, but the answer could not be built: the form re-hydrates with GET instead of re-sending.
-    return NextResponse.json({ guardado: true, relectura: false, grupoId: id })
+    return NextResponse.json({
+      guardado: true,
+      relectura: false,
+      grupoId: id,
+    })
   } catch (error) {
     console.error("Error guardando grupo de variantes:", error)
     return NextResponse.json({ error: "Error al guardar las variantes" }, { status: 500 })

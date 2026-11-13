@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolverContextoValuacion, valuarLocal, contarExcluidos } from "@/lib/currency/valuacion.server"
 
 // Stats agregadas para el header de /inventario:
 // - totalSkus, valor a costo, valor a venta, sin stock, bajo stock, valor en riesgo
@@ -22,39 +23,50 @@ export async function GET() {
     // Para una org con miles de SKUs esto sigue siendo barato (una columna).
     const { data: items, error: dbError } = await supabaseAdmin
       .from("inventario")
-      .select("stock, stock_reservado, precio_compra, precio_venta, stock_minimo")
+      .select("stock, stock_reservado, precio_compra, precio_venta, stock_minimo, moneda")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
 
     if (dbError) throw dbError
 
     let totalSkus = 0
-    let valorCosto = 0
-    let valorVenta = 0
     let sinStock = 0
     let bajoStock = 0
-    let valorEnRiesgo = 0
 
-    for (const item of items || []) {
-      totalSkus++
+    // Cada monto se calcula en la moneda del ítem y se suma en local (cotización una sola vez,
+    // y solo si algún ítem está en divisa).
+    const rows = (items || []).map((item) => {
       const stock = item.stock || 0
       const precioCompra = Number(item.precio_compra) || 0
       const precioVenta = Number(item.precio_venta) || 0
       const minimoEfectivo = item.stock_minimo ?? globalThreshold
-
-      valorCosto += stock * precioCompra
-      valorVenta += stock * precioVenta
-
+      let riesgo = 0
+      totalSkus++
       if (stock === 0) {
         sinStock++
         // Para items sin stock, el "valor en riesgo" es lo que costaría reponer al mínimo.
-        valorEnRiesgo += minimoEfectivo * precioCompra
+        riesgo = minimoEfectivo * precioCompra
       } else if (stock <= minimoEfectivo) {
         bajoStock++
         // Para bajo stock: lo que costaría llegar al mínimo.
-        valorEnRiesgo += Math.max(0, minimoEfectivo - stock) * precioCompra
+        riesgo = Math.max(0, minimoEfectivo - stock) * precioCompra
       }
-    }
+      return {
+        moneda: (item.moneda ?? null) as "USD" | "EUR" | null,
+        costo: stock * precioCompra,
+        venta: stock * precioVenta,
+        riesgo,
+      }
+    })
+    const ctx = await resolverContextoValuacion(organizationId!, rows)
+    const vCosto = valuarLocal(rows, (r) => r.costo, ctx)
+    const vVenta = valuarLocal(rows, (r) => r.venta, ctx)
+    const vRiesgo = valuarLocal(rows, (r) => r.riesgo, ctx)
+    const valorCosto = vCosto.total
+    const valorVenta = vVenta.total
+    const valorEnRiesgo = vRiesgo.total
+    const aproximado = vCosto.aproximado || vVenta.aproximado || vRiesgo.aproximado
+    const excluidosSinCotizacion = contarExcluidos(rows, ctx)
 
     // valorCosto y valorEnRiesgo salen de precio_compra, así que van detrás del
     // mismo permiso que el costo de cada item. Los conteos y el valor a venta
@@ -85,6 +97,8 @@ export async function GET() {
         sinStock,
         bajoStock,
         valorEnRiesgo: canViewCost ? Math.round(valorEnRiesgo * 100) / 100 : null,
+        aproximado,
+        excluidosSinCotizacion,
       },
       {
         headers: { "Cache-Control": cacheControl, Vary: "Cookie" },
