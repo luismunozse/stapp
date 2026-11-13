@@ -62,6 +62,7 @@ import { formatDivisa } from "@/lib/currency/formato-divisa"
 import { motivoCorto, reconvertirApartada } from "./pos-divisa"
 
 const HELD_SALES_KEY = "pos_held_sales"
+const MONEDA_CARGANDO = "Cargando la cotización, probá de nuevo en un instante."
 
 // Module-scope cache for notif config (rarely changes; avoid refetch on every POS mount).
 let cachedNotifConfig: { data: any; ts: number } | null = null
@@ -118,7 +119,9 @@ export function PosTerminal() {
   // Multimoneda: la cotización en uso del carrito (`tcCarrito`) arranca con la del hook y se
   // reemplaza cuando el hook trae otra o el servidor responde 409 COTIZACION_CAMBIO. Cada cambio
   // reconvierte las líneas en divisa. Con la función apagada el hook no pide la cotización.
-  const { config: configMoneda, tipoCambio } = useMoneda()
+  const { config: configMoneda, tipoCambio, error: errorMoneda } = useMoneda()
+  // Sin config ni error todavía: la decisión sobre una línea en divisa se posterga (no se rechaza).
+  const monedaCargando = !configMoneda && !errorMoneda
   const unidadConversion = configMoneda ? unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal) : 0
   const tcHook = tipoCambio?.disponible ? tipoCambio.valor : null
   const [tcCarrito, setTcCarrito] = useState<number | null>(tcHook)
@@ -138,7 +141,12 @@ export function PosTerminal() {
     (nueva: number) => cambiarCotizacion(nueva, unidadConversion),
     [cambiarCotizacion, unidadConversion]
   )
-  const hayLineasDivisa = cartItems.some((i) => i.moneda)
+  // Lo que necesita `addProduct` se lee de un ref: el escaneo lo llama después de un fetch y una
+  // closure vieja convertiría con la cotización del momento del escaneo, no la vigente.
+  const monedaRef = useRef({ config: configMoneda, tipoCambio, cargando: monedaCargando, tc: tcCarrito ?? tcHook, unidad: unidadConversion })
+  useEffect(() => {
+    monedaRef.current = { config: configMoneda, tipoCambio, cargando: monedaCargando, tc: tcCarrito ?? tcHook, unidad: unidadConversion }
+  })
   const noVendible = useMemo(
     () => (p: InventarioResult): string | null => {
       if (!p.moneda) return null
@@ -348,8 +356,12 @@ export function PosTerminal() {
   const addProduct = useCallback((product: InventarioResult) => {
     let precio = { precioUnitario: product.precioVenta } as Pick<PosCartItem, "precioUnitario" | "moneda" | "precioOrigen">
     if (product.moneda) {
-      const motivo = motivoNoVendible(product.moneda, configMoneda, tipoCambio)
-      const tc = tcCarrito ?? tcHook
+      const { config, tipoCambio: tcActual, cargando, tc, unidad } = monedaRef.current
+      if (cargando) {
+        void showError(MONEDA_CARGANDO)
+        return
+      }
+      const motivo = motivoNoVendible(product.moneda, config, tcActual)
       if (motivo || tc === null) {
         void showError(mensajeNoVendible(motivo ?? "SIN_COTIZACION", product.nombre, product.moneda))
         return
@@ -357,7 +369,7 @@ export function PosTerminal() {
       precio = {
         moneda: product.moneda,
         precioOrigen: product.precioVenta,
-        precioUnitario: convertirALocal(product.precioVenta, tc, unidadConversion),
+        precioUnitario: convertirALocal(product.precioVenta, tc, unidad),
       }
     }
     setCartItems((prev) => {
@@ -386,7 +398,7 @@ export function PosTerminal() {
         },
       ]
     })
-  }, [orgGarantiaDefault, configMoneda, tipoCambio, tcCarrito, tcHook, unidadConversion, showError])
+  }, [orgGarantiaDefault, showError])
 
   const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number; costo?: number }) => {
     setCartItems((prev) => [
@@ -562,7 +574,7 @@ export function PosTerminal() {
         const moneda = it.moneda ?? null
         if (id in monedas && (monedas[id] ?? null) !== moneda) {
           const nombreMoneda = (m: string | null) => m ?? "moneda local"
-          cambios.push(`${it.nombre}: ahora tiene precio en ${nombreMoneda(monedas[id] ?? null)} (en la venta apartada: ${nombreMoneda(moneda)})`)
+          cambios.push(`${it.nombre}: ahora tiene precio en ${nombreMoneda(monedas[id] ?? null)} (en la venta apartada: ${nombreMoneda(moneda)}). Quitala y volvé a agregarla.`)
         } else if (moneda) {
           if (id in precios && precios[id] !== it.precioOrigen) {
             cambios.push(`${it.nombre}: precio de lista actual ${formatDivisa(precios[id], moneda)} (en la venta apartada: ${formatDivisa(it.precioOrigen ?? 0, moneda)})`)
@@ -586,6 +598,12 @@ export function PosTerminal() {
     (id: string) => {
       const sale = heldSales.find((s) => s.id === id)
       if (!sale) return
+      // Sin la config de moneda (cargando o con error) no se puede decidir si sus líneas en divisa
+      // se venden: la apartada queda guardada en vez de perder esas líneas.
+      if (!configMoneda && sale.items.some((i) => i.moneda)) {
+        void showError(MONEDA_CARGANDO)
+        return
+      }
 
       if (cartItems.length > 0) {
         const currentHeld: HeldSale = {
@@ -892,7 +910,7 @@ export function PosTerminal() {
   })
 
   const chipCotizacion =
-    configMoneda && (hayLineasDivisa || configMoneda.habilitada) ? (
+    configMoneda?.habilitada ? (
       <ChipCotizacion
         tipoCambio={tipoCambio}
         monedaLocal={configMoneda.monedaLocal}

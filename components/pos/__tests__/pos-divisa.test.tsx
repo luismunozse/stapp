@@ -76,6 +76,9 @@ function setMoneda(config: object, tipoCambio: object | undefined) {
 
 type Respuesta = { status: number; body: unknown }
 let ventasRespuestas: Respuesta[] = []
+let monedasCheckStock: Record<string, string | null> = { u1: "USD" }
+let barcodePendiente: Promise<void> | null = null
+const CARGANDO = "Cargando la cotización, probá de nuevo en un instante."
 let ventasBodies: any[] = []
 
 function stubFetch() {
@@ -90,9 +93,10 @@ function stubFetch() {
       if (url.startsWith("/api/configuracion/recargos-metodo")) return json(200, { recargos: [] })
       if (url.startsWith("/api/operadores")) return json(200, [])
       if (url.startsWith("/api/inventario/check-stock")) {
-        return json(200, { stock: { u1: 5 }, precios: { u1: 10 }, monedas: { u1: "USD" } })
+        return json(200, { stock: { u1: 5 }, precios: { u1: 10 }, monedas: monedasCheckStock })
       }
       if (url.startsWith("/api/inventario/barcode")) {
+        if (barcodePendiente) await barcodePendiente
         return json(200, { found: true, item: { ...USD_10, trackeaSeries: false, diasGarantiaDefault: null } })
       }
       if (url === "/api/ventas" && init?.method === "POST") {
@@ -117,6 +121,8 @@ describe("PosTerminal — productos con precio en divisa", () => {
   beforeEach(() => {
     showError.mockClear()
     ventasRespuestas = []
+    monedasCheckStock = { u1: "USD" }
+    barcodePendiente = null
     localStorage.clear()
     stubFetch()
   })
@@ -220,6 +226,40 @@ describe("PosTerminal — productos con precio en divisa", () => {
     expect(screen.queryByTestId("exito")).not.toBeInTheDocument()
   })
 
+  it("mientras carga la configuración de moneda no agrega y pide reintentar", async () => {
+    useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: undefined })
+    render(<PosTerminal />)
+    await agregarUsd()
+
+    await waitFor(() => expect(showError).toHaveBeenCalledWith(CARGANDO))
+    expect(textoCarrito()).toMatch(/Carrito vacío/)
+  })
+
+  it("si la configuración de moneda no cargó, agregar se trata como deshabilitada", async () => {
+    useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: new Error("500") })
+    render(<PosTerminal />)
+    await agregarUsd()
+
+    await waitFor(() =>
+      expect(showError).toHaveBeenCalledWith('"Funda" tiene precio en USD y la moneda extranjera está deshabilitada.')
+    )
+  })
+
+  it("una línea escaneada usa la cotización vigente cuando llega la respuesta, no la del momento del escaneo", async () => {
+    let soltar: () => void = () => {}
+    barcodePendiente = new Promise<void>((r) => { soltar = r })
+    setMoneda({}, tcVivo(1200))
+    const { rerender } = render(<PosTerminal />)
+    for (const ch of "779001") fireEvent.keyDown(document.body, { key: ch, code: `Digit${ch}` })
+    fireEvent.keyDown(document.body, { key: "Enter", code: "Enter" })
+
+    setMoneda({}, tcVivo(1300))
+    rerender(<PosTerminal />)
+    soltar()
+
+    await waitFor(() => expect(textoCarrito()).toMatch(/US\$ 10 → \$ 13\.000 c\/u/))
+  })
+
   describe("venta apartada", () => {
     const lineaUsd: PosCartItem = {
       lineId: "l1", inventarioId: "u1", codigo: "U1", nombre: "Funda",
@@ -264,6 +304,45 @@ describe("PosTerminal — productos con precio en divisa", () => {
       expect(textoCarrito()).toMatch(/Mano de obra/)
       expect(textoCarrito()).not.toMatch(/Funda/)
       expect(textoCarrito()).toMatch(/TOTAL\$ 500/)
+    })
+
+    it("mientras carga la configuración de moneda no se recupera ni se pierde la línea en divisa", async () => {
+      apartar([lineaUsd, lineaLocal])
+      useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: undefined })
+      render(<PosTerminal />)
+
+      fireEvent.click(screen.getByTestId("recuperar"))
+
+      await waitFor(() => expect(showError).toHaveBeenCalledWith(CARGANDO))
+      expect(textoCarrito()).toMatch(/Carrito vacío/)
+      expect(JSON.parse(localStorage.getItem("pos_held_sales")!)[0].items).toHaveLength(2)
+    })
+
+    it("si la configuración de moneda no cargó, tampoco se recupera (la apartada queda)", async () => {
+      apartar([lineaUsd])
+      useMonedaMock.mockReturnValue({ config: undefined, tipoCambio: undefined, error: new Error("500") })
+      render(<PosTerminal />)
+
+      fireEvent.click(screen.getByTestId("recuperar"))
+
+      await waitFor(() => expect(showError).toHaveBeenCalledWith(CARGANDO))
+      expect(textoCarrito()).toMatch(/Carrito vacío/)
+      expect(JSON.parse(localStorage.getItem("pos_held_sales")!)).toHaveLength(1)
+    })
+
+    it("si el producto cambió de moneda, el aviso pide quitarla y volver a agregarla", async () => {
+      apartar([lineaUsd])
+      monedasCheckStock = { u1: null }
+      setMoneda({}, tcVivo(1200))
+      render(<PosTerminal />)
+
+      fireEvent.click(screen.getByTestId("recuperar"))
+
+      await waitFor(() =>
+        expect(showError).toHaveBeenCalledWith(
+          expect.stringContaining("Funda: ahora tiene precio en moneda local (en la venta apartada: USD). Quitala y volvé a agregarla.")
+        )
+      )
     })
 
     it("avisa si el precio de lista en divisa cambió desde que se apartó", async () => {
