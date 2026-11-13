@@ -53,6 +53,32 @@ describe("handlePreApprovalNotification", () => {
     expect(escrito).not.toHaveProperty("current_period_end")
   })
 
+  it("una adhesion nueva guarda cuando se autorizo (desde ahi corre la gracia del primer cobro)", async () => {
+    const subs = createChainMock(
+      { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-vieja", current_period_end: null, canceled_at: null },
+      null,
+    )
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+    await handlePreApprovalNotification("pre-1")
+
+    const escrito = subs.update.mock.calls[0][0]
+    expect(typeof escrito.mercadopago_preapproval_at).toBe("string")
+    expect(Date.now() - new Date(escrito.mercadopago_preapproval_at).getTime()).toBeLessThan(60_000)
+  })
+
+  it("un aviso repetido de la misma adhesion no mueve la fecha de autorizacion", async () => {
+    const subs = createChainMock(
+      { id: "sub-1", status: "ACTIVE", mercadopago_preapproval_id: "pre-1", current_period_end: null, canceled_at: null },
+      null,
+    )
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
+
+    await handlePreApprovalNotification("pre-1")
+
+    expect(subs.update.mock.calls[0][0]).not.toHaveProperty("mercadopago_preapproval_at")
+  })
+
   it("mapea paused a PAST_DUE", async () => {
     global.fetch = vi.fn(async () =>
       new Response(JSON.stringify({ ...PREAPPROVAL, status: "paused" }), { status: 200 })

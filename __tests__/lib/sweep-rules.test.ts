@@ -19,7 +19,7 @@ describe("esAdhesionSinCobro", () => {
       esAdhesionSinCobro({
         tienePreapproval: true,
         currentPeriodEnd: null,
-        createdAt: hace(20),
+        adhesionDesde: hace(20),
         pagosExitosos: 0,
         ahora: AHORA,
       })
@@ -31,7 +31,7 @@ describe("esAdhesionSinCobro", () => {
       esAdhesionSinCobro({
         tienePreapproval: true,
         currentPeriodEnd: null,
-        createdAt: hace(3),
+        adhesionDesde: hace(3),
         pagosExitosos: 0,
         ahora: AHORA,
       })
@@ -43,7 +43,7 @@ describe("esAdhesionSinCobro", () => {
       esAdhesionSinCobro({
         tienePreapproval: true,
         currentPeriodEnd: null,
-        createdAt: hace(60),
+        adhesionDesde: hace(60),
         pagosExitosos: 1,
         ahora: AHORA,
       })
@@ -55,7 +55,7 @@ describe("esAdhesionSinCobro", () => {
       esAdhesionSinCobro({
         tienePreapproval: true,
         currentPeriodEnd: hace(30),
-        createdAt: hace(60),
+        adhesionDesde: hace(60),
         pagosExitosos: 0,
         ahora: AHORA,
       })
