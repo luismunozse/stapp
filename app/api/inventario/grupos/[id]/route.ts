@@ -29,7 +29,7 @@ type Fila = Record<string, any>
 
 const GRUPO_NO_ENCONTRADO = "Grupo no encontrado"
 
-// Migration 408 raises this when items of different currencies end up in one group.
+// Migration 409 raises this when items of different currencies end up in one group.
 const MONEDA_GRUPO_MIXTA = "MONEDA_GRUPO_MIXTA"
 const MENSAJE_MONEDA_MIXTA = "No se pueden agrupar productos con monedas distintas"
 const esMonedaMixta = (e: unknown) =>
@@ -334,7 +334,7 @@ export async function PUT(request: Request, { params }: Contexto) {
       canViewCost,
       datos,
     })
-    // A currency change runs through guardar_grupo_variantes_moneda (migration 408): the save and the
+    // A currency change runs through guardar_grupo_variantes_moneda (migration 409): the save and the
     // new currency of every member (active and archived) commit in ONE transaction, so converted
     // prices are never stored under the old currency label.
     const { data: resultado, error: rpcError } = await conReintento(() =>

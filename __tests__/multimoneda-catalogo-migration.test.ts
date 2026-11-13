@@ -4,14 +4,14 @@ import { readFileSync, existsSync } from "fs"
 import { join } from "path"
 import { collapse, stripComments } from "./helpers/sql-text"
 
-// Migration 408 (multimoneda S4): a variant group keeps ONE currency (sync trigger + inheritance /
+// Migration 409 (multimoneda S4): a variant group keeps ONE currency (sync trigger + inheritance /
 // mixed-currency guard) and the kit cost converts foreign-currency components. Pinned by text: CI
 // has no Postgres.
 const ROOT = process.cwd()
 const MIG = join(ROOT, "supabase/migrations")
-const SQL_PATH = join(MIG, "408_multimoneda_catalogo.sql")
-const ROLLBACK_PATH = join(MIG, "rollback/408_rollback.sql")
-const PROBES_PATH = join(MIG, "verify/408_probes.sql")
+const SQL_PATH = join(MIG, "409_multimoneda_catalogo.sql")
+const ROLLBACK_PATH = join(MIG, "rollback/409_rollback.sql")
+const PROBES_PATH = join(MIG, "verify/409_probes.sql")
 const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8").replace(/\r\n/g, "\n") : "")
 const SQL = read(SQL_PATH)
 const RB = read(ROLLBACK_PATH)
@@ -38,7 +38,7 @@ const fnBody = (text: string, name: string) => {
   return m ? m[1] : ""
 }
 
-describe("migration 408: moneda del grupo de variantes y costo de kit", () => {
+describe("migration 409: moneda del grupo de variantes y costo de kit", () => {
   it("exists with rollback and probes", () => {
     expect(existsSync(SQL_PATH)).toBe(true)
     expect(existsSync(ROLLBACK_PATH)).toBe(true)

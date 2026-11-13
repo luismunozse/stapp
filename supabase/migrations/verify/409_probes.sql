@@ -1,9 +1,9 @@
--- Verification of 408 (multimoneda S4): currency of the variant group and converted kit cost.
+-- Verification of 409 (multimoneda S4): currency of the variant group and converted kit cost.
 --
--- Run AFTER 408 is applied:  node scripts/db-run.mjs <this file>
+-- Run AFTER 409 is applied:  node scripts/db-run.mjs <this file>
 -- (no --apply: the file opens its own transaction and always ends in ROLLBACK).
--- Only data created: one scratch organization ('probe-408-org') with variant groups (one inserted
--- directly, the others through guardar_grupo_variantes and the 408 wrapper), a few items and two
+-- Only data created: one scratch organization ('probe-409-org') with variant groups (one inserted
+-- directly, the others through guardar_grupo_variantes and the 409 wrapper), a few items and two
 -- kits, rolled back with everything. The rollback rehearsal at the end takes ACCESS
 -- EXCLUSIVE on inventario (DROP TRIGGER) until that ROLLBACK, so it runs last.
 -- Green = esperado equals obtenido, or obtenido starts with 'OK:' for probes run through
@@ -37,35 +37,35 @@ DO $$
 DECLARE v_org TEXT; v_g TEXT; v_a TEXT; v_c TEXT; v_l TEXT; v_u TEXT; v_x TEXT;
         v_p1 TEXT; v_p2 TEXT; v_p3 TEXT; v_k TEXT; v_k2 TEXT; v_k0 TEXT;
 BEGIN
-  INSERT INTO organizations (nombre, slug) VALUES ('Probe 408 Org', 'probe-408-org') RETURNING id INTO v_org;
+  INSERT INTO organizations (nombre, slug) VALUES ('Probe 409 Org', 'probe-409-org') RETURNING id INTO v_org;
   INSERT INTO inventario_grupos (organization_id, nombre, opciones)
-    VALUES (v_org, 'Probe 408 Funda', '[{"nombre":"Color","valores":["Rojo","Azul","Verde","Negro","Blanco","Gris"]}]')
+    VALUES (v_org, 'Probe 409 Funda', '[{"nombre":"Color","valores":["Rojo","Azul","Verde","Negro","Blanco","Gris"]}]')
     RETURNING id INTO v_g;
   -- First member of an empty group: keeps the currency it was inserted with.
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda, grupo_id, atributos)
-    VALUES (v_org, 'P408-A', 'Probe 408 Funda - Rojo', 'P408Cat', 10, 20, 'USD', v_g, '[{"opcion":"Color","valor":"Rojo"}]')
+    VALUES (v_org, 'P409-A', 'Probe 409 Funda - Rojo', 'P409Cat', 10, 20, 'USD', v_g, '[{"opcion":"Color","valor":"Rojo"}]')
     RETURNING id INTO v_a;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda, grupo_id, atributos, deleted_at)
-    VALUES (v_org, 'P408-C', 'Probe 408 Funda - Verde', 'P408Cat', 10, 20, 'USD', v_g, '[{"opcion":"Color","valor":"Verde"}]', NOW())
+    VALUES (v_org, 'P409-C', 'Probe 409 Funda - Verde', 'P409Cat', 10, 20, 'USD', v_g, '[{"opcion":"Color","valor":"Verde"}]', NOW())
     RETURNING id INTO v_c;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
-    VALUES (v_org, 'P408-L', 'Probe 408 Local', 'P408Cat', 1, 2) RETURNING id INTO v_l;
+    VALUES (v_org, 'P409-L', 'Probe 409 Local', 'P409Cat', 1, 2) RETURNING id INTO v_l;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
-    VALUES (v_org, 'P408-U', 'Probe 408 Dolar', 'P408Cat', 1, 2, 'USD') RETURNING id INTO v_u;
+    VALUES (v_org, 'P409-U', 'Probe 409 Dolar', 'P409Cat', 1, 2, 'USD') RETURNING id INTO v_u;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
-    VALUES (v_org, 'P408-X', 'Probe 408 Control', 'P408Cat', 1, 2, 'USD') RETURNING id INTO v_x;
+    VALUES (v_org, 'P409-X', 'Probe 409 Control', 'P409Cat', 1, 2, 'USD') RETURNING id INTO v_x;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
-    VALUES (v_org, 'P408-P1', 'Probe 408 Pieza local', 'P408Cat', 500, 900) RETURNING id INTO v_p1;
+    VALUES (v_org, 'P409-P1', 'Probe 409 Pieza local', 'P409Cat', 500, 900) RETURNING id INTO v_p1;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
-    VALUES (v_org, 'P408-P2', 'Probe 408 Pieza USD', 'P408Cat', 10, 20, 'USD') RETURNING id INTO v_p2;
+    VALUES (v_org, 'P409-P2', 'Probe 409 Pieza USD', 'P409Cat', 10, 20, 'USD') RETURNING id INTO v_p2;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
-    VALUES (v_org, 'P408-P3', 'Probe 408 Pieza local 2', 'P408Cat', 7.5, 15) RETURNING id INTO v_p3;
+    VALUES (v_org, 'P409-P3', 'Probe 409 Pieza local 2', 'P409Cat', 7.5, 15) RETURNING id INTO v_p3;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, es_kit, tipo_kit)
-    VALUES (v_org, 'P408-K', 'Probe 408 Kit mixto', 'P408Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k;
+    VALUES (v_org, 'P409-K', 'Probe 409 Kit mixto', 'P409Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, es_kit, tipo_kit)
-    VALUES (v_org, 'P408-K2', 'Probe 408 Kit local', 'P408Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k2;
+    VALUES (v_org, 'P409-K2', 'Probe 409 Kit local', 'P409Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k2;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, es_kit, tipo_kit)
-    VALUES (v_org, 'P408-K0', 'Probe 408 Kit vacio', 'P408Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k0;
+    VALUES (v_org, 'P409-K0', 'Probe 409 Kit vacio', 'P409Cat', 0, 0, true, 'VIRTUAL') RETURNING id INTO v_k0;
   INSERT INTO inventario_kit_items (kit_id, componente_id, cantidad, organization_id) VALUES
     (v_k, v_p1, 1, v_org), (v_k, v_p2, 2, v_org), (v_k2, v_p1, 3, v_org), (v_k2, v_p3, 2, v_org);
   INSERT INTO _s VALUES (v_org, v_g, v_a, v_c, v_l, v_u, v_x, v_p1, v_p2, v_p3, v_k, v_k2, v_k0);
@@ -92,13 +92,13 @@ INSERT INTO _r SELECT 5, 'guardar_grupo_variantes_moneda exists, service_role on
 
 -- 10-13: INSERT into a group takes the group's currency, whatever the INSERT said.
 INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, grupo_id, atributos)
-  SELECT org, 'P408-B', 'Probe 408 Funda - Azul', 'P408Cat', 10, 20, g, '[{"opcion":"Color","valor":"Azul"}]' FROM _s;
+  SELECT org, 'P409-B', 'Probe 409 Funda - Azul', 'P409Cat', 10, 20, g, '[{"opcion":"Color","valor":"Azul"}]' FROM _s;
 INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda, grupo_id, atributos)
-  SELECT org, 'P408-E', 'Probe 408 Funda - Negro', 'P408Cat', 10, 20, 'EUR', g, '[{"opcion":"Color","valor":"Negro"}]' FROM _s;
+  SELECT org, 'P409-E', 'Probe 409 Funda - Negro', 'P409Cat', 10, 20, 'EUR', g, '[{"opcion":"Color","valor":"Negro"}]' FROM _s;
 INSERT INTO _r SELECT 10, 'a variant inserted without moneda into a USD group is USD', 'USD',
-  COALESCE((SELECT i.moneda FROM inventario i, _s WHERE i.organization_id = _s.org AND i.codigo = 'P408-B'), 'NULL');
+  COALESCE((SELECT i.moneda FROM inventario i, _s WHERE i.organization_id = _s.org AND i.codigo = 'P409-B'), 'NULL');
 INSERT INTO _r SELECT 11, 'a variant inserted as EUR into a USD group is USD', 'USD',
-  COALESCE((SELECT i.moneda FROM inventario i, _s WHERE i.organization_id = _s.org AND i.codigo = 'P408-E'), 'NULL');
+  COALESCE((SELECT i.moneda FROM inventario i, _s WHERE i.organization_id = _s.org AND i.codigo = 'P409-E'), 'NULL');
 INSERT INTO _r SELECT 12, 'the first member of an empty group kept its own currency', 'USD',
   COALESCE((SELECT i.moneda FROM inventario i JOIN _s ON i.id = _s.a), 'NULL');
 INSERT INTO _r SELECT 13, 'an ungrouped insert keeps its currency (local stays NULL)', 'NULL',
@@ -151,13 +151,13 @@ END $$;
 INSERT INTO _r SELECT 34, 'ungrouped USD rows were never touched by any group write (U, X)', '2',
   count(*)::TEXT FROM inventario i, _s WHERE i.id IN (_s.u, _s.x) AND i.moneda = 'USD';
 
--- 50-56: the same rules through the real save RPC (361) and the 408 wrapper.
+-- 50-56: the same rules through the real save RPC (361) and the 409 wrapper.
 --   M1 (USD) and M2 (local) and M3 (USD): ungrouped items created here; ids of new groups/rows are
 --   client-style (c + 24 hex).
-CREATE FUNCTION pg_temp.cid(n INT) RETURNS TEXT LANGUAGE sql AS $$ SELECT 'c408' || lpad(n::text, 21, '0') $$;
+CREATE FUNCTION pg_temp.cid(n INT) RETURNS TEXT LANGUAGE sql AS $$ SELECT 'c409' || lpad(n::text, 21, '0') $$;
 CREATE FUNCTION pg_temp.color(v TEXT) RETURNS JSONB LANGUAGE sql AS $$ SELECT jsonb_build_array(jsonb_build_object('opcion', 'Color', 'valor', v)) $$;
 CREATE FUNCTION pg_temp.grupo(n INT) RETURNS JSONB LANGUAGE sql AS $$
-  SELECT jsonb_build_object('id', pg_temp.cid(n), 'nombre', 'Probe 408 RPC ' || n,
+  SELECT jsonb_build_object('id', pg_temp.cid(n), 'nombre', 'Probe 409 RPC ' || n,
            'opciones', '[{"nombre":"Color","valores":["Rojo","Azul","Verde"]}]'::jsonb) $$;
 CREATE TEMP TABLE _m (m1 TEXT, m2 TEXT, m3 TEXT);
 DO $$
@@ -165,11 +165,11 @@ DECLARE v_org TEXT; v_m1 TEXT; v_m2 TEXT; v_m3 TEXT;
 BEGIN
   SELECT org INTO v_org FROM _s;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
-    VALUES (v_org, 'P408-M1', 'Probe 408 M1', 'P408Cat', 10, 20, 'USD') RETURNING id INTO v_m1;
+    VALUES (v_org, 'P409-M1', 'Probe 409 M1', 'P409Cat', 10, 20, 'USD') RETURNING id INTO v_m1;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
-    VALUES (v_org, 'P408-M2', 'Probe 408 M2', 'P408Cat', 100, 200) RETURNING id INTO v_m2;
+    VALUES (v_org, 'P409-M2', 'Probe 409 M2', 'P409Cat', 100, 200) RETURNING id INTO v_m2;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, moneda)
-    VALUES (v_org, 'P408-M3', 'Probe 408 M3', 'P408Cat', 10, 20, 'USD') RETURNING id INTO v_m3;
+    VALUES (v_org, 'P409-M3', 'Probe 409 M3', 'P409Cat', 10, 20, 'USD') RETURNING id INTO v_m3;
   INSERT INTO _m VALUES (v_m1, v_m2, v_m3);
 END $$;
 -- (a) Promote the USD item M1 into a new group with one new variant: the new row inherits USD.
@@ -178,7 +178,7 @@ DO $$ BEGIN
     format('SELECT guardar_grupo_variantes(%L, NULL, %L, %L, %L, %L, NULL)',
       (SELECT org FROM _s), pg_temp.grupo(1), '{}',
       jsonb_build_array(jsonb_build_object('id', (SELECT m1 FROM _m), 'atributos', pg_temp.color('Rojo')),
-                        jsonb_build_object('id', pg_temp.cid(2), 'atributos', pg_temp.color('Azul'), 'codigo', 'P408-N2')),
+                        jsonb_build_object('id', pg_temp.cid(2), 'atributos', pg_temp.color('Azul'), 'codigo', 'P409-N2')),
       '[]'));
 END $$;
 INSERT INTO _r SELECT 51, 'RPC: the promoted item and the new variant are both USD in the new group', '2|2',
@@ -208,7 +208,7 @@ DO $$ BEGIN
       (SELECT org FROM _s), pg_temp.grupo(1), '{}',
       jsonb_build_array(jsonb_build_object('id', (SELECT m1 FROM _m), 'atributos', pg_temp.color('Rojo'), 'precio_venta', 18),
                         jsonb_build_object('id', pg_temp.cid(2), 'atributos', pg_temp.color('Azul')),
-                        jsonb_build_object('id', pg_temp.cid(4), 'atributos', pg_temp.color('Verde'), 'codigo', 'P408-N4')),
+                        jsonb_build_object('id', pg_temp.cid(4), 'atributos', pg_temp.color('Verde'), 'codigo', 'P409-N4')),
       '[]', 'EUR'));
 END $$;
 INSERT INTO _r SELECT 55, 'wrapper: every row of the group is EUR (M1, N2, new N4) and the price was saved', '3|3|18',

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 408 (multimoneda S4): one currency per variant group + kit cost with converted components.
+-- 409 (multimoneda S4): one currency per variant group + kit cost with converted components.
 -- Re-runnable. Changes no data: every write below lives inside a function body.
 -- ============================================================================
 -- Prerequisite: 355 (variant groups), 361 (guardar_grupo_variantes), 365 (inventario.moneda) and
@@ -41,7 +41,7 @@
 -- statements are the last ones, so the write block is as short as possible.
 -- lock_timeout bounds the WAIT, not the hold; if it aborts, nothing was applied: re-run it.
 --
--- Rollback: rollback/408_rollback.sql. Probes: verify/408_probes.sql.
+-- Rollback: rollback/409_rollback.sql. Probes: verify/409_probes.sql.
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';

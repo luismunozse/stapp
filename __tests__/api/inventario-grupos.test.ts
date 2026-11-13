@@ -224,7 +224,7 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
     if (inyectado) return falloRpc(inyectado.code, inyectado.message)
     if ("rpcDatos" in opciones) return { data: opciones.rpcDatos, error: null }
     if (nombre === "guardar_grupo_variantes_moneda") {
-      // Migration 408: the same save, then the currency of every row of that group in p_org, in one
+      // Migration 409: the same save, then the currency of every row of that group in p_org, in one
       // transaction (an error above leaves the store untouched).
       const { p_moneda, ...resto } = args
       const r = guardarGrupoFalso(tablas as unknown as Record<string, Fila[]>, resto)

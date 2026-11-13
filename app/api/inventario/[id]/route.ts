@@ -139,7 +139,7 @@ export async function PUT(
         monedaNueva = validacion.moneda
       }
     }
-    // Migration 408 copies a variant's currency to every sibling without converting their prices,
+    // Migration 409 copies a variant's currency to every sibling without converting their prices,
     // so a single variant never changes it: the group endpoint does, for the whole group.
     if (monedaNueva !== undefined && monedaNueva !== (existingItem.moneda ?? null) && existingItem.grupo_id) {
       return NextResponse.json({ error: "Cambiá la moneda desde el grupo de variantes" }, { status: 400 })

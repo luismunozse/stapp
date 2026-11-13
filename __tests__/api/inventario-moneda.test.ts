@@ -195,7 +195,7 @@ describe("PUT /api/inventario/[id] con moneda", () => {
     expect(status).toBe(400)
   })
 
-  // Migration 408 copies a variant's currency to its siblings without converting their prices:
+  // Migration 409 copies a variant's currency to its siblings without converting their prices:
   // a single variant must not change it, the group endpoint does.
   it("cambiar la moneda de una variante es 400 y no actualiza", async () => {
     vi.mocked(cargarConfigMoneda).mockResolvedValue(configUsd(true) as any)

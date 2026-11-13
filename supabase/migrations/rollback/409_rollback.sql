@@ -1,4 +1,4 @@
--- Rollback of 408 (multimoneda S4): currency of the variant group and converted kit cost.
+-- Rollback of 409 (multimoneda S4): currency of the variant group and converted kit cost.
 --
 -- Restores inventario_sync_compartidos_grupo() and its trigger exactly as in 355 and
 -- calcular_costo_kit(TEXT, TEXT) exactly as in 177 (with its 177 grant), and removes the
