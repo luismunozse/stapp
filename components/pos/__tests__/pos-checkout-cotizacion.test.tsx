@@ -7,9 +7,10 @@ import type { PosCartItem } from "@/components/pos/pos-types"
 import { aplicarCotizacionLineas } from "@/lib/currency/venta-divisa"
 import { botonConfirmarListo } from "./checkout-test-utils"
 
-// Tras un 409 COTIZACION_CAMBIO el total cambia: los pagos se vuelven a sembrar como al abrir
-// (una línea por el total nuevo, sin pago parcial ni monto recibido) para que el segundo
-// confirmar no lleve montos viejos ni convierta la diferencia en deuda.
+// Tras un 409 COTIZACION_CAMBIO el total cambia pero el cobro que eligió el cajero no: una sola
+// línea se vuelve a sembrar por el total nuevo con su mismo método (y recargo); con pago parcial
+// (fiado) quedan el tilde y la seña; con varias líneas quedan como están y la conciliación frena
+// el confirmar si ya no suman.
 
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
@@ -31,7 +32,7 @@ const LINEA_USD: PosCartItem = {
 const nueva = { disponible: true, valor: 1300, fuente: "BLUE", moneda: "USD", en: new Date().toISOString(), estado: "vivo" }
 
 let ventasBodies: any[] = []
-function stubFetch() {
+function stubFetch(recargos: Array<{ metodo: string; porcentaje: number }> = []) {
   ventasBodies = []
   let primera = true
   vi.stubGlobal(
@@ -40,7 +41,7 @@ function stubFetch() {
       const json = (status: number, body: unknown) => ({ ok: status < 400, status, json: async () => body })
       if (url.includes("/check-stock")) return json(200, { stock: { u1: 5 } })
       if (url.includes("/cuenta-corriente")) return json(200, { saldo: 0 })
-      if (url.includes("/recargos-metodo")) return json(200, { recargos: [] })
+      if (url.includes("/recargos-metodo")) return json(200, { recargos })
       if (url.includes("/operadores")) return json(200, [])
       if (url === "/api/ventas") {
         ventasBodies.push(JSON.parse(String(init?.body)))
@@ -84,7 +85,24 @@ describe("PosCheckoutDialog — pagos tras un 409 COTIZACION_CAMBIO", () => {
     stubFetch()
   })
 
-  it("con pago parcial: vuelve a una línea por el total nuevo, sin dejar deuda", async () => {
+  it("con una línea en tarjeta con recargo: sigue en tarjeta, con su recargo, por el total nuevo", async () => {
+    stubFetch([{ metodo: "TARJETA_CREDITO", porcentaje: 10 }])
+    render(<Terminal />)
+    fireEvent.click(await screen.findByRole("button", { name: /t\. crédito/i }))
+    expect(await screen.findByText("$13200")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/costo terminal/i), { target: { value: "12" } })
+
+    await confirmarDosVeces()
+
+    expect(ventasBodies[0]).toMatchObject({ metodoPago: "TARJETA_CREDITO", pagos: [{ metodo: "TARJETA_CREDITO", monto: 13200 }] })
+    // 10 USD a 1300 = 13000, más el 10% de la tarjeta.
+    expect(ventasBodies[1].metodoPago).toBe("TARJETA_CREDITO")
+    expect(ventasBodies[1].pagosParcial).toBe(false)
+    expect(ventasBodies[1].pagos).toEqual([{ metodo: "TARJETA_CREDITO", monto: 14300, cuotas: 1, costoFinanciero: 12 }])
+    expect(ventasBodies[1].idempotencyKey).toBe(ventasBodies[0].idempotencyKey)
+  })
+
+  it("fiado con seña de $5.000: sigue fiado y con la misma seña", async () => {
     render(<Terminal />)
     fireEvent.click(await screen.findByRole("checkbox"))
     fireEvent.change(screen.getAllByLabelText(/Monto \*/)[0], { target: { value: "5000" } })
@@ -92,12 +110,13 @@ describe("PosCheckoutDialog — pagos tras un 409 COTIZACION_CAMBIO", () => {
     await confirmarDosVeces()
 
     expect(ventasBodies[0]).toMatchObject({ pagosParcial: true, pagos: [{ monto: 5000 }] })
-    expect(ventasBodies[1].pagosParcial).toBe(false)
-    expect(ventasBodies[1].pagos).toEqual([expect.objectContaining({ metodo: "EFECTIVO", monto: 13000 })])
+    expect(ventasBodies[1].pagosParcial).toBe(true)
+    expect(ventasBodies[1].pagos).toEqual([expect.objectContaining({ metodo: "EFECTIVO", monto: 5000 })])
+    expect(ventasBodies[1].tipoCambio).toBe(1300)
     expect(ventasBodies[1].idempotencyKey).toBe(ventasBodies[0].idempotencyKey)
   })
 
-  it("con dos líneas de pago: vuelve a una sola por el total nuevo", async () => {
+  it("con dos líneas de pago: las deja y no confirma si ya no suman el total nuevo", async () => {
     render(<Terminal />)
     const montoUno = await screen.findByLabelText(/Monto \*/)
     fireEvent.change(montoUno, { target: { value: "6000" } })
@@ -106,10 +125,13 @@ describe("PosCheckoutDialog — pagos tras un 409 COTIZACION_CAMBIO", () => {
     expect(montos).toHaveLength(2)
     fireEvent.change(montos[1], { target: { value: "6000" } })
 
-    await confirmarDosVeces()
-
+    fireEvent.click(await botonConfirmarListo())
+    await waitFor(() => expect(showError).toHaveBeenCalledWith("La cotización cambió."))
     expect(ventasBodies[0].pagos).toHaveLength(2)
-    expect(ventasBodies[1].pagos).toEqual([expect.objectContaining({ metodo: "EFECTIVO", monto: 13000 })])
-    expect(ventasBodies[1].tipoCambio).toBe(1300)
+    expect(screen.getAllByLabelText(/Monto \*/)).toHaveLength(2)
+
+    fireEvent.click(await botonConfirmarListo())
+    await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringMatching(/no coincide con el total a cobrar \(\$13000\)/)))
+    expect(ventasBodies).toHaveLength(1)
   })
 })

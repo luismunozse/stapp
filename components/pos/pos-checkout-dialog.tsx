@@ -368,16 +368,30 @@ export function PosCheckoutDialog({
         const error = await res.json()
         // La cotización cambió en el servidor: el carrito se reconvierte con la nueva y el
         // diálogo queda abierto con el total recalculado (misma idempotencyKey) para confirmar.
-        // Los pagos se vuelven a sembrar como al abrir: una línea por el total, sin pago parcial
-        // ni monto recibido. Sembrada con el total de este render; cuando llegan los ítems
-        // reconvertidos el total cambia y el efecto de re-siembra de una línea pone el nuevo.
-        // Así el segundo confirmar no lleva montos viejos ni convierte la diferencia en deuda.
+        // El cobro que eligió el cajero no se toca: con pago parcial (fiado) quedan los pagos
+        // cargados y la diferencia con el nuevo total pasa a ser deuda, que es lo que es una
+        // venta a cuenta. Con una sola línea se vuelve a sembrar esa línea con su mismo método
+        // (cuotas, referencia, recargo y costo financiero incluidos) por el total; sembrada con
+        // el total de este render, cuando llegan los ítems reconvertidos el efecto de re-siembra
+        // de una línea pone el nuevo. Con varias líneas se dejan como están y la conciliación
+        // de más arriba frena el confirmar si ya no suman (el mensaje del 409 pide revisar).
+        // El monto recibido solo se borra en efectivo, porque el vuelto cambia.
         // DIVISA_NO_DISPONIBLE solo se avisa: el cajero decide qué quitar.
         if (res.status === 409 && error?.code === "COTIZACION_CAMBIO" && error.nueva?.disponible === true && typeof error.nueva.valor === "number") {
           onCotizacionCambiada?.(error.nueva.valor)
-          setPagosLines([createPagoLine(totalEfectivo)])
-          setMontoRecibido(null)
-          setPagoParcial(false)
+          if (!pagoParcial && pagosLines.length === 1) {
+            const primera = pagosLines[0]
+            setPagosLines([
+              {
+                ...createPagoLine(totalEfectivo, primera.metodo),
+                referencia: primera.referencia,
+                cuotas: primera.cuotas,
+                recargo: primera.recargo,
+                costoFinanciero: primera.costoFinanciero,
+              },
+            ])
+          }
+          if (isCashOnly) setMontoRecibido(null)
         }
         await showError(error.error || "Error al crear la venta")
         return
