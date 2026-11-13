@@ -33,7 +33,16 @@ function diasDesde(iso: string, ahora: Date): number {
 export function esAdhesionSinCobro(input: {
   tienePreapproval: boolean
   currentPeriodEnd: string | null
-  createdAt: string
+  /**
+   * Desde cuándo corre la gracia: el momento en que se autorizó la adhesión
+   * vigente (subscriptions.mercadopago_preapproval_at). En filas anteriores a
+   * esa columna, la creación de la suscripción.
+   */
+  adhesionDesde: string
+  /**
+   * Pagos exitosos desde `adhesionDesde`. Un pago viejo (de un plan anterior,
+   * de otra adhesión) no prueba que esta adhesión haya cobrado.
+   */
   pagosExitosos: number
   ahora: Date
 }): boolean {
@@ -41,7 +50,15 @@ export function esAdhesionSinCobro(input: {
   if (input.currentPeriodEnd !== null) return false
   if (input.pagosExitosos > 0) return false
 
-  return diasDesde(input.createdAt, input.ahora) > DIAS_GRACIA_PREAPPROVAL
+  return diasDesde(input.adhesionDesde, input.ahora) > DIAS_GRACIA_PREAPPROVAL
+}
+
+/** Desde cuándo se mide una adhesión: su autorización, o la creación de la fila si es vieja. */
+export function inicioAdhesion(sub: {
+  mercadopago_preapproval_at?: string | null
+  created_at: string
+}): string {
+  return sub.mercadopago_preapproval_at ?? sub.created_at
 }
 
 /**

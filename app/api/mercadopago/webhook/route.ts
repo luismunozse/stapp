@@ -735,6 +735,12 @@ export async function handlePreApprovalNotification(
       billing_period: externalRef.billing_period ?? undefined,
       payment_provider: "MERCADOPAGO",
       mercadopago_preapproval_id: preApprovalId,
+      // Cuándo se autorizó la adhesión vigente: desde ahí corre la gracia del
+      // primer cobro en el barrido diario, y solo cuentan los pagos posteriores.
+      // Un aviso repetido de la misma adhesión no lo mueve.
+      ...(status === "ACTIVE" && actual?.mercadopago_preapproval_id !== preApprovalId
+        ? { mercadopago_preapproval_at: new Date().toISOString() }
+        : {}),
       // Volver a adherir deja sin efecto una cancelacion pendiente.
       ...(status === "ACTIVE" ? { cancel_at_period_end: false, canceled_at: null } : {}),
     })
