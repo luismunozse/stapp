@@ -111,6 +111,7 @@ export async function POST(request: Request) {
             stock_maximo: data.stockMaximo ?? null,
             punto_reorden: data.puntoReorden ?? null,
             barcode: data.barcode?.trim() || null,
+            moneda: null,
             organization_id: organizationId!,
           })
           .select("*, proveedores:proveedor_id(id, nombre)")

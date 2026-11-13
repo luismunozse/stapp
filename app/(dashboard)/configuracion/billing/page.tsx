@@ -115,8 +115,8 @@ function BillingContent() {
 
   const handleCancelSubscription = async () => {
     const confirmed = await confirm({
-      title: "Cancelar Suscripción",
-      description: "¿Estás seguro de que deseas cancelar tu suscripción? Mantendrás acceso hasta el final del período actual.",
+      title: "Cancelar suscripción",
+      description: "¿Seguro que querés cancelar tu suscripción? Vas a mantener el acceso hasta el final del período actual.",
       confirmText: "Sí, cancelar",
       cancelText: "No, mantener",
       variant: "warning",
@@ -165,7 +165,7 @@ function BillingContent() {
           <div>
             <p className="font-medium text-sm">¡Pago exitoso!</p>
             <p className="text-xs sm:text-sm">
-              Tu suscripción Premium ha sido activada.
+              Tu suscripción al plan Profesional está activa.
             </p>
           </div>
         </div>
@@ -184,7 +184,7 @@ function BillingContent() {
             </p>
             <p className="text-xs sm:text-sm">
               {canceled
-                ? "Puedes intentarlo de nuevo cuando quieras."
+                ? "Podés intentarlo de nuevo cuando quieras."
                 : rejectionInfo
                   ? rejectionInfo.message
                   : "El pago no se completó. Intentá de nuevo o usá otro medio de pago."}

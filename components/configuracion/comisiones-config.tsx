@@ -18,7 +18,7 @@ import type { CommissionBaseKind } from "@/lib/commissions/types"
 
 const CONFIG_URL = "/api/comisiones/config"
 const SAVE_ERROR = "No se pudieron guardar las reglas"
-const RATE_ERROR = "Ingrese un porcentaje entre 0 y 100."
+const RATE_ERROR = "Ingresá un porcentaje entre 0 y 100."
 
 // The raw text of a number input is "" when the browser rejects what was typed (a comma, letters).
 function parseRate(text: string): number | null {

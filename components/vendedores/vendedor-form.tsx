@@ -173,11 +173,11 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Vendedor" : "Nuevo Vendedor"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar vendedor" : "Nuevo vendedor"}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifica los datos del vendedor. Deja la contraseña vacía para mantener la actual."
-              : "Completa los datos para crear un nuevo vendedor."}
+              ? "Modificá los datos del vendedor. Dejá la contraseña vacía para mantener la actual."
+              : "Completá los datos para crear un nuevo vendedor."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -333,7 +333,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : isEditing ? "Guardar Cambios" : "Crear Vendedor"}
+              {loading ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear vendedor"}
             </Button>
           </FormActionBar>
         </form>

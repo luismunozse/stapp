@@ -32,6 +32,12 @@ import { AgruparDialog } from "@/components/inventario/agrupar-dialog"
 import { useFotosVariantes } from "@/components/inventario/variantes/use-fotos-variantes"
 import { useVariantesForm } from "@/components/inventario/variantes/use-variantes-form"
 import { validezDeVariantes } from "@/components/inventario/variantes/vista"
+import { SelectorMoneda } from "@/components/moneda/selector-moneda"
+import { EquivalenteLocal } from "@/components/moneda/equivalente-local"
+import { DialogoCambioMoneda } from "@/components/moneda/dialogo-cambio-moneda"
+import { useMoneda } from "@/hooks/use-moneda"
+import { convertirPrecioCatalogo, cotizacionDe, type MonedaCatalogo } from "@/lib/currency/catalogo"
+import { unidadRedondeo } from "@/lib/currency/convert"
 
 interface ProveedorLite {
   id: string
@@ -100,6 +106,8 @@ const inventarioSchema = z.object({
   trackeaSeries: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
+  // Currency of the price (null = local). In a variant group it is the group's.
+  moneda: z.enum(["USD", "EUR"]).nullable().optional(),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -141,6 +149,7 @@ function inventarioFormDefaults(
         trackeaSeries: item.trackeaSeries ?? false,
         esKit: item.esKit ?? false,
         tipoKit: item.tipoKit ?? null,
+        moneda: item.moneda ?? null,
       }
     : {
         nombre: "",
@@ -161,6 +170,7 @@ function inventarioFormDefaults(
         trackeaSeries: false,
         esKit: false,
         tipoKit: null,
+        moneda: null,
       }
 }
 
@@ -403,6 +413,8 @@ export function InventarioForm({
   const esKitActual = !!watch("esKit")
   const fotos = useFotosVariantes()
   const guardadoEnSesion = useRef(false)
+  /** Archived members the section does not list (no combination): they still take the group's currency. */
+  const archivadasSinCombinacion = useRef(0)
   const variantes = useVariantesForm({
     permite: permiteVariantes,
     item,
@@ -414,6 +426,7 @@ export function InventarioForm({
     // Opening a variant: the product's name is the group's base name, not the variant's.
     alHidratar: (lectura) => {
       setValue("nombre", lectura.grupo.nombre)
+      archivadasSinCombinacion.current = lectura.archivadas.filter((a) => !a.atributos || a.atributos.length === 0).length
       compartidosGuardados.current =
         item && !guardadoEnSesion.current ? compartidosDe(inventarioFormDefaults(item)) : compartidosDe(getValues())
     },
@@ -429,6 +442,70 @@ export function InventarioForm({
   const filasNuevasConStock = variantesActivo
     ? filasEnOrden(variantes.estado).some((f) => !f.archivar && !f.existente && f.stockInicial > 0)
     : false
+
+  // --- Moneda del precio -----------------------------------------------------
+  //
+  // With the variants section on, the currency is the group's: switching it converts (or keeps) every
+  // variant's price and the group PUT carries it. Without the section a variant cannot change it (the
+  // API refuses it too: the database would copy it to the siblings without converting their prices).
+  const { config: configMoneda, tipoCambio } = useMoneda()
+  const moneda: MonedaCatalogo = watch("moneda") ?? null
+  /** The currency the server has: the item's, or the one a save in this session applied. */
+  const monedaGuardada = useRef<MonedaCatalogo>(item?.moneda ?? null)
+  // Another item loaded into this form (opening a duplicate) starts from its own currency.
+  useEffect(() => {
+    monedaGuardada.current = item?.moneda ?? null
+  }, [item])
+  const monedaDeVariante = !!item?.grupoId && !variantesActivo
+  // An existing item (or group) whose cost this user cannot see: its stored cost would be relabeled
+  // without converting, so the currency cannot change here.
+  const monedaSinCosto = !!item && !costoCargado
+  const monedaBloqueada = monedaDeVariante || monedaSinCosto
+  // Archived members take the group's currency without their prices being converted.
+  const hayArchivadas =
+    variantesActivo &&
+    (Object.keys(variantes.estado.archivadas).length > 0 ||
+      archivadasSinCombinacion.current > 0 ||
+      // A restored member whose price the client never saw is the same case.
+      Object.values(variantes.estado.filas).some((f) => f.archivar || (f.restaurada && !f.precioTocado)))
+  /** The currency picked while the prices have amounts: it waits for convert / keep / cancel. */
+  const [monedaPedida, setMonedaPedida] = useState<{ a: MonedaCatalogo } | null>(null)
+  const cotizacionCambio =
+    monedaPedida && configMoneda ? cotizacionDe(moneda ?? monedaPedida.a, configMoneda, tipoCambio ?? null) : null
+
+  const hayPrecios = () => {
+    const v = getValues()
+    if (Number(v.precioVenta) > 0 || (costoCargado && Number(v.precioCompra) > 0)) return true
+    return (
+      variantesActivo &&
+      filasEnOrden(variantes.estado).some((f) => !f.archivar && (f.precioVenta > 0 || (f.precioCompra ?? 0) > 0))
+    )
+  }
+  const fijarMoneda = (m: MonedaCatalogo) => setValue("moneda", m, { shouldDirty: true })
+  const pedirMoneda = (m: MonedaCatalogo) => {
+    if (m === moneda) return
+    if (hayPrecios()) setMonedaPedida({ a: m })
+    else fijarMoneda(m)
+  }
+  const convertirMoneda = () => {
+    if (!monedaPedida || !configMoneda || cotizacionCambio === null) return
+    const unidad = unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal)
+    const de = moneda
+    if (hayArchivadas) return
+    const convertir = (monto: number) =>
+      Number.isFinite(monto) ? convertirPrecioCatalogo(monto, de, monedaPedida.a, cotizacionCambio, unidad) : monto
+    // The section first: its base then already matches the converted fields and nothing re-applies it.
+    if (variantesActivo) variantes.dispatch({ tipo: "convertirPrecios", convertir })
+    const v = getValues()
+    setValue("precioVenta", convertir(Number(v.precioVenta)), { shouldDirty: true })
+    if (costoCargado) setValue("precioCompra", convertir(Number(v.precioCompra)), { shouldDirty: true })
+    fijarMoneda(monedaPedida.a)
+    setMonedaPedida(null)
+  }
+  const mantenerMoneda = () => {
+    if (monedaPedida) fijarMoneda(monedaPedida.a)
+    setMonedaPedida(null)
+  }
 
   // Depósito del stock inicial (solo alta, o filas nuevas de un grupo). Se muestra con 2+
   // depósitos activos; con uno solo no hay nada que elegir y el servidor usa el principal.
@@ -1113,6 +1190,8 @@ export function InventarioForm({
       compartidos,
       compartidosPrevios: compartidosGuardados.current,
       depositoId: mostrarDeposito && depositoEfectivo && filasNuevasConStock ? depositoEfectivo : null,
+      // A new group always says its currency; a saved one only when it changed.
+      moneda: !variantes.agrupado || (data.moneda ?? null) !== monedaGuardada.current ? (data.moneda ?? null) : undefined,
     })
     if (salida.tipo !== "guardado") {
       const mensaje = salida.tipo === "pendiente" ? "Variantes todavía no está disponible. No se guardó nada." : salida.mensaje
@@ -1125,6 +1204,8 @@ export function InventarioForm({
     compartidosGuardados.current = compartidos
     const filas = filasEnOrden(variantes.estado)
     const { fallidas } = await fotos.subirTodas(filas.map((f) => ({ id: f.id, imagenUrl: f.imagenUrl, archivar: f.archivar })))
+    // The currency commits with the save (one transaction on the server).
+    monedaGuardada.current = data.moneda ?? null
     if (fallidas.length > 0) {
       // Los datos ya están guardados, así que el borrador no sirve más; el formulario sigue abierto para reintentar las fotos.
       clearDraft()
@@ -1170,7 +1251,7 @@ export function InventarioForm({
       // precio_compra real con cero. El PUT lo acepta opcional, así que
       // omitirlo deja la columna intacta.
       // `depositoId` sale de `rest` y vuelve solo en el alta (ver depositoAEnviar).
-      const { precioCompra, stock, depositoId: _depositoId, ...rest } = data
+      const { precioCompra, stock, depositoId: _depositoId, moneda: monedaElegida, ...rest } = data
       // El selector muestra "Ensamblado" por defecto aunque el valor siga en null;
       // el servidor exige tipo para un kit, así que se manda lo que se ve.
       if (rest.esKit && !rest.tipoKit) rest.tipoKit = "ENSAMBLADO"
@@ -1180,13 +1261,16 @@ export function InventarioForm({
       // una foto de cuando se abrio la lista: reenviarlo tal cual hace que el PUT
       // lo trate como ajuste absoluto y pise las ventas hechas entre medio.
       const stockField = !item || stock !== item.stock ? { stock } : {}
+      // The currency goes on every create; on an edit only when it changed (a variant may not change it).
+      const monedaField = !item || (monedaElegida ?? null) !== monedaGuardada.current ? { moneda: monedaElegida ?? null } : {}
 
       const payload = item
-        ? { ...rest, ...costoField, ...stockField, barcode: normalizedBarcode }
+        ? { ...rest, ...costoField, ...stockField, ...monedaField, barcode: normalizedBarcode }
         : {
             ...rest,
             ...costoField,
             ...stockField,
+            ...monedaField,
             ...depositoAEnviar(Number(stock)),
             barcode: normalizedBarcode,
             codigo: generatedCode,
@@ -1580,6 +1664,17 @@ export function InventarioForm({
             </div>
           </div>
 
+          {configMoneda && (configMoneda.habilitada || moneda !== null) && (
+            <div className="sm:w-1/3">
+              <SelectorMoneda value={moneda} onChange={pedirMoneda} disabled={monedaBloqueada} />
+              {monedaDeVariante ? (
+                <p className="text-xs text-muted-foreground mt-1">La moneda se cambia desde el grupo de variantes.</p>
+              ) : monedaSinCosto ? (
+                <p className="text-xs text-muted-foreground mt-1">Para cambiar la moneda tenés que poder ver los costos</p>
+              ) : null}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               {variantesActivo ? (
@@ -1624,6 +1719,9 @@ export function InventarioForm({
                       {errors.precioCompra.message}
                     </p>
                   )}
+                  {moneda !== null && Number.isFinite(precioCompraActual) && (
+                    <EquivalenteLocal monto={precioCompraActual} moneda={moneda} />
+                  )}
                 </>
               ) : (
                 // El item llegó sin costo. El input necesita un número y
@@ -1655,8 +1753,24 @@ export function InventarioForm({
                   {errors.precioVenta.message}
                 </p>
               )}
+              {moneda !== null && Number.isFinite(precioVentaActual) && (
+                <EquivalenteLocal monto={precioVentaActual} moneda={moneda} />
+              )}
             </div>
           </div>
+
+          <DialogoCambioMoneda
+            open={monedaPedida !== null}
+            de={moneda}
+            a={monedaPedida?.a ?? null}
+            puedeConvertir={cotizacionCambio !== null && !hayArchivadas}
+            motivoSinConvertir={
+              hayArchivadas ? "Hay variantes archivadas: restauralas o eliminalas para convertir" : "No hay cotización disponible"
+            }
+            onConvertir={convertirMoneda}
+            onMantener={mantenerMoneda}
+            onCancelar={() => setMonedaPedida(null)}
+          />
 
           {permiteVariantes && (
             <VariantesSection

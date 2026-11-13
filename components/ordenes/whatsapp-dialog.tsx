@@ -156,12 +156,12 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
       const data = await res.json()
 
       if (data.success) {
-        setApiResult({ success: true, message: "Mensaje enviado via WhatsApp Business API" })
+        setApiResult({ success: true, message: "Mensaje enviado vía WhatsApp Business API" })
       } else {
         setApiResult({ success: false, message: data.error || "Error al enviar" })
       }
     } catch {
-      setApiResult({ success: false, message: "Error de conexion" })
+      setApiResult({ success: false, message: "Error de conexión" })
     } finally {
       setSendingApi(false)
     }
@@ -219,7 +219,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
             }}
             rows={6}
             className="mt-2 font-mono text-sm"
-            placeholder="Selecciona una plantilla o escribe tu mensaje..."
+            placeholder="Seleccioná una plantilla o escribí tu mensaje..."
           />
         </div>
 

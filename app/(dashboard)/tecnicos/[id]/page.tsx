@@ -321,7 +321,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
               <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Órdenes Activas</span>
+              <span className="hidden sm:inline">Órdenes activas</span>
               <span className="sm:hidden">Activas</span>
             </CardTitle>
           </CardHeader>

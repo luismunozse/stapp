@@ -58,7 +58,7 @@ export function OrdenCostosCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <DollarSign className="h-4 w-4" />
-          Presupuesto y Costos
+          Presupuesto y costos
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -69,7 +69,7 @@ export function OrdenCostosCard({
               {fromCotizacion && (
                 <Badge variant="outline" className="text-xs leading-none h-4 gap-1">
                   <FileText className="h-2.5 w-2.5" />
-                  Cotizacion
+                  Desde presupuesto
                 </Badge>
               )}
             </div>
@@ -102,11 +102,11 @@ export function OrdenCostosCard({
             )}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Label className="text-xs text-muted-foreground">Costo Final</Label>
+                <Label className="text-xs text-muted-foreground">Costo final</Label>
                 {fromCotizacion && (
                   <Badge variant="outline" className="text-xs leading-none h-4 gap-1">
                     <FileText className="h-2.5 w-2.5" />
-                    Cotizacion
+                    Desde presupuesto
                   </Badge>
                 )}
               </div>
@@ -136,7 +136,7 @@ export function OrdenCostosCard({
           <div className="pt-3 border-t space-y-2">
             {sena > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Sena</span>
+                <span className="text-muted-foreground">Seña</span>
                 <span className="text-info-text font-medium">{formatPrice(sena)}</span>
               </div>
             )}

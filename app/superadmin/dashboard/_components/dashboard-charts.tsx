@@ -59,7 +59,7 @@ export function DashboardCharts({
   ].filter((moneda) => moneda !== revenueCurrency)
 
   const planData = [
-    { name: "Premium", value: planDistribution.premium },
+    { name: "Profesional", value: planDistribution.premium },
     { name: "Free", value: planDistribution.free },
   ]
 
@@ -74,7 +74,7 @@ export function DashboardCharts({
             <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-950">
               <TrendingUp className="h-4 w-4 text-amber-600" />
             </div>
-            Ingresos Mensuales ({revenueCurrency})
+            Ingresos mensuales ({revenueCurrency})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -128,7 +128,7 @@ export function DashboardCharts({
             <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-950">
               <Building2 className="h-4 w-4 text-blue-600" />
             </div>
-            Crecimiento de Organizaciones
+            Crecimiento de organizaciones
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -168,7 +168,7 @@ export function DashboardCharts({
             <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-950">
               <CreditCard className="h-4 w-4 text-purple-600" />
             </div>
-            Distribución de Planes
+            Distribución de planes
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -205,7 +205,7 @@ export function DashboardCharts({
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PLAN_COLORS[0] }} />
                     <div>
-                      <p className="text-sm font-medium">Premium</p>
+                      <p className="text-sm font-medium">Profesional</p>
                       <p className="text-xs text-muted-foreground">
                         {planDistribution.premium} ({totalPlans > 0 ? Math.round((planDistribution.premium / totalPlans) * 100) : 0}%)
                       </p>

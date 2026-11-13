@@ -220,7 +220,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     return saveOrdenField(
       { diagnostico: value },
       { diagnostico: value },
-      "Diagnostico actualizado"
+      "Diagnóstico actualizado"
     )
   }
 
@@ -382,7 +382,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
 
     if (nuevoEstado === "CANCELADO" || nuevoEstado === "SIN_REPARACION") {
-      const label = nuevoEstado === "CANCELADO" ? "Cancelar" : "Marcar Sin Reparación"
+      const label = nuevoEstado === "CANCELADO" ? "Cancelar" : "Marcar sin reparación"
       const totalCobrado = orden?.totalCobrado || 0
       const tieneCobros = totalCobrado > 0
       const desc = tieneCobros
@@ -613,7 +613,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
     const confirmed = await confirm({
       title: "Eliminar orden",
-      description: `¿Estás seguro de eliminar la Orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
+      description: `¿Estás seguro de eliminar la orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       variant: "danger",
     })
@@ -755,7 +755,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
-                    Pagado
+                    Cobrado
                   </span>
                 )
               )}
@@ -932,7 +932,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >
               <BadgeCheck className="h-4 w-4 mr-2" />
-              Etiqueta Reparado
+              Etiqueta reparado
             </Button>
           )}
           {isAdmin && (
@@ -946,7 +946,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                   <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                     <Receipt className="h-4 w-4 mr-2" />
-                    Generar Remito
+                    Generar remito
                   </DropdownMenuItem>
                 )}
                 {orden.estado === "ENTREGADO" && !orden.esReingreso && (
@@ -979,7 +979,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Banner de retiro sin reparación */}
       {isRetiro && (
         <StatusBanner tone="warning" icon={Package}>
-          Retirado sin reparacion — El cliente retiro el equipo sin reparar.
+          Retirado sin reparación: el cliente retiró el equipo sin reparar.
         </StatusBanner>
       )}
 
@@ -997,7 +997,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         <StatusBanner tone="info" icon={Shield}>
           {orden.ordenOrigenId ? (
             <>
-              Re-ingreso por garantía — Orden original:{" "}
+              Re-ingreso por garantía. Orden original:{" "}
               <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-primary">
                 ver orden original
               </Link>
@@ -1155,7 +1155,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     )}
                     {orden.codigoAccesoDispositivo && (
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Contrasena: </span>
+                        <span className="text-muted-foreground">Contraseña: </span>
                         {/^Patr[oó]n: /.test(orden.codigoAccesoDispositivo) ? (
                           <PatternDisplay value={orden.codigoAccesoDispositivo} size={80} />
                         ) : (
@@ -1180,7 +1180,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <div className="mt-6 pt-6 border-t">
                 <EditableTextField
                   icon={Wrench}
-                  label="Problema Reportado"
+                  label="Problema reportado"
                   value={orden.problemaReportado || ""}
                   onSave={handleSaveProblema}
                   requireValue
@@ -1192,11 +1192,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <div className="mt-4 pt-4 border-t">
                   <EditableTextField
                     icon={Search}
-                    label="Diagnostico"
+                    label="Diagnóstico"
                     value={orden.diagnostico || ""}
                     onSave={handleSaveDiagnostico}
-                    placeholder="Describir el diagnostico del equipo..."
-                    emptyHint="Sin diagnostico aun. Haz clic en el lapiz para agregar."
+                    placeholder="Describí el diagnóstico del equipo..."
+                    emptyHint="Sin diagnóstico aún. Usá el lápiz para agregar."
                   />
                 </div>
               )}
@@ -1238,7 +1238,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   value={orden.notasInternas || ""}
                   onSave={handleSaveNotasInternas}
                   placeholder="Notas privadas del equipo (no se muestran al cliente)..."
-                  emptyHint="Sin notas internas. Haz clic en el lapiz para agregar."
+                  emptyHint="Sin notas internas. Usá el lápiz para agregar."
                   textareaClassName="bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
                   valueClassName="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2"
                 />
@@ -1277,7 +1277,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               </TabsTrigger>
               <TabsTrigger value="cotizaciones" className="gap-2">
                 <FileText className="h-4 w-4" />
-                Cotizaciones
+                Presupuestos
               </TabsTrigger>
               <TabsTrigger value="historial" className="gap-2">
                 <History className="h-4 w-4" />
@@ -1638,7 +1638,7 @@ function DobleCargaWarning({ orden }: { orden: any }) {
       const invId = it.inventario_id
       if (!invId || !repuestoIds.has(invId) || vistos.has(invId)) continue
       vistos.add(invId)
-      duplicados.push({ id: invId, nombre: it.descripcion || it.inventario?.nombre || "Item" })
+      duplicados.push({ id: invId, nombre: it.descripcion || it.inventario?.nombre || "Ítem" })
     }
   }
   if (duplicados.length === 0) return null
@@ -1648,9 +1648,9 @@ function DobleCargaWarning({ orden }: { orden: any }) {
       <div>
         <div className="font-medium mb-1">Posible doble carga de repuestos</div>
         <div>
-          {duplicados.length === 1 ? "El item " : "Los items "}
+          {duplicados.length === 1 ? "El ítem " : "Los ítems "}
           <strong>{duplicados.map((d) => d.nombre).join(", ")}</strong>
-          {duplicados.length === 1 ? " está" : " están"} en una cotización ACEPTADA y también en el tab Repuestos.
+          {duplicados.length === 1 ? " está" : " están"} en un presupuesto aceptado y también en la pestaña Repuestos.
           Reportes de costo lo van a contar dos veces. Eliminá de un lado.
         </div>
       </div>

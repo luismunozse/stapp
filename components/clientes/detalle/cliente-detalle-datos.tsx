@@ -34,7 +34,7 @@ export function ClienteDetalleDatos({ cliente }: { cliente: Cliente }) {
   const { pais } = useCurrency()
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Datos &amp; contacto</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">Datos y contacto</CardTitle></CardHeader>
       <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {cliente.telefono && <Row icon={Phone} label="Teléfono" value={cliente.telefono} href={telHref(cliente.telefono) ? `tel:${telHref(cliente.telefono)}` : undefined} />}
         {cliente.email && <Row icon={Mail} label="Email" value={cliente.email} href={`mailto:${cliente.email}`} />}

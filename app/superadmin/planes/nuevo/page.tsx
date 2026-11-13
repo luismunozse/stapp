@@ -8,7 +8,7 @@ export default function NuevoPlanPage() {
   return (
     <PageShell
       title="Nuevo plan"
-      description="Define un nuevo plan de suscripción para el sistema"
+      description="Definí un nuevo plan de suscripción para el sistema"
       icon={Package}
       backHref="/superadmin/planes"
       backLabel="Volver a planes"

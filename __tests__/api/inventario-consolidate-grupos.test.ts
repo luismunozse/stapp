@@ -70,6 +70,24 @@ describe("POST /api/inventario/consolidate with variants", () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  it("items in different currencies: 400 and the RPC is never called", async () => {
+    mockAuthSuccess()
+    const selects = responder([{ id: "a", grupo_id: null, moneda: "USD" }, { id: "b", grupo_id: null, moneda: null }])
+    const res = await post({ sourceId: "a", targetId: "b" })
+    const cuerpo = await res.json()
+    expect(res.status).toBe(400)
+    expect(cuerpo.error).toBe("No se pueden unificar productos con monedas distintas")
+    expect(selects[0]).toContain("moneda")
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("two items in the same foreign currency consolidate", async () => {
+    mockAuthSuccess()
+    responder([{ id: "a", grupo_id: null, moneda: "USD" }, { id: "b", grupo_id: null, moneda: "USD" }])
+    expect((await post({ sourceId: "a", targetId: "b" })).status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+  })
+
   it("without the variants migration (no grupo_id column) it reads again without it and consolidates", async () => {
     mockAuthSuccess()
     const selects = responder([{ id: "a" }, { id: "b" }], { code: "42703", message: "column inventario.grupo_id does not exist" })

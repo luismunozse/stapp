@@ -458,7 +458,7 @@ export function ConfiguracionForm({
 
   const handleDeleteLogo = async () => {
     const confirmed = await confirm({
-      title: "Eliminar Logo",
+      title: "Eliminar logo",
       description: "¿Estás seguro de eliminar el logo? Se mostrará el texto por defecto.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
@@ -547,7 +547,7 @@ export function ConfiguracionForm({
                     disabled={!allowEdit}
                   >
                     <Upload className="mr-2 h-4 w-4" />
-                    Subir Logo
+                    Subir logo
                   </Button>
                   {preview && (
                     <Button
@@ -635,7 +635,7 @@ export function ConfiguracionForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="codigoPostal" className="text-sm">Código Postal</Label>
+                  <Label htmlFor="codigoPostal" className="text-sm">Código postal</Label>
                   <Input
                     id="codigoPostal"
                     value={codigoPostal}
@@ -715,14 +715,14 @@ export function ConfiguracionForm({
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Zona Horaria</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Zona horaria</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
                 Zona horaria del taller. Se utiliza para mostrar fechas y horas correctamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0">
               <div>
-                <Label htmlFor="zonaHoraria" className="text-sm">Zona Horaria</Label>
+                <Label htmlFor="zonaHoraria" className="text-sm">Zona horaria</Label>
                 <Select value={zonaHoraria} onValueChange={setZonaHoraria} disabled={!allowEdit}>
                   <SelectTrigger id="zonaHoraria">
                     <SelectValue placeholder="Seleccionar zona horaria" />
@@ -788,7 +788,7 @@ export function ConfiguracionForm({
                 <div className="flex-1">
                   <div className="text-sm font-medium">Agrupar variantes en el punto de venta</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    Viene activado. En el Punto de Venta, los productos con variantes (por ejemplo, una funda en varios colores) aparecen en una sola tarjeta y al tocarla elegís cuál vender. Si lo desactivás, cada variante aparece como un producto aparte en la lista.
+                    Viene activado. En el punto de venta, los productos con variantes (por ejemplo, una funda en varios colores) aparecen en una sola tarjeta y al tocarla elegís cuál vender. Si lo desactivás, cada variante aparece como un producto aparte en la lista.
                   </div>
                 </div>
               </label>
@@ -807,7 +807,7 @@ export function ConfiguracionForm({
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-base sm:text-lg">IVA</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Configuración fiscal para el Punto de Venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
+                Configuración fiscal para el punto de venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
@@ -942,7 +942,7 @@ export function ConfiguracionForm({
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="fePuntoVenta" className="text-sm">Punto de Venta</Label>
+                        <Label htmlFor="fePuntoVenta" className="text-sm">Punto de venta</Label>
                         <Input
                           id="fePuntoVenta"
                           type="number"
@@ -954,7 +954,7 @@ export function ConfiguracionForm({
                         />
                       </div>
                       <div>
-                        <Label htmlFor="feCondicionFiscal" className="text-sm">Condición Fiscal</Label>
+                        <Label htmlFor="feCondicionFiscal" className="text-sm">Condición fiscal</Label>
                         <Select
                           value={feCondicionFiscal}
                           onValueChange={(val) => setFeCondicionFiscal(val as "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO")}
@@ -1151,9 +1151,9 @@ export function ConfiguracionForm({
           <>
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Cotizaciones / Presupuestos</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Presupuestos</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Valores por defecto al crear nuevas cotizaciones.
+                Valores por defecto al crear nuevos presupuestos.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
@@ -1172,7 +1172,7 @@ export function ConfiguracionForm({
                   </SelectContent>
                 </Select>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Se aplicará por defecto en nuevas cotizaciones
+                  Se aplicará por defecto en los nuevos presupuestos
                 </p>
               </div>
               <div>
@@ -1191,7 +1191,7 @@ export function ConfiguracionForm({
                 </p>
               </div>
               <div>
-                <Label htmlFor="cotizacionTerminos" className="text-sm">Términos y Condiciones</Label>
+                <Label htmlFor="cotizacionTerminos" className="text-sm">Términos y condiciones</Label>
                 <Textarea
                   id="cotizacionTerminos"
                   value={cotizacionTerminos}
@@ -1201,7 +1201,7 @@ export function ConfiguracionForm({
                   disabled={!allowEdit}
                 />
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Se incluirán por defecto en nuevas cotizaciones y PDFs
+                  Se incluirán por defecto en los nuevos presupuestos y PDFs
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
@@ -1253,9 +1253,9 @@ export function ConfiguracionForm({
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Comprobante de Recepcion</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Comprobante de recepción</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Terminos y condiciones que aparecen en el comprobante PDF al recibir un equipo.
+                Términos y condiciones que aparecen en el comprobante PDF al recibir un equipo.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
@@ -1281,17 +1281,17 @@ export function ConfiguracionForm({
                 </p>
               </div>
               <div>
-                <Label htmlFor="recepcionTerminos" className="text-sm">Terminos y Condiciones</Label>
+                <Label htmlFor="recepcionTerminos" className="text-sm">Términos y condiciones</Label>
                 <Textarea
                   id="recepcionTerminos"
                   value={recepcionTerminos}
                   onChange={(e) => setRecepcionTerminos(e.target.value)}
-                  placeholder={"1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.\n2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.\n3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.\n4. El presupuesto puede variar segun el diagnostico final del equipo."}
+                  placeholder={"1. Conservá este comprobante para retirar tu equipo. El plazo de retiro es de 30 días.\n2. No nos hacemos responsables por datos perdidos. Hacé una copia de seguridad antes de entregar el equipo.\n3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.\n4. El presupuesto puede variar según el diagnóstico final del equipo."}
                   rows={5}
                   disabled={!allowEdit}
                 />
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Escriba cada termino en una linea separada. Si se deja vacio se usaran los terminos por defecto.
+                  Escribí cada término en una línea separada. Si lo dejás vacío, se usan los términos por defecto.
                 </p>
               </div>
             </CardContent>
@@ -1299,24 +1299,24 @@ export function ConfiguracionForm({
 
           <Card>
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Comprobante Termico (Impresora)</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Comprobante térmico (impresora)</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Terminos y condiciones que se imprimen al pie del ticket termico de la orden de servicio.
+                Términos y condiciones que se imprimen al pie del ticket térmico de la orden de servicio.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
               <div>
-                <Label htmlFor="comprobanteTerminos" className="text-sm">Terminos y Condiciones</Label>
+                <Label htmlFor="comprobanteTerminos" className="text-sm">Términos y condiciones</Label>
                 <Textarea
                   id="comprobanteTerminos"
                   value={comprobanteTerminos}
                   onChange={(e) => setComprobanteTerminos(e.target.value)}
-                  placeholder={"1. Conserve este comprobante para retirar su equipo.\n2. No nos responsabilizamos por datos perdidos.\n3. El presupuesto puede variar segun el diagnostico.\n4. Equipos sin retirar a los 60 dias seran considerados abandonados."}
+                  placeholder={"1. Conservá este comprobante para retirar tu equipo.\n2. No nos responsabilizamos por datos perdidos.\n3. El presupuesto puede variar según el diagnóstico.\n4. Los equipos sin retirar a los 60 días serán considerados abandonados."}
                   rows={5}
                   disabled={!allowEdit}
                 />
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Se imprime al final del ticket. Si se deja vacio no aparece ninguna seccion de terminos.
+                  Se imprime al final del ticket. Si lo dejás vacío, no aparece ninguna sección de términos.
                 </p>
               </div>
             </CardContent>
@@ -1354,7 +1354,7 @@ export function ConfiguracionForm({
           <div className="flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full sm:w-auto">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? "Guardando..." : "Guardar Cambios"}
+              {saving ? "Guardando..." : "Guardar cambios"}
             </Button>
             {message && (
               <div

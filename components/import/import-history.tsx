@@ -116,7 +116,7 @@ export function ImportHistory({ entityType }: ImportHistoryProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historial de Importaciones</CardTitle>
+        <CardTitle>Historial de importaciones</CardTitle>
       </CardHeader>
       <CardContent>
         <DataTable

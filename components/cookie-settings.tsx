@@ -54,10 +54,10 @@ export function CookieSettings() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Cookie className="w-5 h-5 text-muted-foreground" />
-          <CardTitle>Preferencias de Cookies</CardTitle>
+          <CardTitle>Preferencias de cookies</CardTitle>
         </div>
         <CardDescription>
-          Gestiona cómo utilizamos las cookies en tu cuenta
+          Gestioná cómo usamos las cookies en tu cuenta
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -102,7 +102,7 @@ export function CookieSettings() {
                   Cookies de análisis
                 </h4>
                 <p className="text-sm text-muted-foreground">
-                  Nos ayudan a entender cómo usas la aplicación para mejorarla.
+                  Nos ayudan a entender cómo usás la aplicación para mejorarla.
                 </p>
               </div>
               <div className="ml-4 flex-shrink-0">

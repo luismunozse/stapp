@@ -23,7 +23,7 @@ export default function NotFound() {
           <Button asChild variant="default">
             <Link href="/superadmin/dashboard">
               <Home className="h-4 w-4 mr-2" />
-              Ir al Dashboard
+              Ir al panel
             </Link>
           </Button>
           <Button asChild variant="outline">

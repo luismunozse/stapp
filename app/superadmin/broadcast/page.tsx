@@ -46,7 +46,7 @@ interface BroadcastHistory {
 
 const ROLES = [
   { value: "ADMIN", label: "Administradores" },
-  { value: "TECNICO", label: "Tecnicos" },
+  { value: "TECNICO", label: "Técnicos" },
   { value: "VENDEDOR", label: "Vendedores" },
 ]
 
@@ -86,12 +86,12 @@ export default function BroadcastPage() {
 
   const handleSendClick = () => {
     if (!title.trim() || !message.trim()) {
-      toast.error("Titulo y mensaje son requeridos")
+      toast.error("El título y el mensaje son obligatorios")
       return
     }
 
     if (target === "specific" && selectedOrgs.length === 0) {
-      toast.error("Selecciona al menos una organizacion")
+      toast.error("Seleccioná al menos una organización")
       return
     }
 
@@ -111,8 +111,8 @@ export default function BroadcastPage() {
         roles: selectedRoles.length > 0 ? selectedRoles : undefined,
         actionUrl: actionUrl.trim() || undefined,
       },
-      successMessage: "Notificacion enviada",
-      errorMessage: "Error al enviar notificacion",
+      successMessage: "Notificación enviada",
+      errorMessage: "Error al enviar la notificación",
       onSuccess: (data) => {
         setLastResult(`Enviada a ${data.totalUsers} usuarios`)
         setSent(true)
@@ -141,7 +141,7 @@ export default function BroadcastPage() {
   return (
     <PageShell
       title="Notificaciones masivas"
-      description="Envia notificaciones masivas a los usuarios de la plataforma"
+      description="Enviá notificaciones masivas a los usuarios de la plataforma"
       icon={Megaphone}
     >
       <div className="grid gap-6 lg:grid-cols-3">
@@ -149,14 +149,14 @@ export default function BroadcastPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Componer notificacion</CardTitle>
+              <CardTitle className="text-lg">Componer notificación</CardTitle>
               <CardDescription>
-                La notificacion aparecera en la campana de notificaciones de cada usuario
+                La notificación va a aparecer en la campana de notificaciones de cada usuario
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Titulo</Label>
+                <Label htmlFor="title">Título</Label>
                 <Input
                   id="title"
                   placeholder="ej: Nueva funcionalidad disponible"
@@ -173,7 +173,7 @@ export default function BroadcastPage() {
                 <Label htmlFor="message">Mensaje</Label>
                 <Textarea
                   id="message"
-                  placeholder="ej: Ya podes generar cotizaciones en PDF desde la seccion de cotizaciones..."
+                  placeholder="Ej.: Ya podés generar presupuestos en PDF desde la sección Presupuestos..."
                   value={message}
                   onChange={(e) => {
                     setMessage(e.target.value)
@@ -188,7 +188,7 @@ export default function BroadcastPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="actionUrl">URL de accion (opcional)</Label>
+                <Label htmlFor="actionUrl">URL de acción (opcional)</Label>
                 <Input
                   id="actionUrl"
                   placeholder="ej: /cotizaciones"
@@ -196,14 +196,14 @@ export default function BroadcastPage() {
                   onChange={(e) => setActionUrl(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Ruta a la que navega el usuario al hacer click en la notificacion
+                  Ruta a la que navega el usuario al hacer clic en la notificación
                 </p>
               </div>
 
               {/* Preview en vivo */}
               <div className="space-y-2 pt-2 border-t">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Preview
+                  Vista previa
                 </Label>
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                   <div className="flex items-start gap-3">
@@ -254,7 +254,7 @@ export default function BroadcastPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas las organizaciones activas</SelectItem>
-                    <SelectItem value="specific">Organizaciones especificas</SelectItem>
+                    <SelectItem value="specific">Organizaciones específicas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -338,7 +338,7 @@ export default function BroadcastPage() {
                   ) : (
                     <>
                       <Send className="mr-2 h-4 w-4" />
-                      Enviar notificacion
+                      Enviar notificación
                     </>
                   )}
                 </Button>
@@ -359,7 +359,7 @@ export default function BroadcastPage() {
             <CardContent>
               {history.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No hay broadcasts enviados
+                  No hay notificaciones masivas enviadas
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -388,8 +388,8 @@ export default function BroadcastPage() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Enviar notificacion masiva"
-        description={`Se enviara "${title}" a ${target === "all" ? "todas las organizaciones activas" : `${selectedOrgs.length} organizacion(es)`}${selectedRoles.length > 0 ? ` (roles: ${selectedRoles.join(", ")})` : ""}. Esta accion no se puede deshacer.`}
+        title="Enviar notificación masiva"
+        description={`Se va a enviar "${title}" a ${target === "all" ? "todas las organizaciones activas" : `${selectedOrgs.length} organizacion(es)`}${selectedRoles.length > 0 ? ` (roles: ${selectedRoles.join(", ")})` : ""}. Esta acción no se puede deshacer.`}
         confirmText="Enviar"
         variant="warning"
         loading={sending}

@@ -179,7 +179,7 @@ export function TrialCountdownBanner() {
         <Zap className="h-3.5 w-3.5 shrink-0" />
         <div className="flex-1 min-w-0 truncate">
           <span className="font-medium">Estás en plan Free — </span>
-          <span>actualizá a Profesional para desbloquear todas las features.</span>
+          <span>actualizá a Profesional para desbloquear todas las funciones.</span>
         </div>
         <Link
           href="/configuracion/billing"

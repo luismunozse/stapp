@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { supabaseAdmin } from "@/lib/supabase"
+import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
@@ -352,6 +353,18 @@ export async function PUT(
       ) {
         return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
       }
+
+      // Solo los ítems nuevos: una línea ya guardada tiene su precio en local aunque el
+      // ítem haya pasado a divisa después. Un id con más líneas en el pedido que en la venta
+      // guardada trae una línea nueva y se revisa.
+      const enDivisa = await rechazarItemsEnDivisa({
+        organizationId: organizationId!,
+        inventarioIds: idsConLineasNuevas(
+          data.items.map((i) => i.inventarioId),
+          ((venta.items_venta || []) as Array<{ inventario_id?: string | null }>).map((r) => r.inventario_id)
+        ),
+      })
+      if (enDivisa) return enDivisa
 
       // Editar venta atómicamente
       const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("editar_venta_atomica", {

@@ -4,6 +4,7 @@ import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Package, DollarSign, TrendingUp, AlertCircle, AlertTriangle, Wallet } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 
 interface InventarioStatsData {
   totalSkus: number
@@ -14,6 +15,9 @@ interface InventarioStatsData {
   bajoStock: number
   /** null cuando el rol no puede ver costos de compra: es costo de reposición. */
   valorEnRiesgo: number | null
+  /** Algún total incluye ítems en divisa convertidos a local. */
+  aproximado?: boolean
+  excluidosSinCotizacion?: number
 }
 
 interface InventarioStatsProps {
@@ -51,7 +55,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
     },
     ...(costosOcultos ? [] : [{
       title: "Valor a costo",
-      value: isLoading ? "—" : formatPrice(data?.valorCosto ?? 0),
+      value: isLoading ? "—" : `${prefijoAprox(data?.aproximado)}${formatPrice(data?.valorCosto ?? 0)}`,
       icon: DollarSign,
       bgClass: "bg-emerald-100 dark:bg-emerald-950",
       colorClass: "text-emerald-600 dark:text-emerald-400",
@@ -60,7 +64,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
     }]),
     {
       title: "Valor a venta",
-      value: isLoading ? "—" : formatPrice(data?.valorVenta ?? 0),
+      value: isLoading ? "—" : `${prefijoAprox(data?.aproximado)}${formatPrice(data?.valorVenta ?? 0)}`,
       icon: TrendingUp,
       bgClass: "bg-violet-100 dark:bg-violet-950",
       colorClass: "text-violet-600 dark:text-violet-400",
@@ -87,7 +91,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
     },
     ...(costosOcultos ? [] : [{
       title: "Valor en riesgo",
-      value: isLoading ? "—" : formatPrice(data?.valorEnRiesgo ?? 0),
+      value: isLoading ? "—" : `${prefijoAprox(data?.aproximado)}${formatPrice(data?.valorEnRiesgo ?? 0)}`,
       icon: Wallet,
       bgClass: "bg-orange-100 dark:bg-orange-950",
       colorClass: "text-orange-600 dark:text-orange-400",
@@ -97,6 +101,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
   ]
 
   return (
+    <div className="space-y-1">
     <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map((card) => {
         const Icon = card.icon
@@ -126,6 +131,8 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
           </Card>
         )
       })}
+    </div>
+    <AvisoExcluidos n={data?.excluidosSinCotizacion} />
     </div>
   )
 }

@@ -82,7 +82,7 @@ describe("Mover de sucursal en los formularios de usuario", () => {
     // Wait until the branches are loaded, so the form HAS a default branch in state that it could leak.
     await waitFor(() => expect(screen.getByTestId("mover-sucursal")).toHaveAttribute("data-sucursales", "2"))
 
-    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true))
     const cuerpo = cuerpoDelPut(fetchMock, "/api/tecnicos/tec-1")
@@ -95,7 +95,7 @@ describe("Mover de sucursal en los formularios de usuario", () => {
     render(<VendedorForm open onOpenChange={() => {}} vendedor={VENDEDOR} onSuccess={() => {}} />)
     await waitFor(() => expect(screen.getByTestId("mover-sucursal")).toHaveAttribute("data-sucursales", "2"))
 
-    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true))
     const cuerpo = cuerpoDelPut(fetchMock, "/api/vendedores/ven-1")

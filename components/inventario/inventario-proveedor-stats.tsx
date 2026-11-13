@@ -4,6 +4,7 @@ import useSWR from "swr"
 import { Card } from "@/components/ui/card"
 import { Package, Layers, DollarSign, TrendingUp, AlertTriangle } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { AvisoExcluidos, prefijoAprox } from "@/components/inventario/aviso-valuacion"
 
 interface Summary {
   totalArticulos: number
@@ -16,6 +17,8 @@ interface Summary {
   itemsBajoStock: number
   itemsSinStock: number
   truncated: boolean
+  aproximado?: boolean
+  excluidosSinCotizacion?: number
 }
 
 interface InventarioProveedorStatsProps {
@@ -81,12 +84,12 @@ export function InventarioProveedorStats({
       ? []
       : [{
           label: "Valor a costo",
-          value: formatPrice(data.valorCosto),
+          value: `${prefijoAprox(data.aproximado)}${formatPrice(data.valorCosto)}`,
           icon: <DollarSign className="h-4 w-4" />,
         }]),
     {
       label: "Valor a venta",
-      value: formatPrice(data.valorVenta),
+      value: `${prefijoAprox(data.aproximado)}${formatPrice(data.valorVenta)}`,
       icon: <TrendingUp className="h-4 w-4" />,
       color: "text-emerald-600",
     },
@@ -120,6 +123,7 @@ export function InventarioProveedorStats({
           </div>
         ))}
       </div>
+      <AvisoExcluidos n={data.excluidosSinCotizacion} className="mt-2" />
       {data.truncated && (
         <div className="text-xs text-amber-600 mt-2">
           Mostrando los primeros 10.000 items. Aplicá filtros adicionales para ver el total real.

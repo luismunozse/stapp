@@ -51,7 +51,7 @@ describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
 })
 
 describe("OrdenCostosCard — card consciente del estado", () => {
-  it("fase cotización (PRESUPUESTADO): muestra 'Presupuesto' y NO 'Costo Final'", () => {
+  it("fase cotización (PRESUPUESTADO): muestra 'Presupuesto' y NO 'Costo final'", () => {
     render(
       <OrdenCostosCard
         ordenId="o"
@@ -63,10 +63,10 @@ describe("OrdenCostosCard — card consciente del estado", () => {
       />,
     )
     expect(screen.getByText("Presupuesto")).toBeInTheDocument()
-    expect(screen.queryByText("Costo Final")).not.toBeInTheDocument()
+    expect(screen.queryByText("Costo final")).not.toBeInTheDocument()
   })
 
-  it("fase facturación (EN_REPARACION): muestra 'Costo Final' y el presupuesto como contexto read-only", () => {
+  it("fase facturación (EN_REPARACION): muestra 'Costo final' y el presupuesto como contexto read-only", () => {
     render(
       <OrdenCostosCard
         ordenId="o"
@@ -77,7 +77,7 @@ describe("OrdenCostosCard — card consciente del estado", () => {
         onUpdateField={vi.fn()}
       />,
     )
-    expect(screen.getByText("Costo Final")).toBeInTheDocument()
+    expect(screen.getByText("Costo final")).toBeInTheDocument()
     expect(screen.getByText(/Presupuesto estimado/i)).toBeInTheDocument()
   })
 
@@ -92,7 +92,7 @@ describe("OrdenCostosCard — card consciente del estado", () => {
         onUpdateField={vi.fn()}
       />,
     )
-    expect(screen.getByText("Costo Final")).toBeInTheDocument()
+    expect(screen.getByText("Costo final")).toBeInTheDocument()
     expect(screen.queryByText(/Presupuesto estimado/i)).not.toBeInTheDocument()
   })
 

@@ -4,6 +4,7 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolverContextoValuacion, valuarLocal, contarExcluidos, montoLocal } from "@/lib/currency/valuacion.server"
 import { NextResponse } from "next/server"
 
 export async function GET() {
@@ -25,7 +26,7 @@ export async function GET() {
       // All active inventory items (exclude archived)
       supabaseAdmin
         .from("inventario")
-        .select("id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, stock_minimo, punto_reorden")
+        .select("id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, stock_minimo, punto_reorden, moneda")
         .eq("organization_id", organizationId!)
         .is("deleted_at", null),
 
@@ -59,12 +60,14 @@ export async function GET() {
     const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     // --- Valorización ---
-    let valorCosto = 0
-    let valorVenta = 0
+    // Montos en la moneda de cada ítem, sumados en local (cotización solo si hay ítems en divisa).
+    const ctx = await resolverContextoValuacion(organizationId!, items)
+    const vCosto = valuarLocal(items, (item) => (item.stock || 0) * (item.precio_compra || 0), ctx)
+    const vVenta = valuarLocal(items, (item) => (item.stock || 0) * (item.precio_venta || 0), ctx)
+    const valorCosto = vCosto.total
+    const valorVenta = vVenta.total
     let totalUnidades = 0
     items.forEach(item => {
-      valorCosto += (item.stock || 0) * (item.precio_compra || 0)
-      valorVenta += (item.stock || 0) * (item.precio_venta || 0)
       totalUnidades += item.stock || 0
     })
     // Las cifras de costo van gateadas como el resto (ver el bloque de abajo):
@@ -76,6 +79,8 @@ export async function GET() {
       margenPotencial: canViewCost ? valorVenta - valorCosto : null,
       totalItems: items.length,
       totalUnidades,
+      aproximado: vCosto.aproximado || vVenta.aproximado,
+      excluidosSinCotizacion: contarExcluidos(items, ctx),
     }
 
     // --- Aggregate sales per item (90 days) ---
@@ -98,7 +103,7 @@ export async function GET() {
           nombre: item.nombre,
           codigo: item.codigo,
           stock: item.stock,
-          precioVenta: item.precio_venta,
+          precioVenta: montoLocal(item.precio_venta, item.moneda, ctx),
           totalVendido,
           tasaRotacion: Math.round(tasaRotacion * 100) / 100,
         }
@@ -121,14 +126,14 @@ export async function GET() {
         nombre: item.nombre,
         codigo: item.codigo,
         stock: item.stock,
-        precioCompra: item.precio_compra,
-        precioVenta: item.precio_venta,
-        capitalInmovilizado: (item.stock || 0) * (item.precio_compra || 0),
+        precioCompra: montoLocal(item.precio_compra, item.moneda, ctx),
+        precioVenta: montoLocal(item.precio_venta, item.moneda, ctx),
+        capitalInmovilizado: montoLocal((item.stock || 0) * (item.precio_compra || 0), item.moneda, ctx),
       }))
 
     const sinMovimiento = (
       canViewCost
-        ? sinMovimientoBase.sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
+        ? sinMovimientoBase.sort((a, b) => (b.capitalInmovilizado ?? 0) - (a.capitalInmovilizado ?? 0))
         : sinMovimientoBase.sort(
             (a, b) => b.stock - a.stock || (a.nombre || "").localeCompare(b.nombre || "", "es")
           )
@@ -172,8 +177,8 @@ export async function GET() {
       if (!catMap[cat]) catMap[cat] = { categoria: cat, items: 0, stock: 0, valorCosto: 0, valorVenta: 0 }
       catMap[cat].items++
       catMap[cat].stock += item.stock || 0
-      catMap[cat].valorCosto += (item.stock || 0) * (item.precio_compra || 0)
-      catMap[cat].valorVenta += (item.stock || 0) * (item.precio_venta || 0)
+      catMap[cat].valorCosto += montoLocal((item.stock || 0) * (item.precio_compra || 0), item.moneda, ctx) ?? 0
+      catMap[cat].valorVenta += montoLocal((item.stock || 0) * (item.precio_venta || 0), item.moneda, ctx) ?? 0
     })
     const porCategoria = Object.values(catMap).sort((a, b) => b.valorVenta - a.valorVenta)
 

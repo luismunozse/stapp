@@ -60,7 +60,7 @@ describe("login en el dominio raíz", () => {
 
     fireEvent.change(await screen.findByLabelText("Email"), { target: { value: "juan@taller.com" } })
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "secreta123" } })
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar Sesión" }))
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }))
 
     await waitFor(() => expect(destino.href).toBe(tenantDashboardUrl("taller-juan")))
     expect(destino.href).not.toContain("/login")

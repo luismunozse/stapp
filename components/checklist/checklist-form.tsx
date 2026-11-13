@@ -40,9 +40,9 @@ interface ChecklistFormProps {
 }
 
 const categoriaLabels: Record<string, string> = {
-  CONDICION_FISICA: "Condicion Fisica",
-  ACCESORIOS: "Accesorios Entregados",
-  FUNCIONAL: "Estado Funcional",
+  CONDICION_FISICA: "Condición física",
+  ACCESORIOS: "Accesorios entregados",
+  FUNCIONAL: "Estado funcional",
   OTRO: "Otros",
   GENERAL: "General",
 }
@@ -222,7 +222,7 @@ export function ChecklistForm({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ClipboardCheck className="h-5 w-5" />
-          {isEditing ? "Editar Checklist" : "Checklist de Recepción"}
+          {isEditing ? "Editar checklist" : "Checklist de recepción"}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -254,7 +254,7 @@ export function ChecklistForm({
           {/* Firma del cliente */}
           <div className="pt-4 border-t">
             <SignaturePad
-              label="Firma del Cliente (Conformidad de recepcion)"
+              label="Firma del cliente (conformidad de recepción)"
               onSignatureChange={handleSignatureChange}
               initialSignature={initialFirma}
               initialMime={initialFirmaMime}

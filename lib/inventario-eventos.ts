@@ -23,6 +23,7 @@ export const AUDITED_FIELDS = [
   "punto_reorden",
   "barcode",
   "ubicacion",
+  "moneda",
 ] as const
 
 export function pickAudited(row: Record<string, any>): Record<string, unknown> {
@@ -81,6 +82,7 @@ export function registrarCreacion(ctx: ContextoEventos, item: Fila): void {
     precioCompra: item.precio_compra,
     proveedorId: item.proveedor_id,
     barcode: item.barcode,
+    moneda: item.moneda ?? null,
   }))
 }
 

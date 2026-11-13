@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
-  title: "Crear Cuenta Gratis",
+  title: "Crear cuenta gratis",
   description:
-    "Registra tu taller de reparación en STApp. Comienza gratis y gestiona órdenes de trabajo, clientes, inventario y facturación.",
+    "Registrá tu taller de reparación en STApp. Empezá gratis y gestioná órdenes de trabajo, clientes, inventario y facturación.",
   keywords: [
     "registrar taller",
     "crear cuenta servicio técnico",
@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   },
   openGraph: {
     images: OG_IMAGES,
-    title: "Crear Cuenta Gratis - STApp",
+    title: "Crear cuenta gratis - STApp",
     description:
-      "Registra tu taller de reparación en STApp. Comienza gratis.",
+      "Registrá tu taller de reparación en STApp. Empezá gratis.",
     url: "https://stapp.com.ar/registro",
   },
   alternates: {

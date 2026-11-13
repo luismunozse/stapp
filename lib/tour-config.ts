@@ -16,7 +16,7 @@ export const tourSteps: DriveStep[] = [
   {
     element: "#nav-ordenes",
     popover: {
-      title: "Órdenes de Servicio",
+      title: "Órdenes de servicio",
       description:
         "Creá y gestioná las órdenes de reparación. Seguí el estado de cada dispositivo desde que ingresa hasta que se entrega.",
       side: "right",
@@ -76,7 +76,7 @@ export const tourSteps: DriveStep[] = [
   {
     element: "#nav-pos",
     popover: {
-      title: "Punto de Venta (POS)",
+      title: "Punto de venta (POS)",
       description:
         "Realizá ventas rápidas desde una interfaz tipo caja registradora, ideal para atención al mostrador.",
       side: "right",
@@ -86,9 +86,9 @@ export const tourSteps: DriveStep[] = [
   {
     element: "#nav-cotizaciones",
     popover: {
-      title: "Cotizaciones",
+      title: "Presupuestos",
       description:
-        "Creá presupuestos y cotizaciones para tus clientes antes de iniciar una reparación o venta.",
+        "Creá presupuestos para tus clientes antes de iniciar una reparación o venta.",
       side: "right",
       align: "start",
     },

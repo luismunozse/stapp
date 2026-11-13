@@ -156,7 +156,7 @@ export function PWARecovery() {
           <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-lg font-semibold mb-2">Algo salió mal</h2>
           <p className="text-muted-foreground text-center mb-6">
-            La página no cargó correctamente. Intenta refrescar.
+            La página no cargó correctamente. Probá refrescarla.
           </p>
           <div className="flex gap-3">
             <Button variant="outline" onClick={handleGoBack}>

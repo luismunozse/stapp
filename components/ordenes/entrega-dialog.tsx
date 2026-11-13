@@ -265,7 +265,7 @@ export function EntregaDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {sinCobro ? <HandCoins className="h-5 w-5" /> : esRetiro ? <PackageX className="h-5 w-5" /> : <PackageCheck className="h-5 w-5" />}
-            {sinCobro ? "Entrega sin Cobro" : esRetiro ? "Retiro de Equipo Sin Reparación" : "Entrega de Equipo"}
+            {sinCobro ? "Entrega sin cobro" : esRetiro ? "Retiro de equipo sin reparación" : "Entrega de equipo"}
           </DialogTitle>
           <DialogDescription>
             Orden {codigoDisplay} - {orden.dispositivo}
@@ -348,7 +348,7 @@ export function EntregaDialog({
 
           <div className="bg-muted/50 p-3 rounded-lg text-sm">
             <p><strong>Cliente:</strong> {orden.cliente.nombre}</p>
-            <p><strong>Telefono:</strong> {orden.cliente.telefono}</p>
+            <p><strong>Teléfono:</strong> {orden.cliente.telefono}</p>
           </div>
 
           {mostrarCobro && (
@@ -448,7 +448,7 @@ export function EntregaDialog({
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium mb-2 block">
-                Firma del Cliente (opcional)
+                Firma del cliente (opcional)
               </Label>
               <SignaturePad
                 onSignatureChange={handleFirmaClienteChange}
@@ -458,7 +458,7 @@ export function EntregaDialog({
 
             <div>
               <Label className="text-sm font-medium mb-2 block">
-                Firma del Encargado - {encargadoNombre} (opcional)
+                Firma del encargado: {encargadoNombre} (opcional)
               </Label>
               <SignaturePad
                 onSignatureChange={handleFirmaEncargadoChange}
@@ -555,7 +555,7 @@ export function EntregaDialog({
               loading={loading}
             >
               {sinCobro ? <HandCoins className="mr-2 h-4 w-4" /> : esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-              {sinCobro ? "Confirmar Entrega sin Cobro" : esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
+              {sinCobro ? "Confirmar entrega sin cobro" : esRetiro ? "Confirmar retiro" : "Confirmar entrega"}
             </Button>
           </div>
         </div>

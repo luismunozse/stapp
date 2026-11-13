@@ -184,13 +184,13 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
           className="w-full"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Registrar Depósito a Cuenta
+          Registrar depósito a cuenta
         </Button>
       )}
 
       {esAdmin && showDeposito && (
         <div className="rounded-lg border p-4 space-y-4">
-          <h4 className="font-medium text-sm">Nuevo Depósito</h4>
+          <h4 className="font-medium text-sm">Nuevo depósito</h4>
           <div className="grid grid-cols-3 gap-1.5">
             {METODOS_DEPOSITO.map(({ value, label, icon: Icon }) => (
               <button
@@ -229,7 +229,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setShowDeposito(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleDeposito} loading={depositoLoading}>
-              Registrar Depósito
+              Registrar depósito
             </Button>
           </div>
         </div>

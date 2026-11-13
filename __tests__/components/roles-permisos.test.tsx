@@ -168,7 +168,7 @@ describe("Roles y permisos", () => {
     })
     expect(pos).toBeChecked()
     expect(
-      screen.getByRole("checkbox", { name: /cobrar sus propias cotizaciones/i }),
+      screen.getByRole("checkbox", { name: /cobrar sus propios presupuestos/i }),
     ).not.toBeChecked()
   })
 
@@ -219,7 +219,7 @@ describe("Roles y permisos — permisos que la API no conoce", () => {
       await screen.findByRole("checkbox", { name: /vender desde el punto de venta/i }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole("checkbox", { name: /cobrar sus propias cotizaciones/i }),
+      screen.queryByRole("checkbox", { name: /cobrar sus propios presupuestos/i }),
     ).not.toBeInTheDocument()
   })
 })

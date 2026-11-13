@@ -38,7 +38,7 @@ export default async function ImportacionesPage() {
   return (
     <PageShell
       title="Importaciones"
-      description="Revisa todas las importaciones realizadas"
+      description="Revisá todas las importaciones realizadas"
       backHref="/configuracion"
       backLabel="Volver a configuración"
     >

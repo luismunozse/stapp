@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { validarMonedaEscritura } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
 
 const updateSchema = z.object({
@@ -11,6 +13,8 @@ const updateSchema = z.object({
   precio: z.number().min(0, "El precio no puede ser negativo").optional(),
   duracionEstimadaMin: z.number().int().positive().nullable().optional(),
   activo: z.boolean().optional(),
+  // Any string passes the schema: validarMonedaEscritura owns the rule and its message.
+  moneda: z.string().nullable().optional(),
 })
 
 function toDTO(s: any) {
@@ -23,6 +27,7 @@ function toDTO(s: any) {
     precio: Number(s.precio),
     duracionEstimadaMin: s.duracion_estimada_min,
     activo: s.activo,
+    moneda: (s.moneda ?? null) as "USD" | "EUR" | null,
   }
 }
 
@@ -37,6 +42,25 @@ export async function PUT(
     const { id } = await params
     const parsed = updateSchema.parse(await request.json())
 
+    // Currency of the price: undefined leaves the column alone and null goes back to local, neither
+    // reads anything. Only a foreign currency needs the service's own currency (`actual`) and the config.
+    let moneda: "USD" | "EUR" | null | undefined
+    if (parsed.moneda === null) moneda = null
+    else if (parsed.moneda !== undefined) {
+      const { data: existente } = await supabaseAdmin
+        .from("servicios")
+        .select("moneda")
+        .eq("id", id)
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .single()
+      if (!existente) return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 })
+      const { config } = await cargarConfigMoneda(organizationId!)
+      const validacion = validarMonedaEscritura(parsed.moneda, existente.moneda ?? null, config)
+      if (!validacion.ok) return NextResponse.json({ error: validacion.error }, { status: 400 })
+      moneda = validacion.moneda
+    }
+
     const updateData: Record<string, any> = {}
     if (parsed.codigo !== undefined) updateData.codigo = parsed.codigo
     if (parsed.nombre !== undefined) updateData.nombre = parsed.nombre
@@ -47,6 +71,7 @@ export async function PUT(
       updateData.duracion_estimada_min = parsed.duracionEstimadaMin
     }
     if (parsed.activo !== undefined) updateData.activo = parsed.activo
+    if (moneda !== undefined) updateData.moneda = moneda
 
     const { data, error: dbError } = await supabaseAdmin
       .from("servicios")

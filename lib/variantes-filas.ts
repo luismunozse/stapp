@@ -509,6 +509,8 @@ export type VariantesAccion =
   | { tipo: "cambiarPrecioBase"; precio: number }
   | { tipo: "cambiarCostoBase"; costo: number }
   | { tipo: "aplicarPrecioATodas" }
+  /** The currency of the group changed and the prices go with it: `convertir` maps an amount to the new currency. */
+  | { tipo: "convertirPrecios"; convertir: (monto: number) => number }
   | { tipo: "editarFila"; filaId: string; cambios: CambiosDeFila }
   | { tipo: "promover"; item: ItemPromovido; filaId?: string }
 
@@ -916,6 +918,24 @@ function cambiarCostoBase(estado: VariantesState, costo: number): Resultado {
   return { ...estado, costoBase: validado.valor, filas }
 }
 
+/**
+ * Converts the base price and cost and every active row's price and cost (the currency of the group
+ * changed). Whether a row follows the base does not change. On a restored row only what the user typed
+ * is converted (a typed price, a cost present on it): its stored values were never seen by the client.
+ */
+function convertirPrecios(estado: VariantesState, convertir: (monto: number) => number): Resultado {
+  const filas = Object.fromEntries(
+    Object.entries(estado.filas).map(([id, f]) => {
+      if (f.archivar) return [id, f]
+      const conviertePrecio = !f.restaurada || f.precioTocado
+      const siguiente: Fila = { ...f, precioVenta: conviertePrecio ? convertir(f.precioVenta) : f.precioVenta }
+      if (typeof f.precioCompra === "number") siguiente.precioCompra = convertir(f.precioCompra)
+      return [id, siguiente]
+    })
+  )
+  return { ...estado, precioBase: convertir(estado.precioBase), costoBase: convertir(estado.costoBase), filas }
+}
+
 /** "Aplicar precio a todas": every active row takes the base price and goes back to following it. */
 function aplicarPrecioATodas(estado: VariantesState): Resultado {
   const filas = Object.fromEntries(
@@ -1075,6 +1095,8 @@ function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () 
       return cambiarCostoBase(estado, accion.costo)
     case "aplicarPrecioATodas":
       return aplicarPrecioATodas(estado)
+    case "convertirPrecios":
+      return convertirPrecios(estado, accion.convertir)
     case "editarFila":
       return editarFila(estado, accion.filaId, accion.cambios)
     case "promover":

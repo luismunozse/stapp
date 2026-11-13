@@ -43,7 +43,7 @@ export function SyncStatusIndicator() {
 
         <span>
           {!isOnline
-            ? `Offline · ${pendingCount} pendiente${pendingCount !== 1 ? "s" : ""}`
+            ? `Sin conexión · ${pendingCount} pendiente${pendingCount !== 1 ? "s" : ""}`
             : isSyncing
               ? "Sincronizando..."
               : conflicts.length > 0
@@ -60,7 +60,7 @@ export function SyncStatusIndicator() {
         <div className="absolute bottom-full left-0 lg:left-auto lg:right-0 mb-2 w-80 rounded-lg bg-background border shadow-xl overflow-hidden">
           <div className="p-3 border-b flex items-center justify-between">
             <h3 className="font-semibold text-sm">
-              {!isOnline ? "Modo offline" : "Operaciones pendientes"}
+              {!isOnline ? "Sin conexión" : "Operaciones pendientes"}
             </h3>
             {isOnline && pendingCount > 0 && (
               <button

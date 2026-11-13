@@ -21,6 +21,9 @@ import { Badge } from "@/components/ui/badge"
 import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { useFormDraft } from "@/hooks/use-form-draft"
 import { ignoreSelectEcho } from "@/lib/radix-select-echo"
+import { useMoneda } from "@/hooks/use-moneda"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import type { MonedaCatalogo } from "@/lib/currency/catalogo"
 
 type Cell = string | number | null
 
@@ -38,6 +41,8 @@ interface PreviewUpdate {
   precioVentaActual: number | null
   precioCompraNuevo: number | null
   precioVentaNuevo: number | null
+  /** null/absent = local currency. */
+  moneda?: MonedaCatalogo
   cambia: boolean
 }
 
@@ -138,11 +143,6 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-function fmtPrice(v: number | null): string {
-  if (v === null || v === undefined) return "—"
-  return v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 function deltaPct(actual: number | null, nuevo: number | null): string {
   if (actual === null || nuevo === null || actual === 0) return ""
   const pct = ((nuevo - actual) / actual) * 100
@@ -152,6 +152,7 @@ function deltaPct(actual: number | null, nuevo: number | null): string {
 
 export default function ImportarPreciosPage() {
   const router = useRouter()
+  const { config } = useMoneda()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState<Step>("upload")
   const [fileName, setFileName] = useState<string>("")
@@ -479,6 +480,9 @@ export default function ImportarPreciosPage() {
       label: `${idx + 1}. ${String(h ?? "").trim() || "(vacía)"}`,
     }))
   }, [headers])
+
+  const mostrarMoneda =
+    config?.habilitada === true || (preview?.updates.some((u) => (u.moneda ?? null) !== null) ?? false)
 
   const cambiosCount = preview
     ? preview.updates.filter((u) => u.cambia && !excludedIds.has(u.id)).length
@@ -813,6 +817,11 @@ export default function ImportarPreciosPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Cambios a aplicar</CardTitle>
+                {mostrarMoneda && (
+                  <p className="text-xs text-muted-foreground">
+                    Los precios se interpretan en la moneda actual de cada producto
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-auto max-h-96">
@@ -822,6 +831,7 @@ export default function ImportarPreciosPage() {
                         <th className="px-3 py-2 text-left w-8"></th>
                         <th className="px-3 py-2 text-left">Código</th>
                         <th className="px-3 py-2 text-left">Producto</th>
+                        {mostrarMoneda && <th className="px-3 py-2 text-left">Moneda</th>}
                         <th className="px-3 py-2 text-right">Costo actual</th>
                         <th className="px-3 py-2 text-right">Costo nuevo</th>
                         <th className="px-3 py-2 text-right">Venta actual</th>
@@ -847,13 +857,16 @@ export default function ImportarPreciosPage() {
                               </td>
                               <td className="px-3 py-2 font-mono text-xs">{u.codigo}</td>
                               <td className="px-3 py-2">{u.nombre}</td>
+                              {mostrarMoneda && (
+                                <td className="px-3 py-2 text-xs">{u.moneda ?? config?.monedaLocal ?? "Local"}</td>
+                              )}
                               <td className="px-3 py-2 text-right tabular-nums">
-                                {fmtPrice(u.precioCompraActual)}
+                                <PrecioEnMoneda monto={u.precioCompraActual} moneda={u.moneda ?? null} />
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">
                                 {u.precioCompraNuevo != null ? (
                                   <span>
-                                    {fmtPrice(u.precioCompraNuevo)}
+                                    <PrecioEnMoneda monto={u.precioCompraNuevo} moneda={u.moneda ?? null} />
                                     <span className="ml-1 text-xs text-muted-foreground">
                                       {deltaPct(u.precioCompraActual, u.precioCompraNuevo)}
                                     </span>
@@ -863,12 +876,12 @@ export default function ImportarPreciosPage() {
                                 )}
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">
-                                {fmtPrice(u.precioVentaActual)}
+                                <PrecioEnMoneda monto={u.precioVentaActual} moneda={u.moneda ?? null} />
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">
                                 {u.precioVentaNuevo != null ? (
                                   <span>
-                                    {fmtPrice(u.precioVentaNuevo)}
+                                    <PrecioEnMoneda monto={u.precioVentaNuevo} moneda={u.moneda ?? null} />
                                     <span className="ml-1 text-xs text-muted-foreground">
                                       {deltaPct(u.precioVentaActual, u.precioVentaNuevo)}
                                     </span>

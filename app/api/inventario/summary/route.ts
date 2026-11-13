@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolverContextoValuacion, valuarLocal, contarExcluidos } from "@/lib/currency/valuacion.server"
 
 // GET /api/inventario/summary?proveedorId=...&categoria=...&tipoDispositivo=...&bajoStock=true
 // Agrega totales del inventario (solo activos, no archivados) para los filtros
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("inventario")
-      .select("stock, precio_compra, precio_venta, stock_minimo")
+      .select("stock, precio_compra, precio_venta, stock_minimo, moneda")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
 
@@ -54,8 +55,6 @@ export async function GET(request: Request) {
     const rows = data || []
     let totalArticulos = rows.length
     let totalStock = 0
-    let valorCosto = 0
-    let valorVenta = 0
     let itemsBajoStock = 0
     let itemsSinStock = 0
 
@@ -69,14 +68,17 @@ export async function GET(request: Request) {
 
     for (const r of rows) {
       const stock = Number(r.stock) || 0
-      const pc = Number(r.precio_compra) || 0
-      const pv = Number(r.precio_venta) || 0
       totalStock += stock
-      valorCosto += stock * pc
-      valorVenta += stock * pv
       if (stock === 0) itemsSinStock++
       else if (stock <= (r.stock_minimo ?? globalThreshold)) itemsBajoStock++
     }
+
+    // Montos en la moneda de cada ítem, sumados en local.
+    const ctx = await resolverContextoValuacion(organizationId!, rows)
+    const vCosto = valuarLocal(rows, (r) => (Number(r.stock) || 0) * (Number(r.precio_compra) || 0), ctx)
+    const vVenta = valuarLocal(rows, (r) => (Number(r.stock) || 0) * (Number(r.precio_venta) || 0), ctx)
+    const valorCosto = vCosto.total
+    const valorVenta = vVenta.total
 
     // valorCosto sale de precio_compra y margenEstimado es valorVenta -
     // valorCosto: dejar el margen expuesto devuelve el costo por resta, así que
@@ -95,6 +97,8 @@ export async function GET(request: Request) {
       itemsBajoStock,
       itemsSinStock,
       truncated: rows.length >= LIMIT,
+      aproximado: vCosto.aproximado || vVenta.aproximado,
+      excluidosSinCotizacion: contarExcluidos(rows, ctx),
     }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     console.error("Error en summary inventario:", error)

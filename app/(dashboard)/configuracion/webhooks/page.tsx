@@ -43,7 +43,7 @@ const EVENT_TYPES = [
   { id: "venta.editada", label: "Venta editada" },
   { id: "venta.devolucion", label: "Devolución de venta" },
   { id: "orden.estado_cambiado", label: "Cambio estado orden" },
-  { id: "cotizacion.aceptada", label: "Cotización aceptada" },
+  { id: "cotizacion.aceptada", label: "Presupuesto aceptado" },
 ] as const
 
 interface Webhook {
@@ -581,7 +581,7 @@ export default function WebhooksPage() {
           <DialogHeader>
             <DialogTitle>Probar webhook</DialogTitle>
             <DialogDescription>
-              Envía un evento <code className="font-mono">webhook.test</code> al
+              Enviá un evento <code className="font-mono">webhook.test</code> al
               endpoint.
             </DialogDescription>
           </DialogHeader>

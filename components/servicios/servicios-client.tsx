@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { IconButton } from "@/components/ui/icon-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,7 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
-import { useCurrency } from "@/contexts/currency-context"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SelectorMoneda } from "@/components/moneda/selector-moneda"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import { EquivalenteLocal } from "@/components/moneda/equivalente-local"
+import { DialogoCambioMoneda } from "@/components/moneda/dialogo-cambio-moneda"
+import { useMoneda } from "@/hooks/use-moneda"
+import { convertirPrecioCatalogo, cotizacionDe, type MonedaCatalogo } from "@/lib/currency/catalogo"
+import { unidadRedondeo } from "@/lib/currency/convert"
 import { useModal } from "@/contexts/modal-context"
 
 interface Servicio {
@@ -21,6 +28,7 @@ interface Servicio {
   precio: number
   duracionEstimadaMin: number | null
   activo: boolean
+  moneda: MonedaCatalogo
 }
 
 interface ServicioFormState {
@@ -31,6 +39,7 @@ interface ServicioFormState {
   precio: number
   duracionEstimadaMin: number | null
   activo: boolean
+  moneda: MonedaCatalogo
 }
 
 const emptyForm: ServicioFormState = {
@@ -41,10 +50,11 @@ const emptyForm: ServicioFormState = {
   precio: 0,
   duracionEstimadaMin: null,
   activo: true,
+  moneda: null,
 }
 
 export function ServiciosClient() {
-  const { formatPrice } = useCurrency()
+  const { config: configMoneda, tipoCambio } = useMoneda()
   const { confirm, alert } = useModal()
 
   const [servicios, setServicios] = useState<Servicio[]>([])
@@ -57,12 +67,19 @@ export function ServiciosClient() {
   const [form, setForm] = useState<ServicioFormState>(emptyForm)
   const [precioDraft, setPrecioDraft] = useState("")
   const [duracionDraft, setDuracionDraft] = useState("")
+  /** Currency filter: "" all, "local" or "divisa" (the API's ?moneda=). */
+  const [monedaFiltro, setMonedaFiltro] = useState<"" | "local" | "divisa">("")
+  // The currency the service was saved with: the PUT only sends the currency when it changed.
+  const monedaGuardada = useRef<MonedaCatalogo>(null)
+  const [monedaPedida, setMonedaPedida] = useState<{ a: MonedaCatalogo } | null>(null)
 
   const fetchServicios = async () => {
     try {
       // incluirInactivos: esta pantalla administra el catalogo completo, a
       // diferencia del selector de la orden que solo debe ofrecer activos.
-      const res = await fetch("/api/servicios?incluirInactivos=true", { cache: "no-store" })
+      const params = new URLSearchParams({ incluirInactivos: "true" })
+      if (monedaFiltro) params.set("moneda", monedaFiltro)
+      const res = await fetch(`/api/servicios?${params.toString()}`, { cache: "no-store" })
       const data = await res.json()
       setServicios(data.servicios ?? [])
     } catch (error) {
@@ -74,13 +91,15 @@ export function ServiciosClient() {
 
   useEffect(() => {
     fetchServicios()
-  }, [])
+  }, [monedaFiltro])
 
   const resetForm = () => {
     setForm(emptyForm)
     setPrecioDraft("")
     setDuracionDraft("")
     setEditingId(null)
+    setMonedaPedida(null)
+    monedaGuardada.current = null
   }
 
   const handleOpenCreate = () => {
@@ -97,7 +116,9 @@ export function ServiciosClient() {
       precio: servicio.precio,
       duracionEstimadaMin: servicio.duracionEstimadaMin,
       activo: servicio.activo,
+      moneda: servicio.moneda ?? null,
     })
+    monedaGuardada.current = servicio.moneda ?? null
     setPrecioDraft(String(servicio.precio))
     setDuracionDraft(servicio.duracionEstimadaMin != null ? String(servicio.duracionEstimadaMin) : "")
     setEditingId(servicio.id)
@@ -113,7 +134,7 @@ export function ServiciosClient() {
     if (!form.codigo.trim() || !form.nombre.trim() || form.precio < 0) {
       await alert({
         title: "Datos incompletos",
-        description: "Completa código, nombre y precio",
+        description: "Completá código, nombre y precio",
         variant: "warning",
       })
       return
@@ -129,6 +150,8 @@ export function ServiciosClient() {
         precio: form.precio,
         duracionEstimadaMin: form.duracionEstimadaMin,
         activo: form.activo,
+        // POST always says it (null = local); PUT only when it changed, so an edit never touches it.
+        moneda: !editingId || form.moneda !== monedaGuardada.current ? form.moneda : undefined,
       }
 
       const res = await fetch(editingId ? `/api/servicios/${editingId}` : "/api/servicios", {
@@ -189,6 +212,31 @@ export function ServiciosClient() {
     }
   }
 
+  // --- Moneda del precio -----------------------------------------------------
+  const cotizacionCambio =
+    monedaPedida && configMoneda ? cotizacionDe(form.moneda ?? monedaPedida.a, configMoneda, tipoCambio ?? null) : null
+  const pedirMoneda = (m: MonedaCatalogo) => {
+    if (m === form.moneda) return
+    if (form.precio > 0) setMonedaPedida({ a: m })
+    else setForm({ ...form, moneda: m })
+  }
+  const convertirMoneda = () => {
+    if (!monedaPedida || !configMoneda || cotizacionCambio === null) return
+    const unidad = unidadRedondeo(configMoneda.redondeoConversion, configMoneda.monedaLocal)
+    const precio = convertirPrecioCatalogo(form.precio, form.moneda, monedaPedida.a, cotizacionCambio, unidad)
+    setForm({ ...form, precio, moneda: monedaPedida.a })
+    setPrecioDraft(String(precio))
+    setMonedaPedida(null)
+  }
+  const mantenerMoneda = () => {
+    if (monedaPedida) setForm({ ...form, moneda: monedaPedida.a })
+    setMonedaPedida(null)
+  }
+  // The filter shows with the feature on, or while some loaded service is priced in a foreign
+  // currency (the feature may have been turned off since), or while the filter is in use.
+  const mostrarFiltroMoneda =
+    !!configMoneda && (configMoneda.habilitada || monedaFiltro !== "" || servicios.some((s) => (s.moneda ?? null) !== null))
+
   const visibles = servicios.filter((s) =>
     s.nombre.toLowerCase().includes(search.trim().toLowerCase())
   )
@@ -213,6 +261,18 @@ export function ServiciosClient() {
             className="pl-8"
           />
         </div>
+        {mostrarFiltroMoneda && configMoneda && (
+          <Select value={monedaFiltro || "all"} onValueChange={(v) => setMonedaFiltro(v === "all" ? "" : (v as "local" | "divisa"))}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Moneda">
+              <SelectValue placeholder="Todas las monedas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las monedas</SelectItem>
+              <SelectItem value="local">Moneda local</SelectItem>
+              <SelectItem value="divisa">{configMoneda.monedaExtranjera}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         {!showForm && (
           <Button onClick={handleOpenCreate}>
             <Plus className="h-4 w-4 mr-2" />
@@ -279,6 +339,7 @@ export function ServiciosClient() {
                     setForm({ ...form, precio: parseFloat(e.target.value) || 0 })
                   }}
                 />
+                {form.moneda !== null && <EquivalenteLocal monto={form.precio} moneda={form.moneda} />}
               </div>
               <div>
                 <Label className="text-xs">Duración estimada (min)</Label>
@@ -295,6 +356,20 @@ export function ServiciosClient() {
                 />
               </div>
             </div>
+
+            <div className="sm:w-1/3">
+              <SelectorMoneda value={form.moneda} onChange={pedirMoneda} />
+            </div>
+
+            <DialogoCambioMoneda
+              open={monedaPedida !== null}
+              de={form.moneda}
+              a={monedaPedida?.a ?? null}
+              puedeConvertir={cotizacionCambio !== null}
+              onConvertir={convertirMoneda}
+              onMantener={mantenerMoneda}
+              onCancelar={() => setMonedaPedida(null)}
+            />
 
             <div className="flex items-center justify-between pt-1">
               <Label htmlFor="servicio-activo">Activo</Label>
@@ -361,7 +436,12 @@ export function ServiciosClient() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-semibold whitespace-nowrap mr-auto sm:mr-0">{formatPrice(servicio.precio)}</span>
+                <div className="mr-auto sm:mr-0 sm:text-right">
+                  <div className="font-semibold whitespace-nowrap">
+                    <PrecioEnMoneda monto={servicio.precio} moneda={servicio.moneda ?? null} />
+                  </div>
+                  <EquivalenteLocal monto={servicio.precio} moneda={servicio.moneda ?? null} />
+                </div>
                 <IconButton
                   label="Editar servicio"
                   variant="ghost"

@@ -233,6 +233,17 @@ export const manualSections: ManualSection[] = [
         tip: "El teléfono y el IMEI se omiten si están vacíos. El problema se corta en 3 líneas en las etiquetas de 30 mm y en 5 en las de 40 mm.",
       },
       {
+        subtitle: "Comprobante térmico: sale con mucho papel en blanco",
+        body: "Si al imprimir un comprobante o ticket con \"Imprimir (navegador)\" sale una tira larga con blanco arriba y abajo, el sistema no está agregando ese espacio: la impresora tiene configurado un papel de largo fijo y lo expulsa entero. Se corrige una sola vez en la computadora donde está instalada la impresora.",
+        steps: [
+          "Abrí las preferencias de impresión de la impresora térmica y, en el tamaño de papel, elegí uno de rollo o \"Receipt\" (largo variable) en lugar de uno de largo fijo. El nombre exacto cambia según la marca",
+          "En la ventana de impresión del navegador, abrí \"Más opciones\" y destildá \"Encabezados y pies de página\", para que no salgan la fecha y la dirección web",
+          "Si la impresora solo ofrece tamaños de largo fijo y el blanco queda arriba del comprobante, activá \"Alinear arriba\" debajo de los botones de impresión. Se guarda en esa computadora y vale para todos los comprobantes térmicos",
+          "Si la impresora está conectada por USB, podés usar \"Imprimir térmica\": corta donde termina el comprobante y no depende de esa configuración",
+        ],
+        tip: "Vale para el comprobante de la orden, el de recepción, el ticket de venta y el de la nota de crédito.",
+      },
+      {
         subtitle: "Firma de recepción",
         body: "Si el tipo de equipo tiene un checklist configurado, el paso \"Fotos y Checklist\" de la nueva orden muestra el \"Checklist de Recepción\" con sus observaciones y el recuadro \"Firma del Cliente (Conformidad de recepción)\". La firma se guarda aunque no marques ningún ítem y sale impresa en el PDF de la orden.",
         tip: "Si no ves el recuadro de firma, configurá un checklist para ese tipo de equipo en Configuración > Checklist.",
@@ -646,7 +657,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Crear un presupuesto",
-        body: "Los presupuestos te permiten enviar una propuesta formal a tus clientes antes de realizar una reparación o venta.",
+        body: "Los presupuestos te permiten enviar propuestas formales a tus clientes antes de realizar una reparación o venta.",
         steps: [
           "Andá a \"Presupuestos\" y hacé clic en \"Nuevo presupuesto\"",
           "Seleccioná el cliente",
@@ -657,7 +668,7 @@ export const manualSections: ManualSection[] = [
           "Opcionalmente agregá notas o condiciones",
           "Guardá como borrador o enviá directamente al cliente",
         ],
-        tip: "El IVA en presupuestos es configurable porque cada país, actividad y régimen fiscal usa una alícuota distinta. Si no discriminás IVA —por ejemplo, si sos monotributista en Argentina—, dejalo en 0%.",
+        tip: "El IVA en los presupuestos es configurable porque cada país, actividad y régimen fiscal usa una alícuota distinta. Si no discriminás IVA —por ejemplo, si sos monotributista en Argentina—, dejalo en 0%.",
       },
       {
         subtitle: "Estados del presupuesto",
@@ -681,7 +692,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Firma digital",
-        body: "Los presupuestos soportan firma digital del cliente. Al aceptar un presupuesto desde el enlace público, el cliente puede firmar directamente en pantalla.",
+        body: "Los presupuestos admiten firma digital del cliente. Al aceptar un presupuesto desde el enlace público, el cliente puede firmar directamente en pantalla.",
       },
     ],
   },
@@ -1040,7 +1051,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Datos de la empresa",
-        body: "Configuración está organizada en pestañas: Secciones (accesos a Checklist, Roles y permisos, WhatsApp, Sucursales, Depósitos, Gastos, etc.), Empresa, Facturación, Comprobantes, Comisiones, Avisos y Seguridad. En la pestaña Empresa editás el logo, los datos de la empresa, el país, la moneda, la zona horaria y los módulos opcionales. Estos datos aparecen en todos los documentos (órdenes, remitos, cotizaciones). En Empresa, Facturación y Comprobantes los cambios se guardan con el botón \"Guardar Cambios\" de la barra fija de abajo.",
+        body: "Configuración está organizada en pestañas: Secciones (accesos a Checklist, Roles y permisos, WhatsApp, Sucursales, Depósitos, Gastos, etc.), Empresa, Facturación, Comprobantes, Comisiones, Avisos y Seguridad. En la pestaña Empresa editás el logo, los datos de la empresa, el país, la moneda, la zona horaria y los módulos opcionales. Estos datos aparecen en todos los documentos (órdenes, remitos, presupuestos). En Empresa, Facturación y Comprobantes los cambios se guardan con el botón \"Guardar Cambios\" de la barra fija de abajo.",
       },
       {
         subtitle: "Checklist de recepción",
@@ -1259,7 +1270,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Planes disponibles",
-        body: "STApp ofrece un plan Profesional con todas las funciones incluidas. Podés elegir entre facturación mensual o anual (con descuento).",
+        body: "STApp ofrece el plan Profesional con todas las funciones incluidas. Podés elegir entre facturación mensual o anual (con descuento).",
       },
       {
         subtitle: "Métodos de pago",

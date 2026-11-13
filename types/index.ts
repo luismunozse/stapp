@@ -237,6 +237,8 @@ export interface Inventario {
   tieneVariantes?: boolean
   esKit?: boolean
   tipoKit?: "ENSAMBLADO" | "VIRTUAL" | null
+  /** Currency of the price: null = the organization's local currency. */
+  moneda?: "USD" | "EUR" | null
   deletedAt?: string | null
   deletedBy?: string | null
   // Variant groups: present only when the API answered with the M1 columns.

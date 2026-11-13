@@ -7,6 +7,8 @@ import { createAuditLogger } from "@/lib/audit"
 import { pickAudited, registrarActualizacion, registrarArchivado } from "@/lib/inventario-eventos"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
+import { validarMonedaEscritura } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -35,6 +37,8 @@ const inventarioSchema = z.object({
   tieneVariantes: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
+  // Any string passes the schema: validarMonedaEscritura owns the rule and its message.
+  moneda: z.string().nullable().optional(),
 })
 
 export async function GET(
@@ -122,8 +126,28 @@ export async function PUT(
       return NextResponse.json({ error: MENSAJE_KIT_EN_GRUPO }, { status: 400 })
     }
 
+    // Currency of the price: undefined leaves the column alone; the config is read only when a
+    // currency is asked for. The item's own currency is `actual` (already in the snapshot above).
+    let monedaNueva: "USD" | "EUR" | null | undefined
+    if (data.moneda !== undefined) {
+      if (data.moneda === null) {
+        monedaNueva = null
+      } else {
+        const { config } = await cargarConfigMoneda(organizationId!)
+        const validacion = validarMonedaEscritura(data.moneda, existingItem.moneda ?? null, config)
+        if (!validacion.ok) return NextResponse.json({ error: validacion.error }, { status: 400 })
+        monedaNueva = validacion.moneda
+      }
+    }
+    // Migration 409 copies a variant's currency to every sibling without converting their prices,
+    // so a single variant never changes it: the group endpoint does, for the whole group.
+    if (monedaNueva !== undefined && monedaNueva !== (existingItem.moneda ?? null) && existingItem.grupo_id) {
+      return NextResponse.json({ error: "Cambiá la moneda desde el grupo de variantes" }, { status: 400 })
+    }
+
     // Preparar datos para update
     const updateData: Record<string, any> = {}
+    if (monedaNueva !== undefined) updateData.moneda = monedaNueva
     if (data.codigo !== undefined) updateData.codigo = data.codigo
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.descripcion !== undefined) updateData.descripcion = data.descripcion

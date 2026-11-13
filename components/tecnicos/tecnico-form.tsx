@@ -140,7 +140,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       // A blank technician rate is invalid: only the reception rate treats blank as "shop default".
       const porcNum = porcentajeComision.trim() === "" ? NaN : Number(porcentajeComision)
       if (!Number.isFinite(porcNum) || porcNum < 0 || porcNum > 100) {
-        throw new Error("Ingrese un porcentaje entre 0 y 100.")
+        throw new Error("Ingresá un porcentaje entre 0 y 100.")
       }
 
       const recepcionNum = porcentajeRecepcion.trim() === "" ? null : Number(porcentajeRecepcion)
@@ -197,11 +197,11 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar Técnico" : "Nuevo Técnico"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar técnico" : "Nuevo técnico"}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Modifica los datos del técnico. Deja la contraseña vacía para mantener la actual."
-              : "Completa los datos para crear un nuevo técnico."}
+              ? "Modificá los datos del técnico. Dejá la contraseña vacía para mantener la actual."
+              : "Completá los datos para crear un nuevo técnico."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -411,7 +411,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Guardando..." : isEditing ? "Guardar Cambios" : "Crear Técnico"}
+              {loading ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear técnico"}
             </Button>
           </FormActionBar>
         </form>

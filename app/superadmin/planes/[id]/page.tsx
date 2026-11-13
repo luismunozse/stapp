@@ -41,7 +41,7 @@ export default function EditPlanPage({ params }: PageProps) {
   return (
     <PageShell
       title={`Editar plan: ${plan.nombre}`}
-      description="Modifica la configuración del plan de suscripción"
+      description="Modificá la configuración del plan de suscripción"
       icon={Package}
       backHref="/superadmin/planes"
       backLabel="Volver a planes"

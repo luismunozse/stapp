@@ -274,7 +274,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             Orden {orden.codigoOrden || `#${orden.numeroOrden}`} creada
           </DialogTitle>
           <DialogDescription>
-            La orden fue creada exitosamente. Puede enviar el comprobante al cliente por WhatsApp.
+            La orden fue creada exitosamente. Podés enviar el comprobante al cliente por WhatsApp.
           </DialogDescription>
         </DialogHeader>
 

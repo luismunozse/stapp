@@ -120,13 +120,13 @@ export function CobrarMultipleDialog({
   const handleCobrar = async () => {
     const ordenesACobrar = ordenes.filter(o => seleccionadas.has(o.id))
     if (ordenesACobrar.length === 0) {
-      await showError("Seleccione al menos una orden")
+      await showError("Seleccioná al menos una orden")
       return
     }
 
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      await showError("Debe registrar al menos un pago")
+      await showError("Registrá al menos un pago")
       return
     }
     if (totalPagos > totalSeleccionado + 0.01) {
@@ -203,7 +203,7 @@ export function CobrarMultipleDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            {clienteNombre ? `Cobro Unificado - ${clienteNombre}` : `Cobro de ${ordenes.length} orden${ordenes.length !== 1 ? "es" : ""}`}
+            {clienteNombre ? `Cobro unificado: ${clienteNombre}` : `Cobro de ${ordenes.length} orden${ordenes.length !== 1 ? "es" : ""}`}
           </DialogTitle>
         </DialogHeader>
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { validarMonedaEscritura } from "@/lib/currency/catalogo"
+import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
 
 const servicioSchema = z.object({
@@ -11,6 +13,9 @@ const servicioSchema = z.object({
   precio: z.number().min(0, "El precio no puede ser negativo"),
   duracionEstimadaMin: z.number().int().positive().nullable().optional(),
   activo: z.boolean().default(true),
+  // Currency of the price: null = the organization's local currency. Any string passes the schema
+  // on purpose: validarMonedaEscritura owns the business rule and its message.
+  moneda: z.string().nullable().optional(),
 })
 
 function toDTO(s: any) {
@@ -23,6 +28,7 @@ function toDTO(s: any) {
     precio: Number(s.precio),
     duracionEstimadaMin: s.duracion_estimada_min,
     activo: s.activo,
+    moneda: (s.moneda ?? null) as "USD" | "EUR" | null,
   }
 }
 
@@ -37,6 +43,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const incluirInactivos = searchParams.get("incluirInactivos") === "true"
     const buscar = searchParams.get("buscar")?.trim()
+    // "local" = priced in the local currency, "divisa" = priced in a foreign one; anything else = all.
+    const monedaFiltro = searchParams.get("moneda")
 
     let query = supabaseAdmin
       .from("servicios")
@@ -47,6 +55,8 @@ export async function GET(request: Request) {
 
     if (!incluirInactivos) query = query.eq("activo", true)
     if (buscar) query = query.ilike("nombre", `%${buscar}%`)
+    if (monedaFiltro === "local") query = query.is("moneda", null)
+    else if (monedaFiltro === "divisa") query = query.not("moneda", "is", null)
 
     const { data, error: dbError } = await query
 
@@ -71,6 +81,15 @@ export async function POST(request: Request) {
     const body = await request.json()
     const parsed = servicioSchema.parse(body)
 
+    // No currency asked for = local (explicit null); the config is read only when one is asked for.
+    let moneda: "USD" | "EUR" | null = null
+    if (parsed.moneda != null) {
+      const { config } = await cargarConfigMoneda(organizationId!)
+      const validacion = validarMonedaEscritura(parsed.moneda, undefined, config)
+      if (!validacion.ok) return NextResponse.json({ error: validacion.error }, { status: 400 })
+      moneda = validacion.moneda
+    }
+
     const { data, error: insertError } = await supabaseAdmin
       .from("servicios")
       .insert({
@@ -82,6 +101,7 @@ export async function POST(request: Request) {
         precio: parsed.precio,
         duracion_estimada_min: parsed.duracionEstimadaMin || null,
         activo: parsed.activo,
+        moneda,
       })
       .select("*")
       .single()

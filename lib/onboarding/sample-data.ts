@@ -59,6 +59,7 @@ export async function generateSampleData(organizationId: string): Promise<Sample
       precio_compra: 15000,
       precio_venta: 35000,
       proveedor: "Proveedor Ejemplo",
+      moneda: null,
       organization_id: organizationId,
     },
     {
@@ -71,6 +72,7 @@ export async function generateSampleData(organizationId: string): Promise<Sample
       precio_compra: 5000,
       precio_venta: 12000,
       proveedor: "Proveedor Ejemplo",
+      moneda: null,
       organization_id: organizationId,
     },
     {
@@ -83,6 +85,7 @@ export async function generateSampleData(organizationId: string): Promise<Sample
       precio_compra: 3000,
       precio_venta: 7500,
       proveedor: null,
+      moneda: null,
       organization_id: organizationId,
     },
     {
@@ -95,6 +98,7 @@ export async function generateSampleData(organizationId: string): Promise<Sample
       precio_compra: 4500,
       precio_venta: 10000,
       proveedor: "Proveedor Ejemplo",
+      moneda: null,
       organization_id: organizationId,
     },
     {
@@ -107,6 +111,7 @@ export async function generateSampleData(organizationId: string): Promise<Sample
       precio_compra: 8000,
       precio_venta: 18000,
       proveedor: null,
+      moneda: null,
       organization_id: organizationId,
     },
   ]

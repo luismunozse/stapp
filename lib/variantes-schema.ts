@@ -169,6 +169,9 @@ export const guardarGrupoSchema = z
     // "Agrupar existentes": the item whose shared fields every member takes. The route reads it
     // and builds the compartidos itself, so a client never sends both.
     fuenteCompartidosId: idTexto.optional(),
+    // Currency of the whole group (null = local). Validated by the route against the config and the
+    // group's current currency; it is written after the RPC, not passed to it.
+    moneda: z.string().nullable().optional(),
   })
   .strict()
   .superRefine((datos, ctx) => {
