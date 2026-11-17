@@ -65,7 +65,7 @@ interface RecepcionEquipoCardProps {
   onProblemaQuickSelect: (texto: string) => void
   fotos: FotoPreview[]
   comprimiendo: boolean
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onFiles: (files: File[]) => void
   onRemoveFoto: (id: string) => void
   onFotoDescripcionChange: (id: string, value: string) => void
   labelFotos: string
@@ -243,7 +243,7 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
           label={props.labelFotos}
           fotos={props.fotos}
           comprimiendo={props.comprimiendo}
-          onFileChange={props.onFileChange}
+          onFiles={props.onFiles}
           onRemove={props.onRemoveFoto}
           onDescripcionChange={props.onFotoDescripcionChange}
         />

@@ -44,7 +44,7 @@ function Harness({
       onProblemaQuickSelect={() => {}}
       fotos={fotos}
       comprimiendo={false}
-      onFileChange={() => {}}
+      onFiles={() => {}}
       onRemoveFoto={() => {}}
       onFotoDescripcionChange={() => {}}
       labelFotos="Fotos"
