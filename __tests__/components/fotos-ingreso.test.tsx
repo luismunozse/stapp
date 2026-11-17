@@ -1,7 +1,17 @@
 // Carga de fotos desde PC: ademas del selector, FotosIngreso acepta archivos
 // arrastrados y pegados (Ctrl+V).
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
+
+// El diálogo del QR se reemplaza por un doble que expone su callback.
+const celular: { onFotoRecibida?: (f: File) => void } = {}
+vi.mock("@/components/fotos/foto-celular-dialog", () => ({
+  FotoCelularDialog: (props: { onFotoRecibida?: (f: File) => void }) => {
+    celular.onFotoRecibida = props.onFotoRecibida
+    return null
+  },
+}))
+
 import { FotosIngreso } from "@/components/ordenes/fotos-ingreso"
 
 const png = (name = "foto.png") => new File(["x"], name, { type: "image/png" })
@@ -90,5 +100,33 @@ describe("FotosIngreso — carga desde PC", () => {
     pegar(document, [png()])
     expect(b).toHaveBeenCalledTimes(1)
     expect(a).not.toHaveBeenCalled()
+  })
+})
+
+describe("FotosIngreso — fotos que llegan desde el celular", () => {
+  it("ofrece el QR desde el celular", () => {
+    renderZona()
+    expect(screen.getByRole("button", { name: "Desde el celular" })).toBeInTheDocument()
+  })
+
+  it("entrega las fotos del celular al padre solo cuando no está procesando otras", () => {
+    const onFiles = vi.fn()
+    const base = { label: "Fotos", fotos: [], onFiles, onRemove: () => {}, onDescripcionChange: () => {} }
+    const { rerender } = render(<FotosIngreso {...base} comprimiendo />)
+
+    const a = png("a.png")
+    const b = png("b.png")
+    act(() => celular.onFotoRecibida!(a))
+    act(() => celular.onFotoRecibida!(b))
+    // El padre sigue comprimiendo: esperan en la cola.
+    expect(onFiles).not.toHaveBeenCalled()
+
+    rerender(<FotosIngreso {...base} comprimiendo={false} />)
+    expect(onFiles).toHaveBeenCalledTimes(1)
+    expect(onFiles).toHaveBeenCalledWith([a, b])
+
+    // No se vuelven a entregar en renders posteriores.
+    rerender(<FotosIngreso {...base} comprimiendo={false} />)
+    expect(onFiles).toHaveBeenCalledTimes(1)
   })
 })

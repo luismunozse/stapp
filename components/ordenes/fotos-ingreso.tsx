@@ -1,12 +1,14 @@
 "use client"
 
-import { useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Upload, Camera, Trash2, Loader2, ImagePlus } from "lucide-react"
+import { Upload, Camera, Trash2, Loader2, ImagePlus, QrCode } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SOLO_PC, useZonaArchivos } from "@/components/fotos/use-zona-archivos"
+import { FotoCelularDialog } from "@/components/fotos/foto-celular-dialog"
+import { isNativePlatform } from "@/lib/capacitor"
 
 export interface FotoPreview {
   id: string
@@ -39,6 +41,18 @@ export function FotosIngreso({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { arrastrando, zonaProps } = useZonaArchivos({ onFiles, deshabilitada: comprimiendo })
+
+  // Fotos que llegan desde el celular (QR). Se entregan al padre de a tandas
+  // y solo cuando no está procesando otras: su manejador arma la lista nueva a
+  // partir del estado que ve en ese render, y dos llamadas encimadas pisarían
+  // una foto con otra.
+  const [celularAbierto, setCelularAbierto] = useState(false)
+  const [colaCelular, setColaCelular] = useState<File[]>([])
+  useEffect(() => {
+    if (comprimiendo || colaCelular.length === 0) return
+    setColaCelular([])
+    onFiles(colaCelular)
+  }, [comprimiendo, colaCelular, onFiles])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -94,6 +108,18 @@ export function FotosIngreso({
             <Camera className="mr-2 h-4 w-4" />
             Tomar foto
           </Button>
+          {/* En la app nativa ya se está en el celular: el QR no aporta. */}
+          {!isNativePlatform() && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCelularAbierto(true)}
+              className="w-full sm:w-auto sm:flex-1"
+            >
+              <QrCode className="mr-2 h-4 w-4" />
+              Desde el celular
+            </Button>
+          )}
         </div>
 
         {comprimiendo && (
@@ -156,6 +182,12 @@ export function FotosIngreso({
           </p>
         )}
       </div>
+
+      <FotoCelularDialog
+        open={celularAbierto}
+        onOpenChange={setCelularAbierto}
+        onFotoRecibida={(file) => setColaCelular((prev) => [...prev, file])}
+      />
     </div>
   )
 }

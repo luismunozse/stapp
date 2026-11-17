@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { supabaseAdmin } from "@/lib/supabase"
 import { guardarFotoOrden } from "@/lib/fotos/guardar-foto-orden"
+import { enforcePlanLimit } from "@/lib/plan-limits"
 import { MIMES_FOTO_CELULAR, esTokenCargaValido, hashTokenCarga } from "@/lib/fotos/carga-sesion"
 
 // Carga de fotos desde el celular con un enlace temporal (QR), sin login.
@@ -45,10 +46,10 @@ export async function GET(
     const org = sesion.organizations as unknown as Record<string, unknown> | null
 
     return NextResponse.json({
-      orden: {
-        codigo: orden?.codigo_orden ?? null,
-        dispositivo: orden?.dispositivo ?? null,
-      },
+      // null = orden nueva: las fotos van al formulario abierto en la PC.
+      orden: orden
+        ? { codigo: orden.codigo_orden ?? null, dispositivo: orden.dispositivo ?? null }
+        : null,
       organizacion: org?.nombre_mostrar || org?.nombre || "",
       expiresAt: sesion.expires_at,
       fotosSubidas: sesion.fotos_subidas,
@@ -72,6 +73,9 @@ export async function POST(
 
     // Se valida el cuerpo antes de gastar cupo.
     const data = fotoSchema.parse(await request.json())
+    if (data.data.length * 0.75 > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "La imagen excede el tamaño máximo de 5MB" }, { status: 400 })
+    }
 
     // Reserva atómica: valida vigencia, revocación y tope en una sola sentencia.
     const { data: filas, error: rpcError } = await supabaseAdmin.rpc("reservar_foto_carga_sesion", {
@@ -82,6 +86,22 @@ export async function POST(
     const sesion = Array.isArray(filas) ? filas[0] : filas
     if (!sesion) return enlaceInvalido()
     sesionReservada = sesion.id
+
+    // Orden nueva (todavía no existe): la foto queda en tránsito hasta que la
+    // PC que mostró el QR la retira y la suma al formulario (migración 414).
+    if (!sesion.orden_id) {
+      const limite = await enforcePlanLimit(sesion.organization_id, "storage")
+      if (limite) {
+        await liberar(sesion.id)
+        sesionReservada = null
+        return limite
+      }
+      const { error: dbError } = await supabaseAdmin
+        .from("foto_carga_pendientes")
+        .insert({ sesion_id: sesion.id, mime: data.mime, data: data.data })
+      if (dbError) throw dbError
+      return NextResponse.json({ ok: true }, { status: 201 })
+    }
 
     const guardada = await guardarFotoOrden({
       organizationId: sesion.organization_id,

@@ -6,12 +6,18 @@ import { NextResponse } from "next/server"
 
 const rpc = vi.fn()
 const maybeSingle = vi.fn()
+const insert = vi.fn()
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     rpc: (...a: unknown[]) => rpc(...a),
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
+    from: (tabla: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle }) }),
+      insert: (fila: unknown) => insert(tabla, fila),
+    }),
   },
 }))
+const enforcePlanLimit = vi.fn()
+vi.mock("@/lib/plan-limits", () => ({ enforcePlanLimit: (...a: unknown[]) => enforcePlanLimit(...a) }))
 const guardarFotoOrden = vi.fn()
 vi.mock("@/lib/fotos/guardar-foto-orden", () => ({
   guardarFotoOrden: (...a: unknown[]) => guardarFotoOrden(...a),
@@ -31,6 +37,8 @@ beforeEach(() => {
   rpc.mockReset()
   maybeSingle.mockReset()
   guardarFotoOrden.mockReset()
+  insert.mockReset().mockResolvedValue({ error: null })
+  enforcePlanLimit.mockReset().mockResolvedValue(null)
 })
 
 describe("token de carga", () => {
@@ -99,6 +107,47 @@ describe("POST /api/public/fotos-celular/[token]", () => {
   })
 })
 
+describe("POST con una sesión sin orden (orden nueva)", () => {
+  const SIN_ORDEN = { ...SESION, orden_id: null, tipo: "INGRESO" }
+
+  it("deja la foto en tránsito y no escribe en fotos_orden", async () => {
+    rpc.mockResolvedValueOnce({ data: [SIN_ORDEN], error: null })
+    const res = await post(FOTO)
+    expect(res.status).toBe(201)
+    expect(insert).toHaveBeenCalledWith("foto_carga_pendientes", {
+      sesion_id: "s1",
+      mime: "image/jpeg",
+      data: "AAAA",
+    })
+    expect(guardarFotoOrden).not.toHaveBeenCalled()
+  })
+
+  it("respeta el límite de almacenamiento del plan y devuelve el cupo", async () => {
+    rpc.mockResolvedValueOnce({ data: [SIN_ORDEN], error: null }).mockResolvedValueOnce({ error: null })
+    enforcePlanLimit.mockResolvedValueOnce(NextResponse.json({ error: "Límite" }, { status: 403 }))
+    const res = await post(FOTO)
+    expect(res.status).toBe(403)
+    expect(insert).not.toHaveBeenCalled()
+    expect(rpc).toHaveBeenLastCalledWith("liberar_foto_carga_sesion", { p_sesion_id: "s1" })
+  })
+
+  it("devuelve el cupo si no se pudo guardar la foto en tránsito", async () => {
+    rpc.mockResolvedValueOnce({ data: [SIN_ORDEN], error: null }).mockResolvedValueOnce({ error: null })
+    insert.mockResolvedValueOnce({ error: new Error("db caída") })
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await post(FOTO)
+    errorSpy.mockRestore()
+    expect(res.status).toBe(500)
+    expect(rpc).toHaveBeenLastCalledWith("liberar_foto_carga_sesion", { p_sesion_id: "s1" })
+  })
+
+  it("rechaza imágenes de más de 5MB sin gastar cupo", async () => {
+    const res = await post({ mime: "image/jpeg", data: "A".repeat(7_100_000) })
+    expect(res.status).toBe(400)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+})
+
 describe("GET /api/public/fotos-celular/[token]", () => {
   const fila = (extra: Record<string, unknown> = {}) => ({
     fotos_subidas: 2,
@@ -123,6 +172,12 @@ describe("GET /api/public/fotos-celular/[token]", () => {
       fotosSubidas: 2,
       maxFotos: 30,
     })
+  })
+
+  it("orden nueva: orden viene en null", async () => {
+    maybeSingle.mockResolvedValueOnce({ data: fila({ ordenes_servicio: null }) })
+    const body = await (await get()).json()
+    expect(body.orden).toBeNull()
   })
 
   it.each([
