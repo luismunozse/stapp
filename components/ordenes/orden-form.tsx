@@ -1053,17 +1053,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }, [clienteId, esClienteEmpresa])
 
   // Manejar seleccion de fotos
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    const fileArray = Array.from(files)
-
-    // Limpia el input que disparo el evento (no via ref: los refs de los
-    // <input type="file"> ahora viven dentro de FotosIngreso) para permitir
-    // volver a seleccionar el mismo archivo. Equivalente al reset original
-    // por refs: siempre se limpiaba el input que disparo el cambio.
-    e.target.value = ""
+  // Recibe los archivos ya sea del selector, arrastrados o pegados: el
+  // <input type="file"> y su reset viven dentro de FotosIngreso.
+  const handleFiles = async (fileArray: File[]) => {
+    if (fileArray.length === 0) return
 
     setComprimiendo(true)
 
@@ -2122,7 +2115,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             label={`Fotos del ${term("equipo")} (Ingreso)`}
             fotos={fotos}
             comprimiendo={comprimiendo}
-            onFileChange={handleFileChange}
+            onFiles={handleFiles}
             onRemove={removeFoto}
             onDescripcionChange={updateFotoDescripcion}
           />

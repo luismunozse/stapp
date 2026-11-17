@@ -124,6 +124,12 @@ export function getApiRateLimit(pathname: string): RateLimitConfig {
     if (pathname.startsWith("/api/public/tenant")) {
       return { max: 60, windowMs: 60000 }
     }
+    // Carga de fotos desde el celular (enlace temporal): una tanda de fotos
+    // elegidas de la galería sale en ráfaga. El abuso lo acota el tope de
+    // fotos por enlace, no este contador.
+    if (pathname.startsWith("/api/public/fotos-celular")) {
+      return { max: 60, windowMs: 60000 }
+    }
     // Endpoints accedidos mediante public_token (cotizaciones, órdenes, kiosco):
     // sin auth, usados por clientes finales. 20 req/min por IP es suficiente
     // para uso normal y bloquea brute-force razonable. Además aplicamos un

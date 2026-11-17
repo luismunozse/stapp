@@ -21,6 +21,7 @@ export const PUBLIC_PATHS = [
   "/icons",
   "/seguimiento",
   "/cotizacion",
+  "/subir-fotos",
   "/kiosco",
   "/api/whatsapp/webhook",
   "/api/v1",

@@ -569,12 +569,8 @@ export function RecepcionForm() {
   // Manejar seleccion de fotos por equipo: replica el handler de
   // orden-form.tsx (compresion incluida) pero escribe en sideState[index]
   // en lugar de un unico estado de fotos.
-  const handleFileChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    const fileArray = Array.from(files)
-    e.target.value = ""
+  const handleFiles = async (index: number, fileArray: File[]) => {
+    if (fileArray.length === 0) return
 
     setComprimiendo(true)
 
@@ -797,7 +793,7 @@ export function RecepcionForm() {
                 }
                 fotos={sideState[index]?.fotos || []}
                 comprimiendo={comprimiendo}
-                onFileChange={(e) => handleFileChange(index, e)}
+                onFiles={(files) => handleFiles(index, files)}
                 onRemoveFoto={(id) => removeFoto(index, id)}
                 onFotoDescripcionChange={(id, value) => updateFotoDescripcion(index, id, value)}
                 labelFotos={`Fotos del ${term("equipo")} (Ingreso)`}
