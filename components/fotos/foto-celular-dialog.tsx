@@ -140,7 +140,7 @@ export function FotoCelularDialog({
         } | null = null
         let perdida = false
         try {
-          const res = await fetch(
+          const res: Response = await fetch(
             `${base}?${sesion}${confirmar ? `&recibida=${encodeURIComponent(confirmar)}` : ""}`
           )
           if (res.ok) {
