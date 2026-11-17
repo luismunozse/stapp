@@ -63,6 +63,7 @@ const ordenSchema = z.object({
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   presupuesto: z.number().optional(),
+  trabajoARealizar: z.string().trim().max(200).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
   notasInternas: z.string().optional(),
@@ -559,6 +560,7 @@ export async function POST(request: Request) {
         accesorios: data.accesorios || null,
         password_dispositivo: data.codigoAccesoDispositivo || null,
         presupuesto: data.presupuesto || null,
+        trabajo_a_realizar: data.trabajoARealizar || null,
         fecha_prometida: data.fechaPrometida
           ? new Date(`${data.fechaPrometida}T12:00:00Z`).toISOString()
           : null,

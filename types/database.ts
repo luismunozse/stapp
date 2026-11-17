@@ -155,6 +155,7 @@ export interface OrdenServicio {
   problema_reportado: string
   estado: EstadoOrden
   presupuesto: number | null
+  trabajo_a_realizar: string | null
   costo_final: number | null
   fecha_ingreso: string
   fecha_prometida: string | null
