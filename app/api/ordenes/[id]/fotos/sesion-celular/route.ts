@@ -44,6 +44,13 @@ export async function POST(
       .eq("created_by", userId!)
       .is("revoked_at", null)
 
+    // Limpieza oportunista de las sesiones viejas de la organización.
+    await supabaseAdmin
+      .from("foto_carga_sesiones")
+      .delete()
+      .eq("organization_id", organizationId!)
+      .lt("expires_at", new Date(ahora.getTime() - 60 * 60 * 1000).toISOString())
+
     const token = generarTokenCarga()
     const expiresAt = new Date(ahora.getTime() + SESION_CARGA_MINUTOS * 60 * 1000)
 

@@ -7,7 +7,8 @@ import { AlertCircle, Camera, CheckCircle2, Images, Loader2, RefreshCw } from "l
 import { compressImage } from "@/lib/image-compression"
 
 interface Sesion {
-  orden: { codigo: string | null; dispositivo: string | null }
+  /** null = orden nueva: las fotos van al formulario abierto en la PC. */
+  orden: { codigo: string | null; dispositivo: string | null } | null
   organizacion: string
   expiresAt: string
   fotosSubidas: number
@@ -163,9 +164,9 @@ export function SubirFotosCelular({ token }: { token: string }) {
         <header className="text-center space-y-1">
           <p className="text-sm text-muted-foreground">{sesion.organizacion}</p>
           <h1 className="text-xl font-semibold">
-            Fotos de la orden {sesion.orden.codigo ?? ""}
+            {sesion.orden ? `Fotos de la orden ${sesion.orden.codigo ?? ""}` : "Fotos para la orden nueva"}
           </h1>
-          {sesion.orden.dispositivo && (
+          {sesion.orden?.dispositivo && (
             <p className="text-sm text-muted-foreground">{sesion.orden.dispositivo}</p>
           )}
         </header>
@@ -178,7 +179,8 @@ export function SubirFotosCelular({ token }: { token: string }) {
             <p className="font-medium">{invalido}</p>
             {listas > 0 && (
               <p className="text-sm text-muted-foreground">
-                {listas === 1 ? "La foto que subiste ya está" : `Las ${listas} fotos que subiste ya están`} en la orden.
+                {listas === 1 ? "La foto que subiste ya está" : `Las ${listas} fotos que subiste ya están`} en la{" "}
+                {sesion?.orden ? "orden" : "computadora"}.
               </p>
             )}
           </CardContent>
