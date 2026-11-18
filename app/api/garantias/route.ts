@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { notificarGarantiaCreada } from "@/lib/garantias/notificar"
 import { formatReclamos } from "@/lib/garantias/formato"
@@ -106,7 +107,9 @@ export async function GET(request: Request) {
       reclamos: formatReclamos(g.reclamos_garantia),
     }))
 
-    return NextResponse.json(garantiasFormatted)
+    return NextResponse.json(
+      conTelefonoSegunPermiso(garantiasFormatted, await puedeVerTelefonoClientes(role, organizationId!))
+    )
   } catch (error) {
     console.error("Error fetching garantias:", error)
     return NextResponse.json(
@@ -219,7 +222,7 @@ export async function POST(request: Request) {
         id: orden.id,
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,
-        cliente: cliente,
+        cliente: conTelefonoSegunPermiso(cliente, await puedeVerTelefonoClientes(role, organizationId!)),
       },
     }, { status: 201 })
   } catch (error) {

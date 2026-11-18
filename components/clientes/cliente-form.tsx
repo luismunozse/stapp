@@ -70,12 +70,20 @@ type ClienteDraftValue = WithoutSensitiveClienteFields<z.input<typeof clienteSch
  *  afuera del componente (sin dependencias de hooks) para poder reusarla en
  *  useForm(defaultValues), el efecto de prefill y el discard del borrador
  *  sin triplicar el mismo objeto literal. */
+/**
+ * Un cliente guardado siempre tiene teléfono; si llega sin él es porque el servidor se lo oculta
+ * a este usuario (TECNICO sin el permiso `tecnicos_ven_telefono_clientes`). En ese caso el campo
+ * no se dibuja y el formulario lleva este relleno solo para pasar la validación: nunca se envía.
+ */
+const TELEFONO_NO_VISIBLE = "0000000"
+const telefonoOcultoEn = (cliente?: Cliente | null) => !!cliente && !cliente.telefono
+
 function clienteFormDefaults(cliente?: Cliente | null): ClienteFormData {
   return cliente
     ? {
         tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
         nombre: cliente.nombre,
-        telefono: cliente.telefono,
+        telefono: cliente.telefono || TELEFONO_NO_VISIBLE,
         email: cliente.email || "",
         direccion: cliente.direccion || "",
         dni: cliente.dni || "",
@@ -342,6 +350,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       const method = cliente ? "PUT" : "POST"
 
       const payload: any = { ...data }
+      // Teléfono oculto: no se manda, así el servidor conserva el que tiene.
+      if (telefonoOcultoEn(cliente)) delete payload.telefono
       if (data.tipoCliente === "INDIVIDUAL") {
         payload.razonSocial = ""
         payload.cuit = ""
@@ -496,6 +506,11 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             </>
           )}
 
+          {telefonoOcultoEn(cliente) ? (
+            <p className="text-sm text-muted-foreground">
+              El teléfono de este cliente está oculto por el administrador. No se modifica al guardar.
+            </p>
+          ) : (
           <div>
             <Label htmlFor="telefono">Teléfono *</Label>
             <Input
@@ -513,6 +528,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               </p>
             )}
           </div>
+          )}
 
           <div>
             <Label htmlFor="email">Email</Label>

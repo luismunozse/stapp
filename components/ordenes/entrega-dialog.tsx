@@ -348,7 +348,7 @@ export function EntregaDialog({
 
           <div className="bg-muted/50 p-3 rounded-lg text-sm">
             <p><strong>Cliente:</strong> {orden.cliente.nombre}</p>
-            <p><strong>Teléfono:</strong> {orden.cliente.telefono}</p>
+            {orden.cliente.telefono && <p><strong>Teléfono:</strong> {orden.cliente.telefono}</p>}
           </div>
 
           {mostrarCobro && (

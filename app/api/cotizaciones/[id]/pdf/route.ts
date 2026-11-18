@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { generateCotizacionPDF } from "@/lib/pdf"
@@ -73,7 +74,7 @@ export async function GET(
       fechaVencimiento: cotizacion.fecha_vencimiento,
       cliente: cliente ? {
         nombre: cliente.nombre,
-        telefono: cliente.telefono,
+        telefono: (await puedeVerTelefonoClientes(role, organizationId!)) ? cliente.telefono : "",
         email: cliente.email,
         direccion: cliente.direccion,
       } : { nombre: "Sin cliente", telefono: "" },

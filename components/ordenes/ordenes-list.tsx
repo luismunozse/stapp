@@ -1,5 +1,6 @@
 "use client"
 
+import { useTelefonoClienteOculto } from "@/hooks/use-telefono-cliente-oculto"
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import useSWR from "swr"
 import { PullToRefresh } from "@/components/ui/pull-to-refresh"
@@ -111,6 +112,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   const pathname = usePathname()
   const { formatPrice, formatDate } = useCurrency()
   const { data: session } = useSession()
+  // Quien no ve teléfonos tampoco busca por teléfono: no se le sugiere.
+  const telefonoOculto = useTelefonoClienteOculto()
   const isTecnico = session?.user?.role === "TECNICO"
   const isAdmin = session?.user?.role === "ADMIN"
   const puedeCobrar = usePuedeCobrar()
@@ -728,7 +731,11 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
           <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={SEARCH_PLACEHOLDERS[placeholderIdx]}
+              placeholder={
+                telefonoOculto && SEARCH_PLACEHOLDERS[placeholderIdx].includes("teléfono")
+                  ? SEARCH_PLACEHOLDERS[0]
+                  : SEARCH_PLACEHOLDERS[placeholderIdx]
+              }
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 pr-9 w-full"

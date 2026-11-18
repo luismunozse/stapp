@@ -9,6 +9,7 @@ import { registrarCambioTotal } from "@/lib/ordenes/cambio-total"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO, ESTADOS_MONTO_CERRADO } from "@/lib/orden-state-machine"
 import type { EstadoOrden } from "@/types"
 import { z } from "zod"
@@ -195,9 +196,13 @@ export async function GET(
       }))
     }
 
+    // Teléfono del cliente: un TECNICO no lo recibe si la organización apagó el permiso (416).
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+
     const org = (orden as any).organizations
     return NextResponse.json({
-      ...formatted,
+      ...conTelefonoSegunPermiso(formatted, verTelefono),
+      telefonoOculto: !verTelefono,
       organizationName: org?.nombre_mostrar || org?.nombre || null,
       organizationLogoUrl: org?.logo_url || null,
       organizationTelefono: org?.telefono || null,
@@ -443,7 +448,10 @@ export async function PUT(
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
-    if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto?.trim() || null
+    // Quien no ve el teléfono tampoco lo pisa: el formulario le llega sin el dato, y guardarlo
+    // vacío borraría el que cargó el mostrador.
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+    if (data.telefonoContacto !== undefined && verTelefono) updateData.telefono_contacto = data.telefonoContacto?.trim() || null
     // Datos del equipo: un texto vacío se guarda como null, igual que en el alta.
     if (data.dispositivo !== undefined) updateData.dispositivo = data.dispositivo
     if (data.marca !== undefined) updateData.marca = data.marca?.trim() || null
@@ -677,10 +685,10 @@ export async function PUT(
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
 
-    return NextResponse.json(formatOrden(updatedOrden, {
+    return NextResponse.json(conTelefonoSegunPermiso(formatOrden(updatedOrden, {
       includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitadosPut),
       includeCotizacionCost: canViewCotizacionCosts(role),
-    }))
+    }), verTelefono))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

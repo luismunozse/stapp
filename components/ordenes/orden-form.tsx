@@ -1538,7 +1538,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   Este turno usa un cliente sin registrar.
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-                  Datos: <strong>{turnoPrefill.clienteSnapshot.nombre}</strong> · {turnoPrefill.clienteSnapshot.telefono}
+                  Datos: <strong>{turnoPrefill.clienteSnapshot.nombre}</strong>
+                  {turnoPrefill.clienteSnapshot.telefono ? ` · ${turnoPrefill.clienteSnapshot.telefono}` : ""}
                   {turnoPrefill.clienteSnapshot.email ? ` · ${turnoPrefill.clienteSnapshot.email}` : ""}
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">

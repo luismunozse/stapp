@@ -27,6 +27,7 @@ import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { ESTADO_LABELS } from "@/lib/turno-colors"
 import { TurnoEstadoBadge } from "@/components/agenda/turno-estado-badge"
 import { useModal } from "@/contexts/modal-context"
+import { useTelefonoClienteOculto } from "@/hooks/use-telefono-cliente-oculto"
 
 const TIPO_LABELS: Record<TipoTurno, string> = {
   visita_diagnostico: "Visita de diagnóstico",
@@ -52,6 +53,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
   const { confirm } = useModal()
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const telefonoOculto = useTelefonoClienteOculto()
   const [error, setError] = useState<string | null>(null)
 
   if (!turno) return null
@@ -167,12 +169,12 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
             {cliente ? (
               <div>
                 <p className="font-medium">{cliente.nombre}</p>
-                <p className="text-sm text-muted-foreground">{cliente.telefono}</p>
+                <p className="text-sm text-muted-foreground">{cliente.telefono || (telefonoOculto ? "Teléfono oculto" : "")}</p>
               </div>
             ) : snap ? (
               <div>
                 <p className="font-medium">{snap.nombre} <span className="text-xs text-warning-700 dark:text-warning-600">(sin registrar)</span></p>
-                <p className="text-sm text-muted-foreground">{snap.telefono}</p>
+                <p className="text-sm text-muted-foreground">{snap.telefono || (telefonoOculto ? "Teléfono oculto" : "")}</p>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Sin cliente</p>
@@ -272,7 +274,8 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
                 Editar
               </Button>
             )}
-            {(turno.cliente?.telefono || turno.clienteSnapshot?.telefono) && (
+            {/* El aviso lo manda el servidor: con el teléfono oculto el botón sigue sirviendo. */}
+            {(turno.cliente?.telefono || turno.clienteSnapshot?.telefono || telefonoOculto) && (
               <Button variant="outline" onClick={handleReenviarConfirmacion} disabled={busy}>
                 <Bell className="mr-2 h-4 w-4" />
                 Reenviar aviso

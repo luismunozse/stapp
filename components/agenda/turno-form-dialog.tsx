@@ -72,6 +72,10 @@ export function TurnoFormDialog({
   const [usarSnapshot, setUsarSnapshot] = useState(false)
   const [snapNombre, setSnapNombre] = useState("")
   const [snapTelefono, setSnapTelefono] = useState("")
+  // Un cliente sin registrar siempre se guarda con teléfono; si al editar llega sin él es que el
+  // servidor se lo oculta a este usuario (permiso `tecnicos_ven_telefono_clientes`). El turno
+  // conserva el que tiene: la edición no toca los datos del cliente.
+  const snapTelefonoOculto = !!turno && !turno.clienteId && !!turno.clienteSnapshot && !turno.clienteSnapshot.telefono
   const [snapEmail, setSnapEmail] = useState("")
   const [tecnicoId, setTecnicoId] = useState<string>("")
   const [inicio, setInicio] = useState("")
@@ -192,7 +196,7 @@ export function TurnoFormDialog({
       setError("Seleccioná un cliente o marcá 'cliente nuevo (sin registrar)'")
       return
     }
-    if (usarSnapshot && (!snapNombre.trim() || !snapTelefono.trim())) {
+    if (usarSnapshot && (!snapNombre.trim() || (!snapTelefono.trim() && !snapTelefonoOculto))) {
       setError("Cliente nuevo requiere nombre y teléfono")
       return
     }
@@ -295,13 +299,14 @@ export function TurnoFormDialog({
                   required
                 />
                 <Input
-                  placeholder="Teléfono"
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
                   value={snapTelefono}
                   onChange={(e) => setSnapTelefono(e.target.value)}
-                  required
+                  required={!snapTelefonoOculto}
+                  disabled={snapTelefonoOculto}
+                  placeholder={snapTelefonoOculto ? "Teléfono oculto por el administrador" : "Teléfono"}
                 />
                 <Input
                   placeholder="Email (opcional)"

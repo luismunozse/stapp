@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { z } from "zod"
 
@@ -26,6 +27,8 @@ export async function GET(request: Request) {
     // Un TECNICO sin el permiso de la org no ve la deuda: ni la columna, ni el total,
     // ni puede filtrar u ordenar por ella (ordenar también la revelaría).
     const verDeuda = await puedeVerDeudaClientes(role, organizationId!)
+    // Lo mismo con el teléfono (416): ni el dato, ni ordenar, ni buscar por él.
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
@@ -43,7 +46,7 @@ export async function GET(request: Request) {
     const sortMap: Record<string, string> = {
       createdAt: "created_at",
       nombre: "nombre",
-      telefono: "telefono",
+      ...(verTelefono && { telefono: "telefono" }),
       email: "email",
       ...(verDeuda && { deudaPendiente: "deuda_pendiente" }),
       ordenes: "ordenes_count",
@@ -57,7 +60,9 @@ export async function GET(request: Request) {
       let query = q.eq("organization_id", organizationId!)
       if (search) {
         query = query.or(
-          `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%,sectores_texto.ilike.%${search}%`
+          verTelefono
+            ? `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%,sectores_texto.ilike.%${search}%`
+            : `nombre.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%,sectores_texto.ilike.%${search}%`
         )
       }
       if (tipoCliente) query = query.eq("tipo_cliente", tipoCliente)
@@ -95,7 +100,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       data: (clientes || []).map((c: any) => ({
-        ...formatCliente(c),
+        ...conTelefonoSegunPermiso(formatCliente(c), verTelefono),
         deudaPendiente: verDeuda ? parseFloat(c.deuda_pendiente || "0") : null,
         saldoCuenta: verDeuda ? parseFloat(c.saldo_cuenta || "0") : Math.max(parseFloat(c.saldo_cuenta || "0"), 0),
         ordenesCount: c.ordenes_count ?? 0,
@@ -107,6 +112,7 @@ export async function GET(request: Request) {
       totalPages: Math.ceil((count || 0) / limit),
       totalDeuda: verDeuda ? totalDeuda : null,
       deudaOculta: !verDeuda,
+      telefonoOculto: !verTelefono,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
@@ -192,7 +198,13 @@ export async function POST(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(formatCliente(cliente), { status: 201 })
+    // Quien lo dio de alta acaba de tipear el teléfono, pero la respuesta sigue la misma regla
+    // que el resto: así la pantalla no depende de por dónde llegó el cliente.
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+    return NextResponse.json(
+      { ...conTelefonoSegunPermiso(formatCliente(cliente), verTelefono), telefonoOculto: !verTelefono },
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
