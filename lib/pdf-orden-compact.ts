@@ -984,7 +984,9 @@ export async function generateOrdenCompactPDF(
       const presup = Number(data.presupuesto) || 0
       const sena = Number(data.sena) || 0
       section("Presupuesto")
-      amountRow("Presupuesto estimado", fmtMoney(presup))
+      // "Trabajo a realizar" ocupa el lugar de la etiqueta genérica; recortado porque la hoja es de alto fijo.
+      const trabajo = safe(data.trabajoARealizar)
+      amountRow(trabajo ? cutText(trabajo, 70) : "Presupuesto estimado", fmtMoney(presup))
       amountRow(`Seña abonada${metodoSena ? " · " + cap("rowtext", metodoSena) : ""}`, fmtMoney(sena))
       drawRule(page, left, right, y - gp(1) - lost, { color: MONO.ink, thickness: 1.2 })
       y -= gp(4) + lost

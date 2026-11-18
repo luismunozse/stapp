@@ -12,6 +12,8 @@ import { pendienteOrden } from "@/lib/ordenes/pendiente"
 interface OrdenCostosCardProps {
   ordenId: string
   presupuesto: number | null | undefined
+  /** Lo que se va a hacer; sale en la hoja de recepción en lugar de "Presupuesto estimado". */
+  trabajoARealizar?: string | null
   costoFinal: number | null | undefined
   sena: number
   totalCobrado?: number
@@ -29,6 +31,7 @@ interface OrdenCostosCardProps {
 export function OrdenCostosCard({
   ordenId,
   presupuesto,
+  trabajoARealizar,
   costoFinal,
   sena,
   totalCobrado = 0,
@@ -62,6 +65,29 @@ export function OrdenCostosCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {enCotizacion && (
+          <div>
+            <Label htmlFor={`trabajo-${ordenId}`} className="text-xs text-muted-foreground">
+              Trabajo a realizar
+            </Label>
+            {readOnly ? (
+              <p className="mt-1 text-sm">{trabajoARealizar || "—"}</p>
+            ) : (
+              <Input
+                id={`trabajo-${ordenId}`}
+                key={`trabajo-${ordenId}-${trabajoARealizar ?? ""}`}
+                className="mt-1"
+                maxLength={200}
+                defaultValue={trabajoARealizar ?? ""}
+                placeholder="Ej: Cambio de batería"
+                onBlur={(e) => {
+                  const value = e.target.value.trim() || null
+                  if (value !== (trabajoARealizar ?? null)) onUpdateField("trabajoARealizar", value)
+                }}
+              />
+            )}
+          </div>
+        )}
         {enCotizacion ? (
           <div>
             <div className="flex items-center gap-2 mb-1">

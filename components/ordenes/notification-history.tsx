@@ -16,6 +16,7 @@ import {
   Package,
   Camera,
   History,
+  DollarSign,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useCurrency } from "@/contexts/currency-context"
@@ -76,6 +77,7 @@ const eventoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   FOTO_AGREGADA: { label: "Foto agregada", icon: Camera, color: "text-indigo-600" },
   REPARACION: { label: "Reparación", icon: Wrench, color: "text-amber-600" },
   AVANCE: { label: "Avance", icon: Wrench, color: "text-teal-600" },
+  TOTAL_MODIFICADO: { label: "Total modificado", icon: DollarSign, color: "text-amber-700" },
 }
 
 export function NotificationHistory({ ordenId }: NotificationHistoryProps) {

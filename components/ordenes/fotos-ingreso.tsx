@@ -1,10 +1,14 @@
 "use client"
 
-import { useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Upload, Camera, Trash2, Loader2 } from "lucide-react"
+import { Upload, Camera, Trash2, Loader2, ImagePlus, QrCode } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { SOLO_PC, useZonaArchivos } from "@/components/fotos/use-zona-archivos"
+import { FotoCelularDialog } from "@/components/fotos/foto-celular-dialog"
+import { isNativePlatform } from "@/lib/capacitor"
 
 export interface FotoPreview {
   id: string
@@ -17,24 +21,54 @@ interface FotosIngresoProps {
   label: string
   fotos: FotoPreview[]
   comprimiendo: boolean
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  /** Recibe los archivos elegidos, arrastrados o pegados. El padre los
+   *  valida y comprime; aca no se filtra nada salvo en el pegado. */
+  onFiles: (files: File[]) => void
   onRemove: (id: string) => void
   onDescripcionChange: (id: string, value: string) => void
 }
+
+const SOLO_PC_PADDING = "[@media(hover:hover)_and_(pointer:fine)]:py-8"
 
 export function FotosIngreso({
   label,
   fotos,
   comprimiendo,
-  onFileChange,
+  onFiles,
   onRemove,
   onDescripcionChange,
 }: FotosIngresoProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const { arrastrando, zonaProps } = useZonaArchivos({ onFiles, deshabilitada: comprimiendo })
+
+  // Fotos que llegan desde el celular (QR). Se entregan al padre de a tandas
+  // y solo cuando no está procesando otras: su manejador arma la lista nueva a
+  // partir del estado que ve en ese render, y dos llamadas encimadas pisarían
+  // una foto con otra.
+  const [celularAbierto, setCelularAbierto] = useState(false)
+  const [colaCelular, setColaCelular] = useState<File[]>([])
+  useEffect(() => {
+    if (comprimiendo || colaCelular.length === 0) return
+    setColaCelular([])
+    onFiles(colaCelular)
+  }, [comprimiendo, colaCelular, onFiles])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    // Permite volver a elegir el mismo archivo.
+    e.target.value = ""
+    if (files.length > 0) onFiles(files)
+  }
 
   return (
-    <div>
+    <div
+      {...zonaProps}
+      className={cn(
+        "relative rounded-lg transition-shadow",
+        arrastrando && "ring-2 ring-primary ring-offset-4 ring-offset-background"
+      )}
+    >
       <Label>{label}</Label>
       <div className="mt-2 space-y-3">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -43,7 +77,7 @@ export function FotosIngreso({
             type="file"
             accept="image/*"
             multiple
-            onChange={onFileChange}
+            onChange={handleInputChange}
             className="hidden"
           />
           <input
@@ -51,7 +85,7 @@ export function FotosIngreso({
             type="file"
             accept="image/*"
             capture="environment"
-            onChange={onFileChange}
+            onChange={handleInputChange}
             className="hidden"
           />
           <Button
@@ -74,6 +108,18 @@ export function FotosIngreso({
             <Camera className="mr-2 h-4 w-4" />
             Tomar foto
           </Button>
+          {/* En la app nativa ya se está en el celular: el QR no aporta. */}
+          {!isNativePlatform() && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCelularAbierto(true)}
+              className="w-full sm:w-auto sm:flex-1"
+            >
+              <QrCode className="mr-2 h-4 w-4" />
+              Desde el celular
+            </Button>
+          )}
         </div>
 
         {comprimiendo && (
@@ -111,11 +157,37 @@ export function FotosIngreso({
         )}
 
         {fotos.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4 border-2 border-dashed rounded-lg">
-            Agregar fotos del estado inicial del equipo
+          <div
+            className={cn(
+              "flex flex-col items-center gap-1 px-4 py-4 text-center text-sm text-muted-foreground border-2 border-dashed rounded-lg transition-colors",
+              SOLO_PC_PADDING,
+              arrastrando && "border-primary bg-primary/5 text-foreground"
+            )}
+          >
+            <ImagePlus className={cn("h-6 w-6 mb-1", SOLO_PC)} aria-hidden="true" />
+            <p>Agregar fotos del estado inicial del equipo</p>
+            <p className={cn("text-xs", SOLO_PC)}>
+              {arrastrando
+                ? "Soltá las imágenes para agregarlas"
+                : "Arrastrá las imágenes hasta acá o pegalas con Ctrl+V"}
+            </p>
+          </div>
+        )}
+
+        {fotos.length > 0 && (
+          <p className={cn("text-xs text-muted-foreground", SOLO_PC)}>
+            {arrastrando
+              ? "Soltá las imágenes para agregarlas"
+              : "Para sumar más, arrastrá las imágenes hasta acá o pegalas con Ctrl+V."}
           </p>
         )}
       </div>
+
+      <FotoCelularDialog
+        open={celularAbierto}
+        onOpenChange={setCelularAbierto}
+        onFotoRecibida={(file) => setColaCelular((prev) => [...prev, file])}
+      />
     </div>
   )
 }

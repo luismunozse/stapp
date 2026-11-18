@@ -58,7 +58,14 @@ const get = (qs = "") => GET(createGetRequest(`${URL_BASE}${qs}`))
 describe("GET /api/garantias/unificadas — acceso y alcance", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // La garantía de prueba vence el 2026-11-14: con el reloj real, "vigente"
+    // deja de ser cierto a partir de ese día y el test falla solo por la fecha.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-12T15:00:00Z"))
     mockCookie(null)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it("sin sesión responde 401 y no lee la vista", async () => {
