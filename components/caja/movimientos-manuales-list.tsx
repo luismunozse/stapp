@@ -14,8 +14,8 @@ import { useModal } from "@/contexts/modal-context"
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
-  TARJETA_DEBITO: "Tarjeta Débito",
-  TARJETA_CREDITO: "Tarjeta Crédito",
+  TARJETA_DEBITO: "Tarjeta de débito",
+  TARJETA_CREDITO: "Tarjeta de crédito",
   MERCADOPAGO: "MercadoPago",
   OTRO: "Otro",
 }
@@ -220,7 +220,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
       <ConfirmDialog
         open={!!deleteId}
         onOpenChange={(open) => !open && setDeleteId(null)}
-        title="Eliminar Movimiento"
+        title="Eliminar movimiento"
         description="Esta acción eliminará el movimiento manual y no se puede deshacer."
         confirmText="Eliminar"
         cancelText="Cancelar"

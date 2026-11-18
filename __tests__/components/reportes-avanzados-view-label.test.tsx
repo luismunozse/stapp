@@ -79,7 +79,7 @@ describe("ReportesAvanzadosView — pestaña Clientes y el permiso de ingresos",
     const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
     render(<ReportesAvanzadosView verTopClientes={false} />)
 
-    expect(screen.getByRole("tab", { name: /tecnicos/i })).toBeTruthy()
+    expect(screen.getByRole("tab", { name: /técnicos/i })).toBeTruthy()
     expect(screen.getByRole("tab", { name: /inventario/i })).toBeTruthy()
     expect(screen.getByRole("tab", { name: /rentabilidad/i })).toBeTruthy()
   })

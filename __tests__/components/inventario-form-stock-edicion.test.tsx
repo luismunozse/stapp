@@ -83,7 +83,7 @@ describe("InventarioForm — el stock en la edicion", () => {
 
   it("NO manda stock cuando el operador solo cambio el precio", async () => {
     render(<InventarioForm item={item} onClose={vi.fn()} onSuccess={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText("Precio Venta *"), { target: { value: "650" } })
+    fireEvent.change(screen.getByLabelText("Precio de venta *"), { target: { value: "650" } })
 
     const payload = await guardarYLeerPut()
 
@@ -115,7 +115,7 @@ describe("InventarioForm — el stock en la edicion", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Stock *")).toHaveValue("9")
 
-    fireEvent.change(screen.getByLabelText("Precio Venta *"), { target: { value: "650" } })
+    fireEvent.change(screen.getByLabelText("Precio de venta *"), { target: { value: "650" } })
     const payload = await guardarYLeerPut()
 
     expect(payload.precioVenta).toBe(650)

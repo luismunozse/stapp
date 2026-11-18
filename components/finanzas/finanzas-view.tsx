@@ -81,7 +81,7 @@ export function FinanzasView() {
             </TabsTrigger>
             <TabsTrigger value="estado-resultados" className="gap-1 sm:gap-2 text-xs sm:text-sm">
               <FileBarChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">Estado de Resultados</span>
+              <span className="hidden sm:inline">Estado de resultados</span>
               <span className="sm:hidden">Resultados</span>
             </TabsTrigger>
             <TabsTrigger value="ingresos" className="gap-1 sm:gap-2 text-xs sm:text-sm">

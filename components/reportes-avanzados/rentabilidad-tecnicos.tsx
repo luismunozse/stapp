@@ -302,7 +302,7 @@ export function RentabilidadTecnicos() {
       {!costosOcultos && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Ganancia por Técnico</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Ganancia por técnico</CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               Ganancia neta por técnico en el periodo
             </CardDescription>
@@ -335,7 +335,7 @@ export function RentabilidadTecnicos() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Detalle por Técnico</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Detalle por técnico</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             Métricas individuales de rentabilidad
           </CardDescription>

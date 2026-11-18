@@ -297,8 +297,8 @@ export function PosTicketShare({
 
           {/* Footer */}
           <div style={{ textAlign: "center", fontSize: "12px" }}>
-            <div style={{ fontWeight: "bold", marginBottom: "2px" }}>¡Gracias por su compra!</div>
-            <div style={{ color: "#888", fontSize: "10px" }}>Conserve este ticket como comprobante</div>
+            <div style={{ fontWeight: "bold", marginBottom: "2px" }}>¡Gracias por tu compra!</div>
+            <div style={{ color: "#888", fontSize: "10px" }}>Conservá este ticket como comprobante</div>
           </div>
         </div>
       </div>

@@ -176,7 +176,7 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
           <IconButton label="Volver" variant="ghost" onClick={onClose}>
             <ArrowLeft className="h-4 w-4" />
           </IconButton>
-          <CardTitle>Nueva Orden de Compra</CardTitle>
+          <CardTitle>Nueva orden de compra</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

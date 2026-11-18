@@ -281,7 +281,7 @@ export function PosCheckoutDialog({
       }
       if (pagoCC && !cliente.id) {
         setLoading(false)
-        await showError("Seleccione un cliente registrado para usar cuenta corriente")
+        await showError("Elegí un cliente registrado para usar cuenta corriente")
         return
       }
 
@@ -447,7 +447,7 @@ export function PosCheckoutDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Cobrar Venta
+            Cobrar venta
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
 
@@ -762,7 +762,7 @@ export function PosCheckoutDialog({
               loading={loading || recargosEstado === "cargando"}
             >
               <CheckCircle2 className="mr-2 h-5 w-5" />
-              Confirmar Venta
+              Confirmar venta
             </Button>
           </div>
         </div>

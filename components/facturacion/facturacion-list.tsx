@@ -150,8 +150,8 @@ export function FacturacionList() {
           <SelectContent>
             <SelectItem value="all">Todos los estados</SelectItem>
             <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-            <SelectItem value="PAGADO_PARCIAL">Pago Parcial</SelectItem>
-            <SelectItem value="PAGADO">Pagado</SelectItem>
+            <SelectItem value="PAGADO_PARCIAL">Pago parcial</SelectItem>
+            <SelectItem value="PAGADO">Cobrado</SelectItem>
             <SelectItem value="ANULADA">Anulada</SelectItem>
           </SelectContent>
         </Select>
@@ -462,7 +462,7 @@ export function FacturacionList() {
                         className="w-full sm:w-auto"
                       >
                         <Plus className="mr-2 h-4 w-4" />
-                        Registrar Pago
+                        Registrar pago
                       </Button>
                     </div>
                   )}
@@ -533,8 +533,8 @@ export function FacturacionList() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Eliminar Remito"
-        description={`¿Estás seguro de que deseas eliminar el remito ${selectedFactura?.numeroFactura}? Esta acción eliminará también todos los pagos asociados y no se puede deshacer.`}
+        title="Eliminar remito"
+        description={`¿Seguro que querés eliminar el remito ${selectedFactura?.numeroFactura}? Esta acción eliminará también todos los pagos asociados y no se puede deshacer.`}
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="danger"
@@ -546,8 +546,8 @@ export function FacturacionList() {
       <ConfirmDialog
         open={voidDialogOpen}
         onOpenChange={setVoidDialogOpen}
-        title="Anular Remito"
-        description={`¿Estás seguro de que deseas anular el remito ${selectedFactura?.numeroFactura}? El remito quedará registrado como anulado pero no se eliminará del sistema.`}
+        title="Anular remito"
+        description={`¿Seguro que querés anular el remito ${selectedFactura?.numeroFactura}? El remito quedará registrado como anulado pero no se eliminará del sistema.`}
         confirmText="Anular"
         cancelText="Cancelar"
         variant="warning"

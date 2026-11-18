@@ -86,7 +86,7 @@ describe("CotizacionForm — resumen de costo/ganancia visible solo con mostrarC
       </ModalProvider>
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /Actualizar Cotización/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Actualizar presupuesto/ }))
 
     await waitFor(() => {
       const putCall = (fetch as any).mock.calls.find(

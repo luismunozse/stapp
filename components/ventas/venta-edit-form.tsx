@@ -42,7 +42,7 @@ const ventaEditSchema = z.object({
   clienteId: z.string().nullable().optional(),
   clienteNombre: z.string().trim().min(1, "Nombre del cliente requerido"),
   clienteTelefono: z.string().optional(),
-  items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
+  items: z.array(itemSchema).min(1, "Agregá al menos un producto"),
   tipoDescuentoGlobal: z.enum(["MONTO", "PORCENTAJE"]),
   descuentoGlobal: z.number({ error: "Descuento inválido" }).min(0),
   observaciones: z.string().optional(),
@@ -317,18 +317,18 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
       <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-3xl max-h-[90dvh] overflow-y-auto pb-[env(safe-area-inset-bottom,1rem)]">
         <DialogHeader>
           <DialogTitle>
-            Editar Venta V{String(venta.numeroVenta).padStart(4, "0")}
+            Editar venta V{String(venta.numeroVenta).padStart(4, "0")}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Cliente */}
           <div className="space-y-4 rounded-lg border p-4">
-            <h3 className="font-medium">Datos del Cliente</h3>
+            <h3 className="font-medium">Datos del cliente</h3>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="edit-cliente-nombre">Nombre del Cliente *</Label>
+                <Label htmlFor="edit-cliente-nombre">Nombre del cliente *</Label>
                 <div className="relative">
                   <Input
                     id="edit-cliente-nombre"
@@ -508,7 +508,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Precio Unit.</Label>
+                      <Label className="text-xs">Precio unit.</Label>
                       <Input
                         type="number"
                         min="0"
@@ -644,7 +644,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
               Cancelar
             </Button>
             <Button type="submit" disabled={totalPorDebajoDeLoCobrado} loading={loading}>
-              Guardar Cambios
+              Guardar cambios
             </Button>
           </div>
         </form>

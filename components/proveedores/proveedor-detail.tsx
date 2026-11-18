@@ -471,7 +471,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                 <FieldSectionLabel icon={Truck}>Operativa</FieldSectionLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   {proveedor.leadTimeDias != null && (
-                    <FiscalField label="Lead time" value={`${proveedor.leadTimeDias} día${proveedor.leadTimeDias === 1 ? "" : "s"}`} />
+                    <FiscalField label="Demora de entrega" value={`${proveedor.leadTimeDias} día${proveedor.leadTimeDias === 1 ? "" : "s"}`} />
                   )}
                   {proveedor.pedidoMinimo != null && (
                     <FiscalField label="Pedido mínimo" value={formatPrice(proveedor.pedidoMinimo)} />

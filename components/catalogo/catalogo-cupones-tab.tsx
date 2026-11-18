@@ -211,7 +211,7 @@ export function CatalogoCuponesTab() {
         open={!!deleteId}
         onOpenChange={(open) => !open && setDeleteId(null)}
         title="Eliminar cupón"
-        description="Las cotizaciones con este cupón mantendrán el descuento ya aplicado."
+        description="Los presupuestos con este cupón mantienen el descuento ya aplicado."
         confirmText="Eliminar"
         variant="danger"
         onConfirm={handleDelete}

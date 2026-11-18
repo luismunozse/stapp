@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 
 describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
-  it("orden totalmente pagada: muestra 'Cobrado' una sola vez y el saldo no dice 'Cobrado'", () => {
+  it("orden totalmente pagada: 'Cobrado' aparece una sola vez (con su importe) y el saldo queda en $0", () => {
     render(
       <OrdenCostosCard
         ordenId="orden-1"
@@ -19,14 +19,12 @@ describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
       />,
     )
 
-    // El total realmente cobrado sigue mostrándose (línea verde original).
-    const cobradoMatches = screen.getAllByText("Cobrado")
-    expect(cobradoMatches).toHaveLength(1)
-
-    // La línea de saldo se rotula "Saldo" y en pago completo muestra el
-    // badge "Pagado" — nunca la palabra "Cobrado".
-    expect(screen.getByText("Saldo")).toBeInTheDocument()
-    expect(screen.getByText("Pagado")).toBeInTheDocument()
+    // La línea del total cobrado dice "Cobrado" con su importe; la de saldo
+    // muestra $0 y no repite la píldora "Cobrado".
+    expect(screen.getAllByText("Cobrado")).toHaveLength(1)
+    const saldo = screen.getByText("Saldo").parentElement!
+    expect(saldo).toHaveTextContent(/\$\s?0(,00)?$/)
+    expect(screen.queryByText("Pagado")).not.toBeInTheDocument()
   })
 
   it("orden con saldo pendiente: la línea de saldo dice 'Saldo' con el monto adeudado", () => {
@@ -128,8 +126,9 @@ describe("OrdenCostosCard — notas de crédito", () => {
       />,
     )
 
-    // 1000 - 400 cobrado - 600 de NC = 0: el saldo es "Pagado", no $600.
-    expect(screen.getByText("Saldo")).toBeInTheDocument()
-    expect(screen.getByText("Pagado")).toBeInTheDocument()
+    // 1000 - 400 cobrado - 600 de NC = 0: el saldo queda en $0, no debe $600.
+    const saldo = screen.getByText("Saldo").parentElement!
+    expect(saldo).toHaveTextContent(/\$\s?0(,00)?$/)
+    expect(screen.getAllByText("Cobrado")).toHaveLength(1)
   })
 })

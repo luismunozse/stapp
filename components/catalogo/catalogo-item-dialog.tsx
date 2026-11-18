@@ -277,7 +277,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
                 <>
                   <Input id="stock" type="text" value="Gestionado por Inventario" disabled readOnly />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Este ítem está linkeado a Inventario. El stock se administra desde ahí.
+                    Este ítem está vinculado a Inventario. El stock se administra desde ahí.
                   </p>
                 </>
               ) : (
@@ -290,7 +290,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
                     step="1"
                     value={stock}
                     onChange={(e) => setStock(e.target.value)}
-                    placeholder="Vacío = sin tracking"
+                    placeholder="Vacío = sin control de stock"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Si lo dejás vacío, no se trackea stock. 0 = agotado.
