@@ -15,6 +15,11 @@ import { CamposExtraFields } from "./campos-extra-fields"
 import { AccesoriosPicker } from "./accesorios-picker"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { CodigoAccesoModal, resumenCodigoAcceso } from "./codigo-acceso-modal"
+import {
+  EstadoFisicoRecepcion,
+  ESTADO_FISICO_FOCO_ID,
+  type EstadoFisicoValor,
+} from "./danos/estado-fisico-recepcion"
 import type { CampoExtra, TipoDispositivoCustom } from "@/types"
 
 /**
@@ -33,6 +38,12 @@ export const equipoFormSchema = z.object({
 })
 
 export type EquipoFormValues = z.infer<typeof equipoFormSchema>
+
+/** Id del boton "Sin daños visibles" del equipo `index` (0-based): unico por
+ *  card, para que el formulario enfoque el del equipo que falta. */
+export function estadoFisicoFocoIdEquipo(index: number): string {
+  return `${ESTADO_FISICO_FOCO_ID}-equipo-${index + 1}`
+}
 
 interface RecepcionEquipoCardProps {
   index: number
@@ -54,12 +65,16 @@ interface RecepcionEquipoCardProps {
   onProblemaQuickSelect: (texto: string) => void
   fotos: FotoPreview[]
   comprimiendo: boolean
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onFiles: (files: File[]) => void
   onRemoveFoto: (id: string) => void
   onFotoDescripcionChange: (id: string, value: string) => void
   labelFotos: string
   codigoAcceso: string
   onCodigoAccesoChange: (value: string) => void
+  estadoFisico: EstadoFisicoValor
+  onEstadoFisicoChange: (valor: EstadoFisicoValor) => void
+  estadoFisicoObligatorio: boolean
+  estadoFisicoError?: string
 }
 
 /**
@@ -214,11 +229,21 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
           onOtroAdd={props.onOtroAccesorioAdd}
         />
 
+        {/* Estado fisico del equipo al recibirlo, sobre el dibujo de SU tipo */}
+        <EstadoFisicoRecepcion
+          codigoTipo={props.tipoSeleccionado || null}
+          valor={props.estadoFisico}
+          onChange={props.onEstadoFisicoChange}
+          obligatorio={props.estadoFisicoObligatorio}
+          error={props.estadoFisicoError}
+          focoId={estadoFisicoFocoIdEquipo(props.index)}
+        />
+
         <FotosIngreso
           label={props.labelFotos}
           fotos={props.fotos}
           comprimiendo={props.comprimiendo}
-          onFileChange={props.onFileChange}
+          onFiles={props.onFiles}
           onRemove={props.onRemoveFoto}
           onDescripcionChange={props.onFotoDescripcionChange}
         />

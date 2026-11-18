@@ -171,6 +171,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
             <FotoUpload
               ordenId={ordenId}
               onClose={() => setShowUpload(false)}
+              onUploaded={fetchFotos}
               onSuccess={() => {
                 setShowUpload(false)
                 fetchFotos()

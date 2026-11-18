@@ -114,6 +114,7 @@ export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
     estado: orden.estado,
     motivoSinCobro: orden.motivo_sin_cobro || null,
     presupuesto: orden.presupuesto,
+    trabajoARealizar: orden.trabajo_a_realizar ?? null,
     costoFinal: orden.costo_final,
     sena: orden.sena || 0,
     metodoPagoSena: orden.metodo_pago_sena || "EFECTIVO",

@@ -255,6 +255,7 @@ export async function GET(
       accesorios: safeString(orden.accesorios),
       codigoAccesoDispositivo: safeString(orden.password_dispositivo),
       presupuesto: typeof orden.presupuesto === "number" ? orden.presupuesto : null,
+      trabajoARealizar: orden.trabajo_a_realizar ?? null,
       observaciones: safeString(orden.observaciones),
       nombreEmpresa: safeString(org?.nombre_mostrar) || safeString(org?.nombre) || undefined,
       telefonoEmpresa: safeString(org?.telefono) || undefined,

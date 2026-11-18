@@ -2,10 +2,10 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
-import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
+import { deleteFile } from "@/lib/storage"
+import { guardarFotoOrden } from "@/lib/fotos/guardar-foto-orden"
 import { formatFoto } from "@/lib/db-utils"
 import { firmarCampo } from "@/lib/storage-privado"
-import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { updateStorageUsage } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -83,65 +83,19 @@ export async function POST(
     const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
     if ("error" in cargada) return cargada.error
 
-    // Verificar límite de storage antes de subir
-    const storageLimitError = await enforcePlanLimit(organizationId!, "storage")
-    if (storageLimitError) return storageLimitError
-
     const body = await request.json()
     const data = fotoSchema.parse(body)
 
-    // Validar tamaño de imagen (máx 5MB en base64)
-    const base64Size = data.data.length * 0.75
-    const maxSize = 5 * 1024 * 1024
-    if (base64Size > maxSize) {
-      return NextResponse.json(
-        { error: "La imagen excede el tamaño máximo de 5MB" },
-        { status: 400 }
-      )
-    }
-
-    // Subir a Supabase Storage
-    const buffer = base64ToBuffer(data.data)
-    const { url, path } = await uploadOrderPhoto(
-      organizationId!,
+    const guardada = await guardarFotoOrden({
+      organizationId: organizationId!,
       ordenId,
-      buffer,
-      data.mime
-    )
-
-    // Guardar referencia en la base de datos
-    const { data: foto, error: dbError } = await supabaseAdmin
-      .from("fotos_orden")
-      .insert({
-        orden_id: ordenId,
-        url,
-        storage_path: path,
-        mime: data.mime,
-        size: buffer.length,
-        descripcion: data.descripcion || null,
-        tipo: data.tipo,
-      })
-      .select("id, url, storage_path, mime, size, descripcion, tipo, created_at")
-      .single()
-
-    if (dbError) {
-      // Si falla el insert, eliminar el archivo subido
-      await deleteFile("FOTOS_ORDENES", path)
-      throw dbError
-    }
-
-    // Actualizar uso de storage. La RPC raisea si se excede el limite del
-    // plan (race condition que el pre-check TS no atrapa). En ese caso,
-    // rollbackear: borrar el archivo subido y el row recien insertado.
-    const { error: storageRpcError } = await updateStorageUsage(organizationId!, buffer.length)
-    if (storageRpcError) {
-      if (isPlanLimitError(storageRpcError)) {
-        await deleteFile("FOTOS_ORDENES", path)
-        await supabaseAdmin.from("fotos_orden").delete().eq("id", foto.id)
-        return planLimitErrorResponse(storageRpcError)
-      }
-      console.error("Error updating storage usage:", storageRpcError)
-    }
+      data: data.data,
+      mime: data.mime,
+      tipo: data.tipo,
+      descripcion: data.descripcion,
+    })
+    if ("error" in guardada) return guardada.error
+    const { foto } = guardada
 
     const [fotoFirmada] = await firmarCampo("FOTOS_ORDENES", [foto], "url", {
       campoPath: "storage_path",

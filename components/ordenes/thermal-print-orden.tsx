@@ -65,6 +65,7 @@ interface PreviewData {
   problemaReportado: string
   observaciones: string | null
   presupuesto: number | null
+  trabajoARealizar?: string | null
   costoFinal: number | null
   fechaPrometida: string | null
   seguimientoUrl: string | null
@@ -117,6 +118,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       problemaReportado: orden.problemaReportado,
       observaciones: orden.observaciones ?? null,
       presupuesto: orden.presupuesto ?? null,
+      trabajoARealizar: orden.trabajoARealizar ?? null,
       costoFinal: orden.costoFinal ?? null,
       fechaPrometida: orden.fechaPrometida
         ? new Date(orden.fechaPrometida).toLocaleDateString("es-AR", { timeZone: timezone })
@@ -460,8 +462,9 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
 
       <Sep />
 
-      {(data.presupuesto != null || data.costoFinal != null || data.fechaPrometida) && (
+      {(data.trabajoARealizar || data.presupuesto != null || data.costoFinal != null || data.fechaPrometida) && (
         <>
+          {data.trabajoARealizar && <div className="font-bold whitespace-pre-wrap break-words">{data.trabajoARealizar}</div>}
           {data.presupuesto != null && (
             <Row left="Presupuesto:" right={formatMoney(data.presupuesto)} />
           )}

@@ -141,6 +141,7 @@ export async function GET(
       accesorios: orden.accesorios,
       codigoAccesoDispositivo: orden.password_dispositivo,
       presupuesto: orden.presupuesto,
+      trabajoARealizar: orden.trabajo_a_realizar ?? null,
       observaciones: orden.observaciones,
       nombreEmpresa: org?.nombre_mostrar || org?.nombre,
       telefonoEmpresa: org?.telefono,

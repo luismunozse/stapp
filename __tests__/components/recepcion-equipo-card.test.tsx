@@ -44,12 +44,15 @@ function Harness({
       onProblemaQuickSelect={() => {}}
       fotos={fotos}
       comprimiendo={false}
-      onFileChange={() => {}}
+      onFiles={() => {}}
       onRemoveFoto={() => {}}
       onFotoDescripcionChange={() => {}}
       labelFotos="Fotos"
       codigoAcceso={codigoAcceso}
       onCodigoAccesoChange={onCodigoAccesoChange}
+      estadoFisico={{ danos: [], sinDanos: false }}
+      onEstadoFisicoChange={vi.fn()}
+      estadoFisicoObligatorio={false}
     />
   )
 }

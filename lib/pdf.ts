@@ -986,6 +986,8 @@ interface OrdenPDFData {
   accesorios?: string | null
   codigoAccesoDispositivo?: string | null
   presupuesto?: number | null
+  /** Lo que se va a hacer ("Cambio de batería"). En la hoja de recepción reemplaza la etiqueta "Presupuesto estimado". */
+  trabajoARealizar?: string | null
   observaciones?: string | null
   nombreEmpresa?: string
   telefonoEmpresa?: string
@@ -2268,7 +2270,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const moneyPresent = !!(data.presupuesto || data.sena)
   const retiroPresent = !!fechaPrometida
   const isPrintSheet = !data.soloCliente
-  const zoneBContentH = (moneyPresent ? 34 : 0) + (moneyPresent && retiroPresent ? 8 : 0) + (retiroPresent ? 9 : 0)
+  // "Trabajo a realizar": renglón propio arriba de los montos (hasta 2 líneas).
+  const trabajoTexto = safe(data.trabajoARealizar)
+  const TRABAJO_LABEL = "TRABAJO A REALIZAR"
+  const trabajoLabelW = archivoBold.widthOfTextAtSize(TRABAJO_LABEL, 6) + 8
+  const trabajoLineas = trabajoTexto
+    ? rxWrapClamp(trabajoTexto, archivoBold, 10, rxContentW - trabajoLabelW, 2)
+    : []
+  const trabajoH = trabajoLineas.length > 0 ? trabajoLineas.length * 12 + 6 : 0
+  const zoneBContentH = trabajoH + (moneyPresent ? 34 : 0) + (moneyPresent && retiroPresent ? 8 : 0) + (retiroPresent ? 9 : 0)
   // Alto fijo de la zona QR/firma/términos, de su propio arranque (el hueco
   // de 4pt previo a la fila QR) hasta la línea de corte (6pt de respiro).
   const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
@@ -2299,13 +2309,23 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const gapBottom = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
   ry -= gapTop
 
+  // ---- Trabajo a realizar ----
+  if (trabajoLineas.length > 0) {
+    page.drawText(TRABAJO_LABEL, { x: rxMargin, y: ry - 9, size: 6, font: archivoBold, color: MONO.label })
+    trabajoLineas.forEach((l, i) => {
+      page.drawText(l, { x: rxMargin + trabajoLabelW, y: ry - 10 - i * 12, size: 10, font: archivoBold, color: MONO.ink })
+    })
+    ry -= trabajoH
+  }
+
   // ---- money3: presupuesto | seña | saldo (última celda ink-fill) ----
   if (data.presupuesto || data.sena) {
     const presupNum = Number(data.presupuesto) || 0
     const senaNum = Number(data.sena) || 0
     const saldoNum = Math.max(presupNum - senaNum, 0)
     const money3Cells = [
-      { label: "Presupuesto estimado", amt: formatCurrencyPDF(presupNum) },
+      // Con el trabajo escrito arriba, el monto ya no es una estimación suelta: es el precio de ese trabajo.
+      { label: trabajoTexto ? "Presupuesto" : "Presupuesto estimado", amt: formatCurrencyPDF(presupNum) },
       { label: `Seña abonada${data.metodoPagoSena ? " · " + data.metodoPagoSena : ""}`, amt: formatCurrencyPDF(senaNum) },
       { label: "Saldo estimado", amt: formatCurrencyPDF(saldoNum) },
     ]

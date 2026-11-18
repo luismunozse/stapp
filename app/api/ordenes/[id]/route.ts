@@ -5,6 +5,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { MENSAJE_TECNICO_OTRA_SUCURSAL, puedeAsignarTecnicoOrden, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
+import { registrarCambioTotal } from "@/lib/ordenes/cambio-total"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
@@ -45,6 +46,7 @@ const updateOrdenSchema = z.object({
     .optional(),
   tecnicoId: z.string().optional().nullable(),
   presupuesto: z.number().min(0, "El presupuesto no puede ser negativo").optional().nullable(),
+  trabajoARealizar: z.string().trim().max(200).optional().nullable(),
   costoFinal: z.number().min(0, "El costo final no puede ser negativo").optional().nullable(),
   fechaPrometida: z.string().optional().nullable(),
   observaciones: z.string().optional().nullable(),
@@ -376,6 +378,7 @@ export async function PUT(
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
+    if (data.trabajoARealizar !== undefined) updateData.trabajo_a_realizar = data.trabajoARealizar || null
     // Reenviar el costo final que la orden ya tiene no es un cambio: no se valida
     // ni se escribe (un formulario que manda todos los campos no debe chocar con
     // el bloqueo de estados cerrados de abajo).
@@ -492,6 +495,19 @@ export async function PUT(
 
     if (updateError) {
       throw updateError
+    }
+
+    // Quién cambió el total y desde qué monto (historial interno de la orden).
+    if (updateData.costo_final !== undefined) {
+      await registrarCambioTotal({
+        ordenId: id,
+        organizationId: organizationId!,
+        userId: userId!,
+        rol: role,
+        antes: orden.costo_final,
+        despues: updateData.costo_final,
+        origen: "EDICION",
+      })
     }
 
     // Registrar evento en orden_eventos para timeline público (fire-and-forget)

@@ -147,6 +147,8 @@ export interface OrdenServicio {
   estado: EstadoOrden
   motivoSinCobro?: string | null
   presupuesto?: number | null
+  /** Lo que se va a hacer ("Cambio de batería"); sale en la hoja de recepción junto al monto. */
+  trabajoARealizar?: string | null
   costoFinal?: number | null
   sena?: number
   metodoPagoSena?: string
