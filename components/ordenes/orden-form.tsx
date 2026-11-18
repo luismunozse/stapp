@@ -68,6 +68,8 @@ const ordenSchema = z.object({
   // 0 se acepta (el submit lo manda como "sin presupuesto"); rechazarlo
   // trababa el alta sin ningun aviso, porque el campo esta en el paso 2.
   presupuesto: z.union([z.number().min(0, "El presupuesto no puede ser negativo"), z.nan(), z.undefined()]).optional(),
+  // Lo que se va a hacer ("Cambio de batería"): sale en la hoja de recepción junto al monto.
+  trabajoARealizar: z.string().max(200, "Máximo 200 caracteres").optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
   notasInternas: z.string().optional(),
@@ -105,6 +107,7 @@ function ordenFormDefaults(): OrdenFormData {
     codigoAccesoDispositivo: "",
     telefonoContacto: "",
     presupuesto: undefined,
+    trabajoARealizar: "",
     fechaPrometida: "",
     observaciones: "",
     notasInternas: "",
@@ -1053,17 +1056,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }, [clienteId, esClienteEmpresa])
 
   // Manejar seleccion de fotos
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    const fileArray = Array.from(files)
-
-    // Limpia el input que disparo el evento (no via ref: los refs de los
-    // <input type="file"> ahora viven dentro de FotosIngreso) para permitir
-    // volver a seleccionar el mismo archivo. Equivalente al reset original
-    // por refs: siempre se limpiaba el input que disparo el cambio.
-    e.target.value = ""
+  // Recibe los archivos ya sea del selector, arrastrados o pegados: el
+  // <input type="file"> y su reset viven dentro de FotosIngreso.
+  const handleFiles = async (fileArray: File[]) => {
+    if (fileArray.length === 0) return
 
     setComprimiendo(true)
 
@@ -1234,6 +1230,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         ...data,
         accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
         presupuesto: data.presupuesto && data.presupuesto > 0 ? data.presupuesto : undefined,
+        trabajoARealizar: data.trabajoARealizar?.trim() || undefined,
         fechaPrometida: data.fechaPrometida || undefined,
         fotos: fotosData.length > 0 ? fotosData : undefined,
         presupuestoAceptado: presupuestoAceptado,
@@ -1445,7 +1442,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   /** Campos que viven en el paso 2; el resto del schema esta en el paso 1. */
   const CAMPOS_PASO_2: ReadonlyArray<keyof OrdenFormData> = [
-    "presupuesto", "fechaPrometida", "observaciones", "notasInternas",
+    "presupuesto", "trabajoARealizar", "fechaPrometida", "observaciones", "notasInternas",
   ]
 
   /** Sin esto, un error de validacion en un campo que no esta en pantalla
@@ -1924,6 +1921,21 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           </>)}
 
           {currentStep === 2 && (<>
+          <div>
+            <Label htmlFor="trabajoARealizar">Trabajo a realizar (opcional)</Label>
+            <Input
+              id="trabajoARealizar"
+              maxLength={200}
+              {...register("trabajoARealizar")}
+              placeholder="Ej: Cambio de batería"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Sale en la hoja de recepción junto al presupuesto.
+            </p>
+            {errors.trabajoARealizar && (
+              <p className="text-sm text-destructive-text mt-1">{errors.trabajoARealizar.message}</p>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="presupuesto">Presupuesto (opcional)</Label>
@@ -2122,7 +2134,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             label={`Fotos del ${term("equipo")} (Ingreso)`}
             fotos={fotos}
             comprimiendo={comprimiendo}
-            onFileChange={handleFileChange}
+            onFiles={handleFiles}
             onRemove={removeFoto}
             onDescripcionChange={updateFotoDescripcion}
           />

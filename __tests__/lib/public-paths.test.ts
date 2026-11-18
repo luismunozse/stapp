@@ -24,6 +24,9 @@ describe("isPublicPath", () => {
     (p) => expect(isPublicPath(p)).toBe(false)
   )
 
+  it("/subir-fotos/<token> es pública (la abre el celular sin sesión al escanear el QR)", () =>
+    expect(isPublicPath("/subir-fotos/abc")).toBe(true))
+
   it.each(["/dashboard", "/perfil", "/ordenes", "/api/account/export", "/api/account/delete-user", "/api/users/profile"])(
     "%s sigue protegida",
     (p) => expect(isPublicPath(p)).toBe(false)

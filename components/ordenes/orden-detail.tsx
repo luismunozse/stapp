@@ -1417,6 +1417,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenCostosCard
             ordenId={orden.id}
             presupuesto={orden.presupuesto}
+            trabajoARealizar={orden.trabajoARealizar ?? null}
             costoFinal={orden.costoFinal}
             sena={orden.sena || 0}
             totalCobrado={orden.totalCobrado || 0}
@@ -1473,6 +1474,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         <OrdenCostosCard
           ordenId={orden.id}
           presupuesto={orden.presupuesto}
+          trabajoARealizar={orden.trabajoARealizar ?? null}
           costoFinal={orden.costoFinal}
           sena={orden.sena || 0}
           totalCobrado={orden.totalCobrado || 0}

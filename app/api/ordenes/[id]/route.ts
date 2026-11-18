@@ -46,6 +46,7 @@ const updateOrdenSchema = z.object({
     .optional(),
   tecnicoId: z.string().optional().nullable(),
   presupuesto: z.number().min(0, "El presupuesto no puede ser negativo").optional().nullable(),
+  trabajoARealizar: z.string().trim().max(200).optional().nullable(),
   costoFinal: z.number().min(0, "El costo final no puede ser negativo").optional().nullable(),
   fechaPrometida: z.string().optional().nullable(),
   observaciones: z.string().optional().nullable(),
@@ -377,6 +378,7 @@ export async function PUT(
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
+    if (data.trabajoARealizar !== undefined) updateData.trabajo_a_realizar = data.trabajoARealizar || null
     // Reenviar el costo final que la orden ya tiene no es un cambio: no se valida
     // ni se escribe (un formulario que manda todos los campos no debe chocar con
     // el bloqueo de estados cerrados de abajo).
