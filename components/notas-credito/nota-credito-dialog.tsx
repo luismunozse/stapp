@@ -35,7 +35,7 @@ const METODOS = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "TRANSFERENCIA", label: "Transferencia" },
   { value: "TARJETA", label: "Tarjeta" },
-  { value: "MERCADOPAGO", label: "Mercado Pago" },
+  { value: "MERCADOPAGO", label: "MercadoPago" },
   { value: "CUENTA_CORRIENTE", label: "Cuenta corriente" },
   { value: "NOTA_CREDITO_INTERNA", label: "NC interna (no devuelve dinero)" },
   { value: "OTRO", label: "Otro" },

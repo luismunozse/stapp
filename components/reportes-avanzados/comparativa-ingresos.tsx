@@ -120,14 +120,14 @@ export function ComparativaIngresos() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          title="Ingresos Mes Actual"
+          title="Ingresos del mes"
           value={formatPrice(data.mesActual.total)}
           description={data.mesActual.nombre}
           icon={DollarSign}
           tone="default"
         />
         <StatCard
-          title="Mes Anterior"
+          title="Mes anterior"
           value={formatPrice(data.mesAnterior.total)}
           description={data.mesAnterior.nombre}
           icon={DollarSign}
@@ -141,7 +141,7 @@ export function ComparativaIngresos() {
           tone={data.cambio.direccion === "up" ? "success" : data.cambio.direccion === "down" ? "danger" : "default"}
         />
         <StatCard
-          title="Remitos Este Mes"
+          title="Remitos este mes"
           value={String(data.mesActual.cantidad)}
           description={`Prom: ${formatPrice(data.mesActual.promedio)}`}
           icon={Receipt}
@@ -152,7 +152,7 @@ export function ComparativaIngresos() {
       {/* Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Comparativa de Ingresos</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Comparativa de ingresos</CardTitle>
           <CardDescription>
             Ingresos totales por mes
           </CardDescription>

@@ -47,7 +47,7 @@ export function PosHeldSales({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw className="h-5 w-5" />
-            Ventas Apartadas
+            Ventas apartadas
             {heldSales.length > 0 && (
               <Badge variant="secondary">{heldSales.length}</Badge>
             )}

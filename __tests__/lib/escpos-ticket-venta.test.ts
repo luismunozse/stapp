@@ -42,7 +42,8 @@ describe("ticket térmico de venta", () => {
       ],
     })
     expect(t).toContain("Pagos:")
-    expect(t).toContain("T. Debito")
+    // "T. Débito": la é sale como su byte de CP858 (0x82).
+    expect(t).toContain("T. D\x82bito")
     expect(t).toContain("$600")
   })
 })

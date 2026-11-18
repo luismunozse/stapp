@@ -201,8 +201,8 @@ export function CatalogoCompartirTab() {
               <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-xs text-amber-900 dark:text-amber-200">
                 En tu plan actual los pedidos del catálogo llegan solo por WhatsApp: no se registran como
-                cotización ni reservan stock. Cargá tu WhatsApp más abajo, sin él tus clientes no pueden hacer
-                pedidos. Con un plan que incluya cotizaciones online los pedidos quedan registrados.{" "}
+                presupuesto ni reservan stock. Cargá tu WhatsApp más abajo, sin él tus clientes no pueden hacer
+                pedidos. Con un plan que incluya presupuestos online los pedidos quedan registrados.{" "}
                 <Link href="/configuracion/billing?plan=profesional" className="font-medium underline">
                   Ver planes
                 </Link>
@@ -334,7 +334,7 @@ export function CatalogoCompartirTab() {
             />
             <p className="text-xs text-muted-foreground mt-1">
               Los pedidos pendientes liberan el stock reservado pasado este tiempo (entre 1 y 720 horas).
-              El pedido sigue en tus cotizaciones.
+              El pedido sigue en tus presupuestos.
             </p>
           </div>
 

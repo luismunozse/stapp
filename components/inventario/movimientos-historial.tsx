@@ -178,7 +178,7 @@ export function MovimientosHistorial({
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            Historial de Movimientos - {inventarioNombre}
+            Historial de movimientos - {inventarioNombre}
           </DialogTitle>
         </DialogHeader>
 

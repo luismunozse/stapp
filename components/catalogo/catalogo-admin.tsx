@@ -29,7 +29,7 @@ export function CatalogoAdmin() {
   return (
     <PageShell
       title="Catálogo público"
-      description="Compartí tu lista de productos y servicios. Los clientes pueden navegar y solicitar cotización."
+      description="Compartí tu lista de productos y servicios. Los clientes pueden navegarla y pedir un presupuesto."
       icon={BookMarked}
       actions={
         <Button

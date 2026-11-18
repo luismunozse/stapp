@@ -278,7 +278,7 @@ function VarianteForm({
             step="1"
             value={stock}
             onChange={(e) => setStock(e.target.value)}
-            placeholder="Sin tracking"
+            placeholder="Sin control de stock"
           />
         </div>
       </div>

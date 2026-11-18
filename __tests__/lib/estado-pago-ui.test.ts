@@ -4,7 +4,7 @@ import { getEstadoPagoUi, normalizarEstadoPago } from "@/lib/estado-pago-ui"
 describe("estado-pago-ui", () => {
   it("unifica los sinónimos de ventas y órdenes en una sola etiqueta y tono", () => {
     expect(getEstadoPagoUi("PAGADO")).toEqual(getEstadoPagoUi("COBRADO"))
-    expect(getEstadoPagoUi("PAGADO").label).toBe("Pagado")
+    expect(getEstadoPagoUi("PAGADO").label).toBe("Cobrado")
     expect(getEstadoPagoUi("PAGADO_PARCIAL")).toEqual(getEstadoPagoUi("PARCIAL"))
     expect(getEstadoPagoUi("PARCIAL").label).toBe("Pago parcial")
     expect(getEstadoPagoUi("PENDIENTE").label).toBe("Sin cobrar")

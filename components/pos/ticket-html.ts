@@ -94,7 +94,7 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
       : ""
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Ticket Venta #${numero}</title>
+<html><head><meta charset="utf-8"><title>Ticket de venta #${numero}</title>
 <style>
   @page { size: ${Number(printerWidth)}mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -125,8 +125,8 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
   ${ivaIncluidoHTML}
   ${Number(venta.saldoPendiente || 0) > 0 ? `<div class="row bold"><span>Saldo pendiente:</span><span>${escapeHtml(fmt(Number(venta.saldoPendiente)))}</span></div>` : ""}
   <div class="sep-bold"></div>
-  <div class="center bold">¡Gracias por su compra!</div>
-  <div class="center small">Conserve este ticket como comprobante</div>
+  <div class="center bold">¡Gracias por tu compra!</div>
+  <div class="center small">Conservá este ticket como comprobante</div>
   <br><br>
 </body></html>`
 }

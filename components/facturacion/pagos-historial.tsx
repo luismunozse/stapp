@@ -23,10 +23,10 @@ interface PagosHistorialProps {
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
-  TARJETA_DEBITO: "Tarjeta Débito",
-  TARJETA_CREDITO: "Tarjeta Crédito",
+  TARJETA_DEBITO: "Tarjeta de débito",
+  TARJETA_CREDITO: "Tarjeta de crédito",
   MERCADOPAGO: "MercadoPago",
-  CUENTA_CORRIENTE: "Cuenta Corriente",
+  CUENTA_CORRIENTE: "Cuenta corriente",
   OTRO: "Otro",
 }
 

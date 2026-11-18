@@ -146,7 +146,7 @@ export function ReportesAvanzadosView({
           <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-10">
             <TabsTrigger value="tecnicos" className="gap-2">
               <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Tecnicos</span>
+              <span className="hidden sm:inline">Técnicos</span>
             </TabsTrigger>
             <TabsTrigger value="vendedores" className="gap-2">
               <ShoppingCart className="h-4 w-4" />
@@ -184,12 +184,12 @@ export function ReportesAvanzadosView({
             </TabsTrigger>
             <TabsTrigger value="rentabilidad-tecnicos" className="gap-2">
               <DollarSign className="h-4 w-4" />
-              <span className="hidden sm:inline">Rentab. tecnico</span>
+              <span className="hidden sm:inline">Rentab. técnico</span>
               {bloqueado("rentabilidad-tecnicos") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
             <TabsTrigger value="prediccion" className="gap-2">
               <Boxes className="h-4 w-4" />
-              <span className="hidden sm:inline">Prediccion</span>
+              <span className="hidden sm:inline">Predicción</span>
               {bloqueado("prediccion") && <Lock className="h-3 w-3 text-amber-600" aria-label="Plan Profesional" />}
             </TabsTrigger>
           </TabsList>

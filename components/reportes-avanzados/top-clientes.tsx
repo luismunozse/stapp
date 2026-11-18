@@ -117,7 +117,7 @@ export function TopClientes() {
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
         <StatCard
-          title="Clientes Activos"
+          title="Clientes activos"
           value={String(data.estadisticas.clientesActivos)}
           description={`de ${data.estadisticas.totalClientes}`}
           icon={Users}
@@ -131,7 +131,7 @@ export function TopClientes() {
           tone="default"
         />
         <StatCard
-          title="Gasto Prom."
+          title="Gasto prom."
           value={formatPrice(data.estadisticas.promedioGastoCliente)}
           description="por cliente"
           icon={DollarSign}
@@ -146,14 +146,14 @@ export function TopClientes() {
           size="sm"
           onClick={() => setOrdenarPor("ordenes")}
         >
-          Por Órdenes
+          Por órdenes
         </Button>
         <Button
           variant={ordenarPor === "monto" ? "default" : "outline"}
           size="sm"
           onClick={() => setOrdenarPor("monto")}
         >
-          Por Monto
+          Por monto
         </Button>
       </div>
 

@@ -73,12 +73,12 @@ describe("FacturacionList — origen badge", () => {
     // Positive control: the orden row (PENDIENTE, with pagos) offers both
     // actions — proves the assertions below would fail if the actions
     // disappeared for orden rows too.
-    expect(within(ordenCard).getByText("Registrar Pago")).toBeInTheDocument()
+    expect(within(ordenCard).getByText("Registrar pago")).toBeInTheDocument()
     expect(within(ordenCard).getByText(/Historial de pagos/)).toBeInTheDocument()
 
     // The venta row must never offer payment actions, even though it's
     // also PENDIENTE and has pagos entries.
-    expect(within(ventaCard).queryByText("Registrar Pago")).toBeNull()
+    expect(within(ventaCard).queryByText("Registrar pago")).toBeNull()
     expect(within(ventaCard).queryByText(/Historial de pagos/)).toBeNull()
   })
 
