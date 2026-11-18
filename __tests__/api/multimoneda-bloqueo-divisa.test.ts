@@ -12,6 +12,13 @@ import { supabaseAdmin } from "@/lib/supabase"
 vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/lib/operadores", () => ({ resolveOperador: vi.fn().mockResolvedValue(null) }))
 vi.mock("@/lib/audit", () => ({ createAuditLogger: () => ({ create: vi.fn() }) }))
+vi.mock("@/lib/currency/tipo-cambio.server", () => ({
+  cargarConfigMoneda: vi.fn().mockResolvedValue({
+    config: { habilitada: true, monedaExtranjera: "USD", monedaLocal: "ARS", redondeoConversion: 0, fuente: "MANUAL" },
+    fila: null,
+  }),
+  resolverTipoCambio: vi.fn().mockResolvedValue({ disponible: true, valor: 1200, fuente: "MANUAL", moneda: "USD", en: "x", estado: "vivo" }),
+}))
 vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn().mockResolvedValue(undefined) }))
 
 import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
@@ -84,7 +91,9 @@ describe("idsConLineasNuevas", () => {
 })
 
 describe("rutas: ítems en divisa", () => {
-  it("POST /api/ventas: 409 y sin RPC", async () => {
+  // S5: POST /api/ventas ya no rechaza ítems en divisa; los convierte. Sin la cotización del POS
+  // en el body responde 409 COTIZACION_CAMBIO y no llama al RPC.
+  it("POST /api/ventas: ya no bloquea, pide la cotización (409 COTIZACION_CAMBIO) y sin RPC", async () => {
     mockSupabaseFrom({ clientes: createChainMock({ id: "c" }), inventario: createChainMock([usd]) })
     const res = await postVenta(
       createPostRequest({
@@ -96,7 +105,7 @@ describe("rutas: ítems en divisa", () => {
     )
     const { status, body } = await parseResponse(res)
     expect(status).toBe(409)
-    expect(body.code).toBe("ITEM_EN_DIVISA")
+    expect(body.code).toBe("COTIZACION_CAMBIO")
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 

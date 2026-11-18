@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { useCurrency } from "@/contexts/currency-context"
 import { cn } from "@/lib/utils"
 import { PosVarianteMiniatura } from "./pos-variante-miniatura"
 import type { InventarioResult } from "./pos-types"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
 
 export interface GrupoAbierto {
   grupoId: string
@@ -22,6 +22,8 @@ interface Props {
   onAdd: (producto: InventarioResult) => void
   /** Where focus goes once the sheet has closed (the search input), instead of the vanished card. */
   devolverFoco?: () => void
+  /** Why a variant priced in a foreign currency cannot be sold now (null = it can). */
+  noVendible?: (producto: InventarioResult) => string | null
 }
 
 // A whole group in one page, in the selling deposito, including the variants with no stock
@@ -43,8 +45,7 @@ export function urlDeGrupo(grupoId: string): string {
  * Bottom sheet of the POS grouped card: one big row per variant (label, price, stock, photo). The
  * whole row is the tap target (>= 56px). A variant without stock is shown but disabled.
  */
-export function PosVariantesSheet({ grupo, onClose, onAdd, devolverFoco }: Props) {
-  const { formatPrice } = useCurrency()
+export function PosVariantesSheet({ grupo, onClose, onAdd, devolverFoco, noVendible }: Props) {
   const [respuesta, setRespuesta] = useState<{ clave: string; filas: InventarioResult[] | null } | null>(null)
   const [intento, setIntento] = useState(0)
   // While the sheet slides out `grupo` is already null: keep drawing the last group so the title
@@ -123,22 +124,27 @@ export function PosVariantesSheet({ grupo, onClose, onAdd, devolverFoco }: Props
           ) : (
             filas.map((fila) => {
               const etiqueta = fila.etiqueta || fila.nombre
+              const motivo = noVendible?.(fila) ?? null
               const sinStock = fila.stock <= 0
+              const deshabilitada = sinStock || motivo !== null
               return (
                 <button
                   key={fila.id}
                   type="button"
-                  disabled={sinStock}
+                  disabled={deshabilitada}
                   onClick={() => elegir(fila)}
                   className={cn(
                     "flex min-h-14 w-full items-center gap-3 rounded-xl border bg-card p-2 text-left transition-colors active:scale-[0.98] hover:border-primary",
-                    sinStock && "cursor-not-allowed bg-muted/40 hover:border-border active:scale-100"
+                    deshabilitada && "cursor-not-allowed bg-muted/40 hover:border-border active:scale-100"
                   )}
                 >
                   <PosVarianteMiniatura etiqueta={etiqueta} imagenUrl={fila.imagenUrl} imagenRespaldo={fila.imagenRespaldo} />
                   <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate text-sm font-medium", sinStock && "text-muted-foreground")}>{etiqueta}</span>
-                    <span className={cn("block text-sm font-bold", sinStock ? "text-muted-foreground" : "text-primary")}>{formatPrice(fila.precioVenta)}</span>
+                    <span className={cn("block truncate text-sm font-medium", deshabilitada && "text-muted-foreground")}>{etiqueta}</span>
+                    <span className={cn("block text-sm font-bold", deshabilitada ? "text-muted-foreground" : "text-primary")}>
+                      <PrecioEnMoneda monto={fila.precioVenta} moneda={fila.moneda ?? null} />
+                    </span>
+                    {motivo !== null && <span className="block text-xs text-muted-foreground">{motivo}</span>}
                   </span>
                   <span
                     className={cn(

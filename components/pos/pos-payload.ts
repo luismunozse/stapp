@@ -15,6 +15,8 @@ export interface BuildVentaPayloadInput {
   descuentoMotivo?: string
   /** Vendedor que realiza la venta (opcional; default = usuario de sesión en el servidor). */
   vendedorId?: string | null
+  /** Cotización usada para convertir las líneas en divisa (solo se envía si hay alguna). */
+  tipoCambio?: number | null
 }
 
 export interface VentaPayload {
@@ -34,7 +36,9 @@ export interface VentaPayload {
     porcentajeDescuento: number
     serieIds?: string[]
     costo?: number
+    precioOrigen?: number
   }[]
+  tipoCambio?: number
   descuento: number
   tipoDescuento: TipoDescuento
   porcentajeDescuento: number
@@ -54,7 +58,8 @@ export interface VentaPayload {
 }
 
 export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
-  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, descuentoGlobal = null, descuentoMotivo, vendedorId } = input
+  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, descuentoGlobal = null, descuentoMotivo, vendedorId, tipoCambio } = input
+  const hayDivisa = items.some((i) => i.moneda)
   const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
 
   const globalTipo: TipoDescuento = descuentoGlobal?.tipo ?? "MONTO"
@@ -79,8 +84,11 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
         porcentajeDescuento: tipo === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : 0,
         ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
         ...(item.costo != null && { costo: item.costo }),
+        // Solo un precio de origen positivo: con 0 el servidor usa el de lista, igual que sin él.
+        ...(item.moneda && typeof item.precioOrigen === "number" && item.precioOrigen > 0 && { precioOrigen: item.precioOrigen }),
       }
     }),
+    ...(hayDivisa && tipoCambio != null ? { tipoCambio } : {}),
     descuento: globalTipo === "MONTO" ? globalValor : 0,
     tipoDescuento: globalTipo,
     porcentajeDescuento: globalTipo === "PORCENTAJE" ? globalValor : 0,

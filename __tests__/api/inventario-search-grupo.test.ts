@@ -17,9 +17,9 @@ import { GET } from "@/app/api/inventario/search/route"
 // record in the selling deposito is NOT returned), and records every attempt.
 
 const SELECT_VERTODAS_ACTUAL =
-  "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default"
+  "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default, moneda"
 const SELECT_DEPOSITO_ACTUAL =
-  "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
+  "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, moneda, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
 const COLUMNAS_VARIANTE = "grupo_id, atributos, imagen_url, grupo:inventario_grupos(nombre)"
 // The group's options, in the order the sheet lists the combinations (Rojo first).
 const OPCIONES_G1 = [
@@ -239,7 +239,7 @@ describe("GET /api/inventario/search: variant fields and the grupoId filter", ()
       })
       // A standalone row has exactly today's keys: no variant key at all.
       expect(Object.keys(porId.suelto).sort()).toEqual(
-        ["codigo", "diasGarantiaDefault", "id", "nombre", "precioCompra", "precioVenta", "stock", "stockReservado", "trackeaSeries"].sort()
+        ["codigo", "diasGarantiaDefault", "id", "moneda", "nombre", "precioCompra", "precioVenta", "stock", "stockReservado", "trackeaSeries"].sort()
       )
       expect(porId.suelto).not.toHaveProperty("grupoId")
       expect(selectConGrupo).toContain(selectActual)

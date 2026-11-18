@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useMoneda } from "@/hooks/use-moneda"
 import { formatCurrencyValue } from "@/lib/currency"
 import { normalizarNumeroAR } from "@/lib/currency/numero-ar"
+import { antiguedad } from "@/lib/currency/antiguedad"
 import { fuentesPara, type ConfigMoneda, type FuenteTipoCambio } from "@/lib/currency/config-moneda"
 import type { MonedaExtranjera } from "@/lib/currency/convert"
 import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
@@ -63,15 +64,6 @@ function opcionesDeFuente(config: ConfigMoneda, moneda: MonedaExtranjera): Fuent
   return fuentesPara(esAR ? "AR" : null, moneda)
 }
 
-function hace(en: string): string {
-  const minutos = Math.max(0, Math.floor((Date.now() - new Date(en).getTime()) / 60_000))
-  if (minutos < 1) return "instantes"
-  if (minutos < 60) return `${minutos} min`
-  const horas = Math.floor(minutos / 60)
-  if (horas < 24) return `${horas} h`
-  return `${Math.floor(horas / 24)} d`
-}
-
 function CotizacionVigente({ tipoCambio, config }: { tipoCambio: ResultadoTipoCambio | undefined; config: ConfigMoneda }) {
   if (!tipoCambio || (!tipoCambio.disponible && tipoCambio.motivo === "DESHABILITADA")) return null
   if (!tipoCambio.disponible) {
@@ -84,14 +76,14 @@ function CotizacionVigente({ tipoCambio, config }: { tipoCambio: ResultadoTipoCa
   if (tipoCambio.estado === "referencia") {
     return (
       <p className="text-sm text-warning-700" role="status">
-        Cotización de hace {hace(tipoCambio.en)}
+        Cotización de hace {antiguedad(tipoCambio.en)}
       </p>
     )
   }
   return (
     <p className="text-sm text-muted-foreground" role="status">
       {FUENTE_LABEL[tipoCambio.fuente]} · {formatCurrencyValue(tipoCambio.valor, config.monedaLocal)} · hace{" "}
-      {hace(tipoCambio.en)}
+      {antiguedad(tipoCambio.en)}
     </p>
   )
 }

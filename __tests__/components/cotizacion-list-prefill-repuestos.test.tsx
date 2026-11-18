@@ -81,7 +81,7 @@ describe("CotizacionList — prefill 'Desde Repuestos' con el costo oculto", () 
     renderList([repuestoGatedConVenta])
 
     fireEvent.click(screen.getByRole("button", { name: /Desde Repuestos/i }))
-    fireEvent.click(await screen.findByRole("button", { name: /Crear Cotización/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /Crear presupuesto/i }))
 
     await waitFor(() => {
       const body = postBody(mockFetch)
@@ -114,7 +114,7 @@ describe("CotizacionList — prefill 'Desde Repuestos' con el costo oculto", () 
     expect(screen.getByText(/sin precio de venta/i)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: /Desde Repuestos/i }))
-    fireEvent.click(await screen.findByRole("button", { name: /Crear Cotización/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /Crear presupuesto/i }))
 
     await waitFor(() => {
       const body = postBody(mockFetch)
@@ -146,7 +146,7 @@ describe("CotizacionList — prefill 'Desde Repuestos' con el costo oculto", () 
     expect(screen.queryByText(/sin precio de venta/i)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: /Desde Repuestos/i }))
-    fireEvent.click(await screen.findByRole("button", { name: /Crear Cotización/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /Crear presupuesto/i }))
 
     await waitFor(() => {
       const body = postBody(mockFetch)

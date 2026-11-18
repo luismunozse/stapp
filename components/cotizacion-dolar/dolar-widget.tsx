@@ -245,7 +245,7 @@ export function DolarWidget({ variant = "card" }: { variant?: "card" | "header" 
         </PopoverTrigger>
         <PopoverContent align="end" className="w-80 space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Cotización Dólar</p>
+            <p className="text-sm font-medium">Cotización del dólar</p>
             <button aria-label="Actualizar cotización"
               onClick={fetchCotizaciones}
               disabled={loading}
@@ -263,7 +263,7 @@ export function DolarWidget({ variant = "card" }: { variant?: "card" | "header" 
   return (
     <Card className="transition-shadow hover:shadow-md">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Cotización Dólar</CardTitle>
+        <CardTitle className="text-sm font-medium">Cotización del dólar</CardTitle>
         <button aria-label="Actualizar cotización"
           onClick={fetchCotizaciones}
           disabled={loading}

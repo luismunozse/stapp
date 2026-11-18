@@ -45,10 +45,10 @@ interface ConvertirVentaDialogProps {
 const METODOS_PAGO = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "TRANSFERENCIA", label: "Transferencia" },
-  { value: "TARJETA_DEBITO", label: "Tarjeta Debito" },
-  { value: "TARJETA_CREDITO", label: "Tarjeta Credito" },
+  { value: "TARJETA_DEBITO", label: "Tarjeta de débito" },
+  { value: "TARJETA_CREDITO", label: "Tarjeta de crédito" },
   { value: "MERCADOPAGO", label: "MercadoPago" },
-  { value: "CUENTA_CORRIENTE", label: "Cuenta Corriente" },
+  { value: "CUENTA_CORRIENTE", label: "Cuenta corriente" },
   { value: "OTRO", label: "Otro" },
 ]
 
@@ -114,7 +114,7 @@ export function ConvertirVentaDialog({
         <div className="space-y-4">
           {/* Items table */}
           <div>
-            <Label className="text-sm font-medium">Items de la cotizacion</Label>
+            <Label className="text-sm font-medium">Ítems del presupuesto</Label>
             <div className="mt-2 space-y-2">
               {items.map((item) => (
                 <div
@@ -132,7 +132,7 @@ export function ConvertirVentaDialog({
                       <Input
                         type="number"
                         min={0}
-                        placeholder="Dias"
+                        placeholder="Días"
                         value={garantias[item.id] || ""}
                         onChange={(e) =>
                           setGarantias((prev) => ({
@@ -143,7 +143,7 @@ export function ConvertirVentaDialog({
                         className="h-8 text-xs"
                       />
                     </div>
-                    <span className="text-xs text-muted-foreground w-12">dias gar.</span>
+                    <span className="text-xs text-muted-foreground w-12">días gar.</span>
                   </div>
                   <div className="text-sm font-medium w-24 text-right">
                     {formatPrice(item.subtotal)}
@@ -161,7 +161,7 @@ export function ConvertirVentaDialog({
 
           {/* Metodo de pago */}
           <div>
-            <Label>Metodo de pago</Label>
+            <Label>Método de pago</Label>
             <Select value={metodoPago} onValueChange={setMetodoPago}>
               <SelectTrigger className="mt-1">
                 <SelectValue />
@@ -194,7 +194,7 @@ export function ConvertirVentaDialog({
             Cancelar
           </Button>
           <Button onClick={handleSubmit} loading={loading}>
-            <ShoppingCart className="mr-2 h-4 w-4" />Crear Venta
+            <ShoppingCart className="mr-2 h-4 w-4" />Crear venta
           </Button>
         </DialogFooter>
       </DialogContent>

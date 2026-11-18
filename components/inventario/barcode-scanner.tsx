@@ -209,7 +209,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = fals
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ScanLine className="h-4 w-4" />
-            Escáner de Código de Barras
+            Escáner de código de barras
           </DialogTitle>
         </DialogHeader>
 

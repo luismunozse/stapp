@@ -84,8 +84,8 @@ export function RentabilidadChart() {
             no tiene. El título sigue a lo que se muestra. */}
         <CardTitle>
           {costosOcultos
-            ? "Ingresos por Tipo de Dispositivo"
-            : "Rentabilidad por Tipo de Dispositivo"}
+            ? "Ingresos por tipo de dispositivo"
+            : "Rentabilidad por tipo de dispositivo"}
         </CardTitle>
         <CardDescription>
           {costosOcultos
@@ -113,7 +113,7 @@ export function RentabilidadChart() {
 
         <div className={`mt-4 grid gap-3 ${costosOcultos ? "grid-cols-1" : "grid-cols-3"}`}>
           <StatCard
-            title="Total Ingresos"
+            title="Total de ingresos"
             value={formatPrice(data.reduce((s, d) => s + d.ingresos, 0))}
             icon={DollarSign}
             tone="success"
@@ -121,13 +121,13 @@ export function RentabilidadChart() {
           {!costosOcultos && (
             <>
               <StatCard
-                title="Total Costos"
+                title="Total de costos"
                 value={formatPrice(data.reduce((s, d) => s + (d.costos ?? 0), 0))}
                 icon={TrendingDown}
                 tone="warning"
               />
               <StatCard
-                title="Margen Total"
+                title="Margen total"
                 value={formatPrice(data.reduce((s, d) => s + (d.ganancia ?? 0), 0))}
                 icon={TrendingUp}
                 tone="info"

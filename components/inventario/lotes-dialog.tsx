@@ -258,7 +258,7 @@ export function LotesDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__default__">Principal (default)</SelectItem>
+                  <SelectItem value="__default__">Principal (predeterminado)</SelectItem>
                   {depositos.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       <span className="flex items-center gap-1">

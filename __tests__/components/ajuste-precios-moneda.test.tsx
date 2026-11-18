@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { InventarioBulkBar } from "@/components/inventario/inventario-bulk-bar"
-import { formatCurrencyValue } from "@/lib/currency"
 import { AjustePreciosProveedor } from "@/components/proveedores/ajuste-precios-proveedor"
 
 const confirmMock = vi.hoisted(() => vi.fn())
@@ -73,6 +72,6 @@ describe("ajuste por proveedor con monedas mezcladas", () => {
 
     expect(screen.getByPlaceholderText("4940")).toBeInTheDocument()
     expect(screen.getByPlaceholderText("49.35")).toBeInTheDocument()
-    expect(screen.getByText(formatCurrencyValue(47, "USD"))).toBeInTheDocument()
+    expect(screen.getByText("US$ 47")).toBeInTheDocument()
   })
 })

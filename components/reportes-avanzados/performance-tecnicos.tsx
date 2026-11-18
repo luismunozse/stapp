@@ -120,7 +120,7 @@ export function PerformanceTecnicos() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 min-[480px]:grid-cols-3 gap-3">
         <StatCard
-          title="Total Órdenes"
+          title="Total de órdenes"
           value={String(data.totales.totalOrdenes)}
           description="Este mes"
           icon={UserCog}
@@ -138,7 +138,7 @@ export function PerformanceTecnicos() {
           tone="success"
         />
         <StatCard
-          title="Tiempo Prom."
+          title="Tiempo prom."
           value={data.totales.promedioTiempo !== null ? `${data.totales.promedioTiempo.toFixed(1)}d` : "-"}
           description="Para completar"
           icon={Clock}
@@ -150,7 +150,7 @@ export function PerformanceTecnicos() {
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Órdenes por Técnico</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Órdenes por técnico</CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               Completadas y en proceso
             </CardDescription>
@@ -176,7 +176,7 @@ export function PerformanceTecnicos() {
       {/* Lista de Técnicos */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Detalle por Técnico</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Detalle por técnico</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             Métricas individuales de rendimiento
           </CardDescription>

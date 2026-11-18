@@ -81,7 +81,7 @@ function PlantillaForm({
       <ResponsiveDialogHeader className="pr-8">
         <ResponsiveDialogTitle>Guardar como plantilla</ResponsiveDialogTitle>
         <ResponsiveDialogDescription>
-          Los ítems, las notas, los términos y los descuentos quedan listos para usar en una cotización nueva.
+          Los ítems, las notas, los términos y los descuentos quedan listos para usar en un presupuesto nuevo.
         </ResponsiveDialogDescription>
       </ResponsiveDialogHeader>
       <div className="grid gap-2">

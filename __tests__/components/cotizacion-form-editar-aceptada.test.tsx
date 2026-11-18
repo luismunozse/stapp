@@ -48,7 +48,7 @@ describe("CotizacionForm — editar una cotización aceptada", () => {
     renderForm(true)
     guardar()
 
-    expect(await screen.findByText(/firmarla de nuevo/i)).toBeInTheDocument()
+    expect(await screen.findByText(/firmarlo de nuevo/i)).toBeInTheDocument()
     expect(putCalls()).toHaveLength(0)
   })
 

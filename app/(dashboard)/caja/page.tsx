@@ -121,7 +121,7 @@ export default function CajaPage() {
 
   return (
     <PageShell
-      title="Caja Diaria"
+      title="Caja diaria"
       description="Resumen de ingresos y egresos del día"
       actions={isAdmin ? <ExportButton fecha={fecha} /> : null}
     >
@@ -184,8 +184,8 @@ export default function CajaPage() {
           <div className="overflow-x-auto">
             <TabsList className="w-auto min-w-full sm:min-w-0">
               <TabsTrigger value="resumen">Resumen</TabsTrigger>
-              {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="historial">Historial de Cierres</TabsTrigger>}
+              {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos manuales</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="historial">Historial de cierres</TabsTrigger>}
             </TabsList>
           </div>
 

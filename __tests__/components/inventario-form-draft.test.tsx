@@ -182,7 +182,7 @@ describe("InventarioForm — borrador local", () => {
 
     await screen.findByText(/se restauró un borrador no guardado/i)
     expect(screen.getByPlaceholderText("Ej: Drone, Cafetera...")).toHaveValue("Drone")
-    expect(screen.getByLabelText("Stock Mínimo")).toBeInTheDocument()
+    expect(screen.getByLabelText("Stock mínimo")).toBeInTheDocument()
   })
 
   it("no restaura un borrador de alta sobre un formulario de edicion", async () => {
@@ -209,7 +209,7 @@ describe("InventarioForm — borrador local", () => {
     expect(screen.getByText(/el costo no se guarda en el borrador/i)).toBeInTheDocument()
     // El resto del borrador vuelve entero.
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria restaurada")
-    expect(screen.getByLabelText("Precio Venta *")).toHaveValue("250")
+    expect(screen.getByLabelText("Precio de venta *")).toHaveValue("250")
   })
 
   it("no habla del costo cuando el rol no puede verlo", async () => {
@@ -253,7 +253,7 @@ describe("InventarioForm — borrador local", () => {
     renderForm({ initialBarcode: "7791234567890" })
 
     await screen.findByText(/se restauró un borrador no guardado/i)
-    expect(screen.getByLabelText("Código de Barras")).toHaveValue("7791234567890")
+    expect(screen.getByLabelText("Código de barras")).toHaveValue("7791234567890")
     // El resto del borrador si vuelve.
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria restaurada")
   })
@@ -274,7 +274,7 @@ describe("InventarioForm — borrador local", () => {
     })
 
     await screen.findByText(/se restauró un borrador no guardado/i)
-    expect(screen.getByLabelText("Código de Barras")).toHaveValue("111111111111")
+    expect(screen.getByLabelText("Código de barras")).toHaveValue("111111111111")
   })
 
   it("borra el borrador cuando el alta se guarda bien", async () => {
@@ -410,7 +410,7 @@ describe("InventarioForm — borrador local (lo que nunca se persiste)", () => {
 
     fireEvent.change(screen.getByLabelText("Nombre *"), { target: { value: "Bateria" } })
     fireEvent.change(screen.getByLabelText("Costo *"), { target: { value: "8888.77" } })
-    fireEvent.change(screen.getByLabelText("Precio Venta *"), { target: { value: "9999.55" } })
+    fireEvent.change(screen.getByLabelText("Precio de venta *"), { target: { value: "9999.55" } })
     await settle()
 
     const raw = window.localStorage.getItem(KEY_ALTA)

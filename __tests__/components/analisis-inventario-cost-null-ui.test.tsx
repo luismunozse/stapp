@@ -130,9 +130,9 @@ describe("AnalisisInventario — costo por item nulo", () => {
 
     await waitFor(() => expect(screen.getByText("Pantalla")).toBeInTheDocument())
 
-    expect(screen.queryByText("Items Más Valiosos")).not.toBeInTheDocument()
+    expect(screen.queryByText("Ítems más valiosos")).not.toBeInTheDocument()
     expect(screen.queryByText("Mayor valor en stock")).not.toBeInTheDocument()
-    expect(screen.getByText("Items con más stock")).toBeInTheDocument()
+    expect(screen.getByText("Ítems con más stock")).toBeInTheDocument()
     expect(screen.getByText("Mayor cantidad de unidades")).toBeInTheDocument()
   })
 
@@ -143,7 +143,7 @@ describe("AnalisisInventario — costo por item nulo", () => {
 
     await waitFor(() => expect(screen.getByText("Pantalla")).toBeInTheDocument())
 
-    expect(screen.getByText("Items Más Valiosos")).toBeInTheDocument()
+    expect(screen.getByText("Ítems más valiosos")).toBeInTheDocument()
     expect(screen.getByText("Mayor valor en stock")).toBeInTheDocument()
   })
 })
@@ -202,7 +202,7 @@ describe("AnalisisInventario — agregados de costo nulos", () => {
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
 
     expect(screen.getByText("1 items · 42 uds")).toBeInTheDocument()
-    expect(screen.queryByText("Valor por Categoría")).not.toBeInTheDocument()
+    expect(screen.queryByText("Valor por categoría")).not.toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
   })
 
@@ -213,8 +213,8 @@ describe("AnalisisInventario — agregados de costo nulos", () => {
 
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
 
-    expect(screen.queryByText("Valor Inventario")).not.toBeInTheDocument()
-    expect(screen.queryByText("Margen Pot.")).not.toBeInTheDocument()
+    expect(screen.queryByText("Valor del inventario")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen pot.")).not.toBeInTheDocument()
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
   })
 
@@ -226,10 +226,10 @@ describe("AnalisisInventario — agregados de costo nulos", () => {
 
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
 
-    expect(screen.getByText("Total Items")).toBeInTheDocument()
+    expect(screen.getByText("Total de ítems")).toBeInTheDocument()
     expect(screen.getByText("42 uds")).toBeInTheDocument()
-    // "Stock Crítico" titula la tarjeta del resumen y también la card de abajo.
-    expect(screen.getAllByText("Stock Crítico").length).toBeGreaterThan(0)
+    // "Stock crítico" titula la tarjeta del resumen y también la card de abajo.
+    expect(screen.getAllByText("Stock crítico").length).toBeGreaterThan(0)
   })
 
   it("muestra el valor por categoría y las cifras de organización cuando el rol puede verlas", async () => {
@@ -240,10 +240,10 @@ describe("AnalisisInventario — agregados de costo nulos", () => {
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
 
     expect(screen.getByText("1 items · 42 uds · $5555")).toBeInTheDocument()
-    expect(screen.getByText("Valor por Categoría")).toBeInTheDocument()
-    expect(screen.getByText("Valor Inventario")).toBeInTheDocument()
+    expect(screen.getByText("Valor por categoría")).toBeInTheDocument()
+    expect(screen.getByText("Valor del inventario")).toBeInTheDocument()
     expect(screen.getByText("$7777")).toBeInTheDocument()
-    expect(screen.getByText("Margen Pot.")).toBeInTheDocument()
+    expect(screen.getByText("Margen pot.")).toBeInTheDocument()
     expect(screen.getByText("$1111")).toBeInTheDocument()
   })
 })

@@ -15,9 +15,9 @@ import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
 
 // Today's selects, plus the variant columns (migration 355) as their own, first step.
 const SELECT_VERTODAS =
-  "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default"
+  "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default, moneda"
 const SELECT_DEPOSITO =
-  "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
+  "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, moneda, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
 const COLUMNAS_VARIANTE = "grupo_id, atributos, imagen_url, grupo:inventario_grupos(nombre)"
 // A typed search stays small; a group page (the POS variants sheet) holds a whole group.
 const LIMITE_BUSQUEDA = 50
@@ -197,6 +197,7 @@ export async function GET(request: Request) {
         precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
+        moneda: item.moneda ?? null,
         ...camposDeVarianteParaPos(item),
       }))
 
@@ -264,6 +265,7 @@ export async function GET(request: Request) {
         precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: item.dias_garantia_default ?? null,
+        moneda: item.moneda ?? null,
         ...camposDeVarianteParaPos(item),
       }
     })

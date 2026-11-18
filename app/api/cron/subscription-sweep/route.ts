@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
-import { esAdhesionSinCobro, venceLaGracia } from "@/lib/subscriptions/sweep-rules"
+import { esAdhesionSinCobro, inicioAdhesion, venceLaGracia } from "@/lib/subscriptions/sweep-rules"
 
 // Cron diario: barre subscriptions ACTIVE con current_period_end vencido.
 //   - MANUAL  → downgrade plan a Free (admin no renovó → asumimos churn)
@@ -205,7 +205,7 @@ export async function GET(request: Request) {
       .from("subscriptions")
       .select(`
         id, organization_id, created_at, current_period_end,
-        mercadopago_preapproval_id,
+        mercadopago_preapproval_id, mercadopago_preapproval_at,
         organizations!inner ( slug ),
         plans!inner ( tipo )
       `)
@@ -216,11 +216,16 @@ export async function GET(request: Request) {
       .neq("organizations.slug", "superadmin")
 
     for (const ad of (adhesiones || []) as any[]) {
+      // Solo cuentan los pagos de ESTA adhesión: un pago de hace un año (otro
+      // plan, otra adhesión, un pago manual) no prueba que esta haya cobrado,
+      // y contarlo dejaba el plan pago gratis para siempre.
+      const desde = inicioAdhesion(ad)
       const { count, error: countError } = await supabaseAdmin
         .from("subscription_payments")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", ad.organization_id)
         .eq("status", "SUCCEEDED")
+        .gte("paid_at", desde)
 
       // Si esta consulta falla no sabemos cuantos pagos tiene la org: un
       // error de infraestructura no puede leerse como "cero pagos exitosos",
@@ -239,7 +244,7 @@ export async function GET(request: Request) {
       const marcar = esAdhesionSinCobro({
         tienePreapproval: true,
         currentPeriodEnd: ad.current_period_end,
-        createdAt: ad.created_at,
+        adhesionDesde: desde,
         pagosExitosos: count ?? 0,
         ahora: new Date(nowIso),
       })

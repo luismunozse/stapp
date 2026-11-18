@@ -68,6 +68,18 @@ describe("POST /api/inventario/check-stock", () => {
     expect(body.precios).toEqual({ a: 120.5 })
   })
 
+  it("con precios: true devuelve monedas por id (null = local)", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      inventario: createChainMock([
+        { id: "a", stock: 5, precio_venta: "10", moneda: "USD" },
+        { id: "b", stock: 5, precio_venta: "10" },
+      ]),
+    })
+    const { body } = await parseResponse(await POST(req({ ids: ["a", "b"], precios: true })))
+    expect(body.monedas).toEqual({ a: "USD", b: null })
+  })
+
   it("sin precios la respuesta queda como siempre", async () => {
     mockAuthSuccess()
     mockSupabaseFrom({ inventario: createChainMock([{ id: "a", stock: 5 }]) })

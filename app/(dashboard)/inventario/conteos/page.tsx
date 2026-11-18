@@ -160,7 +160,7 @@ export default function ConteosPage() {
       ) : conteos.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Sin conteos todavía. Crea uno para empezar.
+            Sin conteos todavía. Creá uno para empezar.
           </CardContent>
         </Card>
       ) : (
