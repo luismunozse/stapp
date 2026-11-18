@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
+import { cargarConfigMoneda, resolverTipoCambio } from "@/lib/currency/tipo-cambio.server"
+import { calcularTotalesMultimoneda } from "@/lib/currency/convert"
+import { resolverLineasDivisa, type ItemCatalogoVenta } from "@/lib/currency/venta-divisa"
+import type { ConfigMoneda } from "@/lib/currency/config-moneda"
+import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
+import { formatCurrencyValue } from "@/lib/currency"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
@@ -38,6 +43,8 @@ const itemSchema = z.object({
   porcentajeDescuento: z.number().min(0).max(100).default(0),
   serieIds: z.array(z.string()).optional(),
   costo: z.number().min(0).nullable().optional(),
+  // Precio en la divisa del ítem (el cajero lo editó). La moneda la decide el servidor.
+  precioOrigen: z.number().positive().optional(),
 })
 
 const ventaSchema = z.object({
@@ -69,6 +76,8 @@ const ventaSchema = z.object({
     costoFinanciero: z.number().min(0).nullable().optional(),
   })).optional(),
   vendedorId: z.string().nullable().optional(),
+  // Cotización con la que el POS armó el total; solo importa si hay líneas en divisa.
+  tipoCambio: z.number().nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -199,6 +208,38 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * La venta ya registrada con esa clave de idempotencia, como la devuelve un alta (201), o null si
+ * no hay ninguna visible todavía.
+ */
+async function ventaIdempotente(organizationId: string, idempotencyKey: string): Promise<NextResponse | null> {
+  const { data: existente } = await supabaseAdmin
+    .from("ventas")
+    .select(`
+      *,
+      clientes (*),
+      users:vendedor_id (id, nombre),
+      items_venta (*, inventario (*)),
+      garantias_venta (*),
+      pagos_venta (*),
+      devoluciones_venta (*, items_devolucion(*))
+    `)
+    .eq("organization_id", organizationId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (!existente) return null
+
+  const { data: org } = await supabaseAdmin
+    .from("organizations")
+    .select("nombre, nombre_mostrar")
+    .eq("id", organizationId)
+    .single()
+  return NextResponse.json({
+    ...formatVenta(existente),
+    organizationName: org?.nombre_mostrar || org?.nombre || null,
+  }, { status: 201 })
+}
+
 export async function POST(request: Request) {
   try {
     const { error, organizationId, userId, role, session, tecnicosOperanPos } = await requirePosAccess()
@@ -266,7 +307,99 @@ export async function POST(request: Request) {
       data.tipoDescuento === "PORCENTAJE"
         ? { tipo: "PORCENTAJE", valor: data.porcentajeDescuento }
         : { tipo: "MONTO", valor: data.descuento }
-    const totales = calcularTotalesVenta(data.items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor)
+
+    // Ítems del catálogo con precio en divisa: la moneda sale de inventario, nunca del request.
+    const catalogo = new Map<string, ItemCatalogoVenta>()
+    const idsInventario = [...new Set(data.items.map((i) => i.inventarioId).filter((x): x is string => !!x))]
+    if (idsInventario.length > 0) {
+      const { data: filasInv, error: invError } = await supabaseAdmin
+        .from("inventario")
+        .select("id, nombre, moneda, precio_venta, precio_compra")
+        .in("id", idsInventario)
+        .eq("organization_id", organizationId!)
+      // 42703: columna moneda inexistente (migración 365 sin aplicar) → todo local.
+      if (invError && (invError as { code?: string }).code !== "42703") throw invError
+      if (!invError) {
+        const filas = (Array.isArray(filasInv) ? filasInv : filasInv ? [filasInv] : []) as Array<{
+          id: string; nombre: string; moneda: "USD" | "EUR" | null; precio_venta: unknown; precio_compra: unknown
+        }>
+        for (const f of filas) {
+          if (f.moneda == null) continue
+          catalogo.set(f.id, {
+            id: f.id,
+            nombre: f.nombre,
+            moneda: f.moneda,
+            precioVenta: Number(f.precio_venta),
+            precioCompra: f.precio_compra == null ? null : Number(f.precio_compra),
+          })
+        }
+      }
+    }
+
+    let configMoneda: ConfigMoneda | null = null
+    let tc: ResultadoTipoCambio | null = null
+    let divisa: Extract<ReturnType<typeof resolverLineasDivisa>, { ok: true }> | null = null
+    if (catalogo.size > 0) {
+      // Reintento idempotente de una venta ya registrada: se devuelve la original antes de
+      // mirar la cotización o la divisa, que pueden haber cambiado desde que se cobró (si no,
+      // el reintento recibía un 409 por una venta que ya existe).
+      if (data.idempotencyKey) {
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        if (existente) return existente
+      }
+      // Ids de las líneas del request cuyo producto tiene precio en divisa: el POS los usa para
+      // avisar de una línea que agregó como local y que mientras tanto pasó a divisa.
+      const inventarioIdsEnDivisa = [...catalogo.keys()]
+      configMoneda = (await cargarConfigMoneda(organizationId!)).config
+      tc = await resolverTipoCambio(organizationId!)
+      const r = resolverLineasDivisa({ lineas: data.items, catalogo, config: configMoneda, tc })
+      if (!r.ok) {
+        return NextResponse.json(
+          { error: r.mensaje, code: "DIVISA_NO_DISPONIBLE", motivo: r.motivo, inventarioIdsEnDivisa },
+          { status: 409 }
+        )
+      }
+      if (r.tipoCambio != null && tc.disponible && data.tipoCambio !== tc.valor) {
+        const nueva = formatCurrencyValue(tc.valor, configMoneda.monedaLocal)
+        const anterior = data.tipoCambio ?? null
+        return NextResponse.json(
+          {
+            error:
+              anterior != null
+                ? `La cotización cambió de ${formatCurrencyValue(anterior, configMoneda.monedaLocal)} a ${nueva}. Revisá el total y confirmá de nuevo.`
+                : `La venta necesita la cotización vigente (${nueva}). Revisá el total y confirmá de nuevo.`,
+            code: "COTIZACION_CAMBIO",
+            anterior,
+            nueva: tc,
+            inventarioIdsEnDivisa,
+          },
+          { status: 409 }
+        )
+      }
+      divisa = r
+    }
+
+    const convertida =
+      divisa && configMoneda
+        ? calcularTotalesMultimoneda({
+            lineas: data.items.map((it, i) => ({
+              ...it,
+              moneda: divisa.lineas[i]?.moneda ?? null,
+              precioOrigen: divisa.lineas[i]?.precioOrigen ?? null,
+            })),
+            tipoCambio: divisa.tipoCambio,
+            redondeoConversion: configMoneda.redondeoConversion,
+            monedaLocal: configMoneda.monedaLocal,
+            global: descuentoGlobal,
+            fiscal,
+            roundCash: cobro.efectivo,
+            factor: cobro.factor,
+          })
+        : null
+    const lineasVenta = convertida ? convertida.lineas : data.items
+    const totales = convertida
+      ? convertida.totales
+      : calcularTotalesVenta(data.items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor)
     const subtotal = totales.subtotal
     const descuentoMonto = totales.descuentoTotal
     const total = totales.total
@@ -294,8 +427,9 @@ export async function POST(request: Request) {
     // Preparar items para la función atómica. Precio y descuento se persisten
     // con el factor del método aplicado (precio efectivo = ingreso real), así
     // cada línea suma lo mismo que el total de la venta.
-    const pItems = data.items.map(item => {
-      const linea = lineaConRecargo(item, cobro.factor)
+    const pItems = data.items.map((item, i) => {
+      const linea = lineaConRecargo(lineasVenta[i], cobro.factor)
+      const enDivisa = divisa?.lineas[i] ?? null
       return {
         inventarioId: item.inventarioId || null,
         descripcion: item.descripcion,
@@ -306,7 +440,15 @@ export async function POST(request: Request) {
         tipoDescuento: item.tipoDescuento,
         porcentajeDescuento: item.porcentajeDescuento,
         ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
-        ...(item.costo != null && { costo: item.costo }),
+        ...(enDivisa
+          ? {
+              monedaOrigen: enDivisa.moneda,
+              precioOrigen: enDivisa.precioOrigen,
+              tipoCambio: divisa!.tipoCambio,
+              tipoCambioFuente: tc && tc.disponible ? tc.fuente : null,
+              costoUnitario: enDivisa.costoLocal,
+            }
+          : item.costo != null && { costo: item.costo }),
       }
     })
 
@@ -335,13 +477,6 @@ export async function POST(request: Request) {
     )
 
     // Crear venta atómicamente
-    // Hasta que la conversión llegue a las ventas, un ítem con precio en divisa no entra.
-    const enDivisa = await rechazarItemsEnDivisa({
-      organizationId: organizationId!,
-      inventarioIds: data.items.map((i) => i.inventarioId),
-    })
-    if (enDivisa) return enDivisa
-
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
       p_vendedor_id: vendedorId,
@@ -384,32 +519,8 @@ export async function POST(request: Request) {
       // 23505: violación del índice único de idempotencia → la venta ya existe.
       // Reintento idempotente: devolver la venta original sin duplicar.
       if ((rpcError as any).code === "23505" && data.idempotencyKey) {
-        const { data: existente } = await supabaseAdmin
-          .from("ventas")
-          .select(`
-            *,
-            clientes (*),
-            users:vendedor_id (id, nombre),
-            items_venta (*, inventario (*)),
-            garantias_venta (*),
-            pagos_venta (*),
-            devoluciones_venta (*, items_devolucion(*))
-          `)
-          .eq("organization_id", organizationId!)
-          .eq("idempotency_key", data.idempotencyKey)
-          .maybeSingle()
-
-        if (existente) {
-          const { data: org } = await supabaseAdmin
-            .from("organizations")
-            .select("nombre, nombre_mostrar")
-            .eq("id", organizationId!)
-            .single()
-          return NextResponse.json({
-            ...formatVenta(existente),
-            organizationName: org?.nombre_mostrar || org?.nombre || null,
-          }, { status: 201 })
-        }
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        if (existente) return existente
 
         // 23505 de idempotencia pero la venta original aún no es visible
         // (carrera de commit). No es un error del usuario; pedir reintento.

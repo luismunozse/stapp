@@ -85,7 +85,7 @@ describe("PrecioEnMoneda", () => {
     const { rerender } = render(<PrecioEnMoneda monto={1500} moneda={null} />)
     expect(screen.getByText("ARS 1.500")).toBeInTheDocument()
     rerender(<PrecioEnMoneda monto={50} moneda="USD" />)
-    expect(screen.getByText(/50/)).toBeInTheDocument()
+    expect(screen.getByText("US$ 50")).toBeInTheDocument()
     expect(screen.queryByText("ARS 50")).not.toBeInTheDocument()
   })
 

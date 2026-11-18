@@ -94,3 +94,22 @@ describe("PosVariantesSheet: closing", () => {
     expect(pendientes[0].signal?.aborted).toBe(true)
   })
 })
+
+describe("PosVariantesSheet: precios en divisa", () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it("muestra el precio en su divisa y deshabilita con el motivo la que no se puede vender", async () => {
+    const pendientes = stubFetchPendiente()
+    const AZUL_USD = { ...ROJO, id: "azul", etiqueta: "Azul", nombre: "Funda X - Azul", precioVenta: 10, moneda: "USD" }
+    const noVendible = vi.fn((p: { moneda?: string | null }) => (p.moneda ? "Sin cotización de USD" : null))
+    render(<PosVariantesSheet grupo={GRUPO} onClose={vi.fn()} onAdd={vi.fn()} noVendible={noVendible} />)
+    await act(async () => pendientes[0].resolver([ROJO, AZUL_USD]))
+    await flush()
+
+    const azul = screen.getByText("Azul").closest("button")!
+    expect(azul).toBeDisabled()
+    expect(azul.textContent).toContain("Sin cotización de USD")
+    expect(azul.textContent).toContain("US$ 10")
+    expect(screen.getByText("Rojo").closest("button")).toBeEnabled()
+  })
+})

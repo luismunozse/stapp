@@ -44,7 +44,9 @@ import {
   round2,
 } from "@/lib/ventas/totales"
 import { buildVentaPayload } from "./pos-payload"
+import { avisoLineasAhoraEnDivisa } from "./pos-divisa"
 import { TotalRow } from "@/components/pos/total-row"
+import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
 
 interface PosCheckoutDialogProps {
   open: boolean
@@ -56,6 +58,10 @@ interface PosCheckoutDialogProps {
   descuentoGlobal?: DescuentoConfig | null
   descuentoMotivo?: string
   fiscal?: FiscalConfig | null
+  /** Cotización con la que el carrito convirtió las líneas en divisa (viaja en el payload). */
+  tipoCambio?: number | null
+  /** 409 COTIZACION_CAMBIO: el terminal adopta la nueva (valor y resultado completo) y reconvierte el carrito. */
+  onCotizacionCambiada?: (nueva: number, resultado: ResultadoTipoCambio) => void
 }
 
 export function PosCheckoutDialog({
@@ -67,6 +73,8 @@ export function PosCheckoutDialog({
   descuentoGlobal = null,
   descuentoMotivo,
   fiscal = null,
+  tipoCambio = null,
+  onCotizacionCambiada,
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
@@ -349,6 +357,7 @@ export function PosCheckoutDialog({
         descuentoGlobal,
         ...(descuentoMotivo ? { descuentoMotivo } : {}),
         ...(vendedorId ? { vendedorId } : {}),
+        tipoCambio,
       })
 
       const res = await fetch("/api/ventas", {
@@ -359,7 +368,38 @@ export function PosCheckoutDialog({
 
       if (!res.ok) {
         const error = await res.json()
-        await showError(error.error || "Error al crear la venta")
+        // La cotización cambió en el servidor: el carrito se reconvierte con la nueva y el
+        // diálogo queda abierto con el total recalculado (misma idempotencyKey) para confirmar.
+        // El cobro que eligió el cajero no se toca: con pago parcial (fiado) quedan los pagos
+        // cargados y la diferencia con el nuevo total pasa a ser deuda, que es lo que es una
+        // venta a cuenta. Con una sola línea se vuelve a sembrar esa línea con su mismo método
+        // (cuotas, referencia, recargo y costo financiero incluidos) por el total; sembrada con
+        // el total de este render, cuando llegan los ítems reconvertidos el efecto de re-siembra
+        // de una línea pone el nuevo. Con varias líneas se dejan como están y la conciliación
+        // de más arriba frena el confirmar si ya no suman (el mensaje del 409 pide revisar).
+        // El monto recibido solo se borra en efectivo, porque el vuelto cambia.
+        // DIVISA_NO_DISPONIBLE solo se avisa: el cajero decide qué quitar.
+        if (res.status === 409 && error?.code === "COTIZACION_CAMBIO" && error.nueva?.disponible === true && typeof error.nueva.valor === "number") {
+          onCotizacionCambiada?.(error.nueva.valor, error.nueva as ResultadoTipoCambio)
+          if (!pagoParcial && pagosLines.length === 1) {
+            const primera = pagosLines[0]
+            setPagosLines([
+              {
+                ...createPagoLine(totalEfectivo, primera.metodo),
+                referencia: primera.referencia,
+                cuotas: primera.cuotas,
+                recargo: primera.recargo,
+                costoFinanciero: primera.costoFinanciero,
+              },
+            ])
+          }
+          if (isCashOnly) setMontoRecibido(null)
+        }
+        // Una línea que se agregó como local y cuyo producto pasó a divisa vuelve a dar 409 en
+        // cada confirmar: se avisa cuáles son para que el cajero las quite y las vuelva a agregar.
+        const aviso = res.status === 409 ? avisoLineasAhoraEnDivisa(items, error?.inventarioIdsEnDivisa) : null
+        const mensaje = error?.error || "Error al crear la venta"
+        await showError(aviso ? `${mensaje}\n\n${aviso}` : mensaje)
         return
       }
 

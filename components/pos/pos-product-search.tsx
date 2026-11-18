@@ -11,11 +11,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Search, Package, Layers, Loader2, Plus, Barcode, PenLine, X, ScanLine, MapPin } from "lucide-react"
-import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 import { agruparResultados } from "@/lib/pos-agrupar"
 import { PosVariantesSheet, type GrupoAbierto } from "./pos-variantes-sheet"
+import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
+import { cn } from "@/lib/utils"
 
 interface ManualProduct {
   nombre: string
@@ -46,6 +47,8 @@ interface PosProductSearchProps {
   onVentaSucursal?: (info: VentaSucursalInfo) => void
   /** Groups the variants of one product into a single card (default). False lists every variant on its own. */
   agruparVariantes?: boolean
+  /** Why a product priced in a foreign currency cannot be sold now (null = it can). */
+  noVendible?: (product: InventarioResult) => string | null
 }
 
 /** Reads the X-Venta-* headers set by search/route.ts under scope=venta. */
@@ -176,8 +179,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal, agruparVariantes = true }, ref) {
-    const { formatPrice } = useCurrency()
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal, agruparVariantes = true, noVendible }, ref) {
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
     const manualPriceRef = useRef<HTMLInputElement>(null)
@@ -569,6 +571,9 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
               {tarjetas.map((tarjeta) => {
                 if (tarjeta.tipo === "grupo") {
+                  // "desde" solo si todas las variantes tienen precio en la misma moneda.
+                  const monedaGrupo = tarjeta.miembros[0]?.moneda ?? null
+                  const mismaMoneda = tarjeta.miembros.every((m) => (m.moneda ?? null) === monedaGrupo)
                   return (
                     <button
                       key={`grupo-${tarjeta.grupoId}`}
@@ -582,18 +587,29 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                       </div>
                       <span className="text-sm font-medium line-clamp-2 leading-tight mb-auto">{tarjeta.nombre}</span>
                       <span className="mt-2 text-sm font-bold text-primary">
-                        {`${tarjeta.cantidad} variantes · desde ${formatPrice(tarjeta.desde)}`}
+                        {`${tarjeta.cantidad} variantes`}
+                        {mismaMoneda && (
+                          <>
+                            {" · desde "}
+                            <PrecioEnMoneda monto={tarjeta.desde} moneda={monedaGrupo} />
+                          </>
+                        )}
                       </span>
                     </button>
                   )
                 }
                 const product = tarjeta.producto
+                const motivoNoVendible = noVendible?.(product) ?? null
                 return (
                 <button
                   key={product.id}
                   type="button"
+                  disabled={motivoNoVendible !== null}
                   onClick={() => handleAdd(product)}
-                  className="group relative flex flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]"
+                  className={cn(
+                    "group relative flex flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]",
+                    motivoNoVendible !== null && "cursor-not-allowed bg-muted/40 hover:border-border hover:shadow-none active:scale-100"
+                  )}
                 >
                   {/* Cross-sucursal stock popover — read only, no add-to-cart */}
                   <StockOtrasSucursales
@@ -611,8 +627,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     {product.nombre}
                   </span>
                   <div className="flex items-center justify-between w-full mt-2">
-                    <span className="text-sm sm:text-base font-bold text-primary">
-                      {formatPrice(product.precioVenta)}
+                    <span className={cn("text-sm sm:text-base font-bold", motivoNoVendible !== null ? "text-muted-foreground" : "text-primary")}>
+                      <PrecioEnMoneda monto={product.precioVenta} moneda={product.moneda ?? null} />
                     </span>
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       product.stock <= 3
@@ -622,19 +638,24 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                       Stock: {product.stock}
                     </span>
                   </div>
+                  {motivoNoVendible !== null && (
+                    <span className="mt-1 text-xs text-muted-foreground">{motivoNoVendible}</span>
+                  )}
                   {/* Quick add overlay - desktop only */}
+                  {motivoNoVendible === null && (
                   <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden sm:flex">
                     <div className="bg-primary text-primary-foreground rounded-full p-1.5">
                       <Plus className="h-4 w-4" />
                     </div>
                   </div>
+                  )}
                 </button>
                 )
               })}
             </div>
           )}
         </div>
-        <PosVariantesSheet grupo={grupoAbierto} onClose={() => setGrupoAbierto(null)} onAdd={handleAdd} devolverFoco={() => inputRef.current?.focus()} />
+        <PosVariantesSheet grupo={grupoAbierto} onClose={() => setGrupoAbierto(null)} onAdd={handleAdd} devolverFoco={() => inputRef.current?.focus()} noVendible={noVendible} />
       </div>
     )
   }

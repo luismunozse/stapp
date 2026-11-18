@@ -282,3 +282,27 @@ describe("POS: flat mode (the workshop decides)", () => {
     expect(carrito()[0]).toMatchObject({ inventarioId: "negro", precioUnitario: 13000 })
   })
 })
+
+describe("POS: productos con precio en divisa en el buscador", () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it("con la moneda extranjera sin configurar, el producto en USD se ve en su divisa, deshabilitado y con el motivo", async () => {
+    const FUNDA_USD = { id: "usd", codigo: "U-1", nombre: "Funda importada", stock: 3, stockReservado: 0, precioVenta: 10, moneda: "USD" }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.startsWith("/api/inventario/search")) {
+          return { ok: true, status: 200, json: async () => [FUNDA_USD, PANTALLA], headers: new Headers() }
+        }
+        return { ok: false, status: 404, json: async () => ({}), headers: new Headers() }
+      })
+    )
+    render(<PosTerminal />)
+
+    const tarjeta = (await screen.findAllByText("Funda importada"))[0].closest("button") as HTMLButtonElement
+    expect(tarjeta).toBeDisabled()
+    expect(tarjeta.textContent).toContain("Moneda extranjera deshabilitada")
+    expect(tarjeta.textContent).toContain("US$ 10")
+    expect(primera("Pantalla").closest("button")).toBeEnabled()
+  })
+})

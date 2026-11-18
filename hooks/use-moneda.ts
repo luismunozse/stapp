@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import type { ConfigMoneda } from "@/lib/currency/config-moneda"
 import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
 
@@ -35,8 +35,18 @@ export function useMoneda() {
     revalidateOnFocus: false,
   })
 
+  const { mutate: mutateCache } = useSWRConfig()
+
   const mutate = async (): Promise<void> => {
     await Promise.all([configSwr.mutate(), tipoCambioSwr.mutate()])
+  }
+
+  /**
+   * Pone en el cache la cotización que informó el servidor (409 COTIZACION_CAMBIO), sin volver a
+   * pedirla: así todo lo que la muestra (el chip del POS) usa la misma que las líneas.
+   */
+  const fijarTipoCambio = async (nueva: ResultadoTipoCambio): Promise<void> => {
+    await mutateCache(TIPO_CAMBIO_URL, nueva, { revalidate: false })
   }
 
   return {
@@ -46,6 +56,9 @@ export function useMoneda() {
     itemsEnDivisa: configSwr.data?.itemsEnDivisa ?? null,
     isLoading: configSwr.isLoading,
     error: configSwr.error as Error | undefined,
+    /** Error al pedir la cotización (con la función habilitada). */
+    tipoCambioError: tipoCambioSwr.error as Error | undefined,
     mutate,
+    fijarTipoCambio,
   }
 }

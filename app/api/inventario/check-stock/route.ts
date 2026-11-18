@@ -110,13 +110,17 @@ export async function POST(request: Request) {
     if (conPrecios) {
       const { data: filas, error: preciosError } = await supabaseAdmin
         .from("inventario")
-        .select("id, precio_venta")
+        .select("id, precio_venta, moneda")
         .eq("organization_id", organizationId!)
         .in("id", uniqueIds)
       if (preciosError) throw preciosError
       const precios: Record<string, number> = {}
-      for (const row of filas || []) precios[row.id] = Number(row.precio_venta) || 0
-      return NextResponse.json({ stock, precios })
+      const monedas: Record<string, "USD" | "EUR" | null> = {}
+      for (const row of filas || []) {
+        precios[row.id] = Number(row.precio_venta) || 0
+        monedas[row.id] = row.moneda ?? null
+      }
+      return NextResponse.json({ stock, precios, monedas })
     }
 
     return NextResponse.json({ stock })
