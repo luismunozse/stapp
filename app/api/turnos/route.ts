@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
@@ -184,7 +185,7 @@ export async function GET(request: Request) {
     if (dbError) throw dbError
 
     return NextResponse.json({
-      turnos: (data || []).map(formatTurno),
+      turnos: conTelefonoSegunPermiso((data || []).map(formatTurno), await puedeVerTelefonoClientes(role, organizationId!)),
     })
   } catch (err) {
     console.error("Error fetching turnos:", err)
@@ -367,7 +368,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        ...formatTurno(turno),
+        ...conTelefonoSegunPermiso(formatTurno(turno), await puedeVerTelefonoClientes(role, organizationId!)),
         serieTotal: insertados.length,
       },
       { status: 201 },

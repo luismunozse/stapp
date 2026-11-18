@@ -373,6 +373,8 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             </Button>
             <Button
               onClick={handleOpenWhatsApp}
+              // Sin número (cliente sin teléfono, o teléfono oculto para el técnico) el link abre un chat roto.
+              disabled={!(orden?.telefonoContacto || orden?.cliente.telefono)}
               className="flex-1 bg-green-600 hover:bg-green-700"
             >
               <WhatsAppIcon className="mr-2 h-4 w-4" />

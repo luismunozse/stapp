@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateComprobanteEntregaPDF } from "@/lib/pdf"
@@ -78,7 +79,7 @@ export async function GET(
       fechaEntrega: new Date(orden.fecha_entrega),
       cliente: {
         nombre: cliente?.nombre || "Sin nombre",
-        telefono: cliente?.telefono || "",
+        telefono: (await puedeVerTelefonoClientes(role, organizationId!)) ? cliente?.telefono || "" : "",
         email: cliente?.email,
       },
       dispositivo: orden.dispositivo,

@@ -118,6 +118,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         deudaError={!!deudaError && !deudaData}
         porSucursal={!!deudaData?.porSucursal}
         deudaOculta={deudaOculta}
+        telefonoOculto={!!(cliente as (Cliente & { telefonoOculto?: boolean }) | undefined)?.telefonoOculto}
         totalOrdenes={totalOrdenes}
         onEdit={() => setShowEdit(true)}
         onWhatsApp={() => setShowWhatsApp(true)}

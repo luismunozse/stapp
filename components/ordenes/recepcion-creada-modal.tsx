@@ -244,7 +244,12 @@ export function RecepcionCreadaModal({
             />
           </div>
 
-          <Button onClick={handleOpenWhatsApp} className="w-full bg-green-600 hover:bg-green-700">
+          <Button
+            onClick={handleOpenWhatsApp}
+            // Sin número (cliente sin teléfono, o teléfono oculto para el técnico) el link abre un chat roto.
+            disabled={!cliente.telefono}
+            className="w-full bg-green-600 hover:bg-green-700"
+          >
             <WhatsAppIcon className="mr-2 h-4 w-4" />
             Abrir WhatsApp
             <ExternalLink className="ml-1 h-3 w-3" />

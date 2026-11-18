@@ -1,6 +1,7 @@
 import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { NextResponse } from "next/server"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
@@ -315,7 +316,9 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
+    return NextResponse.json(
+      conTelefonoSegunPermiso(formatCotizacion(cotizacion, canViewCotizacionCosts(role)), await puedeVerTelefonoClientes(role, organizationId!))
+    )
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -1166,7 +1169,9 @@ export async function PUT(
       ...(modoAceptada ? { editada_aceptada: modoAceptada } : {}),
     })
 
-    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
+    return NextResponse.json(
+      conTelefonoSegunPermiso(formatCotizacion(cotizacion, canViewCotizacionCosts(role)), await puedeVerTelefonoClientes(role, organizationId!))
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

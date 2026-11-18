@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
@@ -230,7 +231,9 @@ export async function GET(request: Request) {
       if (dbError) throw dbError
 
       const includeCosts = canViewCotizacionCosts(role)
-      return NextResponse.json(cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [])
+      return NextResponse.json(
+        conTelefonoSegunPermiso(cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [], await puedeVerTelefonoClientes(role, organizationId!))
+      )
     }
 
     // Modo standalone: filtrar por organization_id con LEFT join + paginacion
@@ -312,7 +315,10 @@ export async function GET(request: Request) {
     }
 
     const includeCosts = canViewCotizacionCosts(role)
-    const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
+    const result = conTelefonoSegunPermiso(
+      cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [],
+      await puedeVerTelefonoClientes(role, organizationId!)
+    )
 
     return NextResponse.json({
       data: result,
@@ -615,7 +621,10 @@ export async function POST(request: Request) {
       items_count: items.length,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacionCompleta, canViewCotizacionCosts(role)), { status: 201 })
+    return NextResponse.json(
+      conTelefonoSegunPermiso(formatCotizacion(cotizacionCompleta, canViewCotizacionCosts(role)), await puedeVerTelefonoClientes(role, organizationId!)),
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

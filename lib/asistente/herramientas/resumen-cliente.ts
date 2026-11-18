@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { supabaseAdmin } from "@/lib/supabase"
+import { puedeVerTelefonoClientes, conTelefonoSegunPermiso } from "@/lib/telefono-cliente"
 import { combinarOr, terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
 import { puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { alcanceListaOrdenes } from "./alcance-lista"
@@ -76,12 +77,14 @@ export const resumenCliente: Herramienta = {
   async ejecutar(input, ctx) {
     const { busqueda } = inputSchema.parse(input)
     const termino = terminoDeBusquedaSeguro(busqueda)
+    // Teléfono oculto para el técnico (416): ni se busca por él ni llega al modelo.
+    const verTelefono = await puedeVerTelefonoClientes(ctx.actor.role, ctx.actor.organizationId)
 
     const { data: clientes, error } = await supabaseAdmin
       .from("clientes")
       .select("id, nombre, telefono, email")
       .eq("organization_id", ctx.actor.organizationId)
-      .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
+      .or(verTelefono ? `nombre.ilike.%${termino}%,telefono.ilike.%${termino}%` : `nombre.ilike.%${termino}%`)
       .order("nombre", { ascending: true })
       .limit(MAX_COINCIDENCIAS)
     if (error) throw new Error(`clientes: ${error.message}`)
@@ -92,7 +95,7 @@ export const resumenCliente: Herramienta = {
     const verDeuda = await puedeVerDeuda(ctx)
     const resultado = await Promise.all(
       clientes.map(async (c: { id: string; nombre: string; telefono: string | null; email: string | null }, i: number) => {
-        const base = { id: c.id, link: `/clientes/${c.id}`, nombre: c.nombre, telefono: c.telefono, email: c.email }
+        const base = { id: c.id, link: `/clientes/${c.id}`, nombre: c.nombre, telefono: verTelefono ? c.telefono : "sin permiso para ver el teléfono", email: c.email }
         if (i >= MAX_DETALLADOS) return base
         const [deuda, ordenes] = await Promise.all([
           verDeuda ? deudaDe(c.id, ctx) : Promise.resolve("sin permiso para ver la deuda" as const),

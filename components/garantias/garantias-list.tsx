@@ -1,5 +1,6 @@
 "use client"
 
+import { useTelefonoClienteOculto } from "@/hooks/use-telefono-cliente-oculto"
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -201,6 +202,7 @@ function ReclamoResumen({ g }: { g: GarantiaListada }) {
  * y el botón de Ventas abran la vista exacta.
  */
 export function GarantiasList() {
+  const telefonoOculto = useTelefonoClienteOculto()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -439,7 +441,7 @@ export function GarantiasList() {
           <Input
             type="search"
             aria-label="Buscar garantías"
-            placeholder="Buscar por cliente, teléfono, orden, venta o certificado"
+            placeholder={telefonoOculto ? "Buscar por cliente, orden, venta o certificado" : "Buscar por cliente, teléfono, orden, venta o certificado"}
             value={busqueda}
             onChange={(e) => onBuscar(e.target.value)}
             className="pl-9"

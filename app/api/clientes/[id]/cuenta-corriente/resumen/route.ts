@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, puedeVerDeudaClientes, respuestaDeudaNoPermitida } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
@@ -165,7 +166,7 @@ export async function GET(
       cliente: {
         nombre: cliente.nombre,
         dni: cliente.dni,
-        telefono: cliente.telefono,
+        telefono: (await puedeVerTelefonoClientes(role, organizationId!)) ? cliente.telefono : undefined,
         email: cliente.email,
         direccion: cliente.direccion,
       },

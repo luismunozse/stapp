@@ -701,6 +701,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   )
   const equipoResumen = [orden.marca, orden.dispositivo].filter(Boolean).join(" ")
   const telefonoCliente = orden.telefonoContacto || orden.cliente?.telefono
+  // TECNICO en una organización que oculta el teléfono de los clientes (permiso 416): el
+  // servidor no manda el número, y la ficha lo dice en vez de mostrar un dato vacío.
+  const telefonoOculto = (orden as { telefonoOculto?: boolean }).telefonoOculto === true
   const estadoSinCobro = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
   // Mismas condiciones que el botón "Cobrar" de OrdenCostosCard.
   const mostrarCobrar = puedeCobrar && userRole !== "TECNICO" && costoFinalNum > 0 && saldoPendiente > 0 && !estadoSinCobro
@@ -780,6 +783,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Sin el número en el navegador no hay a quién escribirle (permiso 416). */}
+          {!telefonoOculto && (
           <WhatsAppDialog
             context={(() => {
               const o: any = orden
@@ -846,6 +851,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               }
             })()}
           />
+          )}
           <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
             <FileDown className="h-4 w-4 mr-2" />
             {downloadingPdf ? "..." : "PDF"}
@@ -1094,9 +1100,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     <h3 className="text-lg font-semibold">{orden.cliente?.nombre}</h3>
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <a href={`tel:${orden.cliente?.telefono}`} className="hover:text-primary">
-                        {orden.cliente?.telefono}
-                      </a>
+                      {orden.cliente?.telefono ? (
+                        <a href={`tel:${orden.cliente.telefono}`} className="hover:text-primary">
+                          {orden.cliente.telefono}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {telefonoOculto ? "Teléfono oculto por el administrador" : "Sin teléfono"}
+                        </span>
+                      )}
                     </div>
                     {orden.cliente?.email && (
                       <div className="flex items-center gap-2 text-sm">
@@ -1110,7 +1122,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                         <span className="text-muted-foreground">{orden.cliente.direccion}</span>
                       </div>
                     )}
-                    <div className="pt-2">
+                    {!telefonoOculto && <div className="pt-2">
                       <EditableTextField
                         icon={Phone}
                         label="Teléfono para avisos"
@@ -1125,7 +1137,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                             : "Sin teléfono alternativo."
                         }
                       />
-                    </div>
+                    </div>}
                   </div>
                 </div>
 
@@ -1378,10 +1390,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
                     {linkCopied ? "Copiado" : "Copiar"}
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
-                    <ExternalLink className="h-4 w-4 mr-1.5" />
-                    WhatsApp
-                  </Button>
+                  {!telefonoOculto && (
+                    <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
+                      <ExternalLink className="h-4 w-4 mr-1.5" />
+                      WhatsApp
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="shrink-0" asChild>
                     <a href={seguimientoUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-4 w-4" />
@@ -1463,10 +1477,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
                   {linkCopied ? "Copiado" : "Copiar link"}
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
-                  <ExternalLink className="h-4 w-4 mr-1.5" />
-                  WhatsApp
-                </Button>
+                {!telefonoOculto && (
+                  <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
+                    <ExternalLink className="h-4 w-4 mr-1.5" />
+                    WhatsApp
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

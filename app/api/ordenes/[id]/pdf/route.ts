@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
@@ -226,6 +227,8 @@ export async function GET(
     const avances = await cargarAvancesVisibles(orden.id, organizationId!)
 
     // Estado físico al ingreso: si la tabla de daños no está disponible, el PDF sale igual sin el bloque.
+    // Teléfono del cliente: un TECNICO no lo recibe si la organización apagó el permiso (416).
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
     const estadoFisico = await listarDanosOrden(orden.id, organizationId!, { incluirAutor: false }).catch((e) => {
       console.error("No se pudo cargar el estado físico para el PDF:", e)
       return null
@@ -238,7 +241,7 @@ export async function GET(
       fechaPrometida: orden.fecha_prometida ? new Date(orden.fecha_prometida) : null,
       cliente: {
         nombre: safeString(cliente?.nombre) || "Sin nombre",
-        telefono: safeString(cliente?.telefono) || "Sin teléfono",
+        telefono: verTelefono ? safeString(cliente?.telefono) || "Sin teléfono" : "—",
         email: safeString(cliente?.email),
         direccion: safeString(cliente?.direccion),
         dni: safeString(cliente?.dni),
@@ -294,7 +297,7 @@ export async function GET(
       estadoCobro: safeString(orden.estado_cobro),
       descuentoCobro: typeof orden.descuento_cobro === "number" ? orden.descuento_cobro : null,
       motivoSinCobro: safeString(orden.motivo_sin_cobro),
-      telefonoContacto: safeString(orden.telefono_contacto),
+      telefonoContacto: verTelefono ? safeString(orden.telefono_contacto) : "",
       metadataCampos,
       esReingreso: !!orden.es_reingreso,
       ordenOrigenNumero,

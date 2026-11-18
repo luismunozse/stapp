@@ -140,6 +140,9 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   // Un TECNICO sin el permiso `tecnicos_ven_deuda_clientes` no ve deudas: lo decide el
   // servidor y lo avisa en la respuesta, así la pantalla no adivina el permiso.
   const deudaOculta: boolean = !!data?.deudaOculta
+  // Lo mismo con el teléfono (permiso `tecnicos_ven_telefono_clientes`): sin la columna, sin
+  // buscar por teléfono y sin WhatsApp, que necesita el número en el navegador.
+  const telefonoOculto: boolean = !!data?.telefonoOculto
   const filtrosActivos = hasActiveFilters({ search, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta })
 
   const clearAllFilters = () => {
@@ -385,14 +388,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 </button>
               )}
               <div className="h-px bg-border my-1" />
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
-              >
-                <WhatsAppIcon className="h-4 w-4 text-success-600" />
-                Enviar WhatsApp
-              </button>
+              {!telefonoOculto && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
+                >
+                  <WhatsAppIcon className="h-4 w-4 text-success-600" />
+                  Enviar WhatsApp
+                </button>
+              )}
               {!cliente.esPractica && (
                 <>
                   {puedeCobrar && (
@@ -437,9 +442,9 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       ),
     },
   ]
-  const columns = deudaOculta
-    ? todasLasColumnas.filter((c) => c.key !== "deudaPendiente")
-    : todasLasColumnas
+  const columns = todasLasColumnas.filter(
+    (c) => !(deudaOculta && c.key === "deudaPendiente") && !(telefonoOculto && c.key === "telefono")
+  )
 
   return (
     <PullToRefresh onRefresh={() => mutate()}>
@@ -450,7 +455,11 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           <div className="relative sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={`Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`}
+              placeholder={
+                telefonoOculto
+                  ? `Buscar por nombre, ${getPersonalIdLabel(pais)} o sector...`
+                  : `Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`
+              }
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 pr-10 w-full"
@@ -702,7 +711,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   cliente={cliente}
                   onEdit={handleEdit}
                   onDelete={esAdmin ? handleDelete : undefined}
-                  onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
+                  onWhatsApp={telefonoOculto ? undefined : (e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
                   onCuentaCorriente={deudaOculta ? undefined : (e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
                   onCobrar={puedeCobrar ? (e, c) => { e.stopPropagation(); setCobrarCliente(c) } : undefined}
                   deleting={deleting === cliente.id}

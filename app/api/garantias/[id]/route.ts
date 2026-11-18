@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
@@ -79,7 +80,10 @@ export async function GET(
         id: garantia.ordenes_servicio.id,
         numeroOrden: garantia.ordenes_servicio.numero_orden,
         dispositivo: garantia.ordenes_servicio.dispositivo,
-        cliente: garantia.ordenes_servicio.clientes,
+        cliente: conTelefonoSegunPermiso(
+          garantia.ordenes_servicio.clientes,
+          await puedeVerTelefonoClientes(role, organizationId!)
+        ),
       },
       reclamos: formatReclamos(garantia.reclamos_garantia),
     })
@@ -199,7 +203,10 @@ export async function PUT(
         id: garantia.ordenes_servicio.id,
         numeroOrden: garantia.ordenes_servicio.numero_orden,
         dispositivo: garantia.ordenes_servicio.dispositivo,
-        cliente: garantia.ordenes_servicio.clientes,
+        cliente: conTelefonoSegunPermiso(
+          garantia.ordenes_servicio.clientes,
+          await puedeVerTelefonoClientes(role, organizationId!)
+        ),
       },
       reclamos: formatReclamos(garantia.reclamos_garantia),
     })

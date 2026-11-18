@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { createAuditLogger } from "@/lib/audit"
@@ -114,7 +115,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       return NextResponse.json({ error: "Sin acceso" }, { status: 403 })
     }
 
-    return NextResponse.json(formatTurno(data))
+    return NextResponse.json(conTelefonoSegunPermiso(formatTurno(data), await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (err) {
     console.error("Error fetching turno:", err)
     return NextResponse.json({ error: "Error al obtener turno" }, { status: 500 })
@@ -255,7 +256,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       notifyTurno(id, "tecnico_en_camino").catch((e) => console.error("notif camino:", e))
     }
 
-    return NextResponse.json(formatTurno(turno))
+    return NextResponse.json(conTelefonoSegunPermiso(formatTurno(turno), await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.issues[0].message }, { status: 400 })

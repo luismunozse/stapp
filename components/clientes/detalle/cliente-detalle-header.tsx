@@ -29,13 +29,15 @@ interface ClienteDetalleHeaderProps {
   porSucursal?: boolean
   /** Sin permiso para ver la deuda de clientes (TECNICO sin `tecnicos_ven_deuda_clientes`). */
   deudaOculta?: boolean
+  /** Teléfono oculto para este usuario (TECNICO sin `tecnicos_ven_telefono_clientes`). */
+  telefonoOculto?: boolean
   totalOrdenes: number
   onEdit: () => void
   onWhatsApp: () => void
 }
 
 export function ClienteDetalleHeader({
-  cliente, resumen, deudaError = false, porSucursal = false, deudaOculta = false, totalOrdenes, onEdit, onWhatsApp,
+  cliente, resumen, deudaError = false, porSucursal = false, deudaOculta = false, telefonoOculto = false, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
   const { formatPrice, pais } = useCurrency()
   const router = useRouter()
@@ -63,8 +65,8 @@ export function ClienteDetalleHeader({
               <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
-              {cliente.telefono && <span>{cliente.telefono}</span>}
-              {cliente.email && <span className="break-all">· {cliente.email}</span>}
+              {cliente.telefono ? <span>{cliente.telefono}</span> : telefonoOculto ? <span>Teléfono oculto</span> : null}
+              {cliente.email && <span className="break-all">{cliente.telefono || telefonoOculto ? "· " : ""}{cliente.email}</span>}
               {(cliente.cuit || cliente.dni) && <span>· {cliente.cuit ? `${getTaxIdLabel(pais)} ${cliente.cuit}` : `${getPersonalIdLabel(pais)} ${cliente.dni}`}</span>}
             </p>
           </div>
@@ -98,9 +100,11 @@ export function ClienteDetalleHeader({
             <Button variant="outline" size="sm" onClick={onEdit} className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
               <Edit className="h-4 w-4" /> Editar
             </Button>
-            <Button variant="outline" size="sm" onClick={onWhatsApp} className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
-              <WhatsAppIcon className="h-4 w-4 text-success-600" /> WhatsApp
-            </Button>
+            {!telefonoOculto && (
+              <Button variant="outline" size="sm" onClick={onWhatsApp} className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
+                <WhatsAppIcon className="h-4 w-4 text-success-600" /> WhatsApp
+              </Button>
+            )}
           </div>
         </div>
       </div>
