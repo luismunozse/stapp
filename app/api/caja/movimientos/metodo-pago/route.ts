@@ -3,8 +3,9 @@ import { z } from "zod"
 import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { round2 } from "@/lib/ventas/totales"
 import { logAudit, type AuditEntity } from "@/lib/audit"
-import { esErrorColumnaOrigen, esOrigenNoEliminable, resolverOrigen } from "@/lib/caja-utils"
+import { fetchMovimientosDia, computeTotales, esErrorColumnaOrigen, esOrigenNoEliminable, resolverOrigen } from "@/lib/caja-utils"
 
 // Métodos a los que se puede corregir un movimiento. CUENTA_CORRIENTE queda
 // afuera a propósito: pasar de/a fiado no es "corregir una etiqueta", mueve la
@@ -217,19 +218,19 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
   }
 }
 
-// ¿El movimiento cae dentro de una sesión de caja ya cerrada? El cierre
-// congela los totales del arqueo (opened_at..closed_at, ver
-// sesiones/[id]/cerrar), así que cambiarle el método después descuadra el
-// historial. Una sesión sin sucursal abarca toda la org.
-// Devuelve null si la consulta falla: quien llama debe fallar CERRADO.
-async function caeEnSesionCerrada(
+// Sesiones de caja ya cerradas que contienen el movimiento. Una sesión sin
+// sucursal abarca toda la org. Corregir el método de un cobro cargado por error
+// tiene que poder hacerse aunque la caja esté cerrada: en ese caso se recalcula
+// el resumen guardado de la sesión (ver recalcularSesionCerrada).
+// Devuelve null si la consulta falla.
+async function sesionesCerradasDelMovimiento(
   orgId: string,
   fecha: string,
   sucursalId: string | null
-): Promise<boolean | null> {
+): Promise<any[] | null> {
   const { data, error } = await supabaseAdmin
     .from("sesiones_caja")
-    .select("id, sucursal_id")
+    .select("id, sucursal_id, opened_at, closed_at, saldo_inicial, conteo_fisico")
     .eq("organization_id", orgId)
     .eq("estado", "CERRADA")
     .lte("opened_at", fecha)
@@ -238,9 +239,39 @@ async function caeEnSesionCerrada(
     console.error("Error consultando sesiones de caja:", error)
     return null
   }
-  return (data || []).some(
+  return (data || []).filter(
     (s: any) => s.sucursal_id == null || sucursalId == null || s.sucursal_id === sucursalId
   )
+}
+
+// El cierre guarda los totales del arqueo (cerrar/route.ts). Tras corregir un
+// método de pago dentro de una sesión cerrada se recalculan con la misma lógica
+// del cierre. El conteo físico no se toca (es lo que se contó); la diferencia
+// sí cambia porque cambia el efectivo esperado.
+async function recalcularSesionCerrada(orgId: string, sesion: any) {
+  const movimientos = await fetchMovimientosDia(
+    orgId,
+    sesion.opened_at,
+    sesion.closed_at,
+    undefined,
+    sesion.sucursal_id
+  )
+  const totales = computeTotales(movimientos)
+  const saldoInicial = parseFloat(sesion.saldo_inicial || "0")
+  const esperado = round2(saldoInicial + totales.totalIngresosEfectivo - totales.totalEgresosEfectivo)
+  const diferencia = round2(parseFloat(sesion.conteo_fisico || "0") - esperado)
+  const { error } = await supabaseAdmin
+    .from("sesiones_caja")
+    .update({
+      total_ingresos: totales.totalIngresos,
+      total_egresos: totales.totalEgresos,
+      total_ingresos_efectivo: totales.totalIngresosEfectivo,
+      total_egresos_efectivo: totales.totalEgresosEfectivo,
+      diferencia,
+    })
+    .eq("id", sesion.id)
+    .eq("organization_id", orgId)
+  if (error) console.error("Error recalculando sesión de caja cerrada:", error)
 }
 
 // PATCH - Corregir el medio de pago de un movimiento de caja.
@@ -314,20 +345,15 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: true, metodoPago })
     }
 
-    let sesionCerrada = origen.sesionEstado === "CERRADA"
-    if (!sesionCerrada) {
-      const cae = await caeEnSesionCerrada(organizationId!, origen.fecha, origen.sucursalId)
-      if (cae === null) {
-        return NextResponse.json({ error: "Error al verificar la sesión de caja" }, { status: 500 })
-      }
-      sesionCerrada = cae
+    const sesionesCerradas = await sesionesCerradasDelMovimiento(
+      organizationId!,
+      origen.fecha,
+      origen.sucursalId
+    )
+    if (sesionesCerradas === null) {
+      return NextResponse.json({ error: "Error al verificar la sesión de caja" }, { status: 500 })
     }
-    if (sesionCerrada) {
-      return NextResponse.json(
-        { error: "No se puede modificar un movimiento de una sesión de caja cerrada" },
-        { status: 400 }
-      )
-    }
+    const enSesionCerrada = origen.sesionEstado === "CERRADA" || sesionesCerradas.length > 0
 
     let cuotasBorradas: number | null = null
     if (cuotasHuerfanas > 0) {
@@ -472,6 +498,10 @@ export async function PATCH(request: Request) {
       }
     }
 
+    if (enSesionCerrada) {
+      for (const ses of sesionesCerradas) await recalcularSesionCerrada(organizationId!, ses)
+    }
+
     // Valor que queda en la columna: el nuevo si se escribió, el previo si no.
     const valorFinal = (col: string) => (col in update ? update[col] : origen.previos?.[col] ?? null)
 
@@ -499,7 +529,7 @@ export async function PATCH(request: Request) {
             : {}),
         },
       },
-      description: `Corrigió el método de pago en caja (${fuente} #${id.slice(-6)}): ${origen.metodoPago} → ${metodoPago}`,
+      description: `Corrigió el método de pago en caja (${fuente} #${id.slice(-6)}): ${origen.metodoPago} → ${metodoPago}${enSesionCerrada ? " (sesión de caja cerrada, arqueo recalculado)" : ""}`,
     })
 
     return NextResponse.json({ ok: true, metodoPago })

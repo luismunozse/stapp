@@ -11,6 +11,11 @@ import {
   parseResponse,
 } from "./helpers"
 
+vi.mock("@/lib/caja-utils", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/caja-utils")>()),
+  fetchMovimientosDia: vi.fn().mockResolvedValue([]),
+}))
+
 import { PATCH } from "@/app/api/caja/movimientos/metodo-pago/route"
 
 const URL = "http://localhost:3000/api/caja/movimientos/metodo-pago"
@@ -118,23 +123,41 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
     expect(updateSpy).not.toHaveBeenCalled()
   })
 
-  it("rechaza si el movimiento cae en una sesión de caja cerrada", async () => {
+  it("permite corregir un movimiento de una sesión cerrada y recalcula el arqueo", async () => {
     mockAuthSuccess({ role: "ADMIN" })
-    const updateSpy = vi.fn()
+    const updateSpy = vi.fn().mockReturnThis()
+    const sesionesChain = createChainMock(
+      [
+        {
+          id: "s-1",
+          sucursal_id: null,
+          opened_at: "2026-10-03T09:00:00Z",
+          closed_at: "2026-10-03T20:00:00Z",
+          saldo_inicial: "1000",
+          conteo_fisico: "1000",
+        },
+      ],
+      null
+    )
+    sesionesChain.update = updateSpy
     mockSupabaseFrom({
-      pagos_venta: pagoVentaChain(pagoVenta, updateSpy),
-      sesiones_caja: createChainMock([{ id: "s-1", sucursal_id: null }], null),
+      pagos_venta: pagoVentaChain(pagoVenta, vi.fn().mockReturnThis()),
+      sesiones_caja: sesionesChain,
+      audit_logs: createChainMock(null, null),
     })
     const res = await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "EFECTIVO" }))
-    const { status, body } = await parseResponse(res)
-    expect(status).toBe(400)
-    expect(body.error).toMatch(/sesión de caja cerrada/)
-    expect(updateSpy).not.toHaveBeenCalled()
+    expect((await parseResponse(res)).status).toBe(200)
+    // El resumen guardado de la sesión se recalcula (conteo físico intacto).
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    const [cambios] = updateSpy.mock.calls[0]
+    expect(cambios).not.toHaveProperty("conteo_fisico")
+    expect(cambios).toHaveProperty("total_ingresos_efectivo")
+    expect(cambios).toHaveProperty("diferencia")
   })
 
-  it("rechaza un movimiento manual de una sesión cerrada", async () => {
+  it("permite corregir un movimiento manual de una sesión cerrada", async () => {
     mockAuthSuccess({ role: "ADMIN" })
-    const updateSpy = vi.fn()
+    const updateSpy = vi.fn().mockReturnThis()
     mockSupabaseFrom({
       movimientos_caja: pagoVentaChain(
         {
@@ -146,10 +169,12 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
         },
         updateSpy
       ),
+      sesiones_caja: createChainMock([], null),
+      audit_logs: createChainMock(null, null),
     })
     const res = await PATCH(patch({ fuente: "movimientos_caja", id: "m-1", metodoPago: "TRANSFERENCIA" }))
-    expect((await parseResponse(res)).status).toBe(400)
-    expect(updateSpy).not.toHaveBeenCalled()
+    expect((await parseResponse(res)).status).toBe(200)
+    expect(updateSpy).toHaveBeenCalled()
   })
 
   it("404 si el movimiento es de otra sucursal", async () => {
@@ -738,7 +763,7 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
       expect(fila.changes.before.cuotas_borradas).toBe(2)
     })
 
-    it("no borra cuotas huérfanas dentro de una sesión de caja cerrada (400)", async () => {
+    it("borra cuotas huérfanas también dentro de una sesión de caja cerrada", async () => {
       const huerfanas = createChainMock([{ id: "q2", numero_cuota: 2, pagada: false }], null)
       const { updateSpy } = setupCobro({ ...cobroCredito, metodo_pago: "EFECTIVO" }, huerfanas)
       mockSupabaseFrom({
@@ -748,8 +773,8 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
         audit_logs: createChainMock(null, null),
       })
       const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
-      expect((await parseResponse(res)).status).toBe(400)
-      expect(huerfanas.delete).not.toHaveBeenCalled()
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(huerfanas.delete).toHaveBeenCalled()
     })
 
     it("un cobro de débito con cuotas guardadas (cronograma legítimo) no se trata como huérfano", async () => {
