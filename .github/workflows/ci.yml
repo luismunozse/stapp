@@ -70,6 +70,10 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # El chequeo de tipos de next build se quedaba sin memoria con el
+          # límite por defecto de Node (~2 GB). El runner tiene 16 GB.
+          NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: PDF render smoke (production bundle)
         run: node scripts/pdf-smoke.mjs
