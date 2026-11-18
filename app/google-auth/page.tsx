@@ -11,6 +11,7 @@ import { BusinessLogo } from "@/components/shared/business-logo"
 import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
+import { isValidTenantSlug } from "@/lib/account-deletion/urls"
 
 /**
  * Página de autenticación con Google en el dominio raíz.
@@ -63,11 +64,20 @@ function useGoogleButtonWidth() {
 function GoogleAuthContent() {
   const searchParams = useSearchParams()
   const action = searchParams.get("action") || "login"
-  const tenant = searchParams.get("tenant") || ""
+  // `tenant` y `orgSlug` vienen de la URL (los controla quien arma el link) y
+  // terminan como subdominio en una navegación. Se normalizan y validan una
+  // sola vez: un valor inválido (ej. `evil.com/x#`, que daría el host
+  // evil.com) se trata como si no hubiera tenant.
+  const tenantParam = (searchParams.get("tenant") || "").trim().toLowerCase()
+  const tenant = isValidTenantSlug(tenantParam) ? tenantParam : ""
   const orgNombre = searchParams.get("orgNombre") || ""
   const rubro = searchParams.get("rubro") || ""
   const rubroDetalle = searchParams.get("rubroDetalle") || ""
-  const orgSlug = searchParams.get("orgSlug") || ""
+  // Al API de registro se le manda el slug tal como llegó (lo valida por su
+  // cuenta); solo la navegación posterior y lo que se muestra usan el validado.
+  const orgSlugParam = searchParams.get("orgSlug") || ""
+  const orgSlugNormalized = orgSlugParam.trim().toLowerCase()
+  const orgSlug = isValidTenantSlug(orgSlugNormalized) ? orgSlugNormalized : ""
   const userName = searchParams.get("userName") || ""
 
   // UTM params pasados desde el registro
@@ -157,7 +167,13 @@ function GoogleAuthContent() {
       })
       if (orgRes.ok) {
         const { organization } = await orgRes.json()
-        window.location.href = `https://${organization.slug}.${rootDomain}/dashboard`
+        const slug = typeof organization?.slug === "string" ? organization.slug : ""
+        if (!isValidTenantSlug(slug)) {
+          setError("No se pudo obtener la organización")
+          setLoading(false)
+          return
+        }
+        window.location.href = `https://${slug.trim().toLowerCase()}.${rootDomain}/dashboard`
       } else {
         setError("No se pudo obtener la organización")
         setLoading(false)
@@ -198,7 +214,7 @@ function GoogleAuthContent() {
           body: JSON.stringify({
             organizacion: {
               nombre: orgNombre,
-              slug: orgSlug,
+              slug: orgSlugParam,
               ...(rubro ? { rubro } : {}),
               ...(rubroDetalle ? { rubroDetalle } : {}),
             },
@@ -221,7 +237,9 @@ function GoogleAuthContent() {
 
         // Registro exitoso con Google → email ya verificado
         // Redirigir al login del subdominio
-        window.location.href = `https://${orgSlug}.${rootDomain}/login?registered=true`
+        window.location.href = orgSlug
+          ? `https://${orgSlug}.${rootDomain}/login?registered=true`
+          : "/login?registered=true"
       } else {
         await loginWithGoogle(credentialResponse.credential)
       }
