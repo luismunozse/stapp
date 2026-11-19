@@ -9,7 +9,6 @@ import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-p
 import { type PDFFont } from "pdf-lib"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
-import { getCombinedIdLabel } from "./countries"
 // Monochrome tokens, logo fetching and Helvetica text measurement are shared
 // with the other react-pdf engines — see lib/pdf-react-shared.ts. The frame,
 // the header and the cliente band — including this document's letter box,
@@ -52,6 +51,9 @@ const COLUMNAS_PAGOS: ColumnaTabla[] = [
   { key: "monto", titulo: "MONTO", ancho: 90, alinear: "right", bold: true },
   { key: "saldo", titulo: "SALDO", flex: true, alinear: "right", bold: true },
 ]
+
+/** Row padding for both tables: the shell's 4pt reads cramped without column rules. */
+const TABLA_FILA = 6
 
 const estadoPagoLabels: Record<string, string> = {
   PENDIENTE: "PENDIENTE",
@@ -102,19 +104,31 @@ const styles = StyleSheet.create({
   condicionesLine: { fontSize: TYPE.small, marginTop: 2 },
 
   // The table frames, header bands, row rules and column cells are drawn by
-  // <Tabla> (lib/pdf-react-shell.tsx) now; this document only declares its own
-  // columns (COLUMNAS_ITEMS / COLUMNAS_PAGOS below). Neither of its headers
-  // carries the resumen's grey band, which is why `headerSombreado` is a prop.
+  // <Tabla> (lib/pdf-react-shell.tsx); this document only declares its own
+  // columns (COLUMNAS_ITEMS / COLUMNAS_PAGOS below) and asks for the grey
+  // header band, no vertical separators and roomier rows (TABLA_FILA).
   tableSection: { marginTop: 14 },
   pagoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 2 },
 
-  detalleBlock: { marginTop: 8 },
-  detalleValue: { fontSize: TYPE.body },
+  // Cliente band, right column: the VENTA/ORDEN reference, styled like the
+  // CLIENTE column it faces (label, bold code, detail line under it).
+  referenciaLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.sectionLabel, color: MONO.label, textTransform: "uppercase", textAlign: "right" },
+  referenciaCodigo: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3, textAlign: "right" },
 
-  estadoBlock: { marginTop: 10 },
-  estadoRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  estadoMonto: { fontSize: TYPE.body, marginLeft: 20 },
-  estadoPendiente: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginLeft: 20 },
+  // Totals: one compact invoice-style block on the right half of the page.
+  totalesBlock: { marginTop: 14, flexDirection: "row", justifyContent: "flex-end" },
+  totalesCol: { width: "50%" },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: RULE_WIDTH,
+    borderTopColor: MONO.ink,
+    paddingVertical: 4,
+  },
+  // 10pt bold: one step over the 9pt body rows and one under the 12pt saldo
+  // bar, which stays the protagonist.
+  totalTexto: { fontFamily: "Helvetica-Bold", fontSize: 10 },
+  estadoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
 
   continuationTitle: { position: "absolute", top: 14, left: 40, fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
 })
@@ -136,7 +150,6 @@ export function RemitoDocument({
   const numeroFactura = safe(data.numeroFactura)
   const fecha = fmtDate(data.fecha)
   const clienteDireccion = safe(data.cliente?.direccion)
-  const clienteDni = safe(data.cliente?.dni)
   const ordenDisplay = data.orden ? data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}` : ""
   const dispositivo = data.orden ? safe(data.orden.dispositivo) : ""
   const pendiente = data.total - (data.montoAbonado || 0)
@@ -192,24 +205,34 @@ export function RemitoDocument({
             ...(data.fechaOperacion ? [`Operación: ${fmtDate(data.fechaOperacion)}`] : []),
           ]}
           letterBox="X"
+          cajaInterior
           wrap={false}
         >
-          {/* The remito's cliente band leads with the address and keeps the
-              DNI on the right, next to the VENTA/ORDEN reference — hence the
-              explicit `campos` order. */}
+          {/* Two mirrored columns: CLIENTE (name, then its ID and contact
+              lines) on the left, the VENTA/ORDEN reference on the right with
+              the same label → bold value → detail rhythm, so both labels sit
+              on the same baseline. The ID keeps the remito's "CUIT/DNI" order. */}
           <BandaCliente
             label="Cliente"
             cliente={{ ...data.cliente, direccion: clienteDireccion.substring(0, 40) }}
-            campos={["direccion", "telefono", "email"]}
+            campos={["dni", "direccion", "telefono", "email"]}
+            pais={data.pais}
+            ordenEtiquetaId="fiscal-primero"
             espacioInferior={6}
             espacioDerecha={4}
             derecha={
-              <>
-                {clienteDni ? <Text style={estilosShell.smallLabelRight}>{getCombinedIdLabel(data.pais, "fiscal-primero")}: {clienteDni}</Text> : null}
-                <Text style={[styles.detalleValue, { marginTop: 4 }]}>
-                  {data.venta ? `VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}` : `ORDEN: ${ordenDisplay}${dispositivo ? ` — ${dispositivo}` : ""}`}
-                </Text>
-              </>
+              data.venta ? (
+                <>
+                  <Text style={styles.referenciaLabel}>Venta</Text>
+                  <Text style={styles.referenciaCodigo}>V{String(data.venta.numeroVenta).padStart(4, "0")}</Text>
+                </>
+              ) : data.orden ? (
+                <>
+                  <Text style={styles.referenciaLabel}>Orden</Text>
+                  <Text style={styles.referenciaCodigo}>{ordenDisplay}</Text>
+                  {dispositivo ? <Text style={estilosShell.smallLabelRight}>{dispositivo}</Text> : null}
+                </>
+              ) : null
             }
           />
 
@@ -234,6 +257,9 @@ export function RemitoDocument({
             <Tabla
               columnas={COLUMNAS_ITEMS}
               headerFijo
+              headerSombreado
+              separadoresVerticales={false}
+              espacioFila={TABLA_FILA}
               filas={data.items.map((item) => ({
                 cantidad: String(item.cantidad),
                 descripcion: safe(item.descripcion).substring(0, 40),
@@ -244,42 +270,35 @@ export function RemitoDocument({
           </View>
         ) : null}
 
-        {/* === DETALLE (money block) + ESTADO DE PAGO — kept together via
-            wrap={false}, the declarative analog of pdf-lib's manual
-            totalsBlockH pre-flight check. === */}
-        <View style={styles.detalleBlock} wrap={false}>
-          <Text style={styles.sectionLabel}>DETALLE</Text>
-          <View style={[styles.hr, { marginTop: 4, marginBottom: 8 }]} />
+        {/* === TOTALES — one invoice-style block on the right half: the
+            breakdown, TOTAL, what was paid, the estado badge (shown once) and
+            the saldo bar. Kept together via wrap={false}, the declarative
+            analog of pdf-lib's manual totalsBlockH pre-flight check. === */}
+        <View style={styles.totalesBlock} wrap={false}>
+          <View style={styles.totalesCol}>
+            <FilaDetalle label="Subtotal" valor={fmt(data.subtotal)} />
+            {data.iva > 0 ? <FilaDetalle label="IVA" valor={fmt(data.iva)} /> : null}
+            {data.descuento && data.descuento > 0 ? (
+              <FilaDetalle label="Descuento" valor={`-${fmt(data.descuento)}`} />
+            ) : null}
+            {data.redondeo && data.redondeo !== 0 ? (
+              <FilaDetalle
+                label="Redondeo"
+                valor={`${data.redondeo >= 0 ? "+" : ""}${fmt(data.redondeo)}`}
+              />
+            ) : null}
 
-          <FilaDetalle label="Subtotal" valor={fmt(data.subtotal)} />
-          {data.iva > 0 ? <FilaDetalle label="IVA" valor={fmt(data.iva)} /> : null}
-          {data.descuento && data.descuento > 0 ? (
-            <FilaDetalle label="Descuento" valor={`-${fmt(data.descuento)}`} />
-          ) : null}
-          {data.redondeo && data.redondeo !== 0 ? (
-            <FilaDetalle
-              label="Redondeo"
-              valor={`${data.redondeo >= 0 ? "+" : ""}${fmt(data.redondeo)}`}
-            />
-          ) : null}
-
-          <View style={estilosShell.filaDetalle}>
-            <Text style={estilosShell.barraLabel}>TOTAL</Text>
-            <Text style={estilosShell.barraValor}>{fmt(data.total)}</Text>
-          </View>
-          <FilaDetalle label="Pagado a cuenta" valor={fmt(data.montoAbonado)} />
-          <BarraTotal label={saldoLabel} valor={fmt(saldo)} />
-
-          <View style={styles.estadoBlock}>
-            <Text style={styles.sectionLabel}>ESTADO DE PAGO</Text>
-            <View style={[styles.hr, { marginTop: 4 }]} />
-            <View style={styles.estadoRow}>
-              <Badge texto={estadoLabel} />
-              <Text style={styles.estadoMonto}>Abonado: {fmt(data.montoAbonado)}</Text>
-              {pendiente > 0 && data.estadoPago !== "ANULADA" ? (
-                <Text style={styles.estadoPendiente}>Pendiente: {fmt(pendiente)}</Text>
-              ) : null}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalTexto}>TOTAL</Text>
+              <Text style={styles.totalTexto}>{fmt(data.total)}</Text>
             </View>
+            <FilaDetalle label="Pagado a cuenta" valor={fmt(data.montoAbonado)} />
+
+            <View style={styles.estadoRow}>
+              <Text style={estilosShell.filaLabel}>Estado</Text>
+              <Badge texto={estadoLabel} />
+            </View>
+            <BarraTotal label={saldoLabel} valor={fmt(saldo)} />
           </View>
         </View>
 
@@ -290,6 +309,9 @@ export function RemitoDocument({
             <Tabla
               columnas={COLUMNAS_PAGOS}
               headerFijo
+              headerSombreado
+              separadoresVerticales={false}
+              espacioFila={TABLA_FILA}
               filas={pagosWithSaldo.map((pago) => {
                 const noteParts: string[] = []
                 if (pago.cuotas && pago.cuotas > 1) noteParts.push(`${pago.cuotas} cuotas`)
@@ -316,15 +338,15 @@ export function RemitoDocument({
 
         {/* === RECIBÍ CONFORME (orden-sourced only) === */}
         {data.orden ? (
-          // espacioSuperior/espacioFilas: this document's own pre-existing
-          // numbers (10/16, tighter than cuenta corriente's 18/22) — required
-          // on Firmas, not defaulted, so this call site states them
-          // explicitly rather than inheriting them by omission.
+          // espacioSuperior/espacioFilas: 14 matches every other section gap
+          // on this document (tableSection, totalesBlock); 22 leaves room to
+          // actually sign (it was 10/16). Required on Firmas, not defaulted,
+          // so this call site states them explicitly.
           <Firmas
             titulo="Recibí conforme"
             campos={["Firma", "Aclaración"]}
-            espacioSuperior={10}
-            espacioFilas={16}
+            espacioSuperior={14}
+            espacioFilas={22}
           />
         ) : null}
 

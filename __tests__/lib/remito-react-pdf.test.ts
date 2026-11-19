@@ -184,7 +184,7 @@ describe("content parity — venta/orden origin & items", () => {
     expect(text).not.toContain("FACTURA")
   })
 
-  it("keeps key sections: CLIENTE, TOTAL, ESTADO DE PAGO, footer disclaimer", async () => {
+  it("keeps key sections: CLIENTE, TOTAL, estado badge once, footer disclaimer", async () => {
     const buffer = await generateFacturaPDFReact({
       ...baseData,
       items: [{ descripcion: "acc p", cantidad: 1, precioUnitario: 3000, subtotal: 3000 }],
@@ -193,8 +193,33 @@ describe("content parity — venta/orden origin & items", () => {
     const text = await extractReactPdfText(buffer)
     expect(text).toContain("CLIENTE")
     expect(text).toContain("TOTAL")
-    expect(text).toContain("ESTADO DE PAGO")
     expect(text).toContain("Remito interno — no válido como comprobante fiscal.")
+    // The totals block carries the estado badge exactly once; the separate
+    // ESTADO DE PAGO section (badge + Abonado + Pendiente) is gone.
+    expect(text).not.toContain("ESTADO DE PAGO")
+    expect(text).not.toContain("Abonado:")
+    const items = await extractReactPdfTextPositions(buffer)
+    expect(items.filter((i) => i.text === "PAGADO")).toHaveLength(1)
+  })
+
+  it("places the totals block on the right half of the page", async () => {
+    const buffer = await generateFacturaPDFReact({
+      ...baseData,
+      estadoPago: "PAGADO_PARCIAL",
+      montoAbonado: 1000,
+      items: [{ descripcion: "acc p", cantidad: 1, precioUnitario: 3000, subtotal: 3000 }],
+    } as any)
+    const items = await extractReactPdfTextPositions(buffer)
+    const pageMid = 595.28 / 2
+    for (const label of ["Subtotal", "TOTAL", "Pagado a cuenta", "SALDO PENDIENTE", "PAGO PARCIAL"]) {
+      const item = items.find((i) => i.text === label)
+      expect(item, label).toBeDefined()
+      expect(item!.x, label).toBeGreaterThanOrEqual(pageMid - 1)
+    }
+    // Badge sits above the saldo bar (pdf y grows upwards).
+    const badge = items.find((i) => i.text === "PAGO PARCIAL")!
+    const saldo = items.find((i) => i.text === "SALDO PENDIENTE")!
+    expect(badge.y).toBeGreaterThan(saldo.y)
   })
 })
 
@@ -330,6 +355,13 @@ describe("content parity — classic form header: letter box & fiscal lines", ()
     const items = await extractReactPdfTextPositions(buffer)
     const letterX = items.find((i) => i.text === "X" && i.page === 1 && i.y > 700)
     expect(letterX).toBeDefined()
+    // The box sits fully inside the frame (whose top border is at
+    // 841.89 - paddingTop 30 ≈ 812): the 20pt X's whole glyph stays under it,
+    // and the legend sits under the X.
+    expect(letterX!.y + 20).toBeLessThan(812)
+    const legend = items.find((i) => i.text === "Documento no válido como comprobante fiscal")
+    expect(legend).toBeDefined()
+    expect(legend!.y).toBeLessThan(letterX!.y)
   })
 
   it("shows ingresos brutos, inicio de actividades and IVA condition in caps when set", async () => {
@@ -365,7 +397,16 @@ describe("content parity — classic form bands: CLIENTE / ORDEN / CONDICIONES",
     } as any)
     const text = await extractReactPdfText(buffer)
     expect(text).toContain("CUIT/DNI: 30123456")
-    expect(text).toContain("VENTA: V0022")
+    // VENTA is a label styled like CLIENTE, the code on the line under it.
+    const items = await extractReactPdfTextPositions(buffer)
+    const cliente = items.find((i) => i.text === "CLIENTE")!
+    const venta = items.find((i) => i.text === "VENTA")!
+    const codigo = items.find((i) => i.text === "V0022")!
+    expect(venta).toBeDefined()
+    expect(codigo).toBeDefined()
+    expect(venta.x).toBeGreaterThan(595.28 / 2)
+    expect(Math.abs(venta.y - cliente.y)).toBeLessThan(0.5) // same row as CLIENTE
+    expect(codigo.y).toBeLessThan(venta.y)
   })
 
   it("CLIENTE band shows the ORDEN reference with código and dispositivo", async () => {
@@ -374,19 +415,29 @@ describe("content parity — classic form bands: CLIENTE / ORDEN / CONDICIONES",
       venta: undefined,
       orden: { numeroOrden: 8, codigoOrden: "ORD-0008", dispositivo: "Notebook Lenovo" },
     } as any)
-    const text = await extractReactPdfText(buffer)
-    expect(text).toContain("ORDEN: ORD-0008 — Notebook Lenovo")
+    const items = await extractReactPdfTextPositions(buffer)
+    const cliente = items.find((i) => i.text === "CLIENTE")!
+    const orden = items.find((i) => i.text === "ORDEN")!
+    const codigo = items.find((i) => i.text === "ORD-0008")!
+    const dispositivo = items.find((i) => i.text === "Notebook Lenovo")!
+    expect(orden).toBeDefined()
+    expect(codigo).toBeDefined()
+    expect(dispositivo).toBeDefined()
+    expect(Math.abs(orden.y - cliente.y)).toBeLessThan(0.5) // same row as CLIENTE
+    expect(orden.x).toBeGreaterThan(cliente.x)
+    expect(codigo.y).toBeLessThan(orden.y)
+    expect(dispositivo.y).toBeLessThan(codigo.y)
   })
 
-  it("omits the dangling em dash when orden.dispositivo is empty, and falls back to #NNNN when codigoOrden is null", async () => {
+  it("omits the dispositivo line when orden.dispositivo is empty, and falls back to #NNNN when codigoOrden is null", async () => {
     const noDispositivo = await generateFacturaPDFReact({
       ...baseData,
       venta: undefined,
       orden: { numeroOrden: 8, codigoOrden: "ORD-0008", dispositivo: "" },
     } as any)
     const textNoDispositivo = await extractReactPdfText(noDispositivo)
-    expect(textNoDispositivo).toContain("ORDEN: ORD-0008")
-    expect(textNoDispositivo).not.toContain("ORDEN: ORD-0008 —")
+    expect(textNoDispositivo).toContain("ORDEN\nORD-0008")
+    expect(textNoDispositivo).not.toContain("ORD-0008 —")
 
     const noCodigo = await generateFacturaPDFReact({
       ...baseData,
@@ -394,7 +445,8 @@ describe("content parity — classic form bands: CLIENTE / ORDEN / CONDICIONES",
       orden: { numeroOrden: 8, codigoOrden: null, dispositivo: "Notebook Lenovo" },
     } as any)
     const textNoCodigo = await extractReactPdfText(noCodigo)
-    expect(textNoCodigo).toContain("ORDEN: #0008 — Notebook Lenovo")
+    expect(textNoCodigo).toContain("#0008")
+    expect(textNoCodigo).toContain("Notebook Lenovo")
   })
 
   it("CONDICIONES band renders above the items table when data exists, absent when empty", async () => {
