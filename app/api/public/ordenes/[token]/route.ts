@@ -5,6 +5,8 @@ import { getDeviceTypeLabel } from "@/lib/device-types"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import { resolveTerminologia } from "@/lib/terminologia"
+import { aplicadoNotasCreditoDeOrden, pendienteOrden } from "@/lib/ordenes/pendiente"
+import { puedeInformarPago, redondearMonto } from "@/lib/ordenes/pagos-informados"
 
 export async function GET(
   request: Request,
@@ -33,6 +35,10 @@ export async function GET(
         presupuesto,
         presupuesto_aprobado_portal,
         public_token,
+        costo_final,
+        descuento_cobro,
+        total_cobrado,
+        notas_credito (monto_aplicado_deuda, anulada),
         tipos_dispositivo:tipo_dispositivo_id (
           nombre
         ),
@@ -49,7 +55,10 @@ export async function GET(
           zona_horaria,
           plantillas_whatsapp,
           recepcion_terminos,
-          terminologia
+          terminologia,
+          moneda,
+          cbu_alias,
+          medios_pago_texto
         )
       `)
     if (error) return error
@@ -111,6 +120,53 @@ export async function GET(
       }))
     }
 
+    // Pago desde el seguimiento: saldo, alias del taller y el último aviso del
+    // cliente. Si la tabla de avisos no responde (p. ej. la migración 419 aún
+    // no se aplicó) no se ofrece pagar: mejor no mostrar la opción que dejar
+    // al cliente con un formulario que falla.
+    const costoFinal = Number(orden.costo_final) || 0
+    const descuentoCobro = Number(orden.descuento_cobro) || 0
+    const totalCobrado = Number(orden.total_cobrado) || 0
+    const saldo = redondearMonto(
+      Math.max(
+        0,
+        pendienteOrden({
+          costoFinal,
+          descuentoCobro,
+          totalCobrado,
+          aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(orden as any),
+        }),
+      ),
+    )
+    let pago: Record<string, unknown> | null = null
+    if (puedeInformarPago(orden.estado, saldo)) {
+      const { data: avisos, error: avisosError } = await supabaseAdmin
+        .from("pagos_informados")
+        .select("monto, metodo, estado, motivo_rechazo, created_at, resuelto_at")
+        .eq("orden_id", orden.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (!avisosError) {
+        const ultimo = (avisos ?? [])[0] as any
+        pago = {
+          total: redondearMonto(costoFinal - descuentoCobro),
+          pagado: redondearMonto(costoFinal - descuentoCobro - saldo),
+          saldo,
+          moneda: org?.moneda || "ARS",
+          alias: (org?.cbu_alias as string | null)?.trim() || null,
+          mediosPagoTexto: (org?.medios_pago_texto as string | null)?.trim() || null,
+          avisoPendiente:
+            ultimo?.estado === "PENDIENTE"
+              ? { monto: Number(ultimo.monto), metodo: ultimo.metodo, fecha: ultimo.created_at }
+              : null,
+          ultimoRechazo:
+            ultimo?.estado === "RECHAZADO"
+              ? { monto: Number(ultimo.monto), motivo: ultimo.motivo_rechazo || null, fecha: ultimo.resuelto_at }
+              : null,
+        }
+      }
+    }
+
     // Plantilla pre-rellenada para el botón de WhatsApp ("Coordinar retiro" /
     // "Consultar"). Si el taller customizó "seguimiento_consulta_cliente" en
     // /configuracion/plantillas-whatsapp, se usa esa; si no, el default.
@@ -158,6 +214,7 @@ export async function GET(
         logoUrl: org?.logo_url || null,
       },
       whatsappMensajeConsulta,
+      pago,
       recepcionTerminos: parseRecepcionTerminos(org?.recepcion_terminos),
       terminologia: resolveTerminologia(org?.terminologia ?? null),
     })

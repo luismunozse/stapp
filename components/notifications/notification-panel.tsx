@@ -17,6 +17,7 @@ import {
   DollarSign,
   CalendarClock,
   MessageCircleOff,
+  Wallet,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -41,6 +42,8 @@ function getNotificationIcon(type: string) {
     case "ALERTA_DIARIA":
     case "FECHA_VENCIDA":
       return <CalendarClock className="h-4 w-4 text-red-500" />
+    case "PAGO_INFORMADO":
+      return <Wallet className="h-4 w-4 text-green-500" />
     case "DEUDA_PENDIENTE":
       return <DollarSign className="h-4 w-4 text-orange-500" />
     case "WHATSAPP_DESCONECTADO":

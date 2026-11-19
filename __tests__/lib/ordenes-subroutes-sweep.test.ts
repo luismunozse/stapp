@@ -51,6 +51,8 @@ const MANEJADORES_ESPERADOS = [
   "[id]/fotos/sesion-celular#POST",
   "[id]/informe#GET",
   "[id]/notas-credito#GET",
+  "[id]/pagos-informados#GET",
+  "[id]/pagos-informados/[pagoId]#POST",
   "[id]/pdf#GET",
   "[id]/reingreso#POST",
   "[id]/repuestos#DELETE",
