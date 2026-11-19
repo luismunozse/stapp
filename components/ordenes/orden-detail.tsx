@@ -102,6 +102,7 @@ import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
 import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
+import { toArray } from "@/lib/db-utils"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 
@@ -672,6 +673,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     return <div className="text-center py-8 text-muted-foreground">Orden no encontrada</div>
   }
 
+  const remitoOrden = toArray(orden.facturas)[0] ?? null
+
   // A practice order gets its own read-only view: no state change, cobro,
   // sena, parts, quotes, invoices or printing (see PracticaOrdenDetail).
   // Every hook of this component runs above this line.
@@ -954,7 +957,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
+                {/* Con remito ya generado se ofrece verlo: el PDF se arma en el
+                    momento con los datos actuales, no hace falta generarlo de nuevo. */}
+                {remitoOrden ? (
+                  <DropdownMenuItem onClick={() => window.open(`/api/facturacion/${remitoOrden.id}/pdf`, "_blank")}>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Ver remito
+                  </DropdownMenuItem>
+                ) : (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                   <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                     <Receipt className="h-4 w-4 mr-2" />
                     Generar remito
