@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { DollarSign, FileText, Lock } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
+import { parseTrabajosARealizar } from "@/lib/ordenes/trabajo-a-realizar"
+import { TrabajosARealizarInput } from "@/components/ordenes/trabajos-a-realizar-input"
 
 interface OrdenCostosCardProps {
   ordenId: string
   presupuesto: number | null | undefined
-  /** Lo que se va a hacer; sale en la hoja de recepción en lugar de "Presupuesto estimado". */
+  /** Lo que se va a hacer, un trabajo por línea; sale en la hoja de recepción en lugar de "Presupuesto estimado". */
   trabajoARealizar?: string | null
   costoFinal: number | null | undefined
   sena: number
@@ -54,6 +56,7 @@ export function OrdenCostosCard({
   // Fase cotización: el número operativo es el presupuesto (estimación previa a
   // la aprobación). Desde APROBADO en adelante (incl. el flujo express que entra
   // directo a EN_REPARACION) el número operativo es el costo final que se factura.
+  const trabajos = parseTrabajosARealizar(trabajoARealizar)
   const enCotizacion = estado === "RECIBIDO" || estado === "EN_DIAGNOSTICO" || estado === "PRESUPUESTADO"
 
   return (
@@ -65,29 +68,35 @@ export function OrdenCostosCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {enCotizacion && (
-          <div>
-            <Label htmlFor={`trabajo-${ordenId}`} className="text-xs text-muted-foreground">
-              Trabajo a realizar
-            </Label>
-            {readOnly ? (
-              <p className="mt-1 text-sm">{trabajoARealizar || "—"}</p>
+        {/* Editable en cualquier estado: es lo que la hoja de recepción muestra en
+            lugar de "Presupuesto estimado", y las órdenes ya en reparación (o
+            creadas antes de que existiera el campo) también tienen que poder
+            cargarlo antes de reimprimir. */}
+        <div>
+          <Label htmlFor={`trabajo-${ordenId}`} className="text-xs text-muted-foreground">
+            Trabajo a realizar
+          </Label>
+          {readOnly ? (
+            trabajos.length > 0 ? (
+              <ul className="mt-1 space-y-0.5 text-sm">
+                {trabajos.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
             ) : (
-              <Input
+              <p className="mt-1 text-sm">—</p>
+            )
+          ) : (
+            <div className="mt-1">
+              <TrabajosARealizarInput
                 id={`trabajo-${ordenId}`}
-                key={`trabajo-${ordenId}-${trabajoARealizar ?? ""}`}
-                className="mt-1"
-                maxLength={200}
-                defaultValue={trabajoARealizar ?? ""}
-                placeholder="Ej: Cambio de batería"
-                onBlur={(e) => {
-                  const value = e.target.value.trim() || null
-                  if (value !== (trabajoARealizar ?? null)) onUpdateField("trabajoARealizar", value)
-                }}
+                key={`trabajo-${ordenId}`}
+                value={trabajoARealizar}
+                onCommit={(value) => onUpdateField("trabajoARealizar", value)}
               />
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
         {enCotizacion ? (
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -122,7 +131,9 @@ export function OrdenCostosCard({
           <>
             {presupuesto != null && presupuesto > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Presupuesto estimado</span>
+                <span className="text-muted-foreground">
+                  {trabajos.length === 1 ? trabajos[0] : trabajos.length > 1 ? "Presupuesto total" : "Presupuesto estimado"}
+                </span>
                 <span className="text-muted-foreground">{formatPrice(presupuesto)}</span>
               </div>
             )}

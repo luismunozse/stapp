@@ -79,6 +79,23 @@ describe("OrdenCostosCard — card consciente del estado", () => {
     expect(screen.getByText(/Presupuesto estimado/i)).toBeInTheDocument()
   })
 
+  it("EN_REPARACION: permite cargar 'Trabajo a realizar' y lo usa como etiqueta del presupuesto", () => {
+    render(
+      <OrdenCostosCard
+        ordenId="o"
+        presupuesto={187000}
+        trabajoARealizar="Cambio de pantalla"
+        costoFinal={null}
+        sena={0}
+        estado="EN_REPARACION"
+        onUpdateField={vi.fn()}
+      />,
+    )
+    expect(screen.getByLabelText("Trabajo a realizar")).toHaveValue("Cambio de pantalla")
+    expect(screen.getByText("Cambio de pantalla")).toBeInTheDocument()
+    expect(screen.queryByText(/Presupuesto estimado/i)).not.toBeInTheDocument()
+  })
+
   it("flujo express (facturación sin presupuesto): no muestra la línea de presupuesto estimado", () => {
     render(
       <OrdenCostosCard
