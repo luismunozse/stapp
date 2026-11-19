@@ -337,6 +337,11 @@ export const estilosShell = StyleSheet.create({
   docTitle: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
   docNumber: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docNumber, marginTop: 2 },
   letterBoxWrap: { position: "absolute", top: -15, left: 0, right: 0, alignItems: "center" },
+  // `cajaInterior` variant: the box sits fully INSIDE the frame, its top
+  // flush with frameInner's padding (10) — the same line the title and the
+  // company name start on — and the legend 4pt under the box's own bottom
+  // edge (10 + 30 + 4). Nothing crosses the frame's border.
+  letterBoxWrapInterior: { position: "absolute", top: 10, left: 0, right: 0, alignItems: "center" },
   letterBox: {
     width: LETTER_BOX_WIDTH,
     height: 30,
@@ -347,6 +352,7 @@ export const estilosShell = StyleSheet.create({
   },
   letterBoxText: { fontFamily: "Helvetica-Bold", fontSize: 20 },
   legendWrap: { position: "absolute", top: 21, left: 0, right: 0, alignItems: "center" },
+  legendWrapInterior: { position: "absolute", top: 44, left: 0, right: 0, alignItems: "center" },
   legendText: { fontSize: TYPE.fine, color: MONO.label },
 
   // === Cliente band ===
@@ -401,6 +407,7 @@ export function Cabecera({
   lineasDerecha = [],
   letterBox,
   leyendaCaja = LEYENDA_NO_FISCAL,
+  cajaInterior = false,
   wrap = true,
   children,
 }: {
@@ -416,6 +423,12 @@ export function Cabecera({
   letterBox?: string
   /** Text under the letter box. Defaults to the not-fiscal legend; a fiscal document passes its ARCA code ("COD. 006"). */
   leyendaCaja?: string
+  /**
+   * Draws the letter box fully inside the frame (top-aligned with the title)
+   * with the legend right under it, instead of straddling the frame's top
+   * border. Off by default: the comprobante fiscal keeps the classic straddle.
+   */
+  cajaInterior?: boolean
   /** false keeps the whole frame on one page (the remito's contract). */
   wrap?: boolean
   children?: React.ReactNode
@@ -514,12 +527,12 @@ export function Cabecera({
           over the header, same as before they moved here. */}
       {letterBox ? (
         <>
-          <View style={estilosShell.letterBoxWrap}>
+          <View style={cajaInterior ? estilosShell.letterBoxWrapInterior : estilosShell.letterBoxWrap}>
             <View style={estilosShell.letterBox}>
               <Text style={estilosShell.letterBoxText}>{letterBox}</Text>
             </View>
           </View>
-          <View style={estilosShell.legendWrap}>
+          <View style={cajaInterior ? estilosShell.legendWrapInterior : estilosShell.legendWrap}>
             <Text style={estilosShell.legendText}>{leyendaCaja}</Text>
           </View>
         </>
@@ -552,11 +565,14 @@ export function BandaCliente({
   espacioInferior,
   espacioDerecha,
   pais,
+  ordenEtiquetaId = "personal-primero",
 }: {
   label: string
   cliente: ClienteData
   /** País de la org, para la etiqueta del documento del cliente. Sin valor, Argentina. */
   pais?: string | null
+  /** Orden de la etiqueta combinada del documento ("DNI/CUIT" vs "CUIT/DNI"). */
+  ordenEtiquetaId?: "personal-primero" | "fiscal-primero"
   campos: CampoCliente[]
   derecha?: React.ReactNode
   /** Bottom padding, for a band followed by another band inside the frame. */
@@ -570,7 +586,7 @@ export function BandaCliente({
 }) {
   const nombre = safe(cliente?.nombre) || "Consumidor Final"
   const valores: Record<CampoCliente, string> = {
-    dni: safe(cliente?.dni) ? `${getCombinedIdLabel(pais, "personal-primero")}: ${safe(cliente?.dni)}` : "",
+    dni: safe(cliente?.dni) ? `${getCombinedIdLabel(pais, ordenEtiquetaId)}: ${safe(cliente?.dni)}` : "",
     telefono: safe(cliente?.telefono) ? `Tel: ${safe(cliente?.telefono)}` : "",
     email: safe(cliente?.email),
     direccion: safe(cliente?.direccion),
@@ -702,7 +718,7 @@ export type ColumnaTabla = {
   sangriaDerecha?: number
 }
 
-function celdaTabla(col: ColumnaTabla, ultima: boolean) {
+function celdaTabla(col: ColumnaTabla, ultima: boolean, separador: boolean) {
   const derecha = col.alinear === "right"
   return {
     ...(col.flex ? { flex: 1 } : { width: col.ancho }),
@@ -710,7 +726,7 @@ function celdaTabla(col: ColumnaTabla, ultima: boolean) {
     paddingRight: derecha ? SANGRIA_CELDA : col.sangriaDerecha ?? 0,
     // The frame already draws the outer border, so the last column must not
     // add a second rule on top of it.
-    ...(ultima ? {} : { borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink }),
+    ...(ultima || !separador ? {} : { borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink }),
     fontSize: TYPE.small,
     textAlign: col.alinear ?? "left",
     ...(col.bold ? { fontFamily: "Helvetica-Bold" } : {}),
@@ -749,8 +765,8 @@ type CeldaTabla = string | React.ReactElement | null | undefined | false
  * conditionally below — passing `fixed={false}` is measurably different from
  * omitting it and would suppress page breaks the table needs.
  *
- * `headerSombreado` — the resumen's header carries a MONO.totalBg band, the
- * remito's two do not. Unlike Firmas' required spacings, this one may default
+ * `headerSombreado` — the resumen's and the remito's headers carry a
+ * MONO.totalBg band, the other documents' do not. Unlike Firmas' required spacings, this one may default
  * (to `false`): it is an off-by-default visual feature, not a spacing
  * constant with no neutral value. Firmas' 18/22 vs 10/16 disagree with no
  * value that means "nothing" — defaulting to either would silently impose
@@ -762,6 +778,8 @@ export function Tabla({
   filas,
   headerFijo = false,
   headerSombreado = false,
+  separadoresVerticales = true,
+  espacioFila,
   pie,
 }: {
   columnas: ColumnaTabla[]
@@ -770,10 +788,21 @@ export function Tabla({
   headerFijo?: boolean
   /** Grey band behind the header row. */
   headerSombreado?: boolean
+  /**
+   * Vertical rule between columns. On by default (every table that adopted
+   * <Tabla> drew them); the remito turns them off and relies on the
+   * horizontal row rules plus column alignment alone.
+   */
+  separadoresVerticales?: boolean
+  /** Vertical padding of each data row. Omitted keeps tablaFila's own 4pt. */
+  espacioFila?: number
   /** Extra row rendered inside the frame, under the last data row. */
   pie?: React.ReactNode
 }) {
   const esUltima = (i: number) => i === columnas.length - 1
+  const celda = (col: ColumnaTabla, i: number) => celdaTabla(col, esUltima(i), separadoresVerticales)
+  const estiloFila =
+    espacioFila === undefined ? estilosShell.tablaFila : [estilosShell.tablaFila, { paddingVertical: espacioFila }]
 
   return (
     <View style={estilosShell.tablaFrame}>
@@ -786,16 +815,16 @@ export function Tabla({
         {...(headerFijo ? { fixed: true } : {})}
       >
         {columnas.map((col, i) => (
-          <Text key={col.key} style={[celdaTabla(col, esUltima(i)), estilosShell.tablaHeaderCell]}>
+          <Text key={col.key} style={[celda(col, i), estilosShell.tablaHeaderCell]}>
             {col.titulo}
           </Text>
         ))}
       </View>
 
       {filas.map((fila, f) => (
-        <View key={f} style={estilosShell.tablaFila} wrap={false}>
+        <View key={f} style={estiloFila} wrap={false}>
           {columnas.map((col, i) => (
-            <View key={col.key} style={celdaTabla(col, esUltima(i))}>
+            <View key={col.key} style={celda(col, i)}>
               {typeof fila[col.key] === "string" ? <Text>{fila[col.key]}</Text> : fila[col.key]}
             </View>
           ))}
