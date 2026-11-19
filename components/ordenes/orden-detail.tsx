@@ -391,7 +391,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       const totalCobrado = orden?.totalCobrado || 0
       const tieneCobros = totalCobrado > 0
       const desc = tieneCobros
-        ? `⚠️ Esta orden tiene ${formatPrice(totalCobrado)} cobrados. Si cancelás sin anular esos cobros, quedan como ingreso real en finanzas (no se descuentan automáticamente). Revisá la pestaña Cobros y anulá los que correspondan o registrá un reembolso manual en Caja antes de proceder.`
+        ? `⚠️ Esta orden tiene ${formatPrice(totalCobrado)} cobrados. Si cancelás sin anular esos cobros, quedan como ingreso real en finanzas (no se descuentan automáticamente). Abrí el botón de cobros de la orden y anulá los que correspondan o registrá un reembolso manual en Caja antes de proceder.`
         : `¿Estás seguro de cambiar el estado a "${ESTADO_LABELS[nuevoEstado]}"? Esta acción puede ser difícil de revertir.`
       const confirmed = await confirm({
         title: label,
@@ -1531,6 +1531,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             descuentoCobro: orden.descuentoCobro || 0,
             clienteId: orden.cliente?.id,
             clienteNombre: orden.cliente?.nombre,
+            estado: orden.estado,
           }}
           onSuccess={() => fetchOrden()}
         />

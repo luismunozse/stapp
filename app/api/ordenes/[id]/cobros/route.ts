@@ -92,6 +92,23 @@ export async function GET(
 
     if (dbError) throw dbError
 
+    // Quién cobró y quién anuló. Lookup aparte y tolerante: si falla, el
+    // historial se muestra igual, solo que sin nombres.
+    const usuarioIds = [...new Set(
+      (cobros || []).flatMap((c: any) => [c.usuario_id, c.anulado_por]).filter(Boolean)
+    )] as string[]
+    const nombres = new Map<string, string>()
+    if (usuarioIds.length > 0) {
+      const { data: usuarios } = await supabaseAdmin
+        .from("users")
+        .select("id, nombre")
+        .eq("organization_id", organizationId!)
+        .in("id", usuarioIds)
+      for (const u of (usuarios || []) as Array<{ id: string; nombre: string }>) {
+        nombres.set(u.id, u.nombre)
+      }
+    }
+
     return NextResponse.json(
       (cobros || []).map((c: any) => ({
         id: c.id,
@@ -108,6 +125,8 @@ export async function GET(
         anulado: c.anulado || false,
         anuladoAt: c.anulado_at,
         anuladoMotivo: c.anulado_motivo,
+        cobradoPor: nombres.get(c.usuario_id) ?? null,
+        anuladoPor: nombres.get(c.anulado_por) ?? null,
       }))
     )
   } catch (err) {
