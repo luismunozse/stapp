@@ -1741,14 +1741,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     placeholder="Ej: Apple, Samsung"
                   />
                   {marcasDisponibles.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
                       {marcasDisponibles.slice(0, 5).map((m) => (
                         <button
                           key={m}
                           type="button"
                           onClick={() => setValue("marca", m)}
                           aria-pressed={watch("marca") === m}
-                          className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                          className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-xs rounded-full border transition-colors ${
                             watch("marca") === m
                               ? "bg-primary text-primary-foreground border-primary"
                               : "hover:bg-muted"
@@ -2395,7 +2395,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             </div>
           )}
 
-          <FormActionBar className="flex-wrap justify-between" inDialog={inSheet} alwaysSticky={inSheet}>
+          {/* En el overlay la barra llega a los bordes de la tarjeta (CardContent
+              tiene p-6): si no, el formulario se ve por los costados y abajo. */}
+          <FormActionBar
+            className={cn("flex-wrap justify-between", inSheet && "-mx-6 -mb-6 rounded-b-lg px-6")}
+            inDialog={inSheet}
+            alwaysSticky={inSheet}
+          >
             <div className="flex gap-2">
               {currentStep > 1 ? (
                 <Button type="button" variant="ghost" onClick={handlePrevStep}>

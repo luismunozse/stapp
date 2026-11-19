@@ -1040,8 +1040,10 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
           scroll propio: no empuja ni se mezcla con el listado. z-[60] tapa
           navbar y bottom-nav. */}
       {showForm && (
-        <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-background sm:bg-black/60 sm:py-6">
-          <div className="min-h-full sm:mx-auto sm:min-h-0 sm:max-w-3xl">
+        <div className="fixed inset-0 z-[60] bg-background sm:flex sm:items-start sm:justify-center sm:bg-black/60 sm:p-6">
+          {/* El scroll vive en la caja del modal, no en el fondo: asi el
+              encabezado y la barra de acciones quedan pegados a sus bordes. */}
+          <div className="h-full overflow-y-auto overscroll-contain sm:h-auto sm:max-h-full sm:w-full sm:max-w-3xl sm:rounded-lg">
             <OrdenForm
               inSheet
               fromTurnoId={fromTurnoId || undefined}
