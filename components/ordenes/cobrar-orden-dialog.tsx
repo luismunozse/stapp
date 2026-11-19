@@ -19,7 +19,7 @@ import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
-import { PagosHistorial } from "@/components/facturacion/pagos-historial"
+import { CobrosOrdenLista, type CobroOrden } from "@/components/ordenes/cobros-orden-lista"
 import { parseMoneyInput } from "@/lib/parse-money"
 
 interface CobrarOrdenDialogProps {
@@ -35,6 +35,8 @@ interface CobrarOrdenDialogProps {
     descuentoCobro: number
     clienteId?: string | null
     clienteNombre?: string
+    /** Estado de la orden: los cobros de una orden entregada no se anulan. */
+    estado?: string
   }
   onSuccess: () => void
 }
@@ -46,16 +48,20 @@ export function CobrarOrdenDialog({
   onSuccess,
 }: CobrarOrdenDialogProps) {
   const { formatPrice, formatDate } = useCurrency()
-  const { showError, showInfo } = useModal()
+  const { showError, showInfo, showSuccess } = useModal()
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [observaciones, setObservaciones] = useState("")
   // El descuento es decisión del ADMIN; el servidor lo rechaza para el resto.
   const { data: session } = useSession()
-  const puedeDescontar = session?.user?.role === "ADMIN"
+  const esAdmin = session?.user?.role === "ADMIN"
+  const puedeDescontar = esAdmin
+  // Anular es del ADMIN y solo antes de entregar (el servidor aplica lo mismo).
+  const ordenEntregada = orden.estado === "ENTREGADO" || orden.estado === "ENTREGADO_SIN_REPARACION"
+  const puedeAnular = esAdmin && !ordenEntregada
   const [descuento, setDescuento] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
-  const [cobrosHistorial, setCobrosHistorial] = useState<any[]>([])
+  const [cobrosHistorial, setCobrosHistorial] = useState<CobroOrden[]>([])
   const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([])
   const [showHistorial, setShowHistorial] = useState(false)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
@@ -81,7 +87,9 @@ export function CobrarOrdenDialog({
       fetchSaldoCuenta()
       fetchCuotas()
     }
-  }, [open, orden.id])
+    // totalCobrado: al anular un cobro con el diálogo abierto vuelve a haber
+    // pendiente, y la línea de pago tiene que arrancar con ese monto.
+  }, [open, orden.id, orden.totalCobrado])
 
   // Update pago amount when discount changes
   useEffect(() => {
@@ -122,6 +130,27 @@ export function CobrarOrdenDialog({
       }
     } catch { /* ignore */ }
     finally { setLoadingHistorial(false) }
+  }
+
+  const handleAnular = async (cobroId: string, motivo: string): Promise<boolean> => {
+    try {
+      const params = new URLSearchParams({ cobroId })
+      if (motivo) params.set("motivo", motivo)
+      const res = await fetch(`/api/ordenes/${orden.id}/cobros?${params.toString()}`, { method: "DELETE" })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        await showError(error.error || "Error al anular el cobro")
+        return false
+      }
+      await fetchHistorial()
+      onSuccess()
+      await showSuccess("Cobro anulado")
+      return true
+    } catch (err) {
+      console.error("Error:", err)
+      await showError("Error al anular el cobro")
+      return false
+    }
   }
 
   const handleCobrar = async () => {
@@ -186,6 +215,9 @@ export function CobrarOrdenDialog({
     }
   }
 
+  const vigentes = cobrosHistorial.filter((c) => !c.anulado)
+  const anulados = cobrosHistorial.filter((c) => c.anulado)
+
   const ordenLabel = orden.codigoOrden || `#${String(orden.numeroOrden).padStart(4, "0")}`
 
   return (
@@ -194,7 +226,7 @@ export function CobrarOrdenDialog({
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Cobrar orden {ordenLabel}
+            {yaCobradoTotal ? "Cobros de la orden" : "Cobrar orden"} {ordenLabel}
             {orden.clienteNombre && (
               <span className="text-sm font-normal text-muted-foreground">
                 - {orden.clienteNombre}
@@ -227,8 +259,8 @@ export function CobrarOrdenDialog({
         </div>
 
         {yaCobradoTotal ? (
-          <div className="text-center py-4">
-            <Badge variant="success" className="text-base px-4 py-1">
+          <div className="text-center py-1">
+            <Badge variant="success" className="text-sm px-3 py-1">
               Cobrado en su totalidad
             </Badge>
           </div>
@@ -315,8 +347,37 @@ export function CobrarOrdenDialog({
           </div>
         )}
 
-        {/* Historial de cobros */}
-        {cobrosHistorial.length > 0 && (
+        {/* Historial de cobros: con la orden ya cobrada es el contenido del
+            diálogo y va abierto; mientras se cobra queda plegado para no tapar el formulario. */}
+        {yaCobradoTotal ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">
+              {vigentes.length === 1 ? "1 cobro" : `${vigentes.length} cobros`}
+              {anulados.length > 0 && (
+                <span className="font-normal text-muted-foreground">
+                  {" "}· {anulados.length} anulado{anulados.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </p>
+            {loadingHistorial && cobrosHistorial.length === 0 ? (
+              <div className="space-y-2">
+                <div className="h-16 animate-pulse rounded-lg bg-muted" />
+                <div className="h-16 animate-pulse rounded-lg bg-muted" />
+              </div>
+            ) : cobrosHistorial.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Esta orden no tiene cobros directos registrados. Si se pagó con una factura, el detalle está en la factura.
+              </p>
+            ) : (
+              <CobrosOrdenLista cobros={cobrosHistorial} puedeAnular={puedeAnular} onAnular={handleAnular} />
+            )}
+            {esAdmin && ordenEntregada && vigentes.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                La orden ya fue entregada: sus cobros no se pueden anular.
+              </p>
+            )}
+          </div>
+        ) : cobrosHistorial.length > 0 && (
           <div>
             <Button
               variant="ghost"
@@ -324,29 +385,18 @@ export function CobrarOrdenDialog({
               onClick={() => setShowHistorial(!showHistorial)}
             >
               <span className="text-sm">
-                Historial de cobros ({cobrosHistorial.filter((c: any) => !c.anulado).length})
-                {cobrosHistorial.some((c: any) => c.anulado) && (
+                Historial de cobros ({vigentes.length})
+                {anulados.length > 0 && (
                   <span className="text-muted-foreground ml-1">
-                    ({cobrosHistorial.filter((c: any) => c.anulado).length} anulados)
+                    ({anulados.length} anulado{anulados.length !== 1 ? "s" : ""})
                   </span>
                 )}
               </span>
               {showHistorial ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
             {showHistorial && (
-              <div className="space-y-2 mt-2">
-                <PagosHistorial pagos={cobrosHistorial.filter((c: any) => !c.anulado)} />
-                {cobrosHistorial.filter((c: any) => c.anulado).length > 0 && (
-                  <div className="text-xs text-muted-foreground pt-2 border-t">
-                    <p className="font-medium mb-1">Cobros anulados:</p>
-                    {cobrosHistorial.filter((c: any) => c.anulado).map((c: any) => (
-                      <div key={c.id} className="flex justify-between line-through opacity-60">
-                        <span>{c.metodoPago} - {formatPrice(c.monto)}</span>
-                        <span>{c.anuladoMotivo || "Anulado"}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="mt-2">
+                <CobrosOrdenLista cobros={cobrosHistorial} puedeAnular={puedeAnular} onAnular={handleAnular} />
               </div>
             )}
           </div>
