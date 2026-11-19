@@ -52,6 +52,7 @@ import {
 } from "lucide-react"
 import type { TimelineEvent } from "./visual-timeline"
 import { EstadoFisico, type EstadoFisicoData } from "./estado-fisico"
+import { PagarOrden, type PagoSeguimiento } from "./pagar-orden"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ESTADO_ORDEN_UI, getEstadoOrdenUi } from "@/lib/estado-orden-ui"
 import { STATUS_TONE_CLASSES } from "@/components/ui/status-pill"
@@ -249,6 +250,7 @@ interface TrackingData {
     logoUrl?: string
   }
   whatsappMensajeConsulta?: string
+  pago?: PagoSeguimiento | null
   recepcionTerminos?: string[]
   terminologia?: Terminologia
 }
@@ -611,6 +613,9 @@ export function SeguimientoContent({ token }: { token: string }) {
           </Card>
         </a>
       )}
+
+      {/* ══════════ PAGO ══════════ */}
+      {data.pago && <PagarOrden token={token} pago={data.pago} onInformado={() => { fetchData() }} />}
 
       {/* ══════════ STEPPER HORIZONTAL ══════════ */}
       {isRetiro ? (
