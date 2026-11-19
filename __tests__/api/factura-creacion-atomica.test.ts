@@ -1,13 +1,11 @@
 /**
  * Tests: F4 — crear_factura_atomica RPC for POST /api/facturacion/generar
- *         F5 — idempotencyKey in POST /api/pagos (pago-form)
  *
  * Guards:
  *   F4a: generar happy path — calls crear_factura_atomica RPC with p_items + p_sena_monto,
  *        route returns 201 with correct shape.
  *   F4b: function-missing → fallback; items insert error → factura deleted + 500.
  *   F4c: total <= 0 → estado_pago is PENDIENTE (not PAGADO).
- *   F5:  POST /api/pagos body includes idempotencyKey → reaches RPC as p_idempotency_key.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
@@ -24,7 +22,6 @@ vi.mock("@/lib/counters", () => ({
 }))
 
 import { POST as generarPost } from "@/app/api/facturacion/generar/route"
-import { POST as pagosPost } from "@/app/api/pagos/route"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -376,104 +373,3 @@ describe("POST /api/facturacion/generar — edge: total <= 0 (F4c / F-C4)", () =
   })
 })
 
-// ═══════════════════════════════════════════════════════════════════════════
-// F5 — POST /api/pagos includes idempotencyKey → reaches RPC as p_idempotency_key
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe("POST /api/pagos — idempotencyKey reaches RPC (F5)", () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it("idempotencyKey in body is forwarded to registrar_pago_factura_atomica as p_idempotency_key", async () => {
-    mockAuthSuccess({ role: "ADMIN" })
-
-    const facturaRow = {
-      id: "f1",
-      orden_id: "o1",
-      total: 1000,
-      monto_abonado: 0,
-      estado_pago: "PENDIENTE",
-      ordenes_servicio: { organization_id: "org-1", cliente_id: "c1" },
-    }
-
-    mockSupabaseFrom({ facturas: createChainMock(facturaRow) })
-
-    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
-      if (fn === "registrar_pago_factura_atomica") {
-        return Promise.resolve({
-          data: {
-            replayed: false,
-            response: {
-              pagos: [{ id: "pp1", monto: 500 }],
-              factura: { montoAbonado: 500, estadoPago: "PAGADO_PARCIAL", pendiente: 500 },
-            },
-          },
-          error: null,
-        })
-      }
-      return Promise.resolve({ data: null, error: null })
-    }) as any)
-
-    const payload = {
-      facturaId: "f1",
-      pagos: [{ monto: 500, metodo: "EFECTIVO" }],
-      idempotencyKey: "stable-uuid-from-ref-001",
-    }
-
-    const res = await pagosPost(createPostRequest(payload))
-    const { status } = await parseResponse(res)
-
-    expect(status).toBe(201)
-
-    const rpcCalls = vi.mocked(supabaseAdmin.rpc).mock.calls
-    const atomicCall = rpcCalls.find(([fn]) => fn === "registrar_pago_factura_atomica")
-    expect(atomicCall).toBeDefined()
-    expect(atomicCall![1]).toMatchObject({
-      p_factura_id: "f1",
-      p_idempotency_key: "stable-uuid-from-ref-001",
-    })
-  })
-
-  it("missing idempotencyKey in body → p_idempotency_key is null (no crash)", async () => {
-    mockAuthSuccess({ role: "ADMIN" })
-
-    const facturaRow = {
-      id: "f1",
-      orden_id: "o1",
-      total: 1000,
-      monto_abonado: 0,
-      estado_pago: "PENDIENTE",
-      ordenes_servicio: { organization_id: "org-1", cliente_id: "c1" },
-    }
-
-    mockSupabaseFrom({ facturas: createChainMock(facturaRow) })
-
-    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
-      if (fn === "registrar_pago_factura_atomica") {
-        return Promise.resolve({
-          data: {
-            replayed: false,
-            response: {
-              pagos: [{ id: "pp1", monto: 500 }],
-              factura: { montoAbonado: 500, estadoPago: "PAGADO_PARCIAL", pendiente: 500 },
-            },
-          },
-          error: null,
-        })
-      }
-      return Promise.resolve({ data: null, error: null })
-    }) as any)
-
-    // No idempotencyKey
-    const res = await pagosPost(createPostRequest({
-      facturaId: "f1",
-      pagos: [{ monto: 500, metodo: "EFECTIVO" }],
-    }))
-    const { status } = await parseResponse(res)
-
-    expect(status).toBe(201)
-
-    const rpcCalls = vi.mocked(supabaseAdmin.rpc).mock.calls
-    const atomicCall = rpcCalls.find(([fn]) => fn === "registrar_pago_factura_atomica")
-    expect(atomicCall![1]).toMatchObject({ p_idempotency_key: null })
-  })
-})

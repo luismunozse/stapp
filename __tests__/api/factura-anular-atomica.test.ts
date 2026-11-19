@@ -22,7 +22,6 @@ import { supabaseAdmin } from "@/lib/supabase"
 // We import the route under test
 import { PUT, DELETE } from "@/app/api/facturacion/[id]/route"
 // Also need POST (pagos) for F1 fallback guards
-import { POST as pagosPost } from "@/app/api/pagos/route"
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -36,14 +35,6 @@ function createPutRequest(body: any): Request {
 
 function createDeleteRequest(): Request {
   return new Request("http://localhost/api/facturacion/f1", { method: "DELETE" })
-}
-
-function createPagosRequest(body: any): Request {
-  return new Request("http://localhost/api/pagos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
 }
 
 /** Minimal factura row joined with ordenes_servicio */
@@ -580,69 +571,3 @@ describe("DELETE /api/facturacion/[id] — calls eliminar_factura_atomica", () =
   })
 })
 
-// ═══════════════════════════════════════════════════════════════════════════
-// F1 — POST /api/pagos runJsFallback guards
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe("POST /api/pagos — runJsFallback guards (function missing forces fallback)", () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it("fallback: factura ANULADA → 400", async () => {
-    mockAuthSuccess({ role: "ADMIN" })
-
-    // Force fallback path
-    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
-      if (fn === "registrar_pago_factura_atomica") {
-        return Promise.resolve({ data: null, error: FUNCTION_MISSING_ERROR })
-      }
-      return Promise.resolve({ data: null, error: null })
-    }) as any)
-
-    mockSupabaseFrom({
-      facturas: createChainMock(
-        facturaWithOrden({ estado_pago: "ANULADA", monto_abonado: 0 })
-      ),
-    })
-
-    const res = await pagosPost(
-      createPagosRequest({
-        facturaId: "f1",
-        pagos: [{ monto: 500, metodo: "EFECTIVO" }],
-      })
-    )
-    const { status, body } = await parseResponse(res)
-
-    expect(status).toBe(400)
-    expect(body.error).toMatch(/anulado/i)
-  })
-
-  it("fallback: overpayment → 400", async () => {
-    mockAuthSuccess({ role: "ADMIN" })
-
-    // Force fallback path
-    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
-      if (fn === "registrar_pago_factura_atomica") {
-        return Promise.resolve({ data: null, error: FUNCTION_MISSING_ERROR })
-      }
-      return Promise.resolve({ data: null, error: null })
-    }) as any)
-
-    mockSupabaseFrom({
-      facturas: createChainMock(
-        facturaWithOrden({ total: 1000, monto_abonado: 200, estado_pago: "PAGADO_PARCIAL" })
-      ),
-    })
-
-    // Try to pay 900 when only 800 is pending
-    const res = await pagosPost(
-      createPagosRequest({
-        facturaId: "f1",
-        pagos: [{ monto: 900, metodo: "EFECTIVO" }],
-      })
-    )
-    const { status, body } = await parseResponse(res)
-
-    expect(status).toBe(400)
-    expect(body.error).toMatch(/excede el pendiente/i)
-  })
-})

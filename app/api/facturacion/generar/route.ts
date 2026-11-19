@@ -226,6 +226,14 @@ export async function POST(request: Request) {
         .select("*")
         .eq("factura_id", facturaId)
 
+      // El remito nace con lo ya cobrado en la orden (trigger de la migracion
+      // 417), no solo con la sena: se lee el estado real para la respuesta.
+      const { data: estadoRemito } = await supabaseAdmin
+        .from("facturas")
+        .select("monto_abonado, estado_pago")
+        .eq("id", facturaId)
+        .single()
+
       return NextResponse.json(
         {
           id: facturaId,
@@ -235,7 +243,8 @@ export async function POST(request: Request) {
           subtotal,
           iva,
           total,
-          estadoPago,
+          montoAbonado: Number(estadoRemito?.monto_abonado ?? montoAbonado),
+          estadoPago: estadoRemito?.estado_pago ?? estadoPago,
           cotizacionId: cotizacionAprobada?.id || null,
           items: (itemsFactura || []).map((i: any) => ({
             id: i.id,
