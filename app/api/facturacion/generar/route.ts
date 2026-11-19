@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextInvoiceNumber } from "@/lib/counters"
 import { toArray } from "@/lib/db-utils"
+import { remitoActivo } from "@/lib/facturacion/remito-activo"
 import { z } from "zod"
 import { construirItemsFactura } from "@/lib/facturacion/items-factura"
 import { getIvaGeneral } from "@/lib/countries"
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
           precio_unitario,
           nombre
         ),
-        facturas (id),
+        facturas (id, estado_pago),
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
@@ -111,10 +112,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verificar si ya existe una factura
-    // (facturas (id) is a reverse embed over the UNIQUE orden_id FK — PostgREST
-    // may return it as an object instead of an array; normalize before checking)
-    if (toArray(orden.facturas).length > 0) {
+    // Verificar si ya existe un remito vigente. Los ANULADA no cuentan: la
+    // orden puede volver a tener remito (migracion 418).
+    if (remitoActivo(orden.facturas)) {
       return NextResponse.json(
         { error: "Ya existe un remito para esta orden" },
         { status: 400 }

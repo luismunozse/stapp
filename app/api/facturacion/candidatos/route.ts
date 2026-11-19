@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { remitoActivo } from "@/lib/facturacion/remito-activo"
 
 export async function GET(request: Request) {
   try {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
 
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, clientes (nombre), facturas (id)")
+      .select("id, numero_orden, codigo_orden, dispositivo, clientes (nombre), facturas (id, estado_pago)")
       .eq("organization_id", organizationId!)
       .in("estado", ["REPARADO", "ENTREGADO"])
 
@@ -46,7 +47,8 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ordenes: (ordenes || [])
-          .filter((o: any) => !o.facturas || o.facturas.length === 0)
+          // Sin remito vigente: un remito anulado no cuenta (migracion 418).
+          .filter((o: any) => !remitoActivo(o.facturas))
           .map((o: any) => ({
             id: o.id,
             numeroOrden: o.numero_orden,
