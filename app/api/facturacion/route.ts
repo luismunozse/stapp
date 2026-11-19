@@ -1,3 +1,4 @@
+import { pagosDeRemitoOrden, cobrosDeOrdenes, porFechaDesc } from "@/lib/facturacion/pagos-remito"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -87,6 +88,8 @@ export async function GET(request: Request) {
         }))
         .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
 
+    const cobrosPorOrden = await cobrosDeOrdenes((facturasOrden || []).map((f: any) => f.orden_id))
+
     const facturasFormatted = [
       ...(facturasOrden || []).map((f: any) => ({
         id: f.id,
@@ -107,7 +110,7 @@ export async function GET(request: Request) {
           dispositivo: f.ordenes_servicio.dispositivo,
           cliente: f.ordenes_servicio.clientes,
         },
-        pagos: formatPagos(f.pagos_parciales),
+        pagos: pagosDeRemitoOrden(f.pagos_parciales, cobrosPorOrden.get(f.orden_id)).sort(porFechaDesc),
       })),
       ...(facturasVenta || []).map((f: any) => ({
         id: f.id,

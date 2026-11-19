@@ -12,7 +12,7 @@ import { GET as facturacionGet } from "@/app/api/facturacion/route"
 
 function chainableThenable(result: { data: any; error: any }) {
   const chain: any = {}
-  const methods = ["select", "eq", "order"]
+  const methods = ["select", "eq", "in", "order"]
   for (const m of methods) chain[m] = vi.fn().mockReturnValue(chain)
   chain.then = (resolve: any) => Promise.resolve(result).then(resolve)
   return chain
@@ -38,6 +38,7 @@ function mockFacturasQueries(
   const ordenesChain = chainableThenable(ordenResult)
   const ventasChain = chainableThenable(ventaResult)
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "cobros_orden") return chainableThenable({ data: [], error: null })
     if (table !== "facturas") {
       return chainableThenable({ data: null, error: { message: `No mock for table: ${table}` } })
     }
@@ -97,7 +98,8 @@ describe("GET /api/facturacion — mixed origen listing", () => {
     }
 
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table !== "facturas") {
+      if (table === "cobros_orden") return chainableThenable({ data: [], error: null })
+    if (table !== "facturas") {
         return chainableThenable({ data: null, error: { message: `No mock for table: ${table}` } })
       }
       // Both queries hit the same table name; disambiguate by call order:

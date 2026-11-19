@@ -1,3 +1,4 @@
+import { pagosDeRemitoOrden, cobrosDeOrdenes, porFechaDesc } from "@/lib/facturacion/pagos-remito"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -179,16 +180,20 @@ export async function GET(
         iva: parseFloat(factura.iva),
         total: parseFloat(factura.total),
         montoAbonado: parseFloat(factura.monto_abonado || "0"),
-        pagos: (factura.pagos_parciales || [])
-          .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-          .map((p: any) => ({
-            monto: parseFloat(p.monto),
-            metodoPago: p.metodo_pago,
+        // Mas viejo primero: la columna SALDO del PDF se va restando en orden.
+        pagos: pagosDeRemitoOrden(
+          factura.pagos_parciales,
+          (await cobrosDeOrdenes([factura.ordenes_servicio.id])).get(factura.ordenes_servicio.id),
+        )
+          .sort((a, b) => -porFechaDesc(a, b))
+          .map((p) => ({
+            monto: p.monto,
+            metodoPago: p.metodoPago,
             fecha: new Date(p.fecha),
-            referencia: p.numero_referencia,
+            referencia: p.referencia,
             cuotas: p.cuotas,
-            recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
-            montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
+            recargoPorcentaje: p.recargoPorcentaje,
+            montoOriginal: p.montoOriginal,
           })),
         nombreEmpresa: org?.nombre_mostrar || org?.nombre,
         telefonoEmpresa: org?.telefono,

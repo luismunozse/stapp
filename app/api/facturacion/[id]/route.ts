@@ -1,3 +1,4 @@
+import { pagosDeRemitoOrden, cobrosDeOrdenes, porFechaDesc } from "@/lib/facturacion/pagos-remito"
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -96,7 +97,13 @@ async function fetchFacturaConOrigen(
   return { origen: "venta", organizationId: data.ventas.organization_id, factura: data }
 }
 
-function formatFacturaResponse(result: { origen: "orden" | "venta"; factura: any }) {
+/** Cobros de la orden del remito, para el historial (ver lib/facturacion/pagos-remito.ts). */
+async function cobrosParaRespuesta(result: { origen: "orden" | "venta"; factura: any }) {
+  if (result.origen !== "orden") return undefined
+  return (await cobrosDeOrdenes([result.factura.orden_id])).get(result.factura.orden_id)
+}
+
+function formatFacturaResponse(result: { origen: "orden" | "venta"; factura: any }, cobrosOrden?: any[]) {
   const f = result.factura
   const base = {
     id: f.id,
@@ -109,7 +116,9 @@ function formatFacturaResponse(result: { origen: "orden" | "venta"; factura: any
     montoAbonado: f.monto_abonado,
     estadoPago: f.estado_pago,
     createdAt: f.fecha,
-    pagos: (f.pagos_parciales || [])
+    pagos: result.origen === "orden"
+      ? pagosDeRemitoOrden(f.pagos_parciales, cobrosOrden).sort(porFechaDesc)
+      : (f.pagos_parciales || [])
       .map((p: any) => ({
         id: p.id,
         monto: p.monto,
@@ -169,7 +178,7 @@ export async function GET(
       return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json(formatFacturaResponse(result), {
+    return NextResponse.json(formatFacturaResponse(result, await cobrosParaRespuesta(result)), {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {
@@ -374,7 +383,7 @@ async function fetchAndReturnFactura(id: string, organizationId: string): Promis
   if (!result) {
     return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
-  return NextResponse.json(formatFacturaResponse(result))
+  return NextResponse.json(formatFacturaResponse(result, await cobrosParaRespuesta(result)))
 }
 
 export async function DELETE(
