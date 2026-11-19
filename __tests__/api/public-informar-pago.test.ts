@@ -31,7 +31,8 @@ const ordenBase = {
 function request(campos: Record<string, string>, archivo?: Uint8Array) {
   const form = new FormData()
   for (const [k, v] of Object.entries(campos)) form.set(k, v)
-  if (archivo) form.set("comprobante", new File([archivo], "comprobante.png", { type: "image/png" }))
+  // Copia sobre un ArrayBuffer propio: BlobPart no acepta un Uint8Array que podría ser SharedArrayBuffer.
+  if (archivo) form.set("comprobante", new File([new Uint8Array(archivo).buffer as ArrayBuffer], "comprobante.png", { type: "image/png" }))
   return new Request("http://localhost/api/public/ordenes/tok/informar-pago", { method: "POST", body: form })
 }
 const params = { params: Promise.resolve({ token: "tok" }) }
