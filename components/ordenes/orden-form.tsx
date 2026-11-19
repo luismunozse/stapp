@@ -17,7 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
-import { X, Plus, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp, Check } from "lucide-react"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { cn } from "@/lib/utils"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
@@ -1517,15 +1519,21 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   return (
     <Card>
-      <CardHeader>
+      {/* En el overlay el encabezado queda fijo: el formulario es largo y
+          "Cerrar" no tiene que quedar arriba de todo el scroll. */}
+      <CardHeader
+        className={cn(
+          inSheet && "sticky top-0 z-20 rounded-t-lg border-b bg-card/95 py-3 backdrop-blur-sm"
+        )}
+      >
         <div className="flex items-center justify-between">
-          <CardTitle>Nueva {term("orden")}</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">Nueva {term("orden")}</CardTitle>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
           </IconButton>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={cn(inSheet && "pt-4")}>
         {fromTurnoId && (
           <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
             <p className="text-sm font-medium">Origen: turno agendado</p>
@@ -1533,15 +1541,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               Los datos se cargaron desde el turno. Revisalos antes de crear la orden.
             </p>
             {turnoPrefill?.requiereCrearCliente && turnoPrefill.clienteSnapshot && (
-              <div className="mt-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
-                <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+              <div className="mt-2 p-2 rounded bg-warning/10 border border-warning/30">
+                <p className="text-xs text-warning-text font-medium">
                   Este turno usa un cliente sin registrar.
                 </p>
-                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                <p className="text-xs text-warning-text mt-1">
                   Datos: <strong>{turnoPrefill.clienteSnapshot.nombre}</strong> · {turnoPrefill.clienteSnapshot.telefono}
                   {turnoPrefill.clienteSnapshot.email ? ` · ${turnoPrefill.clienteSnapshot.email}` : ""}
                 </p>
-                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                <p className="text-xs text-warning-text mt-1">
                   Creá primero el cliente con estos datos usando el botón <strong>+</strong> al lado del buscador de cliente.
                 </p>
               </div>
@@ -1562,42 +1570,78 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {(() => {
             const current = pasos.find((s) => s.step === currentStep)
             return (
-              <p className="text-xs text-center text-muted-foreground sm:hidden mb-2">
+              <p className="text-xs text-center text-muted-foreground sm:hidden">
                 Paso {currentStep}/{totalSteps}{current ? ` · ${current.label}` : ""}
               </p>
             )
           })()}
-          <div className="flex items-center gap-2 mb-6">
-            {pasos.map(({ step, label }, index) => (
-              <div key={step} className="flex items-center gap-2 flex-1">
+          <nav aria-label="Pasos del alta" className="flex items-center gap-1.5 sm:gap-2">
+            {pasos.map(({ step, label }) => {
+              const actual = step === currentStep
+              const hecho = step < currentStep
+              // Lo obligatorio que vive en el paso 3 se marca en el propio paso,
+              // asi se ve desde el paso 1 adonde hay que ir.
+              const pendiente =
+                step === totalSteps &&
+                !actual &&
+                (checklistRequeridosPendientes > 0 || (estadoFisicoIntentoEnviar && estadoFisicoFaltante))
+              return (
                 <button
+                  key={step}
                   type="button"
                   onClick={() => void irAPaso(step)}
-                  aria-current={step === currentStep ? "step" : undefined}
+                  aria-current={actual ? "step" : undefined}
                   aria-label={`Paso ${step}: ${label}`}
-                  className={`flex items-center gap-2 w-full p-2 rounded-lg text-sm font-medium transition-colors ${
-                    step === currentStep
-                      ? "bg-primary text-primary-foreground"
-                      : step < currentStep
-                      ? "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
-                      : "bg-muted text-muted-foreground cursor-pointer hover:bg-muted/70"
-                  }`}
+                  className={cn(
+                    "relative flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border px-2.5 py-2 text-sm font-medium transition-colors sm:justify-start",
+                    actual
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-transparent hover:bg-muted",
+                    !actual && (hecho ? "text-foreground" : "text-muted-foreground")
+                  )}
                 >
-                  <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 ${
-                    step === currentStep
-                      ? "bg-primary-foreground text-primary"
-                      : step < currentStep
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted-foreground/20 text-muted-foreground"
-                  }`}>
-                    {step < currentStep ? "✓" : step}
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                      actual
+                        ? "bg-primary text-primary-foreground"
+                        : hecho
+                        ? "bg-success/15 text-success-text"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {hecho ? <Check className="h-3.5 w-3.5" aria-hidden /> : step}
                   </span>
-                  <span className="hidden sm:inline truncate">{label}</span>
+                  <span className="hidden truncate sm:inline">{label}</span>
+                  {pendiente && (
+                    <span
+                      aria-hidden
+                      className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-warning"
+                    />
+                  )}
                 </button>
-                {index < 2 && <div className={`h-px w-4 shrink-0 ${step < currentStep ? "bg-primary" : "bg-border"}`} />}
+              )
+            })}
+          </nav>
+
+          {/* En los pasos 2 y 3 se pierde de vista para quien es la orden:
+              una linea de contexto. getValues y no watch: estos campos solo
+              cambian en el paso 1, que no esta montado mientras esto se ve. */}
+          {currentStep > 1 && (() => {
+            const equipoResumen = [getValues("marca"), getValues("dispositivo")]
+              .map((v) => (v || "").trim())
+              .filter(Boolean)
+              .join(" ")
+            const partes = [selectedClienteObj?.nombre, equipoResumen].filter(Boolean)
+            const problema = (getValues("problemaReportado") || "").trim()
+            if (partes.length === 0 && !problema) return null
+            return (
+              <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                {partes.length > 0 && <p className="truncate font-medium">{partes.join(" · ")}</p>}
+                {problema && <p className="truncate text-xs text-muted-foreground">{problema}</p>}
               </div>
-            ))}
-          </div>
+            )
+          })()}
 
           {currentStep === 1 && (<>
           <div>
@@ -1672,6 +1716,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             </div>
           )}
 
+          <FieldSectionLabel className="border-t pt-4">{term("equipo")}</FieldSectionLabel>
+
           {/* Tipo de dispositivo con selector visual */}
           <TipoDispositivoPicker
             tipos={tiposDispositivo}
@@ -1700,7 +1746,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                           key={m}
                           type="button"
                           onClick={() => setValue("marca", m)}
-                          className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                          aria-pressed={watch("marca") === m}
+                          className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
                             watch("marca") === m
                               ? "bg-primary text-primary-foreground border-primary"
                               : "hover:bg-muted"
@@ -1799,12 +1846,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             </div>
           )}
 
+          <FieldSectionLabel className="border-t pt-4">Falla</FieldSectionLabel>
+
           {/* Problema reportado con seleccion rapida */}
           <div>
             <Label htmlFor="problemaReportado">Problema reportado *</Label>
             {problemasComunes.length > 0 && (
               <div className="mb-2">
-                <p className="text-xs text-muted-foreground mb-1">Problemas comunes (clic para agregar):</p>
+                <p className="text-xs text-muted-foreground mb-1">Problemas comunes (tocá para agregar):</p>
                 <div className="flex flex-wrap gap-1">
                   {problemasComunes.map((problema) => (
                     <button
@@ -1818,7 +1867,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                         setValue("problemaReportado", newValue, { shouldValidate: true })
                         if (newValue.trim()) clearErrors("problemaReportado")
                       }}
-                      className="px-2 py-1 text-xs rounded-full border bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+                      className="px-3 py-1.5 text-xs rounded-full border bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
                     >
                       {problema}
                     </button>
@@ -1842,6 +1891,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </p>
             )}
           </div>
+
+          <FieldSectionLabel className="border-t pt-4">Contacto y acceso</FieldSectionLabel>
 
           {/* Contacto y acceso al equipo: se piden con el cliente delante, asi
               que viven en el paso 1 y no detras del presupuesto. */}
@@ -1965,6 +2016,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             />
           </div>
 
+          {((!isTecnicoRole && tecnicosDisponibles.length > 0) || operadoresDisponibles.length > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
           {!isTecnicoRole && tecnicosDisponibles.length > 0 && (
             <div>
               <Label htmlFor="tecnicoId">{term("tecnico")} asignado (opcional)</Label>
@@ -2007,10 +2060,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </p>
             </div>
           )}
+          </div>
+          )}
 
           {/* Presupuesto aceptado al momento */}
           {watch("presupuesto") && watch("presupuesto")! > 0 && (
-            <div className="border rounded-lg p-4 bg-green-50/50">
+            <div className="rounded-lg border border-success/30 bg-success/10 p-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -2019,10 +2074,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                     setPresupuestoAceptado(e.target.checked)
                     if (!e.target.checked) setSena("")
                   }}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-5 w-5 shrink-0 accent-primary"
                 />
                 <div>
-                  <span className="font-medium text-green-700">
+                  <span className="font-medium text-success-text">
                     Presupuesto aceptado al momento
                   </span>
                   <p className="text-xs text-muted-foreground">
@@ -2032,7 +2087,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </label>
 
               {presupuestoAceptado && (
-                <div className="mt-4 pl-7">
+                <div className="mt-4 sm:pl-8">
                   <Label htmlFor="sena">Seña / adelanto (opcional)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-muted-foreground">$</span>
@@ -2063,7 +2118,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                             key={value}
                             type="button"
                             onClick={() => setMetodoPagoSena(value)}
-                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+                            aria-pressed={metodoPagoSena === value}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                               metodoPagoSena === value
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border text-muted-foreground hover:text-foreground"
@@ -2145,20 +2201,27 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               <button
                 type="button"
                 onClick={() => setChecklistOpen(!checklistOpen)}
-                className="w-full flex items-center justify-between p-4 bg-muted/50 hover:bg-muted transition-colors"
+                aria-expanded={checklistOpen}
+                className="w-full flex items-center justify-between gap-2 p-4 bg-muted/50 hover:bg-muted transition-colors"
               >
-                <div className="flex items-center gap-2 font-medium">
-                  <ClipboardCheck className="h-4 w-4" />
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-left font-medium">
+                  <ClipboardCheck className="h-4 w-4 shrink-0" />
                   Checklist de recepción
                   <span className="text-xs text-muted-foreground font-normal">
                     ({checklistTemplate.nombre})
                   </span>
                 </div>
-                {checklistOpen ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {checklistTemplate.items.filter((it: any) => !checklistItemFaltante(it.tipo, checklistValores[it.id])).length}
+                    /{checklistTemplate.items.length}
+                  </span>
+                  {checklistOpen ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </span>
               </button>
               {checklistOpen && (
                 <div className="p-4 space-y-4">
@@ -2192,15 +2255,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                             if (item.tipo === "BOOLEAN") {
                               return (
                                 <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between gap-3">
                                     <span className="text-sm">
                                       {item.label}
-                                      {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                      {item.requerido && <span className="text-destructive-text ml-1">*</span>}
                                     </span>
-                                    <div className="flex gap-1.5">
+                                    <div className="flex shrink-0 gap-1.5">
                                       <button
                                         type="button"
-                                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                        aria-pressed={value === true}
+                                        className={`min-w-12 px-3 py-2 text-sm rounded-md border transition-colors ${
                                           value === true
                                             ? "bg-primary text-primary-foreground border-primary"
                                             : "hover:bg-muted"
@@ -2211,7 +2275,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                       </button>
                                       <button
                                         type="button"
-                                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                        aria-pressed={value === false}
+                                        className={`min-w-12 px-3 py-2 text-sm rounded-md border transition-colors ${
                                           value === false
                                             ? "bg-primary text-primary-foreground border-primary"
                                             : "hover:bg-muted"
@@ -2231,7 +2296,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                 <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
-                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                    {item.requerido && <span className="text-destructive-text ml-1">*</span>}
                                   </Label>
                                   <Input
                                     value={(value as string) || ""}
@@ -2249,7 +2314,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                 <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
-                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                    {item.requerido && <span className="text-destructive-text ml-1">*</span>}
                                   </Label>
                                   <Select
                                     value={(value as string) || "none"}
