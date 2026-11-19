@@ -60,3 +60,7 @@ e2e/.auth/
 
 # Manual PDF visual-sample output (PDF_SAMPLES=1)
 .tmp-preview/
+
+# Auditorías de seguridad: el repo es público, no se versionan
+docs/audit-2026-11-10.md
+docs/audit-superadmin-2026-11-10.md
