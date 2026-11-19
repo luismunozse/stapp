@@ -160,6 +160,62 @@ describe("POST /api/facturacion/generar", () => {
     expect(body.error).toContain("Ya existe un remito")
   })
 
+  it("un remito ANULADA no bloquea generar otro (migracion 418)", async () => {
+    mockAuthSuccess()
+    mockRpcFunctionMissing()
+
+    const mockOrden = {
+      id: "o1",
+      estado: "ENTREGADO",
+      costo_final: 15000,
+      presupuesto: 15000,
+      sena: 0,
+      organization_id: "org-1",
+      numero_orden: 1,
+      dispositivo: "iPhone",
+      clientes: { nombre: "Test" },
+      repuestos_orden: [],
+      facturas: [{ id: "f-vieja", estado_pago: "ANULADA" }],
+    }
+    const facturasChain = createChainMock({ id: "f-nueva", orden_id: "o1", numero_factura: 2, total: 15000 })
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock(mockOrden),
+      facturas: facturasChain,
+      items_factura: createChainMock(null),
+      organizations: createChainMock({}),
+    })
+
+    const response = await POST(createPostRequest({ ordenId: "o1" }))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    expect(body.error).toBeUndefined()
+  })
+
+  it("con un remito ANULADA y otro vigente sigue rechazando", async () => {
+    mockAuthSuccess()
+    const mockOrden = {
+      id: "o1",
+      estado: "ENTREGADO",
+      costo_final: 15000,
+      presupuesto: 15000,
+      sena: 0,
+      organization_id: "org-1",
+      numero_orden: 1,
+      dispositivo: "iPhone",
+      clientes: { nombre: "Test" },
+      repuestos_orden: [],
+      facturas: [{ id: "f-vieja", estado_pago: "ANULADA" }, { id: "f-nueva", estado_pago: "PENDIENTE" }],
+    }
+    mockSupabaseFrom({ ordenes_servicio: createChainMock(mockOrden) })
+
+    const response = await POST(createPostRequest({ ordenId: "o1" }))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Ya existe un remito")
+  })
+
   it("creates factura successfully with seña consideration", async () => {
     mockAuthSuccess()
     // Route now tries RPC first; make it appear missing so the JS fallback runs

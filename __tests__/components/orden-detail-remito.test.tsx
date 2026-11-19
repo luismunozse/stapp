@@ -108,6 +108,13 @@ describe("OrdenDetail — remito en el menú de acciones", () => {
     expect(screen.queryByRole("menuitem", { name: /Ver remito/ })).not.toBeInTheDocument()
   })
 
+  it("orden con el remito anulado → vuelve a ofrecer Generar remito", async () => {
+    stubFetch({ ...REAL, facturas: [{ id: "rem-1", estado_pago: "ANULADA" }] })
+    await abrirMenu()
+    expect(await screen.findByRole("menuitem", { name: /Generar remito/ })).toBeInTheDocument()
+    expect(screen.queryByRole("menuitem", { name: /Ver remito/ })).not.toBeInTheDocument()
+  })
+
   it("orden con remito → Ver remito abre el PDF y no ofrece generarlo otra vez", async () => {
     stubFetch({ ...REAL, facturas: { id: "rem-9", estado_pago: "PAGADO" } })
     const open = vi.spyOn(window, "open").mockImplementation(() => null)
