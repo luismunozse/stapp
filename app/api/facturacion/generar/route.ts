@@ -80,7 +80,7 @@ export async function POST(request: Request) {
           nombre
         ),
         facturas (id),
-        cotizaciones (
+        cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
           total,
