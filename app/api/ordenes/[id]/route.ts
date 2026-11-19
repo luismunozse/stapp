@@ -118,6 +118,10 @@ export async function GET(
           fecha_vencimiento,
           estado
         ),
+        facturas (
+          id,
+          estado_pago
+        ),
         organizations:organization_id (
           nombre,
           nombre_mostrar,

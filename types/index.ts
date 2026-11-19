@@ -191,6 +191,8 @@ export interface OrdenServicio {
   // Re-ingreso/garantía
   ordenOrigenId?: string | null
   esReingreso?: boolean
+  /** Remito de la orden (UNIQUE orden_id: PostgREST lo devuelve como objeto o null). */
+  facturas?: { id: string; estado_pago: string } | { id: string; estado_pago: string }[] | null
   /** Onboarding practice order (ordenes_servicio.es_practica): read-only everywhere. */
   esPractica?: boolean
   garantiaOrigenId?: string | null
