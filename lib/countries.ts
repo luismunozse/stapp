@@ -495,7 +495,9 @@ export function getCombinedIdLabel(
  */
 export function formatPhoneForCountry(phone: string, countryCode?: string | null): string {
   const country = getCountryConfig(countryCode)
-  let cleaned = phone.replace(/\D/g, "")
+  // `phone` puede llegar null aunque el tipo diga string (cliente sin teléfono, o teléfono
+  // oculto para el usuario): sin esto, armar el link tiraba un TypeError.
+  let cleaned = (phone ?? "").replace(/\D/g, "")
 
   // "00" es el prefijo internacional: lo que sigue ya trae su codigo de pais
   // (puede ser de otro pais), asi que se devuelve tal cual sin anteponer el nuestro

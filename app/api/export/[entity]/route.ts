@@ -6,6 +6,7 @@ import {
   hasInventarioAccess,
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes, sinTelefonoCliente } from "@/lib/telefono-cliente"
 import { traerTodas } from "@/lib/supabase-paginar"
 import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -41,6 +42,9 @@ const VALID_ENTITIES: EntityType[] = [
   "inventario",
   "garantias",
 ]
+
+/** Exportaciones cuyas filas llevan el teléfono de un cliente. */
+const ENTIDADES_CON_TELEFONO_CLIENTE = new Set(["ordenes", "ventas", "clientes", "garantias"])
 
 interface ExportPayload {
   data: any[]
@@ -139,6 +143,9 @@ async function runExport(entity: string, filters: Record<string, string>) {
       userId,
     })
 
+    // Teléfono del cliente: un TECNICO no lo exporta si la organización apagó el permiso (416).
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+
     let payload: ExportPayload
     switch (entity as EntityType) {
       case "ordenes":
@@ -156,7 +163,7 @@ async function runExport(entity: string, filters: Record<string, string>) {
         break
       }
       case "clientes":
-        payload = await exportClientes(organizationId!, filters)
+        payload = await exportClientes(organizationId!, filters, verTelefono)
         break
       case "inventario": {
         // El costo de compra sigue hasInventarioAccess, igual que los endpoints
@@ -177,6 +184,15 @@ async function runExport(entity: string, filters: Record<string, string>) {
           { error: "Entidad no soportada" },
           { status: 400 }
         )
+    }
+
+    // Sin permiso, el archivo sale sin la columna (una columna vacía invita a pensar que falta el
+    // dato) y sin el valor en las filas.
+    if (!verTelefono && ENTIDADES_CON_TELEFONO_CLIENTE.has(entity)) {
+      payload = {
+        data: sinTelefonoCliente(payload.data),
+        columns: payload.columns.filter((c) => !/telefono/i.test(String(c.key))),
+      }
     }
 
     // El pedido no es el inventario: que el archivo no se llame igual, o el
@@ -294,7 +310,8 @@ async function exportVentas(
 
 async function exportClientes(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  verTelefono: boolean
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("clientes")
@@ -304,8 +321,11 @@ async function exportClientes(
     .limit(10000)
 
   if (filters.search) {
+    // Quien no ve teléfonos no filtra por teléfono: probar dígitos lo iría revelando.
     query = query.or(
-      `nombre.ilike.%${filters.search}%,telefono.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
+      verTelefono
+        ? `nombre.ilike.%${filters.search}%,telefono.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
+        : `nombre.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
     )
   }
 

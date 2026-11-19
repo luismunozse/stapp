@@ -10,6 +10,7 @@ import { formatCurrencyValue } from "@/lib/currency"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/lib/sucursal"
 import { getRecargosMetodo } from "@/lib/recargos"
 import {
@@ -160,6 +161,9 @@ export async function GET(request: Request) {
       }
     }
 
+    // Teléfono del cliente: un TECNICO no lo recibe si la organización apagó el permiso (416).
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+
     if (search) {
       // Escapado: una coma o un paréntesis en la búsqueda ("Pérez, Juan")
       // rompía el filtro .or() de PostgREST y el listado respondía 500.
@@ -167,7 +171,8 @@ export async function GET(request: Request) {
       const filters = termino
         ? [
             `cliente_nombre.ilike.%${termino}%`,
-            `cliente_telefono.ilike.%${termino}%`,
+            // Quien no ve teléfonos no busca por teléfono: probar dígitos lo iría revelando.
+            ...(verTelefono ? [`cliente_telefono.ilike.%${termino}%`] : []),
             `observaciones.ilike.%${termino}%`,
           ]
         : []
@@ -190,7 +195,7 @@ export async function GET(request: Request) {
     }
 
     // Transformar datos para el frontend
-    const ventasFormatted = ventas?.map(formatVenta) || []
+    const ventasFormatted = conTelefonoSegunPermiso(ventas?.map(formatVenta) || [], verTelefono)
 
     return NextResponse.json({
       data: ventasFormatted,
@@ -212,7 +217,11 @@ export async function GET(request: Request) {
  * La venta ya registrada con esa clave de idempotencia, como la devuelve un alta (201), o null si
  * no hay ninguna visible todavía.
  */
-async function ventaIdempotente(organizationId: string, idempotencyKey: string): Promise<NextResponse | null> {
+async function ventaIdempotente(
+  organizationId: string,
+  idempotencyKey: string,
+  role: string | null | undefined,
+): Promise<NextResponse | null> {
   const { data: existente } = await supabaseAdmin
     .from("ventas")
     .select(`
@@ -235,7 +244,7 @@ async function ventaIdempotente(organizationId: string, idempotencyKey: string):
     .eq("id", organizationId)
     .single()
   return NextResponse.json({
-    ...formatVenta(existente),
+    ...conTelefonoSegunPermiso(formatVenta(existente), await puedeVerTelefonoClientes(role, organizationId)),
     organizationName: org?.nombre_mostrar || org?.nombre || null,
   }, { status: 201 })
 }
@@ -344,7 +353,7 @@ export async function POST(request: Request) {
       // mirar la cotización o la divisa, que pueden haber cambiado desde que se cobró (si no,
       // el reintento recibía un 409 por una venta que ya existe).
       if (data.idempotencyKey) {
-        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey, role)
         if (existente) return existente
       }
       // Ids de las líneas del request cuyo producto tiene precio en divisa: el POS los usa para
@@ -519,7 +528,7 @@ export async function POST(request: Request) {
       // 23505: violación del índice único de idempotencia → la venta ya existe.
       // Reintento idempotente: devolver la venta original sin duplicar.
       if ((rpcError as any).code === "23505" && data.idempotencyKey) {
-        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey)
+        const existente = await ventaIdempotente(organizationId!, data.idempotencyKey, role)
         if (existente) return existente
 
         // 23505 de idempotencia pero la venta original aún no es visible
@@ -652,7 +661,7 @@ export async function POST(request: Request) {
 
     // Formatear respuesta
     const response = {
-      ...formatVenta(ventaCompleta),
+      ...conTelefonoSegunPermiso(formatVenta(ventaCompleta), await puedeVerTelefonoClientes(role, organizationId!)),
       organizationName: org?.nombre_mostrar || org?.nombre || null,
       ...(advertencia ? { advertencia } : {}),
     }

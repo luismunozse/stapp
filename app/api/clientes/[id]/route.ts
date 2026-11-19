@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requireAuth, puedeVerDeudaClientes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
@@ -83,11 +84,13 @@ export async function GET(
     // Sin permiso de deuda, un saldo negativo (fiado que debe) se informa como 0; el saldo
     // a favor sigue visible porque se usa para cobrar con cuenta corriente.
     const verDeuda = await puedeVerDeudaClientes(role, organizationId!)
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
     const base = formatCliente(cliente)
-    const clienteFormatted = {
+    const clienteFormatted = conTelefonoSegunPermiso({
       ...base,
       ...(!verDeuda && { saldoCuenta: Math.max(base?.saldoCuenta ?? 0, 0) }),
       deudaOculta: !verDeuda,
+      telefonoOculto: !verTelefono,
       sectores: cliente.sectores_cliente
         ?.filter((s: any) => s.activo)
         .map((s: any) => ({
@@ -111,7 +114,7 @@ export async function GET(
           estado: o.estado,
           fechaIngreso: o.fecha_ingreso,
         })),
-    }
+    }, verTelefono)
 
     return NextResponse.json(clienteFormatted)
   } catch (error) {
@@ -170,7 +173,10 @@ export async function PUT(
     // Preparar datos
     const updateData: Record<string, any> = {}
     if (data.nombre !== undefined) updateData.nombre = data.nombre
-    if (data.telefono !== undefined) updateData.telefono = data.telefono
+    // Quien no ve el teléfono tampoco lo cambia (416): el formulario le llega sin el dato, y
+    // aceptar lo que mande pisaría el número real con uno a ciegas.
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+    if (data.telefono !== undefined && verTelefono) updateData.telefono = data.telefono
     if (data.email !== undefined) updateData.email = data.email === "" ? null : data.email
     if (data.direccion !== undefined) updateData.direccion = data.direccion
     if (data.dni !== undefined) updateData.dni = data.dni
@@ -206,7 +212,10 @@ export async function PUT(
       throw updateError
     }
 
-    return NextResponse.json(formatCliente(cliente))
+    return NextResponse.json({
+      ...conTelefonoSegunPermiso(formatCliente(cliente), verTelefono),
+      telefonoOculto: !verTelefono,
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

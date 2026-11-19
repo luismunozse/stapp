@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
@@ -7,6 +8,7 @@ export async function GET(request: Request) {
   try {
     const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
 
     const { searchParams } = new URL(request.url)
     const desde = searchParams.get("desde") || ""
@@ -95,7 +97,7 @@ export async function GET(request: Request) {
         cliente: orden.clientes ? {
           id: (orden.clientes as any).id,
           nombre: (orden.clientes as any).nombre,
-          telefono: (orden.clientes as any).telefono,
+          telefono: verTelefono ? (orden.clientes as any).telefono : null,
         } : null,
         tecnico: orden.users ? {
           id: (orden.users as any).id,

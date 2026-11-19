@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateGarantiaVentaPDF } from "@/lib/pdf"
 import { leerConfigGarantias } from "@/lib/garantias/config-org"
@@ -130,7 +131,7 @@ export async function GET(
       },
       cliente: {
         nombre: venta.cliente_nombre,
-        telefono: venta.cliente_telefono || "",
+        telefono: (await puedeVerTelefonoClientes(role, organizationId!)) ? venta.cliente_telefono || "" : "",
       },
       item: {
         descripcion: garantia.items_venta?.descripcion || "",

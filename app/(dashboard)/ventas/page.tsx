@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { PageShell } from "@/components/ui/page-shell"
 import { ShieldCheck } from "lucide-react"
 import { PosAccessGate } from "@/components/pos/pos-access-gate"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { CobrosReparacionesList } from "@/components/ventas/cobros-reparaciones-list"
 
 export default function VentasPage() {
   return (
@@ -23,9 +25,22 @@ export default function VentasPage() {
           </Button>
         }
       >
-        <VentasDashboard />
+        {/* Los cobros de órdenes no son ventas del POS (otra tabla, otra
+            numeración): tienen su pestaña en vez de mezclarse con el listado. */}
+        <Tabs defaultValue="ventas">
+          <TabsList>
+            <TabsTrigger value="ventas">Ventas</TabsTrigger>
+            <TabsTrigger value="reparaciones">Reparaciones</TabsTrigger>
+          </TabsList>
+          <TabsContent value="ventas" className="space-y-6">
+            <VentasDashboard />
 
-        <VentasList />
+            <VentasList />
+          </TabsContent>
+          <TabsContent value="reparaciones">
+            <CobrosReparacionesList />
+          </TabsContent>
+        </Tabs>
       </PageShell>
     </PosAccessGate>
   )

@@ -23,6 +23,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { formatOrden } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import {
@@ -95,6 +96,8 @@ export async function GET(request: Request) {
     const tecnicoId = searchParams.get("tecnicoId") || ""
     const clienteId = searchParams.get("clienteId") || ""
     const search = searchParams.get("search") || ""
+    // Teléfono del cliente: un TECNICO no lo recibe si la organización apagó el permiso (416).
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
 
     // Filtros adicionales
     const tipoDispositivo = searchParams.get("tipoDispositivo") || ""
@@ -287,7 +290,8 @@ export async function GET(request: Request) {
         .from("clientes")
         .select("id")
         .eq("organization_id", organizationId!)
-        .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
+        // Quien no ve teléfonos no busca por teléfono: probar dígitos lo iría revelando.
+        .or(verTelefono ? `nombre.ilike.%${termino}%,telefono.ilike.%${termino}%` : `nombre.ilike.%${termino}%`)
         .order("id", { ascending: false })
         .limit(MAX_CLIENTES_EN_BUSQUEDA)
 
@@ -377,7 +381,7 @@ export async function GET(request: Request) {
     const ordenesFormatted = ordenes?.map((o: any) => {
       const formatted = formatOrden(o, ordenOptions)
       if (!formatted) return formatted
-      const conCobro = { ...formatted, ...resumenes.get(o.id) }
+      const conCobro = { ...conTelefonoSegunPermiso(formatted, verTelefono), ...resumenes.get(o.id) }
       // Only a TECNICO gets the hint; the server re-checks everything on take.
       return role === "TECNICO"
         ? { ...conCobro, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
@@ -391,6 +395,7 @@ export async function GET(request: Request) {
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
+      telefonoOculto: !verTelefono,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
@@ -801,7 +806,12 @@ export async function POST(request: Request) {
       }).catch((err) => console.error("Error queueing notification (orden creada):", err))
     }
 
-    return NextResponse.json({ ...ordenFormatted, estadoFisicoGuardado }, { status: 201 })
+    // La respuesta trae al cliente completo (puede ser uno que ya existía): mismo permiso que el GET.
+    const verTelefono = await puedeVerTelefonoClientes(role, organizationId!)
+    return NextResponse.json(
+      { ...conTelefonoSegunPermiso(ordenFormatted, verTelefono), estadoFisicoGuardado, telefonoOculto: !verTelefono },
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -6,6 +6,7 @@ import {
   type AlcanceOrdenes,
 } from "@/lib/ordenes/alcance-lectura"
 import { listarGarantias, parseFiltrosGarantias } from "@/lib/garantias/listado"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 
 /**
  * GET /api/garantias/unificadas — garantías de reparación y de venta en una
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
       alcance,
       filtros,
       actor: { role, userId },
+      ocultarTelefono: !(await puedeVerTelefonoClientes(role, organizationId!)),
       conConteos: true,
     })
 

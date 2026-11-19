@@ -67,7 +67,14 @@ const BADGE_POR_ROL: Record<Rol, "default" | "infoSoft" | "successSoft"> = {
 }
 
 /** Los permisos opt-in de la organización, agrupados por el rol que amplían. */
-const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] = [
+const PERMISOS: {
+  rol: Rol
+  campo: string
+  titulo: string
+  detalle: string
+  /** Ruta propia del permiso (GET/PUT con `{ [campo]: boolean }`). Sin ella, /api/configuracion. */
+  ruta?: string
+}[] = [
   {
     rol: "TECNICO",
     campo: "tecnicosOperanPos",
@@ -95,6 +102,14 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
     titulo: "Ver la deuda de los clientes",
     detalle:
       "Ve cuánto debe cada cliente (fiado y órdenes sin cobrar) en la pantalla Clientes, en su cuenta corriente y en el asistente. Apagado, ve los datos del cliente y sus órdenes, pero no la deuda. El saldo de una orden puntual lo sigue viendo, igual que en la pantalla de la orden.",
+  },
+  {
+    rol: "TECNICO",
+    campo: "tecnicosVenTelefonoClientes",
+    ruta: "/api/configuracion/telefono-clientes",
+    titulo: "Ver el teléfono de los clientes",
+    detalle:
+      "Viene activado. Desactivalo para que no vean el teléfono de ningún cliente: ni en las órdenes, ni en Clientes, ni en los comprobantes que impriman, ni en las exportaciones o el asistente. Tampoco pueden buscar por teléfono ni escribirle al cliente por WhatsApp desde la orden. Los avisos automáticos al cliente siguen saliendo, y pueden seguir cargando el teléfono al dar de alta un cliente.",
   },
   {
     rol: "VENDEDOR",
@@ -397,13 +412,26 @@ function PermisosDelEquipo({ allowEdit }: { allowEdit: boolean }) {
         // lo prende, no pasa nada y no hay error. Esto ademas cubre la ventana
         // en la que un permiso nuevo ya esta en esta pantalla pero su ruta
         // todavia no se desplego.
-        setFlags(
-          Object.fromEntries(
-            PERMISOS.filter((p) => p.campo in d).map((p) => [p.campo, !!d[p.campo]]),
+        setFlags((f) => ({
+          ...(f ?? {}),
+          ...Object.fromEntries(
+            PERMISOS.filter((p) => !p.ruta && p.campo in d).map((p) => [p.campo, !!d[p.campo]]),
           ),
-        )
+        }))
       })
       .catch(() => {})
+
+    // Los permisos con ruta propia se leen aparte y se suman cuando llegan: si su ruta falla o
+    // el permiso todavía no está disponible, no se dibujan y el resto no se entera.
+    for (const p of PERMISOS.filter((x) => x.ruta)) {
+      fetch(p.ruta!)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d || !(p.campo in d)) return
+          setFlags((f) => ({ ...(f ?? {}), [p.campo]: !!d[p.campo] }))
+        })
+        .catch(() => {})
+    }
   }, [])
 
   const alternar = useCallback(
@@ -414,7 +442,8 @@ function PermisosDelEquipo({ allowEdit }: { allowEdit: boolean }) {
       setFlags((f) => (f ? { ...f, [campo]: valor } : f))
       setGuardando(campo)
       try {
-        const res = await fetch("/api/configuracion", {
+        const ruta = PERMISOS.find((p) => p.campo === campo)?.ruta ?? "/api/configuracion"
+        const res = await fetch(ruta, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ [campo]: valor }),

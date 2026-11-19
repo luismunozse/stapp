@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 
 // Lectura pública (cualquier rol autenticado) de feature flags por org.
 // Se usa desde el sidebar/nav para mostrar/ocultar módulos opcionales.
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { data, error: readError } = await supabaseAdmin
@@ -70,6 +71,10 @@ export async function GET() {
         // Default TRUE, al reves que los demas: este permiso QUITA algo que
         // todos tienen. Sin fila o sin columna, el vendedor sigue viendo.
         vendedoresVenIngresos: data?.vendedores_ven_ingresos !== false,
+        // Teléfono de clientes oculto para ESTE usuario (TECNICO con el permiso 416 apagado).
+        // Es solo para dibujar: el servidor ya no le manda el número. Va en consulta aparte
+        // para que su columna, si falta, no tumbe los demás flags.
+        telefonoClienteOculto: !(await puedeVerTelefonoClientes(role, organizationId!)),
       },
       {
         headers: {

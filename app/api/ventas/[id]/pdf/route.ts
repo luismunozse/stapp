@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateVentaPDF, generateVentaTicketPDF } from "@/lib/pdf"
 
@@ -57,7 +58,7 @@ export async function GET(
       fecha: new Date(venta.created_at),
       cliente: {
         nombre: venta.cliente_nombre,
-        telefono: venta.cliente_telefono || "",
+        telefono: (await puedeVerTelefonoClientes(role, organizationId!)) ? venta.cliente_telefono || "" : "",
       },
       vendedor: venta.users?.nombre || "N/A",
       items: venta.items_venta?.map((item: any) => ({

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes, conTelefonoSegunPermiso } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
@@ -282,8 +283,8 @@ export async function POST(request: Request) {
     // agrupado lo dispara el modal de exito (ver el diseño, punto 8).
     return NextResponse.json(
       {
-        recepcion,
-        ordenes,
+        // Mismo permiso que el resto de las respuestas con datos del cliente (416).
+        ...conTelefonoSegunPermiso({ recepcion, ordenes }, await puedeVerTelefonoClientes(role, organizationId!)),
         organizationName: org?.nombre_mostrar || org?.nombre || null,
         organizationLogoUrl: org?.logo_url ?? null,
         organizationTelefono: org?.telefono ?? null,

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { supabaseAdmin } from "@/lib/supabase"
+import { puedeVerTelefonoClientes, conTelefonoSegunPermiso } from "@/lib/telefono-cliente"
 import { combinarOr, terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
 import { COBRO_PENDIENTE_ESTADOS_COBRO, COBRO_PENDIENTE_ESTADOS_ORDEN } from "@/lib/ordenes/filtros-url"
 import { dayRangeUtc } from "@/lib/timezone"
@@ -96,7 +97,11 @@ export const buscarOrdenes: Herramienta = {
         .from("clientes")
         .select("id")
         .eq("organization_id", actor.organizationId)
-        .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
+        .or(
+          (await puedeVerTelefonoClientes(actor.role, actor.organizationId))
+            ? `nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`
+            : `nombre.ilike.%${termino}%`
+        )
         .order("id", { ascending: false })
         .limit(MAX_CLIENTES_EN_BUSQUEDA)
       const filtros = [

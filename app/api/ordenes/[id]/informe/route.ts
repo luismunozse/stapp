@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
 import { cargarFotosInforme, ETIQUETA_TIPO_FOTO } from "@/lib/ordenes/informe-fotos"
@@ -79,7 +80,9 @@ export async function GET(
       sucursalNombre: texto(orden.sucursales?.nombre),
       cliente: {
         nombre: texto(cliente.nombre),
-        telefono: texto(orden.telefono_contacto) || texto(cliente.telefono),
+        telefono: (await puedeVerTelefonoClientes(autenticado.role, organizationId!))
+          ? texto(orden.telefono_contacto) || texto(cliente.telefono)
+          : "",
         email: texto(cliente.email),
       },
       codigoOrden: texto(orden.codigo_orden) || `#${orden.numero_orden}`,

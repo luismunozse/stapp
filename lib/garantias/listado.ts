@@ -201,12 +201,13 @@ export function aplicarTab<Q extends { eq: (c: string, v: unknown) => any; or: (
   }
 }
 
-function aplicarBusqueda<Q extends { or: (f: string) => any }>(query: Q, q: string | null): Q {
+function aplicarBusqueda<Q extends { or: (f: string) => any }>(query: Q, q: string | null, ocultarTelefono = false): Q {
   if (!q) return query
   const t = terminoDeBusquedaSeguro(q)
   const filtros = [
     `cliente_nombre.ilike.%${t}%`,
-    `cliente_telefono.ilike.%${t}%`,
+    // Quien no ve teléfonos no busca por teléfono: probar dígitos lo iría revelando.
+    ...(ocultarTelefono ? [] : [`cliente_telefono.ilike.%${t}%`]),
     `descripcion.ilike.%${t}%`,
     `referencia.ilike.%${t}%`,
     `numero_garantia.ilike.%${t}%`,
@@ -296,7 +297,7 @@ export function accionRegistrarReclamo(estado: EstadoGarantia, role: string | nu
 
 export function mapearFilaGarantia(
   f: FilaVistaGarantia,
-  ctx: { hoy: string; ventana: number; org: ConfigOrg; actor: ActorGarantias | null; sucursales: Map<string, string> }
+  ctx: { hoy: string; ventana: number; org: ConfigOrg; actor: ActorGarantias | null; sucursales: Map<string, string>; ocultarTelefono?: boolean }
 ): GarantiaListada {
   const { estado, diasRestantes } = derivarEstadoGarantia({
     anulada: f.anulada === true,
@@ -348,7 +349,11 @@ export function mapearFilaGarantia(
     fechaInicio: f.fecha_inicio,
     fechaVencimiento: f.fecha_vencimiento,
     diasValidez: f.dias_validez,
-    cliente: { id: f.cliente_id, nombre: f.cliente_nombre?.trim() || "Consumidor final", telefono },
+    cliente: {
+      id: f.cliente_id,
+      nombre: f.cliente_nombre?.trim() || "Consumidor final",
+      telefono: ctx.ocultarTelefono ? null : telefono,
+    },
     descripcion: f.descripcion?.trim() || "—",
     referencia: {
       tipo: esVenta ? "VENTA" : "ORDEN",
@@ -377,6 +382,8 @@ export interface ParametrosListado {
   alcance: AlcanceOrdenes
   filtros: Pick<FiltrosGarantias, "tab" | "origen" | "q" | "page" | "limit" | "ventana">
   actor: ActorGarantias | null
+  /** El actor no ve teléfonos de clientes (TECNICO con el permiso 416 apagado): ni el dato ni la búsqueda. */
+  ocultarTelefono?: boolean
   /** Conteo por pestaña (cuatro HEAD más). El dashboard no lo necesita. */
   conConteos?: boolean
   ahora?: Date
@@ -410,7 +417,7 @@ export async function listarGarantias(p: ParametrosListado): Promise<ResultadoLi
       .eq("organization_id", p.organizationId)
     query = aplicarAlcanceGarantias(query, p.alcance)
     if (origen) query = query.eq("origen", origen)
-    return aplicarBusqueda(query, q)
+    return aplicarBusqueda(query, q, p.ocultarTelefono === true)
   }
 
   const offset = (page - 1) * limit
@@ -454,7 +461,7 @@ export async function listarGarantias(p: ParametrosListado): Promise<ResultadoLi
     [...new Set(filas.map((f) => f.sucursal_id).filter((v): v is string => !!v))],
     p.organizationId
   )
-  const ctx = { hoy, ventana, org, actor: p.actor, sucursales }
+  const ctx = { hoy, ventana, org, actor: p.actor, sucursales, ocultarTelefono: p.ocultarTelefono === true }
 
   return {
     data: filas.map((f) => mapearFilaGarantia(f, ctx)),

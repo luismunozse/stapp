@@ -3,9 +3,9 @@ import { revalidateTag } from "next/cache"
 import { requireAuth, requireCajaAccess } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
-import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { generarCuotasCobros } from "@/lib/ordenes/cuotas-cobro"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 const pagoLineSchema = z.object({
@@ -92,6 +92,23 @@ export async function GET(
 
     if (dbError) throw dbError
 
+    // Quién cobró y quién anuló. Lookup aparte y tolerante: si falla, el
+    // historial se muestra igual, solo que sin nombres.
+    const usuarioIds = [...new Set(
+      (cobros || []).flatMap((c: any) => [c.usuario_id, c.anulado_por]).filter(Boolean)
+    )] as string[]
+    const nombres = new Map<string, string>()
+    if (usuarioIds.length > 0) {
+      const { data: usuarios } = await supabaseAdmin
+        .from("users")
+        .select("id, nombre")
+        .eq("organization_id", organizationId!)
+        .in("id", usuarioIds)
+      for (const u of (usuarios || []) as Array<{ id: string; nombre: string }>) {
+        nombres.set(u.id, u.nombre)
+      }
+    }
+
     return NextResponse.json(
       (cobros || []).map((c: any) => ({
         id: c.id,
@@ -108,6 +125,8 @@ export async function GET(
         anulado: c.anulado || false,
         anuladoAt: c.anulado_at,
         anuladoMotivo: c.anulado_motivo,
+        cobradoPor: nombres.get(c.usuario_id) ?? null,
+        anuladoPor: nombres.get(c.anulado_por) ?? null,
       }))
     )
   } catch (err) {
@@ -178,39 +197,7 @@ export async function POST(
       }
 
       // Generate cuotas calendar (non-money, kept in the route)
-      const cobrosResult: Array<{ id: string; monto: number; metodo: string; cuotas: number | null }> =
-        result.response?.cobros ?? []
-
-      // Base de los vencimientos = HOY en la tz de la org. Con new Date() (UTC en
-      // Vercel), a las 21h ART la fecha base ya era mañana y las cuotas salían
-      // corridas un día.
-      const { data: orgTzRow } = await supabaseAdmin
-        .from("organizations")
-        .select("zona_horaria")
-        .eq("id", organizationId!)
-        .single()
-      const baseHoy = todayInTimeZone(orgTzRow?.zona_horaria || DEFAULT_TIMEZONE)
-
-      for (const cobro of cobrosResult) {
-        if (cobro.cuotas && cobro.cuotas > 1) {
-          const montoCuota = cobro.monto / cobro.cuotas
-          const cuotasInsert = []
-          for (let i = 1; i <= cobro.cuotas; i++) {
-            cuotasInsert.push({
-              cobro_id: cobro.id,
-              orden_id: ordenId,
-              organization_id: organizationId!,
-              numero_cuota: i,
-              total_cuotas: cobro.cuotas,
-              monto: Math.round(montoCuota * 100) / 100,
-              fecha_vencimiento: addMonthsToDateOnly(baseHoy, i),
-              pagada: i === 1,
-              fecha_pago: i === 1 ? new Date().toISOString() : null,
-            })
-          }
-          await supabaseAdmin.from("cuotas_cobro").insert(cuotasInsert)
-        }
-      }
+      await generarCuotasCobros(organizationId!, ordenId, result.response?.cobros ?? [])
 
       revalidateTag("dashboard", "max")
       return NextResponse.json(

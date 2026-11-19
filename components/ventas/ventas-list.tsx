@@ -1,5 +1,6 @@
 "use client"
 
+import { useTelefonoClienteOculto } from "@/hooks/use-telefono-cliente-oculto"
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
@@ -63,6 +64,7 @@ const metodoPagoLabels: Record<string, string> = {
 }
 
 export function VentasList() {
+  const telefonoOculto = useTelefonoClienteOculto()
   const router = useRouter()
   const { formatPrice, formatDate } = useCurrency()
   const { showError } = useModal()
@@ -275,7 +277,7 @@ export function VentasList() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por cliente, teléfono, nro de venta..."
+            placeholder={telefonoOculto ? "Buscar por cliente, nro de venta..." : "Buscar por cliente, teléfono, nro de venta..."}
             className="pl-9"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}

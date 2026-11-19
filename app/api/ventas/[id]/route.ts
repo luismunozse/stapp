@@ -6,6 +6,7 @@ import { idsConLineasNuevas, rechazarItemsEnDivisa } from "@/lib/currency/bloque
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
+import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { esBloqueoPorReclamos, MENSAJE_VENTA_CON_RECLAMOS } from "@/lib/garantias/errores"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getIvaGeneral } from "@/lib/countries"
@@ -107,7 +108,7 @@ export async function GET(
       throw dbError
     }
 
-    return NextResponse.json(formatVenta(venta))
+    return NextResponse.json(conTelefonoSegunPermiso(formatVenta(venta), await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (error) {
     console.error("Error fetching venta:", error)
     return NextResponse.json(
@@ -217,7 +218,7 @@ export async function PUT(
         .eq("id", id)
         .single()
 
-      return NextResponse.json(formatVenta(ventaActualizada))
+      return NextResponse.json(conTelefonoSegunPermiso(formatVenta(ventaActualizada), await puedeVerTelefonoClientes(role, organizationId!)))
     }
 
     // CASO 2: Editar venta
@@ -373,7 +374,10 @@ export async function PUT(
         p_venta_id: id,
         p_cliente_id: clienteId,
         p_cliente_nombre: data.clienteNombre,
-        p_cliente_telefono: data.clienteTelefono || null,
+        // Quien no ve el teléfono edita la venta sin el dato: se conserva el que ya tenía.
+        p_cliente_telefono: (await puedeVerTelefonoClientes(role, organizationId!))
+          ? data.clienteTelefono || null
+          : venta.cliente_telefono ?? null,
         p_subtotal: totales.subtotal,
         p_descuento: totales.descuentoTotal,
         p_tipo_descuento: data.tipoDescuento,
@@ -500,7 +504,7 @@ export async function PUT(
         .single()
 
       return NextResponse.json({
-        ...formatVenta(ventaActualizada),
+        ...conTelefonoSegunPermiso(formatVenta(ventaActualizada), await puedeVerTelefonoClientes(role, organizationId!)),
         ...(advertencia ? { advertencia } : {}),
       })
     }
