@@ -56,7 +56,7 @@ describe("Navbar — account entries in the mobile drawer", () => {
     const link = container.querySelector('#mobile-menu-drawer a[href="/perfil"]')
 
     expect(link).not.toBeNull()
-    expect(link!.textContent).toContain("Mi perfil")
+    expect(link!.getAttribute("aria-label")).toBe("Mi perfil")
   })
 
   it("closes the drawer when navigating to /perfil", () => {
@@ -83,7 +83,7 @@ describe("Navbar — account entries in the mobile drawer", () => {
     const { container } = renderNavbar()
     const drawer = container.querySelector("#mobile-menu-drawer")!
     const btn = Array.from(drawer.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("Tour guiado")
+      b.getAttribute("aria-label") === "Tour guiado"
     )
 
     expect(btn).toBeDefined()
@@ -97,6 +97,6 @@ describe("Navbar — account entries in the mobile drawer", () => {
     const { container } = renderNavbar()
     const drawer = container.querySelector("#mobile-menu-drawer")!
 
-    expect(Array.from(drawer.querySelectorAll("button")).some((b) => /Cerrar sesión/i.test(b.textContent ?? ""))).toBe(true)
+    expect(Array.from(drawer.querySelectorAll("button")).some((b) => b.getAttribute("aria-label") === "Cerrar sesión")).toBe(true)
   })
 })
