@@ -57,7 +57,7 @@ const MI_PLAN_HREF = "/configuracion/billing"
 // abajo, mínimo 44px de alto para que siga siendo un blanco táctil cómodo.
 const cuentaTileClass = cn(
   "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5",
-  "text-[11px] font-medium leading-tight text-foreground/80 transition-colors",
+  "text-xs font-medium leading-none text-foreground/80 transition-colors",
   "hover:bg-accent hover:text-accent-foreground active:scale-95 active:bg-accent/80",
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 )
@@ -536,7 +536,7 @@ export function Navbar() {
               className={cuentaTileClass}
             >
               <User className="h-5 w-5" />
-              <span>Perfil</span>
+              <span className="max-w-full truncate">Perfil</span>
             </Link>
             {isAdmin && (
               <Link
@@ -546,7 +546,7 @@ export function Navbar() {
                 className={cuentaTileClass}
               >
                 <CreditCard className="h-5 w-5" />
-                <span>Plan</span>
+                <span className="max-w-full truncate">Plan</span>
               </Link>
             )}
             <Link
@@ -556,7 +556,7 @@ export function Navbar() {
               className={cuentaTileClass}
             >
               <BookOpen className="h-5 w-5" />
-              <span>Manual</span>
+              <span className="max-w-full truncate">Manual</span>
             </Link>
             <button
               type="button"
@@ -568,7 +568,7 @@ export function Navbar() {
               }}
             >
               <HelpCircle className="h-5 w-5" />
-              <span>Tour</span>
+              <span className="max-w-full truncate">Tour</span>
             </button>
             <button
               type="button"
@@ -577,7 +577,7 @@ export function Navbar() {
               onClick={handleLogout}
             >
               <LogOut className="h-5 w-5" />
-              <span>Salir</span>
+              <span className="max-w-full truncate">Salir</span>
             </button>
           </div>
         </div>
