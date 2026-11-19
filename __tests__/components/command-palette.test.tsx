@@ -65,7 +65,7 @@ describe("Navbar — Mi plan en el menú de la cuenta", () => {
     const { container } = render(<SidebarProvider><Navbar /></SidebarProvider>)
 
     const link = container.querySelector('#mobile-menu-drawer a[href="/configuracion/billing"]')
-    expect(link?.textContent).toContain("Mi plan")
+    expect(link?.getAttribute("aria-label")).toBe("Mi plan")
     const textos = Array.from(container.querySelectorAll("nav a")).map((a) => a.textContent)
     expect(textos).not.toContain("Facturación")
     expect(textos).not.toContain("Dashboard")

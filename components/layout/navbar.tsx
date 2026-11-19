@@ -53,6 +53,15 @@ import {
 /** La suscripción a STApp. Solo el ADMIN la gestiona (la ruta es admin-only). */
 const MI_PLAN_HREF = "/configuracion/billing"
 
+// Celda de los accesos de cuenta del menú mobile: ícono arriba, etiqueta corta
+// abajo, mínimo 44px de alto para que siga siendo un blanco táctil cómodo.
+const cuentaTileClass = cn(
+  "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1.5",
+  "text-xs font-medium leading-none text-foreground/80 transition-colors",
+  "hover:bg-accent hover:text-accent-foreground active:scale-95 active:bg-accent/80",
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+)
+
 export function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -511,54 +520,65 @@ export function Navbar() {
               </div>
             ))}
           </nav>
-          <div className="border-t border-border p-3 space-y-1">
-            {/* The avatar dropdown is `hidden lg:flex`, so on a phone this is the
-                only route to /perfil (and the account deletion section in it). */}
+          {/* Accesos de cuenta en una sola fila de íconos: apilados como filas
+              ocupaban ~260px y en un teléfono dejaban la navegación con 4 ítems
+              visibles. El dropdown del avatar es `hidden lg:flex`, así que en
+              un teléfono esta es la única ruta a /perfil (y a la baja de la
+              cuenta que vive ahí). */}
+          <div
+            className="border-t border-border px-2 py-2 grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${isAdmin ? 5 : 4}, minmax(0, 1fr))` }}
+          >
             <Link
               href="/perfil"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+              aria-label="Mi perfil"
+              className={cuentaTileClass}
             >
-              <User className="mr-3 h-5 w-5 flex-shrink-0" />
-              Mi perfil
+              <User className="h-5 w-5" />
+              <span className="max-w-full truncate">Perfil</span>
             </Link>
             {isAdmin && (
               <Link
                 href={MI_PLAN_HREF}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+                aria-label="Mi plan"
+                className={cuentaTileClass}
               >
-                <CreditCard className="mr-3 h-5 w-5 flex-shrink-0" />
-                Mi plan
+                <CreditCard className="h-5 w-5" />
+                <span className="max-w-full truncate">Plan</span>
               </Link>
             )}
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+              aria-label="Manual de uso"
+              className={cuentaTileClass}
             >
-              <BookOpen className="mr-3 h-5 w-5 flex-shrink-0" />
-              Manual de uso
+              <BookOpen className="h-5 w-5" />
+              <span className="max-w-full truncate">Manual</span>
             </Link>
-            <Button
-              variant="ghost"
-              className="w-full justify-start py-2.5 text-foreground hover:bg-accent hover:text-accent-foreground touch-target active:scale-[0.98]"
+            <button
+              type="button"
+              aria-label="Tour guiado"
+              className={cuentaTileClass}
               onClick={() => {
                 setMobileMenuOpen(false)
                 window.dispatchEvent(new Event("start-tour"))
               }}
             >
-              <HelpCircle className="mr-3 h-5 w-5" />
-              Tour guiado
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start py-2.5 text-destructive-text hover:text-destructive-text hover:bg-destructive/10 touch-target active:scale-[0.98]"
+              <HelpCircle className="h-5 w-5" />
+              <span className="max-w-full truncate">Tour</span>
+            </button>
+            <button
+              type="button"
+              aria-label="Cerrar sesión"
+              className={cn(cuentaTileClass, "text-destructive-text hover:bg-destructive/10 hover:text-destructive-text")}
               onClick={handleLogout}
             >
-              <LogOut className="mr-3 h-5 w-5" />
-              Cerrar sesión
-            </Button>
+              <LogOut className="h-5 w-5" />
+              <span className="max-w-full truncate">Salir</span>
+            </button>
           </div>
         </div>
       </div>
