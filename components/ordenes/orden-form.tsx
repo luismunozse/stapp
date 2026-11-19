@@ -29,6 +29,7 @@ import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
 import { useFormDraft } from "@/hooks/use-form-draft"
+import { TrabajosARealizarInput } from "@/components/ordenes/trabajos-a-realizar-input"
 import {
   stripSensitiveClienteFields,
   type WithoutSensitiveClienteFields,
@@ -1974,15 +1975,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {currentStep === 2 && (<>
           <div>
-            <Label htmlFor="trabajoARealizar">Trabajo a realizar (opcional)</Label>
-            <Input
+            <Label htmlFor="trabajoARealizar">Trabajos a realizar (opcional)</Label>
+            <TrabajosARealizarInput
               id="trabajoARealizar"
-              maxLength={200}
-              {...register("trabajoARealizar")}
-              placeholder="Ej: Cambio de batería"
+              value={getValues("trabajoARealizar")}
+              commitOnChange
+              onCommit={(value) =>
+                setValue("trabajoARealizar", value ?? "", { shouldDirty: true, shouldValidate: true })
+              }
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Sale en la hoja de recepción junto al presupuesto.
+              Salen en la hoja de recepción junto al presupuesto.
             </p>
             {errors.trabajoARealizar && (
               <p className="text-sm text-destructive-text mt-1">{errors.trabajoARealizar.message}</p>

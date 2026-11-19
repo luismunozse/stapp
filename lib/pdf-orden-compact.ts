@@ -52,6 +52,7 @@ import { embedExpedienteFonts, type OrdenPDFData } from "@/lib/pdf"
 import { ORDEN_PAGE_POINTS } from "@/lib/orden-papel"
 import { MONO, drawRule, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+import { parseTrabajosARealizar } from "@/lib/ordenes/trabajo-a-realizar"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
@@ -984,9 +985,16 @@ export async function generateOrdenCompactPDF(
       const presup = Number(data.presupuesto) || 0
       const sena = Number(data.sena) || 0
       section("Presupuesto")
-      // "Trabajo a realizar" ocupa el lugar de la etiqueta genérica; recortado porque la hoja es de alto fijo.
-      const trabajo = safe(data.trabajoARealizar)
-      amountRow(trabajo ? cutText(trabajo, 70) : "Presupuesto estimado", fmtMoney(presup))
+      // "Trabajo a realizar" ocupa el lugar de la etiqueta genérica; recortado porque la hoja es de
+      // alto fijo. Con varios trabajos (uno por línea) se lista cada uno y el monto va en su propia
+      // fila de total: el presupuesto es uno solo, no un precio por trabajo.
+      const trabajosPresup = parseTrabajosARealizar(data.trabajoARealizar).map((t) => cutText(safe(t), 70))
+      if (trabajosPresup.length > 1) {
+        for (const t of trabajosPresup) para(`• ${t}`, reg, F.body, MONO.ink)
+        amountRow("Presupuesto total", fmtMoney(presup))
+      } else {
+        amountRow(trabajosPresup[0] || "Presupuesto estimado", fmtMoney(presup))
+      }
       amountRow(`Seña abonada${metodoSena ? " · " + cap("rowtext", metodoSena) : ""}`, fmtMoney(sena))
       drawRule(page, left, right, y - gp(1) - lost, { color: MONO.ink, thickness: 1.2 })
       y -= gp(4) + lost
