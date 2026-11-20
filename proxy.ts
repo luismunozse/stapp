@@ -794,8 +794,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico
-     * - Public files with extensions
+     * - Public files with extensions (si falta una, en el subdominio sin
+     *   sesión el archivo se redirige a /login y no carga; test en
+     *   __tests__/api/proxy-matcher-imagenes-publicas.test.ts)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)",
   ],
 }
