@@ -6,14 +6,21 @@ const config: CapacitorConfig = {
   appName: 'STApp',
   webDir: 'public',
   server: {
+    // The apex is the canonical host (canonical, sitemap, robots, App Links).
+    // It must be the primary Vercel domain: the native bridge is only
+    // registered natively for the server.url origin, so a redirect to another
+    // host strands the page without it.
     url: 'https://stapp.com.ar/app-entry',
     cleartext: false,
     allowNavigation: ['*.stapp.com.ar', 'stapp.com.ar'],
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: false,
+      // The web hides the splash as soon as React mounts (hideSplashScreen).
+      // Auto-hide is the fallback: if the bridge never reaches the page, the
+      // splash still closes instead of leaving the app stuck on the logo.
+      launchShowDuration: 6000,
+      launchAutoHide: true,
       backgroundColor: '#ffffff',
       showSpinner: true,
       spinnerColor: '#3b82f6',
