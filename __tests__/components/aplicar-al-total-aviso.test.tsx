@@ -4,7 +4,7 @@ import { ModalProvider } from "@/contexts/modal-context"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 
 // Los repuestos suman al monto de la orden igual que los servicios (migración
-// 419): si el costo final no los incluye, la pestaña Repuestos ofrece
+// 420): si el costo final no los incluye, la pestaña Repuestos ofrece
 // "Aplicar al total".
 const repuesto = { id: "r1", nombre: "Pantalla", cantidad: 1, precioUnitario: 100000, precioVentaUnitario: 299100 }
 const servicios = [{ cantidad: 1, precioUnitario: 250000 }]

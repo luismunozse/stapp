@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-// La 419 se probó contra la base en una transacción revertida (alta, cambio de
+// La 420 se probó contra la base en una transacción revertida (alta, cambio de
 // cantidad y baja de repuesto; servicio por RPC; monto editado a mano;
 // "Aplicar al total"). Este test cuida las invariantes del texto.
 const dir = join(__dirname, "..", "supabase", "migrations")
@@ -11,10 +11,10 @@ const sinComentarios = (s: string) =>
     .split("\n")
     .filter((l) => !l.trim().startsWith("--"))
     .join("\n")
-const codigo = sinComentarios(readFileSync(join(dir, "419_repuestos_suman_al_total.sql"), "utf8"))
-const rollback = sinComentarios(readFileSync(join(dir, "rollback", "419_rollback.sql"), "utf8"))
+const codigo = sinComentarios(readFileSync(join(dir, "420_repuestos_suman_al_total.sql"), "utf8"))
+const rollback = sinComentarios(readFileSync(join(dir, "rollback", "420_rollback.sql"), "utf8"))
 
-describe("migración 419: los repuestos suman al monto de la orden", () => {
+describe("migración 420: los repuestos suman al monto de la orden", () => {
   it("no maneja su propia transacción (db-run la envuelve)", () => {
     expect(codigo).not.toMatch(/^\s*(BEGIN|COMMIT)\s*;/im)
   })

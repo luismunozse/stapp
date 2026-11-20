@@ -7,7 +7,7 @@ import { precioVentaRepuesto } from "@/lib/db-utils"
  * Es el número que sigue el monto vivo de la orden (presupuesto o costo_final)
  * y el que escribe "Aplicar al total".
  *
- * ESPEJO de suma_lineas_orden en supabase/migrations/419_repuestos_suman_al_total.sql:
+ * ESPEJO de suma_lineas_orden en supabase/migrations/420_repuestos_suman_al_total.sql:
  * cualquier cambio acá DEBE aplicarse también allá.
  */
 export function sumaLineasOrden(input: {

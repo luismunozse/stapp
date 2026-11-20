@@ -43,7 +43,7 @@ interface OrdenServiciosTabProps {
    *  el número antes de disparar el pedido. */
   totalCobrado: number
   /** Repuestos de la orden: suman al monto igual que los servicios (migración
-   *  419), así que el aviso "Aplicar al total" compara contra los dos. */
+   *  420), así que el aviso "Aplicar al total" compara contra los dos. */
   repuestos?: Array<{ cantidad: number; precioVentaUnitario?: number | null; precioUnitario?: number | null }>
   /** Puede devolver una promesa: el llamador espera a que el refetch del
    *  padre termine antes de reactivar los controles, para evitar la ventana

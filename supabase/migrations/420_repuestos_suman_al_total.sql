@@ -1,10 +1,10 @@
 -- ============================================================================
--- 419: los repuestos suman al monto de la orden igual que los servicios
+-- 420: los repuestos suman al monto de la orden igual que los servicios
 -- ============================================================================
 -- ORDEN DE DESPLIEGUE: aplicar ANTES de mergear el codigo. El codigo nuevo
 -- compara el aviso "Aplicar al total" contra servicios + repuestos; sin la
 -- migracion el boton seguiria escribiendo solo la suma de servicios.
--- Un archivo por vez: node scripts/db-run.mjs supabase/migrations/419_...sql
+-- Un archivo por vez: node scripts/db-run.mjs supabase/migrations/420_...sql
 -- (dry-run por defecto, --apply para confirmar). Sin BEGIN/COMMIT a proposito.
 --
 -- PROBLEMA
@@ -62,7 +62,7 @@ RETURNS NUMERIC AS $$
 $$ LANGUAGE sql STABLE;
 
 COMMENT ON FUNCTION suma_lineas_orden(TEXT) IS
-  'Servicios + repuestos (a precio de venta, con el costo como respaldo) de una orden. Espejo de sumaLineasOrden en lib/servicios/suma-lineas-orden.ts. Ver migracion 419.';
+  'Servicios + repuestos (a precio de venta, con el costo como respaldo) de una orden. Espejo de sumaLineasOrden en lib/servicios/suma-lineas-orden.ts. Ver migracion 420.';
 
 -- La regla de la 303/304, en un solo lugar. p_suma_anterior es la suma de
 -- lineas ANTES del cambio: contra ella se decide si el monto vivo "venia
@@ -158,7 +158,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION sincronizar_monto_lineas_orden(TEXT, NUMERIC) IS
-  'Regla unica de sincronizacion del monto vivo de la orden con sus lineas (servicios + repuestos). La llaman los RPCs de servicios y el trigger de repuestos_orden. Espejo de lib/servicios/sincronizar-costo-final.ts. Ver migraciones 303, 304 y 419.';
+  'Regla unica de sincronizacion del monto vivo de la orden con sus lineas (servicios + repuestos). La llaman los RPCs de servicios y el trigger de repuestos_orden. Espejo de lib/servicios/sincronizar-costo-final.ts. Ver migraciones 303, 304 y 420.';
 
 -- Firma IDENTICA a la 301/303/304: con otra firma CREATE OR REPLACE crearia
 -- una sobrecarga y quedarian dos versiones vivas.
@@ -366,10 +366,10 @@ CREATE TRIGGER repuestos_orden_sincroniza_monto
   EXECUTE FUNCTION trg_repuestos_orden_sincroniza_monto();
 
 COMMENT ON FUNCTION agregar_servicio_orden(TEXT, TEXT, TEXT, TEXT, INTEGER, NUMERIC) IS
-  'Inserta una linea en servicios_orden y sincroniza el monto VIVO de la orden con servicios + repuestos (sincronizar_monto_lineas_orden), con FOR UPDATE sobre la orden. Ver migraciones 303, 304 y 419.';
+  'Inserta una linea en servicios_orden y sincroniza el monto VIVO de la orden con servicios + repuestos (sincronizar_monto_lineas_orden), con FOR UPDATE sobre la orden. Ver migraciones 303, 304 y 420.';
 
 COMMENT ON FUNCTION eliminar_servicio_orden(TEXT, TEXT, TEXT) IS
-  'Elimina una linea de servicios_orden y sincroniza el monto VIVO de la orden con servicios + repuestos. Ver migracion 419.';
+  'Elimina una linea de servicios_orden y sincroniza el monto VIVO de la orden con servicios + repuestos. Ver migracion 420.';
 
 COMMENT ON FUNCTION aplicar_monto_servicios_orden(TEXT, TEXT) IS
-  'Boton "Aplicar al total": escribe servicios + repuestos (suma_lineas_orden) en el monto vivo de la orden. Rechaza dejar costo_final por debajo de total_cobrado. Ver migraciones 304 y 419.';
+  'Boton "Aplicar al total": escribe servicios + repuestos (suma_lineas_orden) en el monto vivo de la orden. Rechaza dejar costo_final por debajo de total_cobrado. Ver migraciones 304 y 420.';

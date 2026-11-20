@@ -29,7 +29,7 @@ interface AplicarAlTotalAvisoProps {
  * APROBADO, costo_final desde APROBADO) no coincide con servicios + repuestos.
  *
  * Pasa cuando la orden ya tiene cobros o alguien escribió el monto a mano: en
- * esos casos el servidor deja de sincronizarlo solo (migraciones 303/304/419).
+ * esos casos el servidor deja de sincronizarlo solo (migraciones 303/304/420).
  * El guard de líneas evita el aviso en órdenes viejas con el monto cargado a
  * mano y sin líneas.
  */

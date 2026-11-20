@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { sumaLineasOrden } from "@/lib/servicios/suma-lineas-orden"
 
-describe("sumaLineasOrden (espejo de suma_lineas_orden, migración 419)", () => {
+describe("sumaLineasOrden (espejo de suma_lineas_orden, migración 420)", () => {
   it("suma servicios y repuestos a precio de venta", () => {
     expect(
       sumaLineasOrden({

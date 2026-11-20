@@ -3,7 +3,7 @@ import { ESTADOS_COSTO_FINAL_BLOQUEADO, ESTADOS_PRESUPUESTO_BLOQUEADO } from "@/
 /**
  * Regla de sincronización entre las líneas de una orden y su costo_final.
  *
- * Desde la migración 419 las líneas son servicios + repuestos (a precio de
+ * Desde la migración 420 las líneas son servicios + repuestos (a precio de
  * venta): ver sumaLineasOrden en lib/servicios/suma-lineas-orden.ts. En SQL la
  * regla vive en una sola función, sincronizar_monto_lineas_orden, que llaman los
  * RPCs de servicios y el trigger de repuestos_orden.

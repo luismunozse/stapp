@@ -80,6 +80,7 @@ import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
+import { PagosInformadosCard } from "@/components/ordenes/pagos-informados-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { commissionCardVersion, orderCommissionKeyPrefix } from "@/lib/commissions/card-version"
@@ -1446,6 +1447,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </Card>
           )}
 
+          {puedeCobrar && userRole !== "TECNICO" && (
+            <PagosInformadosCard ordenId={orden.id} onResuelto={fetchOrden} />
+          )}
           <OrdenCostosCard
             ordenId={orden.id}
             presupuesto={orden.presupuesto}
@@ -1504,6 +1508,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               </div>
             </CardContent>
           </Card>
+        )}
+        {puedeCobrar && userRole !== "TECNICO" && (
+          <PagosInformadosCard ordenId={orden.id} onResuelto={fetchOrden} />
         )}
         <OrdenCostosCard
           ordenId={orden.id}

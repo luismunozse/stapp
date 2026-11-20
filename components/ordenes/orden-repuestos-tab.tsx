@@ -50,7 +50,7 @@ interface OrdenRepuestosTabProps {
    *  refrescó (lo que invitaba a reintentar y crear un repuesto duplicado). */
   onRepuestosChanged: () => void | Promise<void>
   /** Montos de la orden para el aviso "Aplicar al total": los repuestos suman
-   *  al monto igual que los servicios (migración 419). Sin ellos el aviso no
+   *  al monto igual que los servicios (migración 420). Sin ellos el aviso no
    *  se muestra. Solo tiene sentido junto con mostrarCostos. */
   montos?: {
     presupuesto: number | null

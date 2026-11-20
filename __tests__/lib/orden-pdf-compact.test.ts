@@ -1197,3 +1197,26 @@ describe("copy for the shop (second page of the A5 / A6 order)", () => {
     })
   }
 })
+
+describe("trabajo a realizar en la hoja de recepción", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: un solo trabajo reemplaza "Presupuesto estimado"`, async () => {
+      const out = await render(key, { ...LEAN, presupuesto: 187000, sena: 0, trabajoARealizar: "Cambio de pantalla" })
+      expect(out.text).toContain(norm(`Cambio de pantalla ${formatCurrencyValue(187000, "ARS")}`))
+      expect(out.text).not.toContain("Presupuesto estimado")
+    }, 20000)
+
+    it(`${key}: varios trabajos se listan y el monto va en "Presupuesto total"`, async () => {
+      const out = await render(key, {
+        ...LEAN,
+        presupuesto: 187000,
+        sena: 0,
+        trabajoARealizar: "Cambio de pantalla\nCambio de batería",
+      })
+      expect(out.text).toContain(norm("• Cambio de pantalla"))
+      expect(out.text).toContain(norm("• Cambio de batería"))
+      expect(out.text).toContain(norm(`Presupuesto total ${formatCurrencyValue(187000, "ARS")}`))
+      expect(out.text).not.toContain("Presupuesto estimado")
+    }, 20000)
+  }
+})
