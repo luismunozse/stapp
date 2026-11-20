@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Ban, Calendar, User } from "lucide-react"
+import { Ban, Calendar, Pencil, User } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 export interface CobroOrden {
@@ -42,10 +42,12 @@ interface CobrosOrdenListaProps {
   puedeAnular?: boolean
   /** Devuelve true si el cobro quedó anulado. */
   onAnular?: (cobroId: string, motivo: string) => Promise<boolean>
+  /** Si viene, cada cobro vigente ofrece Corregir (método, referencia, comentario). */
+  onCorregir?: (cobro: CobroOrden) => void
 }
 
 /** Detalle de cada cobro de una orden: cuánto, cómo, cuándo, quién, y su anulación. */
-export function CobrosOrdenLista({ cobros, puedeAnular = false, onAnular }: CobrosOrdenListaProps) {
+export function CobrosOrdenLista({ cobros, puedeAnular = false, onAnular, onCorregir }: CobrosOrdenListaProps) {
   const { formatPrice, formatDateTime } = useCurrency()
   const [anulandoId, setAnulandoId] = useState<string | null>(null)
   const [motivo, setMotivo] = useState("")
@@ -107,17 +109,34 @@ export function CobrosOrdenLista({ cobros, puedeAnular = false, onAnular }: Cobr
                   )}
                 </div>
               </div>
-              {puedeAnular && onAnular && !cobro.anulado && anulandoId !== cobro.id && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 shrink-0 text-xs text-destructive hover:text-destructive"
-                  onClick={() => { setAnulandoId(cobro.id); setMotivo("") }}
-                >
-                  <Ban className="mr-1 h-3.5 w-3.5" />
-                  Anular
-                </Button>
+              {!cobro.anulado && anulandoId !== cobro.id && (
+                <div className="flex shrink-0 items-center">
+                  {/* Un cobro con saldo a favor mueve la cuenta del cliente: no se corrige. */}
+                  {onCorregir && cobro.metodoPago !== "CUENTA_CORRIENTE" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => onCorregir(cobro)}
+                    >
+                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                      Corregir
+                    </Button>
+                  )}
+                  {puedeAnular && onAnular && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-destructive hover:text-destructive"
+                      onClick={() => { setAnulandoId(cobro.id); setMotivo("") }}
+                    >
+                      <Ban className="mr-1 h-3.5 w-3.5" />
+                      Anular
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 

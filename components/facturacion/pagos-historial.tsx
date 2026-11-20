@@ -1,14 +1,17 @@
 "use client"
 
+import { Pencil } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useCurrency } from "@/contexts/currency-context"
 
-interface Pago {
+export interface PagoHistorial {
   id: string
   monto: number
   fecha: string
   metodoPago: string
-  referencia?: string
+  referencia?: string | null
   notas?: string
+  observaciones?: string | null
   cuotas?: number | null
   recargoPorcentaje?: number | null
   montoOriginal?: number | null
@@ -17,7 +20,9 @@ interface Pago {
 }
 
 interface PagosHistorialProps {
-  pagos: Pago[]
+  pagos: PagoHistorial[]
+  /** Si viene, cada pago ofrece Corregir (método, referencia, comentario). */
+  onCorregir?: (pago: PagoHistorial) => void
 }
 
 const metodoPagoLabels: Record<string, string> = {
@@ -30,7 +35,7 @@ const metodoPagoLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
-export function PagosHistorial({ pagos }: PagosHistorialProps) {
+export function PagosHistorial({ pagos, onCorregir }: PagosHistorialProps) {
   const { formatPrice, formatDate } = useCurrency()
   if (!pagos || pagos.length === 0) {
     return (
@@ -45,7 +50,7 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
       {pagos.map((pago) => (
         <div
           key={pago.id}
-          className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+          className="flex items-start justify-between gap-3 p-3 bg-muted/50 rounded-lg"
         >
           <div className="space-y-0.5">
             <div className="font-medium text-green-600">
@@ -80,7 +85,25 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
                 Ref: {pago.referencia}
               </div>
             )}
+            {(pago.observaciones || pago.notas) && (
+              <div className="text-xs text-muted-foreground">
+                Nota: {pago.observaciones || pago.notas}
+              </div>
+            )}
           </div>
+          {/* Un pago con saldo a favor mueve la cuenta del cliente: no se corrige. */}
+          {onCorregir && pago.metodoPago !== "CUENTA_CORRIENTE" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 text-xs"
+              onClick={() => onCorregir(pago)}
+            >
+              <Pencil className="mr-1 h-3.5 w-3.5" />
+              Corregir
+            </Button>
+          )}
         </div>
       ))}
     </div>

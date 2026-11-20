@@ -41,6 +41,12 @@ interface MultiPagoInputProps {
   onChange: (pagos: PagoLineItem[]) => void
   saldoCuenta?: number // saldo disponible en cuenta corriente del cliente
   showCuentaCorriente?: boolean // mostrar opción de cuenta corriente
+  /**
+   * Corrección de un pago ya registrado: un solo pago, de monto fijo. Se elige
+   * el método y se completan sus datos (referencia, costo de terminal); no se
+   * puede cambiar el monto, partir el pago ni armar cuotas.
+   */
+  correccion?: boolean
 }
 
 let lineIdCounter = 0
@@ -63,6 +69,7 @@ export function MultiPagoInput({
   onChange,
   saldoCuenta = 0,
   showCuentaCorriente = false,
+  correccion = false,
 }: MultiPagoInputProps) {
   const { formatPrice } = useCurrency()
 
@@ -131,14 +138,14 @@ export function MultiPagoInput({
     <div className="space-y-3">
       {pagos.map((pago, index) => {
         const showReferencia = pago.metodo === "TRANSFERENCIA" || pago.metodo === "MERCADOPAGO"
-        const showCuotas = pago.metodo === "TARJETA_CREDITO"
+        const showCuotas = pago.metodo === "TARJETA_CREDITO" && !correccion
         const showRecargo = pago.metodo === "TARJETA_CREDITO" || pago.metodo === "TARJETA_DEBITO"
         const esCuentaCorriente = pago.metodo === "CUENTA_CORRIENTE"
 
         return (
           <div key={pago.id} className="rounded-lg border p-3 space-y-3">
             {/* Header con número de pago y botón eliminar */}
-            <div className="flex items-center justify-between">
+            <div className={cn("flex items-center justify-between", correccion && "hidden")}>
               <span className="text-xs font-medium text-muted-foreground">
                 Pago {index + 1}{pagos.length > 1 ? ` de ${pagos.length}` : ""}
               </span>
@@ -198,6 +205,12 @@ export function MultiPagoInput({
             )}
 
             {/* Monto */}
+            {correccion ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-xs text-muted-foreground">Monto del pago</span>
+                <span className="font-semibold">{formatPrice(pago.monto)}</span>
+              </div>
+            ) : (
             <div>
               <Label htmlFor={`${pago.id}-monto`} className="text-xs">Monto *</Label>
               <MoneyInput
@@ -217,6 +230,7 @@ export function MultiPagoInput({
                 </p>
               )}
             </div>
+            )}
 
             {/* Cuotas para tarjeta crédito */}
             {showCuotas && (
@@ -287,7 +301,7 @@ export function MultiPagoInput({
       })}
 
       {/* Botón agregar otro método */}
-      <Button
+      {!correccion && <Button
         type="button"
         variant="outline"
         size="sm"
@@ -296,7 +310,7 @@ export function MultiPagoInput({
       >
         <Plus className="mr-1 h-4 w-4" />
         Agregar otro método de pago
-      </Button>
+      </Button>}
 
       {/* Resumen de pagos */}
       {pagos.length > 1 && (

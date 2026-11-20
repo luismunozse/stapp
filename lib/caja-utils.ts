@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { OBS_ESPEJO_SENA, OBS_COBRO_SENA } from "@/lib/caja-observaciones"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { round2 } from "@/lib/ventas/totales"
 
@@ -151,6 +152,8 @@ export interface MovimientoUnificado {
   referenciaId: string
   referenciaNumero?: string | null
   observaciones: string | null
+  /** Número de operación del pago (transferencia, MercadoPago). Solo fuentes de pago. */
+  numeroReferencia?: string | null
   esEgreso?: boolean
   /**
    * Reversa de una venta o un cobro anulado, asentada el día de la anulación.
@@ -191,10 +194,7 @@ export function esMovimientoCogsAutomatico(row: {
   )
 }
 
-/** Texto con que la generación del remito copia la seña a pagos_parciales (mig 249/250). */
-export const OBS_ESPEJO_SENA = "Seña abonada al momento del ingreso"
-/** Texto del cobro_orden de la seña al crear la orden (y el backfill de la mig 067). */
-export const OBS_COBRO_SENA = "Seña al ingreso del equipo"
+export { OBS_ESPEJO_SENA, OBS_COBRO_SENA }
 
 /**
  * Saca de los pagos de remitos la copia de la seña cuando la orden ya tiene la
@@ -245,7 +245,7 @@ export async function fetchMovimientosDia(
   //    sin registrar la devolución en la caja del día de la anulación.
   let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
-    .select("id, monto, metodo_pago, created_at, orden_id, observaciones, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
+    .select("id, monto, metodo_pago, created_at, orden_id, observaciones, numero_referencia, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
     .gte("created_at", fechaDesde)
     .lte("created_at", fechaHasta)
@@ -273,7 +273,7 @@ export async function fetchMovimientosDia(
   let pagosFacturasQuery = supabaseAdmin
     .from("pagos_parciales")
     .select(`
-      id, monto, metodo_pago, fecha, factura_id, observaciones,
+      id, monto, metodo_pago, fecha, factura_id, observaciones, numero_referencia,
       costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
         id, orden_id, numero_factura, estado_pago,
@@ -298,7 +298,7 @@ export async function fetchMovimientosDia(
   let pagosVentasQuery = supabaseAdmin
     .from("pagos_venta")
     .select(`
-      id, monto, metodo_pago, fecha, venta_id, observaciones,
+      id, monto, metodo_pago, fecha, venta_id, observaciones, numero_referencia,
       costo_financiero_porcentaje, costo_financiero_monto,
       ventas!inner(organization_id, numero_venta, estado, sucursal_id)
     `)
@@ -373,6 +373,7 @@ export async function fetchMovimientosDia(
       referenciaId: c.orden_id,
       referenciaNumero: ordenNum ? `ORD-${String(ordenNum).padStart(4, "0")}` : null,
       observaciones: c.observaciones,
+      numeroReferencia: c.numero_referencia ?? null,
       costoFinancieroMonto: c.costo_financiero_monto ? parseFloat(c.costo_financiero_monto) : null,
       costoFinancieroPorcentaje: c.costo_financiero_porcentaje ? parseFloat(c.costo_financiero_porcentaje) : null,
     })
@@ -411,6 +412,7 @@ export async function fetchMovimientosDia(
       referenciaId: p.factura_id,
       referenciaNumero: numFactura || (numOrden ? `ORD-${String(numOrden).padStart(4, "0")}` : null),
       observaciones: p.observaciones,
+      numeroReferencia: p.numero_referencia ?? null,
       costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
       costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
     })
@@ -429,6 +431,7 @@ export async function fetchMovimientosDia(
       referenciaId: p.venta_id,
       referenciaNumero: numVenta ? `V-${String(numVenta).padStart(4, "0")}` : null,
       observaciones: p.observaciones,
+      numeroReferencia: p.numero_referencia ?? null,
       costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
       costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
     })

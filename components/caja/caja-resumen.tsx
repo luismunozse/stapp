@@ -333,8 +333,8 @@ export function CajaResumen({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground"
-                          title="Cambiar método de pago"
-                          aria-label="Cambiar método de pago"
+                          title="Corregir pago"
+                          aria-label="Corregir pago"
                           onClick={() =>
                             setEditando({
                               id: mov.id,
@@ -343,6 +343,8 @@ export function CajaResumen({
                               monto: mov.monto,
                               descripcion: displayName,
                               costoFinancieroPorcentaje: mov.costoFinancieroPorcentaje ?? null,
+                              numeroReferencia: mov.numeroReferencia ?? null,
+                              observaciones: mov.observaciones ?? null,
                             })
                           }
                         >

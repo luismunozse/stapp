@@ -41,6 +41,7 @@ import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
 import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
+import { CambiarMetodoDialog } from "@/components/caja/cambiar-metodo-dialog"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import { ComprobanteFiscalCard } from "@/components/ventas/comprobante-fiscal-card"
 import { GarantiasVentaCard } from "@/components/ventas/garantias-venta-card"
@@ -172,6 +173,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [showDevolucionModal, setShowDevolucionModal] = useState(false)
   const [showPagoForm, setShowPagoForm] = useState(false)
   const [expandedPagos, setExpandedPagos] = useState(false)
+  const [pagoACorregir, setPagoACorregir] = useState<Pago | null>(null)
 
   const fetchOrganization = async () => {
     try {
@@ -643,7 +645,33 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <ChevronDown className="h-4 w-4" />
                 )}
               </Button>
-              {expandedPagos && <PagosHistorial pagos={venta.pagos} />}
+              {expandedPagos && (
+                <PagosHistorial
+                  pagos={venta.pagos}
+                  // Misma corrección que en Caja. El servidor decide igual.
+                  onCorregir={
+                    isAdmin && venta.estado !== "ANULADA"
+                      ? (pago) => setPagoACorregir(venta.pagos.find((p) => p.id === pago.id) ?? null)
+                      : undefined
+                  }
+                />
+              )}
+              <CambiarMetodoDialog
+                movimiento={
+                  pagoACorregir && {
+                    id: pagoACorregir.id,
+                    fuente: "pagos_venta",
+                    metodoPago: pagoACorregir.metodoPago,
+                    monto: pagoACorregir.monto,
+                    descripcion: `Venta V${String(venta.numeroVenta).padStart(4, "0")}`,
+                    costoFinancieroPorcentaje: pagoACorregir.costoFinancieroPorcentaje ?? null,
+                    numeroReferencia: pagoACorregir.referencia ?? null,
+                    observaciones: pagoACorregir.observaciones ?? null,
+                  }
+                }
+                onOpenChange={(open) => { if (!open) setPagoACorregir(null) }}
+                onSuccess={() => fetchVenta()}
+              />
             </div>
           )}
         </CardContent>
