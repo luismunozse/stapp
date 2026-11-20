@@ -2,13 +2,29 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "sonner"
-import { Clipboard, FlaskConical, Inbox, Loader2, RefreshCw, X } from "lucide-react"
+import Link from "next/link"
+import { Clipboard, FlaskConical, Inbox, Loader2, MessageCircle, RefreshCw, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PageShell } from "@/components/ui/page-shell"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
-import { BETA_MAX_IDS_POR_LOTE, emailsParaPlay, type BetaEstado } from "@/lib/android-beta"
+import {
+  BETA_MAX_IDS_POR_LOTE,
+  BETA_MENSAJE_MAX,
+  emailsParaPlay,
+  mensajeInvitacion,
+  type BetaEstado,
+} from "@/lib/android-beta"
 import { cn, formatDateTime } from "@/lib/utils"
 
 interface Tester {
@@ -41,6 +57,11 @@ export function BetaAndroidContent() {
   const { mutate, loading: guardando } = useSuperadminMutation()
   const [filtro, setFiltro] = useState<Filtro>("PENDIENTE")
   const [seleccion, setSeleccion] = useState<string[]>([])
+  const { mutate: enviar, loading: enviando } = useSuperadminMutation<{ ticketId: string }>()
+  const [contacto, setContacto] = useState<Tester | null>(null)
+  const [mensaje, setMensaje] = useState("")
+  // Conversaciones abiertas en esta sesión, para dejar el acceso a mano en la fila.
+  const [conversaciones, setConversaciones] = useState<Record<string, string>>({})
 
   // Se trae todo de una vez y se filtra acá: así "Copiar emails pendientes"
   // funciona igual aunque la vista esté mirando otro estado, y los contadores
@@ -102,6 +123,24 @@ export function BetaAndroidContent() {
     toast.success(mensaje)
     setSeleccion([])
     cargar()
+  }
+
+  const abrirContacto = (t: Tester) => {
+    setContacto(t)
+    setMensaje(mensajeInvitacion(t.usuario?.nombre, t.email))
+  }
+
+  const enviarMensaje = async () => {
+    if (!contacto) return
+    const resultado = await enviar("/api/superadmin/beta-android/contactar", {
+      method: "POST",
+      body: { id: contacto.id, mensaje },
+      errorMessage: "Error al enviar el mensaje",
+    })
+    if (!resultado) return
+    setConversaciones((prev) => ({ ...prev, [contacto.id]: resultado.ticketId }))
+    toast.success("Mensaje enviado al chat de soporte del usuario")
+    setContacto(null)
   }
 
   const todosMarcados = visibles.length > 0 && seleccion.length === visibles.length
@@ -194,12 +233,13 @@ export function BetaAndroidContent() {
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email de Google</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Estado</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Fecha</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Contacto</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading && testers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                         <div className="flex items-center justify-center gap-2">
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                           Cargando...
@@ -208,7 +248,7 @@ export function BetaAndroidContent() {
                     </tr>
                   ) : visibles.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-0">
+                      <td colSpan={7} className="p-0">
                         <div className="flex flex-col items-center justify-center py-12 px-4">
                           <div className="flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-muted">
                             <Inbox className="h-8 w-8 text-muted-foreground" />
@@ -254,6 +294,23 @@ export function BetaAndroidContent() {
                           <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">
                             {formatDateTime(t.created_at)}
                           </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {conversaciones[t.id] && (
+                              <Button asChild size="sm" variant="link">
+                                <Link href={`/superadmin/soporte/${conversaciones[t.id]}`}>Ver chat</Link>
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => abrirContacto(t)}
+                              disabled={!t.usuario}
+                              aria-label={`Contactar a ${t.usuario?.nombre ?? t.email}`}
+                            >
+                              <MessageCircle className="h-4 w-4 mr-1.5" />
+                              Contactar
+                            </Button>
+                          </td>
                         </tr>
                       )
                     })
@@ -264,6 +321,34 @@ export function BetaAndroidContent() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={contacto !== null} onOpenChange={(abierto) => !abierto && !enviando && setContacto(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Escribirle a {contacto?.usuario?.nombre ?? contacto?.email}</DialogTitle>
+            <DialogDescription>
+              Le llega al chat de soporte de su panel y por mail a {contacto?.usuario?.email}. Cargalo antes en la
+              lista de testers de Play Console: si abre el enlace sin estar en la lista, no lo deja entrar.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={mensaje}
+            onChange={(e) => setMensaje(e.target.value)}
+            rows={9}
+            maxLength={BETA_MENSAJE_MAX}
+            aria-label="Mensaje"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setContacto(null)} disabled={enviando}>
+              Cancelar
+            </Button>
+            <Button onClick={enviarMensaje} disabled={enviando || mensaje.trim().length === 0}>
+              {enviando && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Enviar mensaje
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   )
 }

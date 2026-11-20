@@ -23,6 +23,7 @@ import {
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { TICKET_ESTADO, TICKET_PRIORIDAD, TICKET_TIPO } from "@/components/soporte/ticket-config"
+import { TextoConEnlaces } from "@/components/soporte/texto-con-enlaces"
 
 interface TicketData {
   id: string
@@ -295,7 +296,7 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                         : "bg-muted"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">{msg.contenido}</p>
+                    <p className="whitespace-pre-wrap"><TextoConEnlaces texto={msg.contenido} /></p>
                     {/* Adjuntos del mensaje */}
                     {msg.adjuntos && msg.adjuntos.length > 0 && (
                       <div className="flex gap-2 flex-wrap mt-2">
