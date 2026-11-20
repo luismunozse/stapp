@@ -15,6 +15,7 @@ import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
 import { extractAuthCode, parseRequires2FA, tenantDashboardUrl } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
+import { useIsNativePlatform } from "@/hooks/use-is-native-platform"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 import { tenantLookupOutcome } from "@/lib/tenant-lookup"
 
@@ -52,6 +53,8 @@ function extractSubdomain(): string | null {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // Google sign-in cannot work inside the native WebView shell
+  const isNative = useIsNativePlatform()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -284,7 +287,11 @@ function LoginForm() {
           setError("Tu cuenta está bloqueada temporalmente por intentos fallidos. Esperá unos minutos antes de reintentar.")
           setShowResendOption(false)
         } else if (code.includes("USE_GOOGLE_LOGIN")) {
-          setError("Esta cuenta fue creada con Google. Usá el botón \"Continuar con Google\" para iniciar sesión.")
+          setError(
+            isNative
+              ? "Esta cuenta fue creada con Google. En la app, creá una contraseña con «¿Olvidaste tu contraseña?» y entrá con ella."
+              : "Esta cuenta fue creada con Google. Usá el botón \"Continuar con Google\" para iniciar sesión."
+          )
           setShowResendOption(false)
         } else if (code.includes("GOOGLE_NO_ACCOUNT")) {
           setError("No existe una cuenta con este email de Google. Registrate primero.")
@@ -503,7 +510,12 @@ function LoginForm() {
           </form>
 
           {/* Separador + Google */}
-          {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          {isNative && (
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              ¿Te registraste con Google? Tocá «¿Olvidaste tu contraseña?» para crear una y entrar desde la app.
+            </p>
+          )}
+          {!isNative && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
             <>
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
