@@ -56,6 +56,7 @@ import {
   type EstadoFisicoValor,
 } from "./danos/estado-fisico-recepcion"
 import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
+import { esPcDeEscritorio } from "@/lib/ordenes/checklist-obligatorio"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -773,6 +774,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     [tiposDispositivo, tipoDispositivo]
   )
 
+  /** PC de escritorio: el checklist de recepcion (pantalla, bateria, bisagras,
+   *  cargador...) no aplica, asi que sus items obligatorios dejan de bloquear
+   *  la creacion. Se pueden completar igual. */
+  const checklistSinObligatorios = esPcDeEscritorio({
+    tipoNombre: tipoSeleccionado?.nombre,
+    tipoPc: camposExtraValues.tipoPc,
+  })
+
   // Get the selected tipo's effective config and its derived fields
   const {
     config,
@@ -1428,7 +1437,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       items
         .filter((item) => (item.categoria || "GENERAL") === cat)
         .sort((a, b) => a.orden - b.orden)
-        .filter((item) => item.requerido && checklistItemFaltante(item.tipo, checklistValores[item.id])),
+        .filter((item) => item.requerido && !checklistSinObligatorios && checklistItemFaltante(item.tipo, checklistValores[item.id])),
     )
   }
 
@@ -2229,6 +2238,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </button>
               {checklistOpen && (
                 <div className="p-4 space-y-4">
+                  {checklistSinObligatorios && (
+                    <p className="text-sm text-muted-foreground">
+                      PC de escritorio: el checklist es opcional, completá solo lo que aplique.
+                    </p>
+                  )}
                   {(() => {
                     const itemsByCategory = checklistTemplate.items.reduce((acc: Record<string, any[]>, item: any) => {
                       const cat = item.categoria || "GENERAL"
@@ -2252,7 +2266,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                           {(items as any[]).sort((a, b) => a.orden - b.orden).map((item) => {
                             const value = checklistValores[item.id]
                             const faltante =
-                              checklistIntentoEnviar && item.requerido && checklistItemFaltante(item.tipo, value)
+                              checklistIntentoEnviar && item.requerido && !checklistSinObligatorios && checklistItemFaltante(item.tipo, value)
                             const avisoFaltante = faltante ? (
                               <p className="text-sm text-destructive-text mt-1">{CHECKLIST_ITEM_REQUERIDO_MSG}</p>
                             ) : null
@@ -2262,7 +2276,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                   <div className="flex items-center justify-between gap-3">
                                     <span className="text-sm">
                                       {item.label}
-                                      {item.requerido && <span className="text-destructive-text ml-1">*</span>}
+                                      {item.requerido && !checklistSinObligatorios && <span className="text-destructive-text ml-1">*</span>}
                                     </span>
                                     <div className="flex shrink-0 gap-1.5">
                                       <button
@@ -2300,7 +2314,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                 <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
-                                    {item.requerido && <span className="text-destructive-text ml-1">*</span>}
+                                    {item.requerido && !checklistSinObligatorios && <span className="text-destructive-text ml-1">*</span>}
                                   </Label>
                                   <Input
                                     value={(value as string) || ""}
@@ -2318,7 +2332,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                 <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
-                                    {item.requerido && <span className="text-destructive-text ml-1">*</span>}
+                                    {item.requerido && !checklistSinObligatorios && <span className="text-destructive-text ml-1">*</span>}
                                   </Label>
                                   <Select
                                     value={(value as string) || "none"}
