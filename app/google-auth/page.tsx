@@ -12,6 +12,7 @@ import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 import { isValidTenantSlug } from "@/lib/account-deletion/urls"
+import { useIsNativePlatform } from "@/hooks/use-is-native-platform"
 
 /**
  * Página de autenticación con Google en el dominio raíz.
@@ -98,6 +99,7 @@ function GoogleAuthContent() {
   // El email de Google no tiene cuenta: se ofrece ir a registrarse
   const [noAccount, setNoAccount] = useState(false)
   const isDark = useIsDark()
+  const isNative = useIsNativePlatform()
   const { ref: googleButtonRef, width: googleButtonWidth } = useGoogleButtonWidth()
   // Login con Google + 2FA: guardamos el ID token de Google (vale ~1 h) para
   // reenviarlo junto con el código TOTP. Antes se redirigía a
@@ -108,6 +110,26 @@ function GoogleAuthContent() {
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+
+  // Google blocks OAuth in embedded WebViews and the popup would leave the app,
+  // so the native shell gets an explanation instead of the Google button.
+  if (isNative) {
+    return (
+      <AuthSplitLayout>
+        <div className="space-y-6 text-center lg:text-left">
+          <h1 className="text-2xl font-bold tracking-tight">Ingreso con Google</h1>
+          <p className="text-sm text-muted-foreground">
+            El ingreso con Google no está disponible en la app. Entrá con tu email y contraseña.
+          </p>
+          <Button asChild className="w-full h-11">
+            <a href={tenant ? `https://${tenant}.${rootDomain}/login` : "/app-entry"}>
+              Entrar con email y contraseña
+            </a>
+          </Button>
+        </div>
+      </AuthSplitLayout>
+    )
+  }
 
   // Si no hay client ID, mostrar error
   if (!clientId) {

@@ -20,6 +20,7 @@ import {
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { trackAdsConversion, trackEvent } from "@/lib/gtag"
 import { getStoredUtmParams } from "@/lib/utm"
+import { useIsNativePlatform } from "@/hooks/use-is-native-platform"
 
 interface FormData {
   orgNombre: string
@@ -44,6 +45,8 @@ function sanitizeSlug(input: string): string {
 }
 
 function RegistroForm() {
+  // Google sign-in cannot work inside the native WebView shell
+  const isNative = useIsNativePlatform()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -418,7 +421,7 @@ function RegistroForm() {
           <section className="space-y-4" aria-labelledby="paso-cuenta">
             <StepTitle id="paso-cuenta" n={2}>Tu cuenta</StepTitle>
 
-            {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+            {!isNative && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
               <>
                 <Button
                   type="button"
