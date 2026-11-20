@@ -52,7 +52,7 @@ import { embedExpedienteFonts, type OrdenPDFData } from "@/lib/pdf"
 import { ORDEN_PAGE_POINTS } from "@/lib/orden-papel"
 import { MONO, drawRule, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
-import { parseTrabajosARealizar } from "@/lib/ordenes/trabajo-a-realizar"
+import { detallePresupuesto } from "@/lib/ordenes/trabajo-a-realizar"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
@@ -988,7 +988,8 @@ export async function generateOrdenCompactPDF(
       // "Trabajo a realizar" ocupa el lugar de la etiqueta genérica; recortado porque la hoja es de
       // alto fijo. Con varios trabajos (uno por línea) se lista cada uno y el monto va en su propia
       // fila de total: el presupuesto es uno solo, no un precio por trabajo.
-      const trabajosPresup = parseTrabajosARealizar(data.trabajoARealizar).map((t) => cutText(safe(t), 70))
+      // Sin texto cargado, el detalle son los servicios y repuestos de la orden.
+      const trabajosPresup = detallePresupuesto(data.trabajoARealizar, data.trabajos).map((t) => cutText(safe(t), 70))
       if (trabajosPresup.length > 1) {
         for (const t of trabajosPresup) para(`• ${t}`, reg, F.body, MONO.ink)
         amountRow("Presupuesto total", fmtMoney(presup))

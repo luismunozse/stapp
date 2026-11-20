@@ -75,7 +75,9 @@ describe("generateOrdenPDF con estadoFisico", () => {
     expect(r.texto).not.toContain("Estado físico al ingreso")
   })
   it("recepción: dibuja el bloque con la lista y el de diagnóstico", async () => {
-    const r = await imprimir({ estadoFisico: base })
+    // Sin ítems cargados: el renglón "Trabajo a realizar" (texto o ítems) le saca 18pt al hueco y,
+    // con la orden tan llena como la del fixture, el bloque pasa a la página aparte.
+    const r = await imprimir({ estadoFisico: base, trabajos: null })
     expect(r.paginas).toBe(1)
     expect(r.texto).toContain("Estado físico al ingreso")
     expect(r.texto).toContain("Golpe (frente)")
