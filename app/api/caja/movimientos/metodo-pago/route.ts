@@ -5,7 +5,14 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { round2 } from "@/lib/ventas/totales"
 import { logAudit, type AuditEntity } from "@/lib/audit"
-import { fetchMovimientosDia, computeTotales, esErrorColumnaOrigen, esOrigenNoEliminable, resolverOrigen } from "@/lib/caja-utils"
+import {
+  fetchMovimientosDia,
+  computeTotales,
+  esErrorColumnaOrigen,
+  esOrigenNoEliminable,
+  resolverOrigen,
+} from "@/lib/caja-utils"
+import { esMarcaDeSena } from "@/lib/caja-observaciones"
 
 // Métodos a los que se puede corregir un movimiento. CUENTA_CORRIENTE queda
 // afuera a propósito: pasar de/a fiado no es "corregir una etiqueta", mueve la
@@ -33,6 +40,10 @@ const bodySchema = z.object({
   // % que cobra la terminal. Solo se usa si el destino es débito o crédito; con
   // cualquier otro método se descarta. Omitido = no tocar el costo ya guardado.
   costoFinancieroPorcentaje: z.number().min(0).max(100).nullable().optional(),
+  // Número de operación y comentario del pago, como al registrarlo. Solo las
+  // fuentes de pago los guardan. Omitido = no tocar; vacío o null = borrar.
+  referencia: z.string().max(100).nullable().optional(),
+  observaciones: z.string().max(500).nullable().optional(),
 })
 
 type Fuente = z.infer<typeof bodySchema>["fuente"]
@@ -62,6 +73,9 @@ interface Origen {
   bloqueoStatus?: number
   /** Valores previos de las columnas de tarjeta (para la auditoría). */
   previos?: Record<string, unknown>
+  /** Número de operación y comentario guardados (solo fuentes de pago). */
+  referencia?: string | null
+  observaciones?: string | null
   /** Entidad y id para la auditoría. */
   auditEntity: AuditEntity
   auditEntityId: string
@@ -76,6 +90,11 @@ function montoNumerico(valor: unknown): number {
 function leerOrigenFallo(tabla: string, error: unknown): Error {
   console.error(`Error leyendo ${tabla} para corregir el método de pago:`, error)
   return new Error(`No se pudo leer ${tabla}`)
+}
+
+// "" y null son lo mismo para un texto opcional.
+function textoONull(valor: string | null | undefined): string | null {
+  return (valor ?? "").trim() || null
 }
 
 function extraerPrevios(row: any): Record<string, unknown> {
@@ -93,7 +112,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const { data, error } = await supabaseAdmin
         .from("cobros_orden")
         .select(
-          `id, monto, metodo_pago, created_at, anulado, orden_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
+          `id, monto, metodo_pago, created_at, anulado, orden_id, numero_referencia, observaciones, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
         )
         .eq("id", id)
         .eq("organization_id", orgId)
@@ -109,13 +128,15 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         auditEntity: "ordenes_servicio",
         auditEntityId: data.orden_id,
         previos: extraerPrevios(data),
+        referencia: (data as any).numero_referencia ?? null,
+        observaciones: (data as any).observaciones ?? null,
       }
     }
     case "pagos_parciales": {
       const { data, error } = await supabaseAdmin
         .from("pagos_parciales")
         .select(`
-          id, monto, metodo_pago, fecha, factura_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
+          id, monto, metodo_pago, fecha, factura_id, numero_referencia, observaciones, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
           facturas!inner(estado_pago, ordenes_servicio!inner(organization_id, sucursal_id))
         `)
         .eq("id", id)
@@ -133,13 +154,15 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         auditEntity: "facturas",
         auditEntityId: data.factura_id,
         previos: extraerPrevios(data),
+        referencia: (data as any).numero_referencia ?? null,
+        observaciones: (data as any).observaciones ?? null,
       }
     }
     case "pagos_venta": {
       const { data, error } = await supabaseAdmin
         .from("pagos_venta")
         .select(
-          `id, monto, metodo_pago, fecha, venta_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
+          `id, monto, metodo_pago, fecha, venta_id, numero_referencia, observaciones, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
         )
         .eq("id", id)
         .eq("ventas.organization_id", orgId)
@@ -157,6 +180,8 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         auditEntityId: data.venta_id,
         ventaId: data.venta_id,
         previos: extraerPrevios(data),
+        referencia: (data as any).numero_referencia ?? null,
+        observaciones: (data as any).observaciones ?? null,
       }
     }
     case "cuenta_corriente": {
@@ -288,7 +313,7 @@ export async function PATCH(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
     }
-    const { fuente, id, metodoPago, costoFinancieroPorcentaje } = parsed.data
+    const { fuente, id, metodoPago, costoFinancieroPorcentaje, referencia, observaciones } = parsed.data
 
     const origen = await cargarOrigen(fuente, id, organizationId!)
     if (!origen) {
@@ -340,8 +365,39 @@ export async function PATCH(request: Request) {
       cuotasHuerfanas = (huerfanas || []).length
     }
 
+    const esFuentePago =
+      fuente === "pagos_venta" || fuente === "pagos_parciales" || fuente === "cobros_orden"
+
+    // Referencia y comentario: se escriben solo si cambian respecto de lo guardado.
+    const extras: Record<string, unknown> = {}
+    if (esFuentePago) {
+      if (referencia !== undefined && textoONull(referencia) !== textoONull(origen.referencia)) {
+        extras.numero_referencia = textoONull(referencia)
+      }
+      if (
+        observaciones !== undefined &&
+        !esMarcaDeSena(origen.observaciones) &&
+        textoONull(observaciones) !== textoONull(origen.observaciones)
+      ) {
+        extras.observaciones = textoONull(observaciones)
+      }
+    }
+    const hayExtras = Object.keys(extras).length > 0
+    const previosExtras: Record<string, unknown> = {}
+    if ("numero_referencia" in extras) previosExtras.numero_referencia = origen.referencia ?? null
+    if ("observaciones" in extras) previosExtras.observaciones = origen.observaciones ?? null
+
+    // Tablas con organization_id propio; pagos_venta y pagos_parciales se
+    // validan por el join de cargarOrigen.
+    const actualizarRegistro = (valores: Record<string, unknown>) => {
+      const query = supabaseAdmin.from(fuente).update(valores).eq("id", id)
+      return fuente === "cobros_orden" || fuente === "cuenta_corriente" || fuente === "movimientos_caja"
+        ? query.eq("organization_id", organizationId!)
+        : query
+    }
+
     const mismoMetodo = origen.metodoPago === metodoPago
-    if (mismoMetodo && cuotasHuerfanas === 0) {
+    if (mismoMetodo && cuotasHuerfanas === 0 && !hayExtras) {
       return NextResponse.json({ ok: true, metodoPago })
     }
 
@@ -370,20 +426,32 @@ export async function PATCH(request: Request) {
     }
 
     if (mismoMetodo) {
+      // Mismo método: lo único que puede cambiar es la referencia o el comentario.
+      if (hayExtras) {
+        const { error: extrasError } = await actualizarRegistro(extras)
+        if (extrasError) {
+          console.error("Error actualizando los datos del pago:", extrasError)
+          return NextResponse.json({ error: "Error al actualizar los datos del pago" }, { status: 500 })
+        }
+      }
+      const partes = [
+        ...(hayExtras ? ["Corrigió los datos del pago en caja"] : []),
+        ...(cuotasBorradas !== null ? ["Limpió el cronograma de cuotas sobrante del cobro"] : []),
+      ]
       await logAudit({
         organizationId: organizationId!,
         userId: userId!,
         action: "UPDATE",
         entity: origen.auditEntity,
         entityId: origen.auditEntityId,
-        changes: { before: { cuotas_borradas: cuotasBorradas }, after: { fuente, id } },
-        description: `Limpió el cronograma de cuotas sobrante del cobro (${fuente} #${id.slice(-6)})`,
+        changes: {
+          before: { ...previosExtras, ...(cuotasBorradas !== null ? { cuotas_borradas: cuotasBorradas } : {}) },
+          after: { fuente, id, ...extras },
+        },
+        description: `${partes.join(" y ")} (${fuente} #${id.slice(-6)})`,
       })
       return NextResponse.json({ ok: true, metodoPago })
     }
-
-    const esFuentePago =
-      fuente === "pagos_venta" || fuente === "pagos_parciales" || fuente === "cobros_orden"
 
     // Un cobro de orden en cuotas tiene cronograma en cuotas_cobro. La cuota 1
     // se marca pagada al cobrar; si hay otra pagada, el cronograma ya se usó y
@@ -443,13 +511,9 @@ export async function PATCH(request: Request) {
       }
     }
 
-    let updateQuery = supabaseAdmin.from(fuente).update(update).eq("id", id)
-    // Tablas con organization_id propio; pagos_venta y pagos_parciales se
-    // validan por el join de cargarOrigen.
-    if (fuente === "cobros_orden" || fuente === "cuenta_corriente" || fuente === "movimientos_caja") {
-      updateQuery = updateQuery.eq("organization_id", organizationId!)
-    }
-    const { error: updateError } = await updateQuery
+    Object.assign(update, extras)
+
+    const { error: updateError } = await actualizarRegistro(update)
     if (updateError) {
       console.error("Error actualizando método de pago:", updateError)
       return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
@@ -515,12 +579,14 @@ export async function PATCH(request: Request) {
         before: {
           metodo_pago: origen.metodoPago,
           ...(esFuentePago ? origen.previos : {}),
+          ...previosExtras,
           ...(cuotasBorradas !== null ? { cuotas_borradas: cuotasBorradas } : {}),
         },
         after: {
           metodo_pago: metodoPago,
           fuente,
           id,
+          ...extras,
           ...(esFuentePago
             ? {
                 costo_financiero_porcentaje: valorFinal("costo_financiero_porcentaje"),

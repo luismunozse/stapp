@@ -20,6 +20,7 @@ import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 import { CobrosOrdenLista, type CobroOrden } from "@/components/ordenes/cobros-orden-lista"
+import { CambiarMetodoDialog } from "@/components/caja/cambiar-metodo-dialog"
 import { parseMoneyInput } from "@/lib/parse-money"
 
 interface CobrarOrdenDialogProps {
@@ -62,6 +63,9 @@ export function CobrarOrdenDialog({
   const [descuento, setDescuento] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [cobrosHistorial, setCobrosHistorial] = useState<CobroOrden[]>([])
+  // Corregir un cobro (método, referencia, comentario): misma regla que en Caja,
+  // y se puede aunque la orden ya esté entregada. El servidor decide igual.
+  const [cobroACorregir, setCobroACorregir] = useState<CobroOrden | null>(null)
   const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([])
   const [showHistorial, setShowHistorial] = useState(false)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
@@ -369,7 +373,12 @@ export function CobrarOrdenDialog({
                 Esta orden no tiene cobros directos registrados. Si se pagó con una factura, el detalle está en la factura.
               </p>
             ) : (
-              <CobrosOrdenLista cobros={cobrosHistorial} puedeAnular={puedeAnular} onAnular={handleAnular} />
+              <CobrosOrdenLista
+                cobros={cobrosHistorial}
+                puedeAnular={puedeAnular}
+                onAnular={handleAnular}
+                onCorregir={esAdmin ? setCobroACorregir : undefined}
+              />
             )}
             {esAdmin && ordenEntregada && vigentes.length > 0 && (
               <p className="text-xs text-muted-foreground">
@@ -396,7 +405,12 @@ export function CobrarOrdenDialog({
             </Button>
             {showHistorial && (
               <div className="mt-2">
-                <CobrosOrdenLista cobros={cobrosHistorial} puedeAnular={puedeAnular} onAnular={handleAnular} />
+                <CobrosOrdenLista
+                cobros={cobrosHistorial}
+                puedeAnular={puedeAnular}
+                onAnular={handleAnular}
+                onCorregir={esAdmin ? setCobroACorregir : undefined}
+              />
               </div>
             )}
           </div>
@@ -415,6 +429,22 @@ export function CobrarOrdenDialog({
             </Button>
           </div>
         )}
+        <CambiarMetodoDialog
+          movimiento={
+            cobroACorregir && {
+              id: cobroACorregir.id,
+              fuente: "cobros_orden",
+              metodoPago: cobroACorregir.metodoPago,
+              monto: cobroACorregir.monto,
+              descripcion: `Cobro de orden · ${ordenLabel}`,
+              costoFinancieroPorcentaje: cobroACorregir.costoFinancieroPorcentaje ?? null,
+              numeroReferencia: cobroACorregir.referencia ?? null,
+              observaciones: cobroACorregir.observaciones ?? null,
+            }
+          }
+          onOpenChange={(abierto) => { if (!abierto) setCobroACorregir(null) }}
+          onSuccess={() => { fetchHistorial(); onSuccess() }}
+        />
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   )

@@ -10,10 +10,17 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { parseMonto } from "@/lib/parse-money"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCurrency } from "@/contexts/currency-context"
+import {
+  MultiPagoInput,
+  createPagoLine,
+  type MetodoPagoValue,
+  type PagoLineItem,
+} from "@/components/pagos/multi-pago-input"
+import { esMarcaDeSena } from "@/lib/caja-observaciones"
 
 // Mismo set que acepta PATCH /api/caja/movimientos/metodo-pago: sin cuenta
 // corriente, que mueve deuda del cliente y no se corrige desde la caja.
@@ -34,16 +41,27 @@ export interface MovimientoEditable {
   descripcion: string
   /** % de costo de terminal que tiene hoy el pago (precarga el campo). */
   costoFinancieroPorcentaje?: number | null
+  /** Número de operación guardado en el pago. */
+  numeroReferencia?: string | null
+  /** Comentario guardado en el pago. */
+  observaciones?: string | null
 }
 
-// Fuentes cuyo pago lleva costo de terminal (la API ignora el resto).
-const FUENTES_CON_COSTO = ["cobros_orden", "pagos_parciales", "pagos_venta"]
-
-function textoCosto(costoActual: number | null | undefined): string {
-  return costoActual ? String(costoActual).replace(".", ",") : ""
-}
+// Pagos de órdenes, remitos y ventas: llevan referencia, comentario y costo de
+// terminal, y se corrigen con el mismo formulario con que se registran. Un
+// depósito a cuenta o un movimiento manual solo cambia de método.
+const FUENTES_DE_PAGO = ["cobros_orden", "pagos_parciales", "pagos_venta"]
 
 const esTarjeta = (metodo: string) => metodo === "TARJETA_DEBITO" || metodo === "TARJETA_CREDITO"
+const textoONull = (valor: string | null | undefined) => (valor ?? "").trim() || null
+
+function lineaDesde(movimiento: MovimientoEditable): PagoLineItem {
+  return {
+    ...createPagoLine(movimiento.monto, movimiento.metodoPago as MetodoPagoValue),
+    referencia: movimiento.numeroReferencia ?? "",
+    costoFinanciero: movimiento.costoFinancieroPorcentaje ?? null,
+  }
+}
 
 interface CambiarMetodoDialogProps {
   movimiento: MovimientoEditable | null
@@ -53,47 +71,45 @@ interface CambiarMetodoDialogProps {
 
 export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: CambiarMetodoDialogProps) {
   const { formatPrice } = useCurrency()
-  const [metodo, setMetodo] = useState("")
-  const [costo, setCosto] = useState("")
+  const [linea, setLinea] = useState<PagoLineItem>(() => createPagoLine())
+  const [comentario, setComentario] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (movimiento) {
-      setMetodo(movimiento.metodoPago)
-      setCosto(textoCosto(movimiento.costoFinancieroPorcentaje))
+      setLinea(lineaDesde(movimiento))
+      // El comentario que marca una seña no se edita: no se muestra ni se envía.
+      setComentario(esMarcaDeSena(movimiento.observaciones) ? "" : movimiento.observaciones ?? "")
       setError("")
     }
   }, [movimiento])
+
+  const esPago = !!movimiento && FUENTES_DE_PAGO.includes(movimiento.fuente)
+  const comentarioEditable = esPago && !esMarcaDeSena(movimiento?.observaciones)
+  const metodo = linea.metodo as string
+
+  const cambioMetodo = !!movimiento && metodo !== movimiento.metodoPago
+  const cambioReferencia =
+    esPago && textoONull(linea.referencia) !== textoONull(movimiento?.numeroReferencia)
+  const cambioComentario =
+    comentarioEditable && textoONull(comentario) !== textoONull(movimiento?.observaciones)
+  // Costo de terminal: solo con destino tarjeta, y solo si se tocó. Sin tocar no
+  // se envía y la API conserva el guardado (una fila vieja puede tener monto de
+  // costo sin porcentaje).
+  const cambioCosto =
+    esPago &&
+    esTarjeta(metodo) &&
+    (linea.costoFinanciero ?? null) !== (movimiento?.costoFinancieroPorcentaje ?? null)
+  const sinCambios = !cambioMetodo && !cambioReferencia && !cambioComentario && !cambioCosto
 
   const handleSubmit = async () => {
     if (!movimiento) return
     setError("")
 
-    // Costo de terminal: solo para fuentes de pago con destino tarjeta, y solo
-    // si el usuario lo tocó. Sin tocar no se envía y la API conserva el guardado
-    // (una fila vieja puede tener monto de costo sin porcentaje).
-    let costoFinancieroPorcentaje: number | null | undefined
-    if (muestraCosto && costo.trim() !== textoCosto(movimiento.costoFinancieroPorcentaje)) {
-      const texto = costo.trim()
-      if (texto === "") {
-        costoFinancieroPorcentaje = null
-      } else {
-        if (/^\d{1,3}(\.\d{3})+$/.test(texto)) {
-          setError("Usá la coma para los decimales (por ejemplo 2,5)")
-          return
-        }
-        const n = /^\d+([.,]\d+)?$/.test(texto) ? parseMonto(texto) : null
-        if (n === null) {
-          setError("Ingresá un número válido para el costo de terminal (por ejemplo 2,5)")
-          return
-        }
-        if (n < 0 || n > 100) {
-          setError("El costo de terminal tiene que estar entre 0 y 100")
-          return
-        }
-        costoFinancieroPorcentaje = n
-      }
+    if (cambioCosto && linea.costoFinanciero != null && (linea.costoFinanciero < 0 || linea.costoFinanciero > 100)) {
+      setError("El costo de terminal tiene que estar entre 0 y 100")
+      return
     }
 
     setLoading(true)
@@ -105,33 +121,32 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
           fuente: movimiento.fuente,
           id: movimiento.id,
           metodoPago: metodo,
-          ...(costoFinancieroPorcentaje !== undefined && { costoFinancieroPorcentaje }),
+          ...(cambioCosto && { costoFinancieroPorcentaje: linea.costoFinanciero ?? null }),
+          ...(esPago && { referencia: textoONull(linea.referencia) }),
+          ...(comentarioEditable && { observaciones: textoONull(comentario) }),
         }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error al cambiar el método de pago")
+        throw new Error(data.error || "Error al corregir el pago")
       }
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cambiar el método de pago")
+      setError(err instanceof Error ? err.message : "Error al corregir el pago")
     } finally {
       setLoading(false)
     }
   }
 
-  const sinCambios = !!movimiento && metodo === movimiento.metodoPago
   const esTarjetaOrigen = !!movimiento && esTarjeta(movimiento.metodoPago)
   const esTarjetaDestino = esTarjeta(metodo)
-  const muestraCosto =
-    !!movimiento && FUENTES_CON_COSTO.includes(movimiento.fuente) && esTarjetaDestino && !sinCambios
 
   return (
     <Dialog open={!!movimiento} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Cambiar método de pago</DialogTitle>
+          <DialogTitle>{esPago ? "Corregir pago" : "Cambiar método de pago"}</DialogTitle>
           {movimiento && (
             <DialogDescription>
               {movimiento.descripcion} · {formatPrice(movimiento.monto)}
@@ -139,46 +154,61 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
           )}
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Método de pago</label>
-            <Select value={metodo} onValueChange={setMetodo}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Elegí un método" />
-              </SelectTrigger>
-              <SelectContent>
-                {METODOS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {muestraCosto && (
-            <div>
-              <label htmlFor="costo-terminal" className="text-sm font-medium">
-                Costo de terminal (%)
-              </label>
-              <Input
-                id="costo-terminal"
-                className="mt-1"
-                type="text"
-                inputMode="decimal"
-                value={costo}
-                onChange={(e) => setCosto(e.target.value)}
-                placeholder="Ej: 2,5"
+          {esPago ? (
+            <>
+              {/* El mismo formulario con que se registra el pago, en modo
+                  corrección: un solo pago y monto fijo. */}
+              <MultiPagoInput
+                correccion
+                montoPendiente={movimiento?.monto ?? 0}
+                pagos={[linea]}
+                onChange={(pagos) => setLinea(pagos[0])}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Lo que cobra el posnet. Se descuenta como costo financiero.
-              </p>
+              {comentarioEditable && (
+                <div>
+                  <Label htmlFor="corregir-pago-comentario" className="text-xs">Comentario</Label>
+                  <Textarea
+                    id="corregir-pago-comentario"
+                    value={comentario}
+                    onChange={(e) => setComentario(e.target.value)}
+                    placeholder="Banco o billetera, quién pagó, por qué se corrige..."
+                    maxLength={500}
+                    rows={2}
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <label className="text-sm font-medium">Método de pago</label>
+              <Select
+                value={metodo}
+                onValueChange={(value) => setLinea((l) => ({ ...l, metodo: value as MetodoPagoValue }))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Elegí un método" />
+                </SelectTrigger>
+                <SelectContent>
+                  {METODOS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
           {movimiento?.metodoPago === "TARJETA_CREDITO" && metodo === "TARJETA_DEBITO" && (
             <p className="text-xs text-muted-foreground">Se van a borrar las cuotas y el recargo del pago.</p>
           )}
-          {esTarjetaOrigen && !esTarjetaDestino && !sinCambios && (
+          {esTarjetaOrigen && !esTarjetaDestino && cambioMetodo && (
             <p className="text-xs text-muted-foreground">
               Se van a borrar las cuotas, el recargo y el costo de terminal del pago.
+            </p>
+          )}
+          {esPago && metodo === "TARJETA_CREDITO" && cambioMetodo && (
+            <p className="text-xs text-muted-foreground">
+              Queda como pago único. Para cobrar en cuotas, anulá el cobro y registralo de nuevo.
             </p>
           )}
           {error && <p className="text-sm text-destructive-text">{error}</p>}

@@ -98,6 +98,135 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
     expect(ventasUpdate).toHaveBeenCalledWith({ metodo_pago: "EFECTIVO" })
   })
 
+  describe("referencia y comentario", () => {
+    const pagoEfectivo = {
+      ...pagoVenta,
+      metodo_pago: "EFECTIVO",
+      monto: "1000",
+      numero_referencia: null,
+      observaciones: null,
+    }
+
+    function montar(row: any) {
+      const updateSpy = vi.fn().mockReturnValue(createChainMock(null, null))
+      const pagos = pagoVentaChain(row, updateSpy)
+      const respuestas = [{ data: row, error: null }, { data: [{ id: "pv-1" }, { id: "pv-2" }], error: null }]
+      pagos.then = (resolve: any) => Promise.resolve(respuestas.shift()).then(resolve)
+      mockSupabaseFrom({
+        pagos_venta: pagos,
+        sesiones_caja: createChainMock([], null),
+        ventas: createChainMock(null, null),
+        audit_logs: createChainMock(null, null),
+      })
+      return updateSpy
+    }
+
+    it("al pasar a transferencia guarda el número de operación y el comentario", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = montar(pagoEfectivo)
+
+      const res = await PATCH(patch({
+        fuente: "pagos_venta",
+        id: "pv-1",
+        metodoPago: "TRANSFERENCIA",
+        referencia: "  OP-99812  ",
+        observaciones: "Banco Nación, lo pasó la esposa",
+      }))
+
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metodo_pago: "TRANSFERENCIA",
+          numero_referencia: "OP-99812",
+          observaciones: "Banco Nación, lo pasó la esposa",
+        })
+      )
+    })
+
+    it("sin referencia ni comentario en el pedido no toca esas columnas", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = montar({ ...pagoEfectivo, numero_referencia: "X1", observaciones: "nota" })
+
+      await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TRANSFERENCIA" }))
+
+      const update = updateSpy.mock.calls[0][0]
+      expect(update).not.toHaveProperty("numero_referencia")
+      expect(update).not.toHaveProperty("observaciones")
+    })
+
+    it("con el mismo método corrige solo la referencia", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = montar({ ...pagoEfectivo, metodo_pago: "TRANSFERENCIA" })
+
+      const res = await PATCH(patch({
+        fuente: "pagos_venta",
+        id: "pv-1",
+        metodoPago: "TRANSFERENCIA",
+        referencia: "OP-1",
+      }))
+
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({ numero_referencia: "OP-1" })
+    })
+
+    it("con el mismo método y los mismos datos no escribe nada", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = montar({ ...pagoEfectivo, metodo_pago: "TRANSFERENCIA", numero_referencia: "OP-1" })
+
+      const res = await PATCH(patch({
+        fuente: "pagos_venta",
+        id: "pv-1",
+        metodoPago: "TRANSFERENCIA",
+        referencia: "OP-1",
+        observaciones: "",
+      }))
+
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).not.toHaveBeenCalled()
+    })
+
+    it("no pisa el comentario que marca una seña", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = montar({ ...pagoEfectivo, observaciones: "Seña al ingreso del equipo" })
+
+      await PATCH(patch({
+        fuente: "pagos_venta",
+        id: "pv-1",
+        metodoPago: "TRANSFERENCIA",
+        referencia: "OP-7",
+        observaciones: "otra cosa",
+      }))
+
+      const update = updateSpy.mock.calls[0][0]
+      expect(update.numero_referencia).toBe("OP-7")
+      expect(update).not.toHaveProperty("observaciones")
+    })
+
+    it("un movimiento manual de caja ignora referencia y comentario", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = vi.fn().mockReturnValue(createChainMock(null, null))
+      const mov = {
+        id: "m-1", metodo_pago: "EFECTIVO", fecha: "2026-10-03T15:00:00Z",
+        sucursal_id: null, origen: "MANUAL", sesiones_caja: null,
+      }
+      const chain = createChainMock(mov, null)
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: mov, error: null })
+      chain.update = updateSpy
+      mockSupabaseFrom({
+        movimientos_caja: chain,
+        sesiones_caja: createChainMock([], null),
+        audit_logs: createChainMock(null, null),
+      })
+
+      await PATCH(patch({
+        fuente: "movimientos_caja", id: "m-1", metodoPago: "TRANSFERENCIA",
+        referencia: "OP-1", observaciones: "x",
+      }))
+
+      expect(updateSpy).toHaveBeenCalledWith({ metodo_pago: "TRANSFERENCIA" })
+    })
+  })
+
   it("rechaza si el pago original fue a cuenta corriente", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     const updateSpy = vi.fn()
