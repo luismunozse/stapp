@@ -81,7 +81,8 @@ describe("generateOrdenPDF", () => {
     // money band was ~101pt (inflated) vs ~32pt fixed/expected; retiro ->
     // QR caption was ~82pt vs ~22pt. The thresholds below sit well between
     // those two numbers so a regression here fails loudly either way.
-    const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), soloCliente: true })
+    // Sin ítems cargados: con ellos aparece el renglón "Trabajo a realizar" entre accesorios y montos.
+    const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), trabajos: null, soloCliente: true })
     const positions = await extractPdfTextPositions(buffer)
     const yOf = (needle: string): number => {
       const hit = positions.find((p) => p.text.includes(needle))

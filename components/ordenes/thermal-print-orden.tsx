@@ -30,6 +30,7 @@ import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { AvisoImpresionNavegador } from "@/components/aviso-impresion-navegador"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
+import { detallePresupuesto } from "@/lib/ordenes/trabajo-a-realizar"
 import { lineasEstadoFisico, type EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -42,6 +43,9 @@ interface ThermalPrintOrdenProps {
     organizationComprobanteTerminos?: string | null
     /** Pins marcados en la recepción (solo al crear la orden); se imprimen como lista de texto. */
     estadoFisico?: EstadoFisicoPDF | null
+    /** Ítems cargados en la orden: son el detalle del presupuesto cuando no hay "Trabajo a realizar" escrito. */
+    servicios?: Array<{ nombre?: string | null; cantidad?: number | null }> | null
+    repuestos?: Array<{ nombre?: string | null; cantidad?: number | null; inventario?: { nombre?: string | null } | null }> | null
   }
 }
 
@@ -118,7 +122,12 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       problemaReportado: orden.problemaReportado,
       observaciones: orden.observaciones ?? null,
       presupuesto: orden.presupuesto ?? null,
-      trabajoARealizar: orden.trabajoARealizar ?? null,
+      // Sin "Trabajo a realizar" escrito, el detalle son los servicios y repuestos cargados.
+      trabajoARealizar:
+        detallePresupuesto(orden.trabajoARealizar, [
+          ...(orden.servicios ?? []),
+          ...(orden.repuestos ?? []).map((r) => ({ nombre: r.nombre || r.inventario?.nombre, cantidad: r.cantidad })),
+        ]).join("\n") || null,
       costoFinal: orden.costoFinal ?? null,
       fechaPrometida: orden.fechaPrometida
         ? new Date(orden.fechaPrometida).toLocaleDateString("es-AR", { timeZone: timezone })

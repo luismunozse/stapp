@@ -16,7 +16,7 @@ import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { bloquesTerminosGarantia } from "@/lib/garantias/config"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
 import { dibujarEstadoFisico, hayEstadoFisico, medirEstadoFisico, type EstadoFisicoPDF } from "@/lib/pdf-estado-fisico"
-import { parseTrabajosARealizar } from "@/lib/ordenes/trabajo-a-realizar"
+import { detallePresupuesto } from "@/lib/ordenes/trabajo-a-realizar"
 
 /** Renglones que puede ocupar la sección de avances en la hoja de entrega A4. */
 const AVANCES_MAX_LINEAS_A4 = 6
@@ -2273,7 +2273,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const isPrintSheet = !data.soloCliente
   // "Trabajo a realizar": renglón propio arriba de los montos (hasta 2 líneas).
   // Varios trabajos (uno por línea) van en el mismo renglón separados por " · ".
-  const trabajoTexto = parseTrabajosARealizar(data.trabajoARealizar).map(safe).join(" · ")
+  // Sin texto cargado, el detalle son los servicios y repuestos de la orden.
+  const trabajoTexto = detallePresupuesto(data.trabajoARealizar, data.trabajos).map(safe).join(" · ")
   const TRABAJO_LABEL = "TRABAJO A REALIZAR"
   const trabajoLabelW = archivoBold.widthOfTextAtSize(TRABAJO_LABEL, 6) + 8
   const trabajoLineas = trabajoTexto
