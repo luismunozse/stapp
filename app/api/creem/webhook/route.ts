@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { verifyCreemSignature } from "@/lib/creem"
+import { isCreemTestEvent, isProductionDeployment } from "@/lib/creem-mode"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 import {
   REGISTERED_PAYMENT_COLUMNS,
@@ -29,6 +30,10 @@ import {
  * reembolso parcial solo se registra.
  *
  * Idempotencia: subscription_payments (provider_payment_id + payment_provider).
+ *
+ * Sandbox: en producción los eventos `mode: "test"` se registran en
+ * webhook_events y se ignoran (ver lib/creem-mode.ts). No activan, no renuevan
+ * y tampoco cancelan: una suscripción de prueba no decide sobre un plan real.
  */
 
 interface HandleResult {
@@ -71,6 +76,21 @@ export async function POST(request: NextRequest) {
       errorMessage: "creem_signature_invalid",
     })
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+  }
+
+  if (isProductionDeployment() && isCreemTestEvent(body)) {
+    console.warn(
+      `[creem-webhook] Evento de sandbox ignorado en producción: ${body?.eventType ?? ""} ${body?.id ?? ""}`
+    )
+    const result: HandleResult = { status: "SKIPPED", reason: "creem_test_mode_event" }
+    await finishWebhookEvent(log, {
+      status: "SKIPPED",
+      httpStatus: 200,
+      organizationId: null,
+      subscriptionPaymentId: null,
+      errorMessage: result.reason ?? null,
+    })
+    return NextResponse.json({ received: true, result })
   }
 
   try {

@@ -4,6 +4,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createCreemCheckout } from "@/lib/creem"
+import { isCreemTestKey, isProductionDeployment } from "@/lib/creem-mode"
 
 /**
  * Crea un checkout de Creem (cobro internacional en USD) para la org del
@@ -21,6 +22,16 @@ const checkoutSchema = z.object({
 export async function POST(request: NextRequest) {
   const { error, session, organizationId } = await requireAuth()
   if (error) return error
+
+  // Con la key de sandbox el checkout se paga con tarjeta de prueba y el webhook
+  // activaría el plan sin cobrar nada.
+  if (isProductionDeployment() && isCreemTestKey()) {
+    console.error("[creem-checkout] CREEM_API_KEY de sandbox en producción - checkout rechazado")
+    return NextResponse.json(
+      { error: "El pago internacional no está disponible en este momento." },
+      { status: 503 }
+    )
+  }
 
   const body = await request.json().catch(() => ({}))
   const { billingPeriod = "MONTHLY", planSlug = "profesional" } =
