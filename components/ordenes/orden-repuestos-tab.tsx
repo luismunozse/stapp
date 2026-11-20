@@ -17,6 +17,8 @@ import {
   disponibleDe,
   type InventarioOption,
 } from "./inventario-search-combobox"
+import { AplicarAlTotalAviso } from "./aplicar-al-total-aviso"
+import { sumaLineasOrden } from "@/lib/servicios/suma-lineas-orden"
 
 interface Repuesto {
   id: string
@@ -47,11 +49,20 @@ interface OrdenRepuestosTabProps {
    *  en la que el panel muestra "sin repuestos" mientras el padre aun no
    *  refrescó (lo que invitaba a reintentar y crear un repuesto duplicado). */
   onRepuestosChanged: () => void | Promise<void>
+  /** Montos de la orden para el aviso "Aplicar al total": los repuestos suman
+   *  al monto igual que los servicios (migración 420). Sin ellos el aviso no
+   *  se muestra. Solo tiene sentido junto con mostrarCostos. */
+  montos?: {
+    presupuesto: number | null
+    costoFinal: number | null
+    totalCobrado: number
+    servicios: Array<{ cantidad: number; precioUnitario: number }>
+  }
 }
 
 const ESTADOS_CERRADOS: string[] = [...ESTADOS_ENTREGA, "CANCELADO"]
 
-export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, ordenEstado, onRepuestosChanged }: OrdenRepuestosTabProps) {
+export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, ordenEstado, onRepuestosChanged, montos }: OrdenRepuestosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const ordenCerrada = !!ordenEstado && ESTADOS_CERRADOS.includes(ordenEstado)
@@ -322,6 +333,18 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
         </div>
       </CardHeader>
       <CardContent>
+        {mostrarCostos && montos && ordenEstado && (
+          <AplicarAlTotalAviso
+            ordenId={ordenId}
+            estado={ordenEstado}
+            presupuesto={montos.presupuesto}
+            costoFinal={montos.costoFinal}
+            totalCobrado={montos.totalCobrado}
+            sumaLineas={sumaLineasOrden({ servicios: montos.servicios, repuestos })}
+            cantidadLineas={montos.servicios.length + (repuestos?.length ?? 0)}
+            onAplicado={onRepuestosChanged}
+          />
+        )}
         {showAddRepuesto && (
           <div className="mb-4 p-3 border rounded-lg space-y-3 bg-muted/30">
             <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">

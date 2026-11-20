@@ -1324,6 +1324,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 mostrarCostos={isAdmin}
                 ordenEstado={orden.estado}
                 onRepuestosChanged={fetchOrden}
+                montos={{
+                  presupuesto: orden.presupuesto ?? null,
+                  costoFinal: orden.costoFinal ?? null,
+                  totalCobrado: orden.totalCobrado || 0,
+                  servicios: (orden as any).servicios || [],
+                }}
               />
             </TabsContent>
 
@@ -1336,6 +1342,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   presupuesto={orden.presupuesto ?? null}
                   estado={orden.estado}
                   totalCobrado={orden.totalCobrado || 0}
+                  repuestos={(orden as any).repuestos || []}
                   onServiciosChanged={fetchOrden}
                 />
               )}
