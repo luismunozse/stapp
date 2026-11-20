@@ -5,6 +5,16 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 // app and Google blocks embedded WebViews), so the native shell must not offer it.
 
 let native = false
+let plugin = false
+const nativeGoogleSignIn = vi.fn()
+vi.mock("@/lib/native-google-signin", () => {
+  class NativeGoogleSignInCancelled extends Error {}
+  return {
+    isNativeGoogleSignInAvailable: () => native && plugin,
+    nativeGoogleSignIn: (...a: unknown[]) => nativeGoogleSignIn(...a),
+    NativeGoogleSignInCancelled,
+  }
+})
 vi.mock("@/lib/capacitor", () => ({
   isNativePlatform: () => native,
   getPlatform: () => (native ? "android" : "web"),
@@ -40,6 +50,8 @@ const ROOT = "stapp.com.ar"
 
 beforeEach(() => {
   native = false
+  plugin = false
+  nativeGoogleSignIn.mockReset()
   mockSearchParams = new URLSearchParams()
   vi.stubEnv("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "test-client-id")
   vi.stubEnv("NEXT_PUBLIC_ROOT_DOMAIN", ROOT)
@@ -131,5 +143,73 @@ describe("google-auth", () => {
     render(<GoogleAuthPage />)
     const link = await screen.findByRole("link", { name: /Entrar con email y contraseña/ })
     expect(link.getAttribute("href")).toBe("/app-entry")
+  })
+})
+
+describe("native WITH the social login plugin", () => {
+  beforeEach(() => {
+    native = true
+    plugin = true
+  })
+
+  it("login: shows the Google button and no hint", async () => {
+    render(<LoginPage />)
+    expect(await screen.findByRole("button", { name: /Continuar con Google/ })).toBeInTheDocument()
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument()
+  })
+
+  it("login: USE_GOOGLE_LOGIN keeps the Google button message", async () => {
+    signIn.mockResolvedValue({ ok: false, error: "USE_GOOGLE_LOGIN" })
+    render(<LoginPage />)
+    fireEvent.change(await screen.findByLabelText("Email"), { target: { value: "a@b.com" } })
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "secreta123" } })
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }))
+    expect(await screen.findByText(/Usá el botón "Continuar con Google"/)).toBeInTheDocument()
+  })
+
+  it("registro: shows the Google signup button", async () => {
+    render(<RegistroPage />)
+    expect(await screen.findByRole("button", { name: /Registrarse con Google/ })).toBeInTheDocument()
+  })
+
+  it("google-auth: native button feeds the idToken into signIn credentials", async () => {
+    nativeGoogleSignIn.mockResolvedValue("id-token-1")
+    signIn.mockResolvedValue({ ok: false, error: "GOOGLE_NO_ACCOUNT" })
+    render(<GoogleAuthPage />)
+    expect(screen.queryByText("google-login")).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole("button", { name: /Continuar con Google/ }))
+    await waitFor(() =>
+      expect(signIn).toHaveBeenCalledWith(
+        "credentials",
+        expect.objectContaining({ googleIdToken: "id-token-1" })
+      )
+    )
+    expect(nativeGoogleSignIn).toHaveBeenCalledWith("test-client-id")
+  })
+
+  it("google-auth: register action uses the signup wording", async () => {
+    mockSearchParams = new URLSearchParams({ action: "register" })
+    render(<GoogleAuthPage />)
+    expect(await screen.findByRole("button", { name: /Registrarse con Google/ })).toBeInTheDocument()
+  })
+
+  it("google-auth: cancel shows no error and resets the button", async () => {
+    const { NativeGoogleSignInCancelled } = await import("@/lib/native-google-signin")
+    nativeGoogleSignIn.mockRejectedValue(new NativeGoogleSignInCancelled())
+    render(<GoogleAuthPage />)
+    fireEvent.click(await screen.findByRole("button", { name: /Continuar con Google/ }))
+    await waitFor(() => expect(nativeGoogleSignIn).toHaveBeenCalled())
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: /Continuar con Google/ })).toBeEnabled()
+    expect(signIn).not.toHaveBeenCalled()
+  })
+
+  it("google-auth: other failures show a Spanish error", async () => {
+    nativeGoogleSignIn.mockRejectedValue(new Error("boom"))
+    render(<GoogleAuthPage />)
+    fireEvent.click(await screen.findByRole("button", { name: /Continuar con Google/ }))
+    expect(
+      await screen.findByText("No se pudo iniciar sesión con Google. Intentá de nuevo.")
+    ).toBeInTheDocument()
   })
 })

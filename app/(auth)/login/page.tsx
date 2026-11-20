@@ -16,6 +16,7 @@ import { savePWATokens } from "@/components/auth/session-refresher"
 import { extractAuthCode, parseRequires2FA, tenantDashboardUrl } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { useIsNativePlatform } from "@/hooks/use-is-native-platform"
+import { useNativeGoogleSignInAvailable } from "@/hooks/use-native-google-sign-in"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 import { tenantLookupOutcome } from "@/lib/tenant-lookup"
 
@@ -55,6 +56,9 @@ function LoginForm() {
   const searchParams = useSearchParams()
   // Google sign-in cannot work inside the native WebView shell
   const isNative = useIsNativePlatform()
+  const nativeGoogle = useNativeGoogleSignInAvailable()
+  // Google is offered on web, or in the native shell when the plugin is installed
+  const googleOffered = !isNative || nativeGoogle
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -288,7 +292,7 @@ function LoginForm() {
           setShowResendOption(false)
         } else if (code.includes("USE_GOOGLE_LOGIN")) {
           setError(
-            isNative
+            !googleOffered
               ? "Esta cuenta fue creada con Google. En la app, creá una contraseña con «¿Olvidaste tu contraseña?» y entrá con ella."
               : "Esta cuenta fue creada con Google. Usá el botón \"Continuar con Google\" para iniciar sesión."
           )
@@ -510,12 +514,12 @@ function LoginForm() {
           </form>
 
           {/* Separador + Google */}
-          {isNative && (
+          {!googleOffered && (
             <p className="mt-6 text-center text-sm text-muted-foreground">
               ¿Te registraste con Google? Tocá «¿Olvidaste tu contraseña?» para crear una y entrar desde la app.
             </p>
           )}
-          {!isNative && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          {googleOffered && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
             <>
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">

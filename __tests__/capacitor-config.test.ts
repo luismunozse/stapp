@@ -25,3 +25,17 @@ describe('capacitor.config', () => {
     expect(splash?.launchShowDuration).toBeLessThanOrEqual(8000)
   })
 })
+
+describe('capacitor.config SocialLogin', () => {
+  it('enables only the Google provider of the social login plugin', () => {
+    const social = config.plugins?.SocialLogin as
+      | { providers?: Record<string, boolean> }
+      | undefined
+    expect(social?.providers).toEqual({
+      google: true,
+      facebook: false,
+      apple: false,
+      twitter: false,
+    })
+  })
+})

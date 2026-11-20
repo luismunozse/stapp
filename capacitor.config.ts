@@ -33,6 +33,15 @@ const config: CapacitorConfig = {
     Camera: {
       permissions: ['camera', 'photos'],
     },
+    SocialLogin: {
+      // Google only; the plugin skips initializing the other providers.
+      providers: {
+        google: true,
+        facebook: false,
+        apple: false,
+        twitter: false,
+      },
+    },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },

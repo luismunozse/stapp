@@ -21,6 +21,7 @@ import { BusinessLogo } from "@/components/shared/business-logo"
 import { trackAdsConversion, trackEvent } from "@/lib/gtag"
 import { getStoredUtmParams } from "@/lib/utm"
 import { useIsNativePlatform } from "@/hooks/use-is-native-platform"
+import { useNativeGoogleSignInAvailable } from "@/hooks/use-native-google-sign-in"
 
 interface FormData {
   orgNombre: string
@@ -47,6 +48,9 @@ function sanitizeSlug(input: string): string {
 function RegistroForm() {
   // Google sign-in cannot work inside the native WebView shell
   const isNative = useIsNativePlatform()
+  const nativeGoogle = useNativeGoogleSignInAvailable()
+  // Google is offered on web, or in the native shell when the plugin is installed
+  const googleOffered = !isNative || nativeGoogle
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -421,7 +425,7 @@ function RegistroForm() {
           <section className="space-y-4" aria-labelledby="paso-cuenta">
             <StepTitle id="paso-cuenta" n={2}>Tu cuenta</StepTitle>
 
-            {!isNative && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+            {googleOffered && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
               <>
                 <Button
                   type="button"
