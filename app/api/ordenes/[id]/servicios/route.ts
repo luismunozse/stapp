@@ -198,7 +198,7 @@ export async function DELETE(
 }
 
 /**
- * "Aplicar al total": escribe la suma de las lineas en el monto vivo de la orden
+ * "Aplicar al total": escribe servicios + repuestos (migracion 419) en el monto vivo de la orden
  * (presupuesto antes de APROBADO, costo_final desde APROBADO).
  *
  * Va por un RPC dedicado y NO por el PUT de /api/ordenes/[id] a proposito: ese
