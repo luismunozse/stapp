@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 import { TICKET_ESTADO, TICKET_PRIORIDAD, TICKET_TIPO } from "@/components/soporte/ticket-config"
+import { TextoConEnlaces } from "@/components/soporte/texto-con-enlaces"
 
 interface TicketData {
   id: string
@@ -412,7 +413,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
                         : "bg-muted"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">{msg.contenido}</p>
+                    <p className="whitespace-pre-wrap"><TextoConEnlaces texto={msg.contenido} /></p>
                     {msg.adjuntos && msg.adjuntos.length > 0 && (
                       <div className="flex gap-2 flex-wrap mt-2">
                         {msg.adjuntos.map((adj) => (

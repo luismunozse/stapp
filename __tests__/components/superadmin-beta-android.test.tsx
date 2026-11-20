@@ -176,4 +176,30 @@ describe("Superadmin: Beta Android", () => {
     await screen.findByText("Ana Gómez")
     expect(screen.queryByRole("button", { name: /Marcar como agregados/ })).not.toBeInTheDocument()
   })
+  it("Contactar abre el mensaje con el enlace de invitación y lo manda al chat del usuario", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return respuesta({ ticketId: "t1", nuevo: true })
+      return respuesta({ testers: TESTERS })
+    })
+    render(<BetaAndroidContent />)
+    await screen.findByText("Ana Gómez")
+    fireEvent.click(screen.getByRole("button", { name: "Contactar a Ana Gómez" }))
+
+    const texto = (await screen.findByLabelText("Mensaje")) as HTMLTextAreaElement
+    expect(texto.value).toContain("Hola Ana")
+    expect(texto.value).toContain("https://play.google.com/apps/testing/ar.com.stapp.app")
+    expect(texto.value).toContain("ana@gmail.com")
+
+    fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje" }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST")
+      expect(post).toBeTruthy()
+      expect(post![0]).toBe("/api/superadmin/beta-android/contactar")
+      expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ id: "b1", mensaje: texto.value })
+    })
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    // Queda el acceso a la conversación en la fila.
+    expect(await screen.findByRole("link", { name: "Ver chat" })).toHaveAttribute("href", "/superadmin/soporte/t1")
+  })
 })
