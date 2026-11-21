@@ -43,6 +43,7 @@ import {
   AlertTriangle,
   Layers,
   ArrowRight,
+  ListChecks,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -106,6 +107,16 @@ import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
 import { remitoActivo } from "@/lib/facturacion/remito-activo"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { cn } from "@/lib/utils"
+
+// Mobile/app sections of the order detail (desktop shows everything at once)
+type SeccionMovil = "resumen" | "detalle" | "trabajo" | "cobro"
+const SECCIONES_MOVIL: { key: SeccionMovil; label: string; icon: typeof ListChecks }[] = [
+  { key: "resumen", label: "Resumen", icon: ListChecks },
+  { key: "detalle", label: "Detalle", icon: Smartphone },
+  { key: "trabajo", label: "Trabajo", icon: Wrench },
+  { key: "cobro", label: "Cobro", icon: DollarSign },
+]
 
 // Orden de los estados en el flujo normal
 const estadoFlow: EstadoOrden[] = [
@@ -142,6 +153,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   // Hoja de esta impresión: arranca en la del taller y solo cambia lo que se le pide al server.
   const ordenPapel = useOrdenPapel()
   const [activeTab, setActiveTab] = useState("repuestos")
+  // Mobile/app only: the detail is split into sections so the screen isn't one
+  // endless scroll. Desktop (lg+) ignores this and shows the two-column layout.
+  const [seccionMovil, setSeccionMovil] = useState<SeccionMovil>("resumen")
+  const soloEnMovil = (seccion: SeccionMovil) => (seccionMovil === seccion ? "" : "max-lg:hidden")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
@@ -731,18 +746,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4 lg:gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 lg:gap-4">
+        <div className="flex items-start gap-3 lg:items-center lg:gap-4">
           <Link href={listaHref} aria-label="Volver a órdenes">
             <IconButton label="Volver a órdenes" variant="outline">
               <ArrowLeft className="h-4 w-4" />
             </IconButton>
           </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-xl font-bold lg:text-2xl">
                 Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
               </h1>
               <OrderStatusBadge status={orden.estado} showIcon />
@@ -787,7 +802,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Mobile/app: one swipeable row instead of 3–4 wrapped rows of buttons */}
+        <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:pb-0">
           {/* Sin el número en el navegador no hay a quién escribirle (permiso 416). */}
           {!telefonoOculto && (
           <WhatsAppDialog
@@ -1044,9 +1060,41 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         />
       )}
 
+      {/* Mobile/app: section switcher */}
+      <div
+        role="tablist"
+        aria-label="Secciones de la orden"
+        className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1 lg:hidden"
+      >
+        {SECCIONES_MOVIL.map((s) => {
+          const Icon = s.icon
+          const activa = seccionMovil === s.key
+          const alerta = s.key === "cobro" && costoFinalNum > 0 && !estadoSinCobro && saldoPendiente > 0
+          return (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              aria-selected={activa}
+              onClick={() => setSeccionMovil(s.key)}
+              className={cn(
+                "relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-xs font-medium transition-colors",
+                activa ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {s.label}
+              {alerta && (
+                <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-amber-500" aria-label="Saldo pendiente" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Progress Bar */}
       {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && !isRetiro && !isSinCobro && (
-        <div className="space-y-2">
+        <div className={cn("space-y-2", soloEnMovil("resumen"))}>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Progreso</span>
             <span>{progressPercentage}%</span>
@@ -1060,8 +1108,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       )}
 
-      {/* Mobile: Estado + Tecnico arriba */}
-      <div className="lg:hidden space-y-4">
+      {/* Mobile: Resumen — estado, técnico, link de seguimiento */}
+      <div className={cn("lg:hidden space-y-3", soloEnMovil("resumen"))}>
         <OrdenEstadoCard
           estado={orden.estado}
           fechaIngreso={orden.fechaIngreso}
@@ -1086,25 +1134,48 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onTomar={handleTomarOrden}
         />
         {(orden as any).recibidoPor && (
+          <p className="px-1 text-xs text-muted-foreground">
+            Recibido por <span className="font-medium text-foreground">{(orden as any).recibidoPor.nombre}</span>
+          </p>
+        )}
+        {seguimientoUrl && (
           <Card>
-            <CardContent className="p-4">
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                Recibido por
+            <CardContent className="p-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <Link2 className="h-3.5 w-3.5" />
+                Link de seguimiento
               </div>
-              <p className="text-sm font-medium">{(orden as any).recibidoPor.nombre}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={handleCopyLink}>
+                  {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
+                  {linkCopied ? "Copiado" : "Copiar link"}
+                </Button>
+                {!telefonoOculto && (
+                  <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
+                    <ExternalLink className="h-4 w-4 mr-1.5" />
+                    WhatsApp
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
+        {isAdmin && <DobleCargaWarning orden={orden} />}
       </div>
 
       {/* Main Content - 2 columns. grid-cols-1 (minmax(0,1fr)) keeps the scrolling tab bar from widening the page on mobile */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column - Info */}
-        <div className="lg:col-span-2 space-y-6">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-6 lg:grid-cols-3",
+          (seccionMovil === "resumen" || seccionMovil === "cobro") && "max-lg:hidden"
+        )}
+      >
+        {/* Left Column - Info. flex+gap (not space-y) so sections hidden on mobile leave no stray margin */}
+        <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-6">
           {/* Main Info Card */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="grid gap-6 md:grid-cols-2">
+          <Card className={soloEnMovil("detalle")}>
+            <CardContent className="p-4 lg:p-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:gap-6">
                 {/* Cliente */}
                 <div className="space-y-3">
                   <FieldSectionLabel icon={User}>Cliente</FieldSectionLabel>
@@ -1281,10 +1352,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           </Card>
 
           {/* Estado físico: daños al recibir (firmados) y detectados en diagnóstico */}
-          <EstadoFisicoCard ordenId={ordenId} estado={orden.estado} onCargado={setEstadoFisicoTicket} />
+          <div className={soloEnMovil("detalle")}>
+            <EstadoFisicoCard ordenId={ordenId} estado={orden.estado} onCargado={setEstadoFisicoTicket} />
+          </div>
 
           {/* Tabs: Repuestos, Fotos, Checklist, Cotizaciones, Historial */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className={soloEnMovil("trabajo")}>
             <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="repuestos" className="gap-2">
                 <Package className="h-4 w-4" />
@@ -1371,11 +1444,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Garantia (no aplica para retiros ni sin cobro) */}
           {!isRetiro && !isSinCobro && (
+            <div className={soloEnMovil("trabajo")}>
             <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} isAdmin={isAdmin} />
+            </div>
           )}
 
           {/* Notas de crédito: las ve quien ve la orden (spec, Permisos). */}
-          <NotasCreditoOrden ordenId={orden.id} />
+          <div className={soloEnMovil("trabajo")}>
+            <NotasCreditoOrden ordenId={orden.id} />
+          </div>
         </div>
 
         {/* Right Column - Management (hidden on mobile, shown above) */}
@@ -1483,32 +1560,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       </div>
 
-      {isAdmin && (
-        <div className="lg:hidden">
-          <DobleCargaWarning orden={orden} />
-        </div>
-      )}
 
-      {/* Mobile: Costos (below content) */}
-      <div className="lg:hidden space-y-4">
-        {seguimientoUrl && (
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={handleCopyLink}>
-                  {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
-                  {linkCopied ? "Copiado" : "Copiar link"}
-                </Button>
-                {!telefonoOculto && (
-                  <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
-                    <ExternalLink className="h-4 w-4 mr-1.5" />
-                    WhatsApp
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* Mobile: Cobro — pagos informados, costos, comisión */}
+      <div className={cn("lg:hidden space-y-3", soloEnMovil("cobro"))}>
         {puedeCobrar && userRole !== "TECNICO" && (
           <PagosInformadosCard ordenId={orden.id} onResuelto={fetchOrden} />
         )}

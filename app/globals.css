@@ -359,7 +359,7 @@
  */
 @layer utilities {
   .text-headline {
-    @apply text-2xl font-semibold tracking-tight sm:text-3xl;
+    @apply text-xl font-semibold tracking-tight sm:text-3xl;
   }
 
   .text-title {

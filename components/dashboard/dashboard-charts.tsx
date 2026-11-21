@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import dynamic from "next/dynamic"
+import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import type { EstadoOrden } from "@/types"
@@ -67,6 +69,14 @@ interface DashboardChartsProps {
   children?: React.ReactNode
 }
 
+type ChartKey = "estado" | "ingresos" | "tecnico"
+
+const CHART_TABS: { key: ChartKey; label: string }[] = [
+  { key: "estado", label: "Estados" },
+  { key: "ingresos", label: "Ingresos" },
+  { key: "tecnico", label: "Técnicos" },
+]
+
 export function DashboardCharts({
   ordenesPorEstado,
   ingresosUltimos7Dias,
@@ -74,19 +84,49 @@ export function DashboardCharts({
   ordenesPorTecnico,
   children,
 }: DashboardChartsProps) {
+  // Mobile/app: one chart at a time behind a segmented control instead of
+  // three stacked ~300px cards. md+ keeps the 2×2 grid.
+  const [chart, setChart] = useState<ChartKey>("estado")
+  const mobileHidden = (key: ChartKey) => chart !== key && "max-md:hidden"
+
   return (
-    <>
-      {/* Gráficos principales */}
-      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
-        <OrdenesPorEstadoChart data={ordenesPorEstado} />
-        <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
+    <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+      {/* Recent orders lead on mobile: it's what people open the app for */}
+      {children && <div className="max-md:order-first md:order-last [&>*]:h-full">{children}</div>}
+
+      <div
+        role="tablist"
+        aria-label="Gráficos"
+        className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1 md:hidden"
+      >
+        {CHART_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={chart === t.key}
+            onClick={() => setChart(t.key)}
+            className={cn(
+              "rounded-md py-1.5 text-xs font-medium transition-colors",
+              chart === t.key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Órdenes por técnico + contenido adicional */}
-      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
-        <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
-        {children}
+      <div className={cn("[&>*]:h-full", mobileHidden("estado"))}>
+        <OrdenesPorEstadoChart data={ordenesPorEstado} />
       </div>
-    </>
+      <div className={cn("[&>*]:h-full", mobileHidden("ingresos"))}>
+        <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
+      </div>
+      <div className={cn("[&>*]:h-full", mobileHidden("tecnico"))}>
+        <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
+      </div>
+    </div>
   )
 }

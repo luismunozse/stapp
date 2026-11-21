@@ -43,7 +43,7 @@ describe("ReportesAvanzadosView — BranchScopeLabel in header", () => {
     const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
     const { container } = render(<ReportesAvanzadosView />)
 
-    const header = container.querySelector(".space-y-6 > div")
+    const header = container.querySelector(".lg\\:space-y-6 > div")
     expect(header).not.toBeNull()
     // The label should be inside the header
     expect(header?.querySelector("[data-testid='branch-scope-label']")).not.toBeNull()

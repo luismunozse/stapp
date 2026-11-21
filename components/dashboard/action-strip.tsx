@@ -144,7 +144,7 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
   return (
     <div
       role="list"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -155,7 +155,7 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
             href={item.href}
             role="listitem"
             className={cn(
-              "group flex items-start gap-3 rounded-xl border p-4",
+              "group flex items-start gap-2 rounded-xl border p-3 sm:gap-3 sm:p-4",
               "motion-safe:transition motion-safe:duration-150",
               "motion-safe:active:scale-[0.98]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -165,7 +165,7 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
           >
             <Icon
               className={cn(
-                "mt-0.5 h-5 w-5 shrink-0",
+                "mt-0.5 h-4 w-4 shrink-0 sm:h-5 sm:w-5",
                 "motion-safe:transition-transform motion-safe:duration-150",
                 "motion-safe:[@media(hover:hover)]:group-hover:scale-110",
                 t.head,
@@ -174,7 +174,7 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
             />
             <div className="min-w-0">
               <p className={cn("text-sm font-semibold leading-tight", t.head)}>{item.label}</p>
-              <p className={cn("mt-0.5 text-sm leading-snug", t.sub)}>{item.value}</p>
+              <p className={cn("mt-0.5 text-xs leading-snug sm:text-sm", t.sub)}>{item.value}</p>
             </div>
           </Link>
         )

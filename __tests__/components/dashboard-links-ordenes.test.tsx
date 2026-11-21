@@ -38,8 +38,12 @@ describe("links del dashboard a la lista de órdenes", () => {
 
   it("quick actions: 'Ver cobros pendientes' llega filtrado", () => {
     render(<QuickActions cobrosPendientesCount={2} />)
-    const link = screen.getByRole("link", { name: /Ver cobros pendientes/ })
-    expect(link).toHaveAttribute("href", "/ordenes?filtro=pendientesCobro")
+    // Two renders of the same action: icon tile (mobile) and pill (desktop)
+    const links = screen.getAllByRole("link", { name: /Ver cobros pendientes/ })
+    expect(links.length).toBeGreaterThan(0)
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/ordenes?filtro=pendientesCobro")
+    }
   })
 
   it("la página del dashboard no arma query strings a mano hacia /ordenes", () => {

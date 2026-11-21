@@ -246,7 +246,12 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
   }
 
   // variant === "top"
+  // The banner is fixed, so it reserves its own room under the header with an
+  // in-flow spacer: the layout no longer pads for it up front, which left a
+  // 2.5rem gap in the native app (where the banner never shows).
   return (
+    <>
+    <div aria-hidden className="lg:hidden h-10" />
     <div className="lg:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] left-0 right-0 z-40 flex justify-center px-2">
       <div className="relative w-full max-w-sm rounded-xl border border-primary/20 bg-card p-3 shadow-lg">
         <button
@@ -262,5 +267,6 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
         </div>
       </div>
     </div>
+    </>
   )
 }

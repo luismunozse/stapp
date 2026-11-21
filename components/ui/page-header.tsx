@@ -70,7 +70,9 @@ export function PageHeader({
           {titleAddon}
         </div>
         {description && (
-          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+          // Mobile/app: title only — the supporting line costs a row on every
+          // screen and rarely adds anything the title doesn't already say.
+          <p className="hidden max-w-2xl text-pretty text-sm text-muted-foreground sm:block">
             {description}
           </p>
         )}

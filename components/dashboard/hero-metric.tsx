@@ -22,8 +22,8 @@ export function HeroMetric({
   sparkline,
 }: HeroMetricProps) {
   return (
-    <Card className="p-5 sm:p-6 lg:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <Card className="p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-row items-end justify-between gap-3 sm:gap-4">
         {/* Left column: label → hero number → delta chip → secondary */}
         <div className="min-w-0 flex-1">
           {/* Refined cap label — widest tracking for quiet authority */}
@@ -32,13 +32,13 @@ export function HeroMetric({
           </p>
 
           {/* Hero number + delta on the same baseline row */}
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:mt-2 sm:gap-y-2">
             {/*
              * tabular-nums prevents layout shift as digits change.
              * tracking-tight counters the looser default letterspacing
              * at large sizes so digits feel cohesive, not floating.
              */}
-            <span className="text-4xl font-bold tracking-tight tabular-nums text-foreground sm:text-5xl lg:text-6xl">
+            <span className="text-3xl font-bold tracking-tight tabular-nums text-foreground sm:text-5xl lg:text-6xl">
               {value}
             </span>
 
@@ -77,7 +77,7 @@ export function HeroMetric({
           </div>
 
           {/* Secondary stat: muted label + prominent value */}
-          <p className="mt-2.5 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground sm:mt-2.5">
             {secondaryLabel}:{" "}
             <span className="font-semibold text-foreground">
               {secondaryValue}
@@ -89,7 +89,7 @@ export function HeroMetric({
         {sparkline.length > 0 && (
           <Sparkline
             data={sparkline}
-            className="mt-2 h-14 w-full max-w-[260px] flex-shrink-0 sm:mt-0 sm:w-[200px] lg:w-[260px]"
+            className="h-12 w-24 flex-shrink-0 sm:h-14 sm:w-[200px] lg:w-[260px]"
           />
         )}
       </div>
