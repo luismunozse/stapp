@@ -110,14 +110,17 @@ export function CajaResumen({
             : "",
         ]
           .filter(Boolean)
-          .join(" ")}
+          .join(" · ")}
         icon={Banknote}
         tone="default"
       />
       {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
-        <div className="mt-2 p-2 bg-destructive/10 dark:bg-destructive/15 border border-destructive/25 rounded-lg inline-block">
-          <div className="text-xs text-muted-foreground">Costo terminales</div>
-          <div className="text-sm font-medium text-destructive-text">-{formatPrice(data.totalCostosFinancieros)}</div>
+        // Phones: one full-width line instead of a lone half-width box
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg border border-destructive/25 bg-destructive/10 p-2 dark:bg-destructive/15 sm:mt-2 sm:inline-block sm:space-y-0">
+          <div className="text-xs text-muted-foreground">
+            Costo terminales{" "}
+            <span className="text-sm font-medium text-destructive-text sm:block">-{formatPrice(data.totalCostosFinancieros)}</span>
+          </div>
           <div className="text-xs text-muted-foreground">
             Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
           </div>

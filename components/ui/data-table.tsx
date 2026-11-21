@@ -383,7 +383,8 @@ function DataTablePagination({
   const end = Math.min(page * pageSize, total)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+    // Phones: one row (count · arrows), and nothing at all for a single page
+    <div className={cn("flex flex-row items-center justify-between gap-2 px-2 sm:gap-4", totalPages <= 1 && "max-sm:hidden")}>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span className="hidden sm:inline">
           Mostrando {start} - {end} de {total}

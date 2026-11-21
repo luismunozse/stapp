@@ -123,7 +123,7 @@ export default function CajaPage() {
     <PageShell
       title="Caja diaria"
       description="Resumen de ingresos y egresos del día"
-      actions={isAdmin ? <ExportButton fecha={fecha} /> : null}
+      actions={isAdmin ? <ExportButton fecha={fecha} className="max-sm:hidden" /> : null}
     >
       {/* Banner de sesión */}
       {puedeOperarCaja && (
@@ -154,6 +154,8 @@ export default function CajaPage() {
             Hoy
           </Button>
         )}
+        {/* Phones: export rides in the date row (the header slot would cost a whole row) */}
+        {isAdmin && <ExportButton fecha={fecha} iconOnly className="h-10 w-10 shrink-0 p-0 sm:hidden" />}
       </div>
 
       {loading && !data ? (

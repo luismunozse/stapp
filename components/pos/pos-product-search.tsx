@@ -601,21 +601,19 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 const product = tarjeta.producto
                 const motivoNoVendible = noVendible?.(product) ?? null
                 return (
+                // The stock popover button sits next to (over) the card, not
+                // inside it: a <button> inside a <button> is invalid HTML and
+                // touch devices may route the tap to the wrong one.
+                <div key={product.id} className="relative flex">
                 <button
-                  key={product.id}
                   type="button"
                   disabled={motivoNoVendible !== null}
                   onClick={() => handleAdd(product)}
                   className={cn(
-                    "group relative flex flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]",
+                    "group relative flex w-full flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]",
                     motivoNoVendible !== null && "cursor-not-allowed bg-muted/40 hover:border-border hover:shadow-none active:scale-100"
                   )}
                 >
-                  {/* Cross-sucursal stock popover — read only, no add-to-cart */}
-                  <StockOtrasSucursales
-                    inventarioId={product.id}
-                    productName={product.nombre}
-                  />
 
                   <div className="flex items-center gap-1.5 mb-1">
                     <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -650,6 +648,12 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                   </div>
                   )}
                 </button>
+                {/* Cross-sucursal stock popover — read only, no add-to-cart */}
+                <StockOtrasSucursales
+                  inventarioId={product.id}
+                  productName={product.nombre}
+                />
+                </div>
                 )
               })}
             </div>

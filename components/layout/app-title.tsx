@@ -31,13 +31,15 @@ function subscribe(listener: () => void) {
  * app bar's back arrow goes) for this route.
  */
 export function AppTitleSync({ title, backHref }: { title: string; backHref?: string }) {
-  const path = usePathname()
   useEffect(() => {
+    // Read the path here rather than with usePathname(): this sits inside many
+    // screens, and the URL is already the new one by the time effects run.
+    const path = window.location.pathname
     publish({ title, path, backHref })
     return () => {
       if (current?.path === path && current.title === title) publish(null)
     }
-  }, [title, path, backHref])
+  }, [title, backHref])
   return null
 }
 

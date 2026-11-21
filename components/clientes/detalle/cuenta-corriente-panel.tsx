@@ -282,15 +282,15 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
         ) : (
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {movimientos.map((mov) => (
-              <div key={mov.id} className="flex items-start justify-between p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-start gap-2">
+              <div key={mov.id} className="flex items-start justify-between gap-2 p-3 bg-muted/50 rounded-lg">
+                <div className="flex min-w-0 flex-1 items-start gap-2">
                   {mov.monto >= 0 ? (
                     <ArrowDownCircle className="h-4 w-4 text-success-600 mt-0.5 shrink-0" />
                   ) : (
                     <ArrowUpCircle className="h-4 w-4 text-destructive-text mt-0.5 shrink-0" />
                   )}
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className={cn("font-medium text-sm", mov.monto >= 0 ? "text-success-600" : "text-destructive-text")}>
                         {mov.monto >= 0 ? "+" : ""}{formatPrice(Math.abs(mov.monto))}
                       </span>
@@ -317,10 +317,13 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                {/* Phones: balance on top, actions under it — side by side they
+                    pushed the print button off the right edge */}
+                <div className="flex shrink-0 flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-1">
                   <div className="text-xs text-muted-foreground whitespace-nowrap">
                     Saldo: {formatPrice(mov.saldoPosterior)}
                   </div>
+                  <div className="-mr-1.5 flex items-center sm:mr-0">
                   {TIPOS_CON_RECIBO.includes(mov.tipo) && (
                     <Button
                       variant="ghost"
@@ -351,6 +354,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false 
                       <Undo2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  </div>
                 </div>
               </div>
             ))}

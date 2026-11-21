@@ -41,7 +41,9 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      {/* Phones: title on its own line and a full-width button — side by side
+          the title broke into three lines */}
+      <CardHeader className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="text-base">Órdenes pendientes de cobro</CardTitle>
         {ordenes.length > 0 && puedeCobrar && (
           <Button size="sm" onClick={() => setShowCobrar(true)} className="gap-1.5">
