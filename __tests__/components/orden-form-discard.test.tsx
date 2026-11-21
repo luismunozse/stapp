@@ -205,6 +205,33 @@ describe("OrdenForm — descartar un borrador", () => {
     await screen.findByText(/Paso 3\/3/)
   }
 
+  it("en la app, el botón Atrás de Android vuelve un paso y en el paso 1 cierra el alta", async () => {
+    window.localStorage.setItem(DRAFT_KEY, draftDelClienteX())
+    const onClose = vi.fn()
+    const { OrdenForm } = await import("@/components/ordenes/orden-form")
+    render(
+      <ModalProvider>
+        <OrdenForm inSheet onClose={onClose} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    fireEvent.click(screen.getByRole("button", { name: "Agregar detalles" }))
+    await screen.findByText(/Paso 2\/3/)
+
+    const primero = new Event("app:back", { cancelable: true })
+    act(() => {
+      window.dispatchEvent(primero)
+    })
+    expect(primero.defaultPrevented).toBe(true)
+    await screen.findByText(/Paso 1\/3/)
+    expect(onClose).not.toHaveBeenCalled()
+
+    act(() => {
+      window.dispatchEvent(new Event("app:back", { cancelable: true }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it("no arrastra la firma del cliente descartado a la orden siguiente", async () => {
     window.localStorage.setItem(DRAFT_KEY, draftDelClienteX())
 
