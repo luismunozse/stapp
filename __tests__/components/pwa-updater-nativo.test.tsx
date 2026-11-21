@@ -25,6 +25,7 @@ describe("PWAUpdater en la app nativa", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     document.body.innerHTML = ""
+    sessionStorage.clear()
     Object.defineProperty(window, "location", {
       value: { ...window.location, reload, pathname: "/ordenes" },
       configurable: true,
@@ -45,6 +46,15 @@ describe("PWAUpdater en la app nativa", () => {
     dialogo.setAttribute("role", "dialog")
     dialogo.setAttribute("data-state", "open")
     document.body.appendChild(dialogo)
+    render(<PWAUpdater />)
+    volverALaApp()
+    await waitFor(() => expect(h.toast).toHaveBeenCalled())
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it("no recarga dos veces por la misma versión (sin bucles)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ buildId: "nuevo" }) }))
+    sessionStorage.setItem("stapp-native-reload-for", "nuevo")
     render(<PWAUpdater />)
     volverALaApp()
     await waitFor(() => expect(h.toast).toHaveBeenCalled())

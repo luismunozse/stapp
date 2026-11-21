@@ -1,7 +1,9 @@
 /**
- * Un miembro logueado del taller que abre /login va a su panel. La app nativa
- * cae en /login en cada arranque (y después de cada actualización): sin esto,
- * una sesión de 30 días todavía válida mostraba el formulario vacío.
+ * Regresión: /login NO redirige al panel solo porque haya cookie de sesión.
+ * El panel revalida la sesión contra la base (auth(), la fila del usuario, rol
+ * y sucursal) y manda una sesión vieja a /login; si el proxy la devolvía al
+ * panel, los dos rebotaban sin fin y la app nativa dejaba de abrir. La app
+ * llega al panel por /app-entry → /dashboard.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
@@ -30,62 +32,32 @@ import { sessionCookieName } from "@/lib/session-cookie"
 
 const HOST = "taller.stapp.com.ar"
 
-function req(path: string, method = "GET") {
+function req(path: string) {
   return new NextRequest(`https://${HOST}${path}`, {
-    method,
     headers: { host: HOST, cookie: `${sessionCookieName()}=jwt` },
   })
 }
 
-describe("proxy: /login con sesión activa", () => {
+describe("proxy: /login con cookie de sesión", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getToken.mockResolvedValue({ id: "u1", organizationId: "org-1", role: "ADMIN" })
     getTenantStatusBySlug.mockResolvedValue({ kind: "ok", status: { id: "org-1", activo: true } })
   })
 
-  it("manda al panel en vez de mostrar el formulario", async () => {
+  it("muestra el login (sin redirigir): el panel decide si la sesión sigue valiendo", async () => {
     const res = await proxy(req("/login"))
-    expect(res.status).toBe(307)
-    expect(res.headers.get("location")).toBe(`https://${HOST}/dashboard`)
+    expect(res.headers.get("location")).toBeNull()
   })
 
-  it("respeta un callbackUrl seguro", async () => {
-    const res = await proxy(req("/login?callbackUrl=%2Fordenes%2F123"))
-    expect(res.headers.get("location")).toBe(`https://${HOST}/ordenes/123`)
+  it("tampoco con callbackUrl (es justo el rebote del panel)", async () => {
+    const res = await proxy(req("/login?callbackUrl=%2Fdashboard"))
+    expect(res.headers.get("location")).toBeNull()
   })
 
-  it("ignora un callbackUrl externo (open redirect)", async () => {
-    const res = await proxy(req("/login?callbackUrl=%2F%2Fevil.com"))
-    expect(res.headers.get("location")).toBe(`https://${HOST}/dashboard`)
-  })
-
-  it("sin sesión muestra el login", async () => {
+  it("el panel sin cookie sigue mandando al login", async () => {
     getToken.mockResolvedValue(null)
-    const res = await proxy(req("/login"))
-    expect(res.headers.get("location")).toBeNull()
-  })
-
-  it("con la sesión de otra organización muestra el login (re-loguearse acá)", async () => {
-    getToken.mockResolvedValue({ id: "u1", organizationId: "org-2", role: "ADMIN" })
-    const res = await proxy(req("/login"))
-    expect(res.headers.get("location")).toBeNull()
-  })
-
-  it("con el refresh vencido muestra el login (no rebota entre login y panel)", async () => {
-    getToken.mockResolvedValue({ id: "u1", organizationId: "org-1", role: "ADMIN", error: "RefreshTokenExpired" })
-    const res = await proxy(req("/login"))
-    expect(res.headers.get("location")).toBeNull()
-  })
-
-  it("si no se pudo verificar el taller, no adivina: muestra el login", async () => {
-    getTenantStatusBySlug.mockResolvedValue({ kind: "error" })
-    const res = await proxy(req("/login"))
-    expect(res.headers.get("location")).toBeNull()
-  })
-
-  it("el POST del formulario no se redirige", async () => {
-    const res = await proxy(req("/login", "POST"))
-    expect(res.headers.get("location")).toBeNull()
+    const res = await proxy(req("/dashboard"))
+    expect(res.headers.get("location")).toMatch(/\/login\?callbackUrl=%2Fdashboard$/)
   })
 })

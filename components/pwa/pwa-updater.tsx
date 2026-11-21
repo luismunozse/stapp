@@ -7,6 +7,7 @@ import { isNativePlatform } from "@/lib/capacitor"
 const UPDATE_TOAST_ID = "sw-update-available"
 const VERSION_CHECK_INTERVAL = 5 * 60 * 1000 // 5 min
 const LOADED_BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"
+const NATIVE_RELOAD_KEY = "stapp-native-reload-for"
 
 /**
  * Dueño del ciclo de vida del Service Worker + detección de nueva versión.
@@ -72,8 +73,27 @@ function useNativeUpdate() {
         if (!res.ok) return
         const { buildId } = (await res.json()) as { buildId?: string }
         if (!buildId || buildId === "dev" || buildId === LOADED_BUILD_ID) return
-        if (alVolver && !hayTrabajoEnCurso()) recargar()
-        else avisar()
+        // At most one automatic reload per new version: if the page still
+        // reports the old build after reloading (a cache in between), offer
+        // the button instead of reloading forever.
+        let yaRecargada = false
+        try {
+          yaRecargada = sessionStorage.getItem(NATIVE_RELOAD_KEY) === buildId
+        } catch {
+          yaRecargada = true
+        }
+        if (alVolver && !yaRecargada && !hayTrabajoEnCurso()) {
+          try {
+            sessionStorage.setItem(NATIVE_RELOAD_KEY, buildId)
+          } catch {
+            /* without storage there is no guard: don't auto-reload */
+            avisar()
+            return
+          }
+          recargar()
+        } else {
+          avisar()
+        }
       } catch {
         /* sin conexión: reintenta en el próximo ciclo */
       }
