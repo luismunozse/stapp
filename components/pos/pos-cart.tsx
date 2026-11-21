@@ -113,6 +113,9 @@ export function PosCart({
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
   const [editingQtyId, setEditingQtyId] = useState<string | null>(null)
+  // Mobile/app: the global-discount controls stay folded so the item list keeps
+  // the screen. They open on demand, and always while a discount is applied.
+  const [descuentoMovilAbierto, setDescuentoMovilAbierto] = useState(false)
   const [editingQtyValue, setEditingQtyValue] = useState("")
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
@@ -245,7 +248,8 @@ export function PosCart({
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="p-3 border-b space-y-2">
-        <div className="flex items-center justify-between">
+        {/* Title row: desktop only — on mobile the bottom tab already says "Carrito" */}
+        <div className="flex items-center justify-between max-lg:hidden">
           <div className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-primary" />
             <h2 className="font-semibold text-lg">Carrito</h2>
@@ -311,6 +315,16 @@ export function PosCart({
             >
               <X className="h-3.5 w-3.5" />
             </IconButton>
+          )}
+          {items.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 shrink-0 px-2 text-xs text-destructive-text lg:hidden"
+              onClick={onClearCart}
+            >
+              Vaciar
+            </Button>
           )}
         </div>
 
@@ -672,8 +686,24 @@ export function PosCart({
       {/* Footer: Totals + Actions */}
       <div className="border-t bg-muted/30 shrink-0">
         {/* Global discount control */}
+        {items.length > 0 && !descuentoGlobal && (
+          <button
+            type="button"
+            onClick={() => setDescuentoMovilAbierto((v) => !v)}
+            aria-expanded={descuentoMovilAbierto}
+            className="flex w-full items-center gap-1 px-4 pt-2 text-xs font-medium text-primary lg:hidden"
+          >
+            {descuentoMovilAbierto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            Descuento global
+          </button>
+        )}
         {items.length > 0 && (
-          <div className="px-4 pt-3 space-y-1.5">
+          <div
+            className={cn(
+              "px-4 pt-2 space-y-1.5 lg:pt-3",
+              !descuentoMovilAbierto && !descuentoGlobal && "max-lg:hidden"
+            )}
+          >
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-muted-foreground shrink-0">Descuento global:</span>
               <div className="flex items-center rounded-md border overflow-hidden h-7">
@@ -717,7 +747,7 @@ export function PosCart({
               value={descuentoMotivo}
               onChange={(e) => onSetDescuentoMotivo(e.target.value)}
               placeholder="Motivo del descuento (opcional)"
-              className="h-7 text-xs"
+              className={cn("h-7 text-xs", !descuentoGlobal && !descuentoMotivo && "max-lg:hidden")}
             />
           </div>
         )}
@@ -729,10 +759,13 @@ export function PosCart({
               const t = computeVentaTotals(items, descuentoGlobal, fiscal)
               return (
                 <>
-                  <TotalRow
-                    label={`Subtotal (${items.reduce((s, i) => s + i.cantidad, 0)} items)`}
-                    amount={formatPrice(t.subtotal)}
-                  />
+                  {/* Mobile: subtotal only when something sits between it and the total */}
+                  <div className={cn(t.descuentoTotal === 0 && t.iva === 0 && "max-lg:hidden")}>
+                    <TotalRow
+                      label={`Subtotal (${items.reduce((s, i) => s + i.cantidad, 0)} items)`}
+                      amount={formatPrice(t.subtotal)}
+                    />
+                  </div>
                   {t.descuentoTotal > 0 && (
                     <TotalRow
                       label="Descuento"
@@ -765,22 +798,47 @@ export function PosCart({
 
         {/* Action buttons */}
         <div className="p-3 space-y-2">
-          <Button
-            className="w-full h-12 text-lg font-semibold"
-            disabled={items.length === 0 || !!checkoutDisabledReason}
-            onClick={onCheckout}
-            title={checkoutDisabledReason}
-          >
-            <CreditCard className="mr-2 h-5 w-5" />
-            Cobrar (F8)
-          </Button>
+          {/* Mobile: Apartar / Recuperar ride next to Cobrar as icons (one row, not two) */}
+          <div className="flex gap-2">
+            <IconButton
+              label="Apartar venta"
+              variant="outline"
+              className="h-12 w-12 shrink-0 lg:hidden"
+              disabled={items.length === 0}
+              onClick={onHoldSale}
+            >
+              <Pause className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              label="Recuperar venta"
+              variant="outline"
+              className={cn("relative h-12 w-12 shrink-0 lg:hidden", heldCount > 0 && "border-warning text-warning-text")}
+              onClick={onRecallSale}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {heldCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 min-w-5 rounded-full bg-warning px-1 text-center text-xs font-semibold leading-5 text-warning-foreground">
+                  {heldCount}
+                </span>
+              )}
+            </IconButton>
+            <Button
+              className="flex-1 h-12 text-lg font-semibold"
+              disabled={items.length === 0 || !!checkoutDisabledReason}
+              onClick={onCheckout}
+              title={checkoutDisabledReason}
+            >
+              <CreditCard className="mr-2 h-5 w-5" />
+              Cobrar <span className="hidden lg:inline">(F8)</span>
+            </Button>
+          </div>
           {checkoutDisabledReason && (
             <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-warning-700 dark:text-warning-text">
               <WifiOff className="h-3.5 w-3.5 shrink-0" />
               {checkoutDisabledReason}
             </p>
           )}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 max-lg:hidden">
             <Button
               variant="outline"
               size="sm"

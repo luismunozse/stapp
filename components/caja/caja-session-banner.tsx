@@ -34,17 +34,17 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
 
   if (!sesion) {
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-warning/40 dark:border-warning/30 bg-warning-50 dark:bg-warning/10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-warning-100 dark:bg-warning/20">
+      <div className="flex flex-row items-center justify-between gap-3 p-3 sm:p-4 rounded-lg border-2 border-warning/40 dark:border-warning/30 bg-warning-50 dark:bg-warning/10">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="hidden sm:block p-2 rounded-full bg-warning-100 dark:bg-warning/20">
             <Lock className="h-5 w-5 text-warning-600 dark:text-warning-400" />
           </div>
           <div>
             <span className="font-semibold text-warning-700 dark:text-warning-300">Caja cerrada</span>
-            <p className="text-xs text-warning-600 dark:text-warning-400">Abrí la caja para registrar movimientos del día</p>
+            <p className="hidden sm:block text-xs text-warning-600 dark:text-warning-400">Abrí la caja para registrar movimientos del día</p>
           </div>
         </div>
-        <Button onClick={onAbrir} className="w-full sm:w-auto">
+        <Button onClick={onAbrir} size="sm" className="shrink-0 sm:h-10 sm:px-4">
           <LockOpen className="mr-2 h-4 w-4" />
           Abrir caja
         </Button>
@@ -57,11 +57,11 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
   const horaApertura = formatTimeValue(sesion.openedAt, timezone)
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-success/30 bg-success-50 dark:bg-success/15 dark:border-success/20">
-      <div className="flex items-center gap-3">
-        <LockOpen className="h-5 w-5 text-success-600" />
-        <div>
-          <div className="flex items-center gap-2">
+    <div className="flex flex-row items-center justify-between gap-3 p-3 sm:p-4 rounded-lg border-2 border-success/30 bg-success-50 dark:bg-success/15 dark:border-success/20">
+      <div className="flex min-w-0 items-center gap-3">
+        <LockOpen className="h-5 w-5 shrink-0 text-success-600" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-medium">Caja abierta</span>
             <Badge variant="outline" className="text-success-600 border-success-200">
               Desde {horaApertura}
@@ -73,7 +73,7 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
           </p>
         </div>
       </div>
-      <Button variant="outline" onClick={onCerrar} className="w-full sm:w-auto">
+      <Button variant="outline" onClick={onCerrar} size="sm" className="shrink-0 sm:h-10 sm:px-4">
         <Lock className="mr-2 h-4 w-4" />
         Cerrar caja
       </Button>

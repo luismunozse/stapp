@@ -15,13 +15,13 @@ export default function ClientesPage() {
       title="Clientes"
       description="Gestioná tus clientes y su información"
       actions={
-        <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="gap-1.5 w-full sm:w-auto">
+        <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="hidden gap-1.5 sm:inline-flex">
           <PieChart className="h-4 w-4" />
           Segmentación
         </Button>
       }
     >
-      <ClientesList />
+      <ClientesList onSegmentacion={() => setShowSegmentacion(true)} />
 
       <ClientesSegmentacion open={showSegmentacion} onOpenChange={setShowSegmentacion} />
     </PageShell>

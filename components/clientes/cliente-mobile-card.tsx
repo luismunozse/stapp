@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal, Wrench, Receipt } from "lucide-react"
+import { User, Building2, Phone, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal, Wrench, Receipt } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
@@ -45,7 +45,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
   // navigates with real link semantics; interactive children sit above it at z-10.
   return (
     <Card className="relative active:bg-muted/50 transition-colors">
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 min-w-0">
             <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${
@@ -165,37 +165,26 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
           </div>
         </div>
 
-        {/* Phone is the primary datum; email and address are de-emphasized */}
-        <div className="mt-2 space-y-1 pl-12">
-          {cliente.telefono && <div className="text-sm font-medium tabular-nums">{cliente.telefono}</div>}
-          {cliente.email && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">{cliente.email}</span>
-            </div>
-          )}
-          {cliente.direccion && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{cliente.direccion}</span>
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground pt-0.5">
+        {/* Phone + activity on one line. Email and address live in the client
+            detail: on the card they only cost two rows per client. */}
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-2 pl-12 text-xs text-muted-foreground">
+          {cliente.telefono && <span className="text-sm font-medium tabular-nums text-foreground">{cliente.telefono}</span>}
+          <span>
             {cliente.ordenesCount ?? 0} órdenes
             {cliente.ultimaVisita && <> · Última: {formatDate(cliente.ultimaVisita)}</>}
-          </div>
+          </span>
         </div>
 
         {showActions && (
           <div
             role="group"
             aria-label={`Acciones rápidas de ${cliente.nombre}`}
-            className="relative z-10 mt-3 pt-3 border-t flex items-center gap-2"
+            className="relative z-10 mt-2 pt-2 border-t flex items-center gap-2"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
             {tel && (
-              <Button asChild variant="outline" size="sm" className="h-10 flex-1 gap-1.5">
+              <Button asChild variant="outline" size="sm" className="h-9 flex-1 gap-1.5">
                 <a href={`tel:${tel}`} aria-label={`Llamar a ${cliente.nombre}`}>
                   <Phone className="h-4 w-4" />
                   Llamar
@@ -206,7 +195,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 flex-1 gap-1.5"
+                className="h-9 flex-1 gap-1.5"
                 onClick={(e) => onWhatsApp(e, cliente)}
                 aria-label={`Enviar WhatsApp a ${cliente.nombre}`}
               >
@@ -217,7 +206,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
             {showCobrar && (
               <Button
                 size="sm"
-                className="h-10 flex-1 gap-1.5"
+                className="h-9 flex-1 gap-1.5"
                 onClick={(e) => onCobrar!(e, cliente)}
                 aria-label={`Cobrar a ${cliente.nombre}`}
               >

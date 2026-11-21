@@ -3,7 +3,8 @@
 import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Wrench } from "lucide-react"
+import { Wrench, Wallet, ClipboardList, User } from "lucide-react"
+import { MobileSectionTabs, mobileSectionClass } from "@/components/ui/mobile-section-tabs"
 import { Button } from "@/components/ui/button"
 import { ClienteDetalleSkeleton } from "./cliente-detalle-skeleton"
 import { ClienteDetalleHeader } from "./cliente-detalle-header"
@@ -47,6 +48,9 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   const [showEdit, setShowEdit] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
   const [showExpress, setShowExpress] = useState(false)
+  // Mobile/app: account, orders and contact data as sections instead of six
+  // stacked cards. `null` = not chosen yet → defaults by what the user can see.
+  const [seccionElegida, setSeccionElegida] = useState<SeccionCliente | null>(null)
 
   const { data: cliente, error, isLoading, mutate } = useSWR<Cliente>(
     `/api/clientes/${clienteId}`, clienteFetcher, {
@@ -109,9 +113,13 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   })
   const refreshMoney = () => { mutateCC(); mutateDeuda() }
   const totalOrdenes = ordenesData?.total || 0
+  const seccion: SeccionCliente =
+    seccionElegida && !(seccionElegida === "cuenta" && deudaOculta)
+      ? seccionElegida
+      : deudaOculta ? "ordenes" : "cuenta"
 
   return (
-    <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
+    <div className="sm:px-6 sm:py-6 max-w-5xl mx-auto">
       <ClienteDetalleHeader
         cliente={cliente}
         resumen={resumen}
@@ -124,10 +132,25 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         onWhatsApp={() => setShowWhatsApp(true)}
       />
 
-      <div className="space-y-6 pt-6">
-        <ClienteDetalleDatos cliente={cliente} />
-        {!deudaOculta && <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+      <MobileSectionTabs
+        label="Secciones del cliente"
+        className="mt-3"
+        value={seccion}
+        onChange={setSeccionElegida}
+        sections={[
+          ...(!deudaOculta ? [{ key: "cuenta" as const, label: "Cuenta", icon: Wallet, alert: (resumen.debe ?? 0) > 0 }] : []),
+          { key: "ordenes" as const, label: "Órdenes", icon: ClipboardList },
+          { key: "datos" as const, label: "Datos", icon: User },
+        ]}
+      />
+
+      {/* flex+gap (not space-y) so sections hidden on mobile leave no stray margin */}
+      <div className="flex flex-col gap-4 pt-3 lg:gap-6 lg:pt-6 [&>*:empty]:hidden">
+        <div className={mobileSectionClass(seccion, "datos")}>
+          <ClienteDetalleDatos cliente={cliente} />
+        </div>
+        {!deudaOculta && <Card className={mobileSectionClass(seccion, "cuenta")}>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 p-4 sm:p-6">
             <CardTitle className="text-base">Cuenta corriente</CardTitle>
             <div className="flex flex-wrap gap-2">
               <ClienteNotasCreditoLink clienteId={clienteId} />
@@ -138,21 +161,29 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} saldoGlobal={!!deudaData?.porSucursal} />
           </CardContent>
         </Card>}
         {!deudaOculta && (
-          <ClienteOrdenesPendientes
-            clienteId={clienteId}
-            clienteNombre={cliente.nombre}
-            onCobrado={refreshMoney}
-          />
+          <div className={mobileSectionClass(seccion, "cuenta")}>
+            <ClienteOrdenesPendientes
+              clienteId={clienteId}
+              clienteNombre={cliente.nombre}
+              onCobrado={refreshMoney}
+            />
+          </div>
         )}
-        <ClienteOrdenesHistorial clienteId={clienteId} />
-        <ClienteCotizaciones clienteId={clienteId} />
+        <div className={mobileSectionClass(seccion, "ordenes")}>
+          <ClienteOrdenesHistorial clienteId={clienteId} />
+        </div>
+        <div className={mobileSectionClass(seccion, "ordenes")}>
+          <ClienteCotizaciones clienteId={clienteId} />
+        </div>
         {cliente.tipoCliente === "EMPRESA" && (
-          <ClienteSectores sectores={cliente.sectores || []} />
+          <div className={mobileSectionClass(seccion, "datos")}>
+            <ClienteSectores sectores={cliente.sectores || []} />
+          </div>
         )}
       </div>
 
@@ -180,3 +211,5 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
     </div>
   )
 }
+
+type SeccionCliente = "cuenta" | "ordenes" | "datos"

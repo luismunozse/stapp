@@ -108,10 +108,11 @@ import { remitoActivo } from "@/lib/facturacion/remito-activo"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { cn } from "@/lib/utils"
+import { MobileSectionTabs, mobileSectionClass, type MobileSection } from "@/components/ui/mobile-section-tabs"
 
 // Mobile/app sections of the order detail (desktop shows everything at once)
 type SeccionMovil = "resumen" | "detalle" | "trabajo" | "cobro"
-const SECCIONES_MOVIL: { key: SeccionMovil; label: string; icon: typeof ListChecks }[] = [
+const SECCIONES_MOVIL: MobileSection<SeccionMovil>[] = [
   { key: "resumen", label: "Resumen", icon: ListChecks },
   { key: "detalle", label: "Detalle", icon: Smartphone },
   { key: "trabajo", label: "Trabajo", icon: Wrench },
@@ -156,7 +157,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   // Mobile/app only: the detail is split into sections so the screen isn't one
   // endless scroll. Desktop (lg+) ignores this and shows the two-column layout.
   const [seccionMovil, setSeccionMovil] = useState<SeccionMovil>("resumen")
-  const soloEnMovil = (seccion: SeccionMovil) => (seccionMovil === seccion ? "" : "max-lg:hidden")
+  const soloEnMovil = (seccion: SeccionMovil) => mobileSectionClass(seccionMovil, seccion)
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
@@ -1061,36 +1062,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Mobile/app: section switcher */}
-      <div
-        role="tablist"
-        aria-label="Secciones de la orden"
-        className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1 lg:hidden"
-      >
-        {SECCIONES_MOVIL.map((s) => {
-          const Icon = s.icon
-          const activa = seccionMovil === s.key
-          const alerta = s.key === "cobro" && costoFinalNum > 0 && !estadoSinCobro && saldoPendiente > 0
-          return (
-            <button
-              key={s.key}
-              type="button"
-              role="tab"
-              aria-selected={activa}
-              onClick={() => setSeccionMovil(s.key)}
-              className={cn(
-                "relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-xs font-medium transition-colors",
-                activa ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" aria-hidden />
-              {s.label}
-              {alerta && (
-                <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-amber-500" aria-label="Saldo pendiente" />
-              )}
-            </button>
-          )
-        })}
-      </div>
+      <MobileSectionTabs
+        label="Secciones de la orden"
+        value={seccionMovil}
+        onChange={setSeccionMovil}
+        sections={SECCIONES_MOVIL.map((s) => ({
+          ...s,
+          alert: s.key === "cobro" && costoFinalNum > 0 && !estadoSinCobro && saldoPendiente > 0,
+        }))}
+      />
 
       {/* Progress Bar */}
       {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && !isRetiro && !isSinCobro && (

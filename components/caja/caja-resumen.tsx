@@ -20,6 +20,7 @@ import {
   TrendingDown,
   Receipt,
   Pencil,
+  ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CambiarMetodoDialog, type MovimientoEditable } from "@/components/caja/cambiar-metodo-dialog"
@@ -92,6 +93,7 @@ export function CajaResumen({
 }: CajaResumenProps) {
   const { formatPrice, timezone } = useCurrency()
   const [editando, setEditando] = useState<MovimientoEditable | null>(null)
+  const [origenAbierto, setOrigenAbierto] = useState(false)
 
   if (!data) return null
 
@@ -124,21 +126,21 @@ export function CajaResumen({
 
       {/* Resumen por método de pago */}
       {Object.keys(data.porMetodo).length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {Object.entries(data.porMetodo)
             .sort(([, a], [, b]) => b - a)
             .map(([metodo, total]) => {
               const Icon = METODO_ICONS[metodo] || DollarSign
               return (
                 <Card key={metodo}>
-                  <CardContent className="p-4">
+                  <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">
                         {METODO_LABELS[metodo] || metodo}
                       </span>
                     </div>
-                    <div className={`text-lg font-bold ${total < 0 ? "text-destructive-text" : ""}`}>
+                    <div className={`text-base sm:text-lg font-bold tabular-nums ${total < 0 ? "text-destructive-text" : ""}`}>
                       {formatPrice(total)}
                     </div>
                   </CardContent>
@@ -151,10 +153,22 @@ export function CajaResumen({
       {/* Resumen por tipo */}
       {Object.keys(data.porTipo).length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Por origen</CardTitle>
+          {/* Phones: folded by default — the totals above already answer "how much" */}
+          <CardHeader className="p-4 sm:p-6 sm:pb-3">
+            <button
+              type="button"
+              onClick={() => setOrigenAbierto((v) => !v)}
+              aria-expanded={origenAbierto}
+              className="flex w-full items-center justify-between text-left sm:pointer-events-none"
+            >
+              <CardTitle className="text-base">Por origen</CardTitle>
+              <ChevronDown
+                className={`h-4 w-4 text-muted-foreground transition-transform sm:hidden ${origenAbierto ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
           </CardHeader>
-          <CardContent>
+          <CardContent className={`p-4 pt-0 sm:p-6 sm:pt-0 ${origenAbierto ? "" : "max-sm:hidden"}`}>
             <div className="space-y-2">
               {Object.entries(data.porTipo).map(([tipo, info]) => {
                 const tipoInfo = TIPO_LABELS[tipo] || { label: tipo, icon: DollarSign, color: "text-gray-600" }
@@ -240,12 +254,12 @@ export function CajaResumen({
 
       {/* Filtros + Detalle de movimientos */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
             <CardTitle className="text-base">Detalle de movimientos</CardTitle>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               <Select value={filtroMetodo || "all"} onValueChange={(v) => onFiltroMetodoChange(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+                <SelectTrigger className="w-full min-w-0 sm:w-[160px] h-8 text-xs">
                   <SelectValue placeholder="Método" />
                 </SelectTrigger>
                 <SelectContent>
@@ -256,7 +270,7 @@ export function CajaResumen({
                 </SelectContent>
               </Select>
               <Select value={filtroTipo || "all"} onValueChange={(v) => onFiltroTipoChange(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+                <SelectTrigger className="w-full min-w-0 sm:w-[160px] h-8 text-xs">
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -269,7 +283,7 @@ export function CajaResumen({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {data.movimientos.length === 0 ? (
             <EmptyState
               icon={Receipt}
@@ -278,7 +292,7 @@ export function CajaResumen({
               variant="search"
             />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               {data.movimientos.map((mov: any, i: number) => {
                 const tipoInfo = TIPO_LABELS[mov.tipo] || { label: mov.tipo, icon: DollarSign, color: "text-gray-600" }
                 const Icon = tipoInfo.icon
@@ -291,7 +305,7 @@ export function CajaResumen({
                   : (mov.referencia || tipoInfo.label)
 
                 return (
-                  <div key={mov.id ? `${mov.fuente}-${mov.id}` : i} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div key={mov.id ? `${mov.fuente}-${mov.id}` : i} className="flex items-center justify-between gap-2 p-2.5 sm:p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-start gap-2">
                       <Icon className={`h-4 w-4 mt-0.5 ${tipoInfo.color}`} />
                       <div className="space-y-0.5">

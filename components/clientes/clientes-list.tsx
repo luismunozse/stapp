@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X, Filter, PieChart } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -37,9 +38,13 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 interface ClientesListProps {
   allowImport?: boolean
+  /** Mobile: opens the segmentation sheet from the overflow menu (the page hides its header button there). */
+  onSegmentacion?: () => void
 }
 
-export function ClientesList({ allowImport = true }: ClientesListProps) {
+export function ClientesList({ allowImport = true, onSegmentacion }: ClientesListProps) {
+  // Mobile/app: the filter bar (3 rows on a phone) stays folded until asked for.
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false)
   const { data: session } = useSession()
   // Borrar clientes es solo de ADMIN (el servidor lo exige igual).
   const esAdmin = session?.user?.role === "ADMIN"
@@ -450,8 +455,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     <PullToRefresh onRefresh={() => mutate()}>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
-        <div className="flex-1 w-full sm:w-auto">
+      <div className="flex flex-row gap-2 sm:gap-4 items-center justify-between">
+        <div className="flex-1 min-w-0 sm:w-auto">
           <div className="relative sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -477,11 +482,21 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           </div>
         </div>
 
-        {/* Mobile: Nuevo is the primary action; Exportar / Importar live in an overflow menu */}
-        <div className="flex items-center gap-2 sm:hidden">
-          <Button onClick={() => setShowForm(true)} className="h-10 flex-1 gap-1.5">
+        {/* Mobile: search, filters, Nuevo and an overflow menu share one row */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+          <Button
+            variant={filtrosMovilAbiertos ? "secondary" : "outline"}
+            size="icon"
+            className="relative"
+            onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+            aria-label="Filtros"
+            aria-expanded={filtrosMovilAbiertos}
+          >
+            <Filter className="h-4 w-4" />
+            {filtrosActivos && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </Button>
+          <Button onClick={() => setShowForm(true)} size="icon" aria-label="Nuevo cliente" title="Nuevo cliente">
             <Plus className="h-4 w-4" />
-            Nuevo cliente
           </Button>
           <Popover>
             <PopoverTrigger asChild>
@@ -490,6 +505,12 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-48 p-1 space-y-1">
+              {onSegmentacion && (
+                <Button onClick={onSegmentacion} variant="ghost" className="w-full justify-start">
+                  <PieChart className="h-4 w-4 mr-2" />
+                  Segmentación
+                </Button>
+              )}
               <ExportButton
                 entity="clientes"
                 filters={{ ...(search && { search }) }}
@@ -530,7 +551,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-end gap-2">
+      <div className={cn("flex flex-wrap items-end gap-2", !filtrosMovilAbiertos && "max-sm:hidden")}>
         <Select value={tipoCliente || "TODOS"} onValueChange={(v) => onFilterChange(() => setTipoCliente(v === "TODOS" ? "" : v))}>
           <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
@@ -704,7 +725,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           )
         ) : (
           <>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {clientes.map((cliente) => (
                 <ClienteMobileCard
                   key={cliente.id}
