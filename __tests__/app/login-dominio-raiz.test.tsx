@@ -44,10 +44,6 @@ describe("login en el dominio raíz", () => {
         set href(v: string) {
           destino.href = v
         },
-        // The login leaves /login out of history (Android back button)
-        replace(v: string) {
-          destino.href = v
-        },
       },
     })
   })

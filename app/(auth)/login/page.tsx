@@ -51,32 +51,6 @@ function extractSubdomain(): string | null {
   return subdomain
 }
 
-// Emails that signed in on this device (per business subdomain), newest
-// first. The WebView of the Android app has no browser profile to remember
-// them, so the login keeps its own short list.
-const EMAILS_RECIENTES_KEY = "stapp-emails-recientes"
-const MAX_EMAILS_RECIENTES = 3
-
-function leerEmailsRecientes(): string[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(EMAILS_RECIENTES_KEY) || "[]")
-    return Array.isArray(raw) ? raw.filter((e): e is string => typeof e === "string" && e.includes("@")) : []
-  } catch {
-    return []
-  }
-}
-
-function recordarEmail(email: string) {
-  const limpio = email.trim().toLowerCase()
-  if (!limpio.includes("@")) return
-  try {
-    const lista = [limpio, ...leerEmailsRecientes().filter((e) => e !== limpio)].slice(0, MAX_EMAILS_RECIENTES)
-    localStorage.setItem(EMAILS_RECIENTES_KEY, JSON.stringify(lista))
-  } catch {
-    // storage blocked: the login works the same, just without the suggestion
-  }
-}
-
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -89,18 +63,6 @@ function LoginForm() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
-  // Emails used on this device, newest first (suggested in the email field)
-  const [emailsRecientes, setEmailsRecientes] = useState<string[]>([])
-
-  // Device memory: prefill the last email so returning users only type the
-  // password, and in the native app keep the session by default (a phone is
-  // a personal device; "Recordarme" off meant a 7-day session).
-  useEffect(() => {
-    const recientes = leerEmailsRecientes()
-    setEmailsRecientes(recientes)
-    if (recientes[0]) setEmail((actual) => actual || recientes[0])
-    if (isNativePlatform()) setRememberMe(true)
-  }, [])
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -277,8 +239,7 @@ function LoginForm() {
         }
 
         await saveRefreshTokenForPWA()
-        recordarEmail(email)
-        window.location.replace(safeCallbackPath(searchParams.get("callbackUrl")))
+        window.location.href = safeCallbackPath(searchParams.get("callbackUrl"))
       } else {
         const orgRes = await fetch("/api/auth/user-organization", {
           credentials: "include",
@@ -287,8 +248,7 @@ function LoginForm() {
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
           // La sesión ya vale en el subdominio (cookie en `.{ROOT_DOMAIN}`)
-          recordarEmail(email)
-          window.location.replace(tenantDashboardUrl(organization.slug))
+          window.location.href = tenantDashboardUrl(organization.slug)
         } else {
           setError("No se pudo obtener la organización")
           setLoading(false)
@@ -367,11 +327,8 @@ function LoginForm() {
         // Guardar refresh token para PWA antes de redirigir
         await saveRefreshTokenForPWA()
 
-        // Ya estamos en el subdominio correcto - usar window.location para navegación completa.
-        // replace(): /login no queda en el historial, así el botón Atrás de
-        // Android no vuelve al formulario (parecía que cerraba la sesión).
-        recordarEmail(email)
-        window.location.replace(safeCallbackPath(searchParams.get("callbackUrl")))
+        // Ya estamos en el subdominio correcto - usar window.location para navegación completa
+        window.location.href = safeCallbackPath(searchParams.get("callbackUrl"))
         return
       } else {
         // Login desde el dominio principal: la cookie de sesión está scopeada a
@@ -385,8 +342,7 @@ function LoginForm() {
 
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
-          recordarEmail(email)
-          window.location.replace(tenantDashboardUrl(organization.slug))
+          window.location.href = tenantDashboardUrl(organization.slug)
           return
         } else {
           setError("No se pudo obtener la organización")
@@ -495,35 +451,20 @@ function LoginForm() {
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
-                name="email"
                 type="email"
                 inputMode="email"
                 placeholder="tu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                // "username": what password managers / Android Autofill pair
-                // with current-password to offer saved logins.
-                autoComplete="username"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                list={emailsRecientes.length > 0 ? "emails-recientes" : undefined}
+                autoComplete="email"
               />
-              {emailsRecientes.length > 0 && (
-                <datalist id="emails-recientes">
-                  {emailsRecientes.map((e) => (
-                    <option key={e} value={e} />
-                  ))}
-                </datalist>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
               <div className="relative">
                 <Input
                   id="password"
-                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}

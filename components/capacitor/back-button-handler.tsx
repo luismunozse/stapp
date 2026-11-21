@@ -9,8 +9,8 @@ import { isNativePlatform } from "@/lib/capacitor"
  * - Si hay un Radix Dialog abierto, lo cierra (despacha Escape).
  * - Si una pantalla a pantalla completa escucha "app:back" y lo cancela
  *   (alta de orden: paso anterior o cerrar), no navega.
- * - En el Inicio (/dashboard) minimiza la app (queda abierta, con la sesión).
- * - En otra pantalla vuelve a la anterior, o al Inicio si no hay historial.
+ * - Si se puede ir atrás o no estamos en /dashboard, hace router.back().
+ * - En la raíz del dashboard, sale de la app.
  */
 export function CapacitorBackButtonHandler() {
   const router = useRouter()
@@ -37,17 +37,10 @@ export function CapacitorBackButtonHandler() {
           // themselves — previous step or close — by cancelling this event.
           const appBack = new Event("app:back", { cancelable: true })
           if (!window.dispatchEvent(appBack)) return
-          // Home screen: send the app to the background like any Android app.
-          // Going "back" from here walked into /login (the history before the
-          // panel), which looked like a logout; exiting also lost the place.
-          if (pathname === "/dashboard") {
-            App.minimizeApp()
-            return
-          }
-          if (canGoBack) {
+          if (canGoBack || pathname !== "/dashboard") {
             router.back()
           } else {
-            router.replace("/dashboard")
+            App.exitApp()
           }
         })
         if (cancelled) {
