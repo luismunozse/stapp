@@ -2508,7 +2508,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           <FormActionBar
             className={cn(
               "flex-wrap justify-between",
-              inSheet && "-mx-4 -mb-4 rounded-b-lg px-4 sm:-mx-6 sm:-mb-6 sm:px-6",
+              // bottom-0: the overlay's scroll box has no padding to make up for
+              inSheet && "bottom-0 -mx-4 -mb-4 rounded-b-lg px-4 sm:-mx-6 sm:-mb-6 sm:px-6",
               // Phones: one row of big thumb buttons at the very bottom; going
               // back lives in the app bar arrow (and Android's back button).
               inSheet && "max-sm:!mt-auto max-sm:flex-nowrap max-sm:rounded-none"
