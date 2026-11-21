@@ -35,7 +35,11 @@ export default function AppEntryPage() {
     setNavigating(true)
     setError("")
     rememberTenant(tenantSlug)
-    window.location.href = `${PROTOCOL}://${tenantSlug}.${ROOT_DOMAIN}/login`
+    // Straight to the panel: with a live session it opens (no login form on
+    // every launch or update); without one the proxy sends it to /login.
+    // replace(): this hop must not stay in history, or Android's back button
+    // walks the user back here and into the login.
+    window.location.replace(`${PROTOCOL}://${tenantSlug}.${ROOT_DOMAIN}/dashboard`)
   }
 
   useEffect(() => {
