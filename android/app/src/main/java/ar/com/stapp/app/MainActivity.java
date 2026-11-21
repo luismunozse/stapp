@@ -2,6 +2,7 @@ package ar.com.stapp.app;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.webkit.CookieManager;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import com.getcapacitor.Bridge;
@@ -18,6 +19,17 @@ public class MainActivity extends BridgeActivity {
         // not tolerate yet: amounts get truncated and cards overflow. Pin it to 100% until they do.
         getBridge().getWebView().getSettings().setTextZoom(100);
         injectBridgeOnWildcardOrigins();
+    }
+
+    /**
+     * WebView writes cookies to disk only every so often. If the app is killed while in the
+     * background (low memory, an APK update) before that, the session cookie is lost and the
+     * user has to log in again. Persist them every time the app leaves the foreground.
+     */
+    @Override
+    public void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
     }
 
     /**

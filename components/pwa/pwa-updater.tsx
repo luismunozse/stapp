@@ -21,11 +21,81 @@ const LOADED_BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"
  * Al confirmar el toast: activa el SW que esté esperando y recarga una sola vez
  * (vía `controllerchange`); si no hay SW esperando, recarga directo.
  *
- * No corre en Capacitor (app nativa) ni sin soporte de SW.
+ * En Capacitor (app nativa) no hay Service Worker: ahí corre solo el
+ * version-poll (ver useNativeUpdate). Sin esto la app nativa seguía con el
+ * código viejo hasta cerrarla del todo, porque Android la mantiene viva en
+ * segundo plano durante días.
  */
+/**
+ * Something on screen that a reload would throw away: an open dialog/sheet,
+ * a full-screen form (new order), a focused field, or the POS cart.
+ */
+function hayTrabajoEnCurso(): boolean {
+  if (document.querySelector('[role="dialog"][data-state="open"], .fixed.inset-0')) return true
+  const activo = document.activeElement
+  if (activo && /^(INPUT|TEXTAREA|SELECT)$/.test(activo.tagName)) return true
+  return window.location.pathname.startsWith("/pos")
+}
+
+/**
+ * Native app: poll the build id like the web does. A new version applies by
+ * itself when the user comes back to the app (they just returned, nothing is
+ * half-typed); if something is in progress, or the check fires mid-use, the
+ * same "Actualizar" toast is offered instead. The session survives a reload.
+ */
+function useNativeUpdate() {
+  useEffect(() => {
+    if (!isNativePlatform()) return
+    let avisado = false
+    let recargando = false
+
+    const recargar = () => {
+      if (recargando) return
+      recargando = true
+      window.location.reload()
+    }
+
+    const avisar = () => {
+      if (avisado) return
+      avisado = true
+      toast("Hay una nueva versión disponible", {
+        id: UPDATE_TOAST_ID,
+        description: "Actualizá para usar las últimas mejoras.",
+        duration: Infinity,
+        action: { label: "Actualizar", onClick: recargar },
+      })
+    }
+
+    const check = async (alVolver: boolean) => {
+      try {
+        const res = await fetch("/api/version", { cache: "no-store" })
+        if (!res.ok) return
+        const { buildId } = (await res.json()) as { buildId?: string }
+        if (!buildId || buildId === "dev" || buildId === LOADED_BUILD_ID) return
+        if (alVolver && !hayTrabajoEnCurso()) recargar()
+        else avisar()
+      } catch {
+        /* sin conexión: reintenta en el próximo ciclo */
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check(true)
+    }
+    const interval = setInterval(() => void check(false), VERSION_CHECK_INTERVAL)
+    document.addEventListener("visibilitychange", onVisible)
+    void check(false)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      clearInterval(interval)
+    }
+  }, [])
+}
+
 export function PWAUpdater() {
   const reloadingRef = useRef(false)
   const promptedRef = useRef(false)
+  useNativeUpdate()
 
   useEffect(() => {
     if (isNativePlatform()) return

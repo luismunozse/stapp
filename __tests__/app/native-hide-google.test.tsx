@@ -69,6 +69,27 @@ afterEach(() => {
 
 const HINT = /¿Te registraste con Google\?/
 
+describe("login: email recordado en el dispositivo", () => {
+  afterEach(() => localStorage.clear())
+
+  it("precarga el último email usado y ofrece los recientes", async () => {
+    localStorage.setItem("stapp-emails-recientes", JSON.stringify(["luis@taller.com", "otro@taller.com"]))
+    const { container } = render(<LoginPage />)
+    const email = (await screen.findByLabelText("Email")) as HTMLInputElement
+    await waitFor(() => expect(email.value).toBe("luis@taller.com"))
+    expect(email).toHaveAttribute("autocomplete", "username")
+    const opciones = [...container.querySelectorAll("datalist#emails-recientes option")].map((o) => o.getAttribute("value"))
+    expect(opciones).toEqual(["luis@taller.com", "otro@taller.com"])
+  })
+
+  it("en la app nativa 'Recordarme' arranca marcado", async () => {
+    native = true
+    render(<LoginPage />)
+    const recordar = (await screen.findByRole("checkbox")) as HTMLInputElement
+    await waitFor(() => expect(recordar.checked).toBe(true))
+  })
+})
+
 describe("login", () => {
   it("web: shows the Google button and no hint", async () => {
     render(<LoginPage />)
