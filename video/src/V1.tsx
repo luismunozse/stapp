@@ -1,12 +1,11 @@
 import React from 'react';
-import {AbsoluteFill, Sequence, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import {Phone as PhoneIcon, PhoneMissed, Wrench, CheckCircle2, CheckCheck, MessageCircle} from 'lucide-react';
-import {Bg, CTA, Highlight, Phone, Pill, Scene, Title, easeOut} from './kit';
+import {Highlight, Phone, Pill, Title} from './kit';
 import {C, SHADOW} from './brand';
 
 // Video 1 · "El cliente que llama 10 veces" (problema → solución)
-export const V1_SCENES = [105, 90, 210, 180, 75, 150];
-export const V1_DUR = V1_SCENES.reduce((a, b) => a + b, 0);
+import {Chain, total, type Part} from './seq';
 
 const Call: React.FC = () => {
   const f = useCurrentFrame();
@@ -65,21 +64,21 @@ const Missed: React.FC = () => {
 const Estado: React.FC = () => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const flip = spring({frame: f - 68, fps, config: {damping: 12, stiffness: 170}});
+  const flip = spring({frame: f - 55, fps, config: {damping: 12, stiffness: 170}});
   return (
     <>
       <Title text="Con STApp cambiás el estado de la orden *en un toque*" top={190} size={74} />
-      <Phone src="screens/ordenes.png" top={500} keys={[{f: 0, z: 1, x: 584, y: 1265}, {f: 15, z: 1, x: 584, y: 1265}, {f: 50, z: 2.4, x: 883, y: 1120}, {f: 115, z: 2.4, x: 883, y: 1120}, {f: 145, z: 1.12, x: 584, y: 1250}]}>
+      <Phone src="screens/ordenes.png" top={500} keys={[{f: 0, z: 1, x: 584, y: 1265}, {f: 12, z: 1, x: 584, y: 1265}, {f: 42, z: 2.4, x: 883, y: 1120}, {f: 85, z: 2.4, x: 883, y: 1120}, {f: 112, z: 1.12, x: 584, y: 1250}]}>
         {(ts) => {
           const a = ts(694, 1023);
           return (
             <>
-              {f >= 68 && (
+              {f >= 55 && (
                 <div style={{position: 'absolute', left: a.x - 4, top: a.y - 4, height: 64 * a.k + 8, width: 378 * a.k + 8, borderRadius: 9999, background: C.estadoReparado, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 * a.k, fontWeight: 700, fontSize: 34 * a.k, transform: `scale(${0.6 + 0.4 * flip})`, opacity: flip}}>
                   <CheckCircle2 size={36 * a.k} /> Reparado
                 </div>
               )}
-              <Highlight toScreen={ts} x={50} y={975} w={1072} h={655} from={150} label="Orden CEL008 · lista" />
+              <Highlight toScreen={ts} x={50} y={975} w={1072} h={655} from={114} label="Orden CEL008 · lista" />
             </>
           );
         }}
@@ -132,24 +131,14 @@ const Punch: React.FC = () => (
   </AbsoluteFill>
 );
 
-export const V1: React.FC = () => {
-  const parts = [
-    <><Title text="Cuando el cliente te llama *por décima vez*" top={200} size={84} /><Call /></>,
-    <><Title text="Y no es *solo* Lucía…" top={240} size={90} /><Missed /></>,
-    <Estado />,
-    <WhatsApp />,
-    <Punch />,
-  ];
-  let from = 0;
-  return (
-    <Bg>
-      {parts.map((p, i) => {
-        const d = V1_SCENES[i];
-        const el = <Sequence key={i} from={from} durationInFrames={d}><Scene dur={d}>{p}</Scene></Sequence>;
-        from += d;
-        return el;
-      })}
-      <Sequence from={from} durationInFrames={V1_SCENES[5]}><CTA /></Sequence>
-    </Bg>
-  );
-};
+const hook = <><Title text="Cuando el cliente te llama *por décima vez*" top={200} size={84} /><Call /></>;
+const missed = <><Title text="Y no es *solo* Lucía…" top={240} size={90} /><Missed /></>;
+const scenes: Part[] = [[105, hook], [90, missed], [150, <Estado />], [180, <WhatsApp />], [75, <Punch />]];
+export const V1_DUR = total(scenes);
+export const V1: React.FC = () => <Chain scenes={scenes} />;
+
+// Versión con locución (Facundo, toma A): escenas ajustadas a cada frase.
+const VOZ1 = 'voz/v1a.mp3';
+const scenesVoz: Part[] = [[96, hook, [0, 2.75]], [160, missed, [2.75, 7.75]], [150, <Estado />, [7.75, 11.1]], [120, <WhatsApp />, [11.1, 13.45]], [96, <Punch />, [13.45, 16.3]]];
+export const V1VOZ_DUR = total(scenesVoz, 135);
+export const V1Voz: React.FC = () => <Chain scenes={scenesVoz} cta={135} voz={VOZ1} ctaVoz={[16.3, 20.0]} />;

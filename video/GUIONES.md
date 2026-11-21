@@ -68,3 +68,14 @@ Sin voz. Al subirlo, agregale un audio en tendencia con ritmo marcado. Los corte
 | 15 | Oferta | "30 días gratis y sin tarjeta, ¿qué perdés?" | Cierre con todas las funciones |
 
 **Cómo medir:** a la semana, compará la retención (cuántos miran más de 3 s y cuántos lo ven completo) entre la versión con voz y la de solo texto, y quedate con la que gane.
+
+---
+
+## Versiones con voz (Facundo, ElevenLabs, eleven_v4)
+
+- `out/TikTok1-ClienteLlama-Voz.mp4` (25,2 s) y `out/TikTok2-LibretaVsSTApp-Voz.mp4` (25 s).
+- Audio: toma A de cada guion (`public/voz/v1a.mp3`, `public/voz/v2a.mp3`). Las tomas B quedan como alternativa.
+- Cada escena reproduce su frase (los tramos en segundos están en `src/V1.tsx` y `src/V2.tsx`), y la duración de las escenas se ajustó a la locución.
+- Después del render se normaliza el volumen para TikTok:
+  `ffmpeg -i in.mp4 -c:v copy -af loudnorm=I=-14:TP=-1.5:LRA=11 -ar 48000 -c:a aac -b:a 192k out.mp4`
+- Al subirlos, si agregás música de TikTok, bajala a 10-20 % para que se entienda la voz.
