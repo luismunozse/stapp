@@ -12,7 +12,6 @@ export const PUBLIC_PATHS = [
   "/api/cron",
   "/api/mercadopago/webhook",
   "/api/rebill/webhook",
-  "/api/creem/webhook",
   "/_next",
   "/favicon.ico",
   "/manifest.json",

@@ -1,7 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval, getPreApproval } from "@/lib/mercadopago"
 import { cancelRebillSubscription, getRebillSubscription } from "@/lib/rebill"
-import { cancelCreemSubscription } from "@/lib/creem"
 
 export type CancelResult =
   | { ok: true; canceled: string[]; skipped: boolean }
@@ -48,7 +47,6 @@ export function isAlreadyCanceledError(err: unknown): boolean {
  * manera). Si el error no se reconoce, se pregunta al proveedor el estado real:
  * si ya está cancelada, el reintento tras un fallo parcial es un éxito. Si la
  * consulta también falla, se conserva el fallo original (nunca se asume éxito).
- * Mismo criterio que `isCreemSubscriptionEnding` en lib/creem.ts.
  */
 const CANCELED_STATUSES = new Set(["cancelled", "canceled"])
 
@@ -76,7 +74,7 @@ async function providerStatusIsCanceled(
 export async function cancelOrganizationSubscriptions(organizationId: string): Promise<CancelResult> {
   const { data: sub, error } = await supabaseAdmin
     .from("subscriptions")
-    .select("mercadopago_preapproval_id, rebill_subscription_id, creem_subscription_id")
+    .select("mercadopago_preapproval_id, rebill_subscription_id")
     .eq("organization_id", organizationId)
     .maybeSingle()
 
@@ -86,7 +84,6 @@ export async function cancelOrganizationSubscriptions(organizationId: string): P
   const jobs: Array<[string, () => Promise<unknown>, (() => Promise<{ status?: unknown } | null | undefined>)?]> = []
   if (sub.mercadopago_preapproval_id) jobs.push(["MERCADOPAGO", () => cancelPreApproval(sub.mercadopago_preapproval_id), () => getPreApproval(sub.mercadopago_preapproval_id)])
   if (sub.rebill_subscription_id) jobs.push(["REBILL", () => cancelRebillSubscription(sub.rebill_subscription_id), () => getRebillSubscription(sub.rebill_subscription_id)])
-  if (sub.creem_subscription_id) jobs.push(["CREEM", () => cancelCreemSubscription(sub.creem_subscription_id)])
 
   const canceled: string[] = []
   const failed: string[] = []

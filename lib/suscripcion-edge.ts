@@ -55,7 +55,6 @@ const ESCRITURAS_PERMITIDAS = [
   "/api/mercadopago",
   "/api/subscription",
   "/api/subscriptions",
-  "/api/creem",
   "/api/rebill",
   "/api/reactivar-trial",
   "/api/soporte",

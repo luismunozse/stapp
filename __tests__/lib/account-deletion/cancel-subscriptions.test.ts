@@ -4,16 +4,14 @@ import { createChainMock, mockSupabaseFrom } from "../../api/helpers"
 
 vi.mock("@/lib/mercadopago", () => ({ cancelPreApproval: vi.fn(), getPreApproval: vi.fn() }))
 vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn(), getRebillSubscription: vi.fn() }))
-vi.mock("@/lib/creem", () => ({ cancelCreemSubscription: vi.fn() }))
 
 import { cancelPreApproval, getPreApproval } from "@/lib/mercadopago"
 import { cancelRebillSubscription, getRebillSubscription } from "@/lib/rebill"
-import { cancelCreemSubscription } from "@/lib/creem"
 import { cancelOrganizationSubscriptions, isAlreadyCanceledError } from "@/lib/account-deletion/cancel-subscriptions"
 
 const sub = (over: Record<string, unknown> = {}) => ({
   id: "s1", canceled_at: null,
-  mercadopago_preapproval_id: null, rebill_subscription_id: null, creem_subscription_id: null,
+  mercadopago_preapproval_id: null, rebill_subscription_id: null,
   ...over,
 })
 
@@ -48,7 +46,6 @@ describe("cancelOrganizationSubscriptions", () => {
     expect(r).toEqual({ ok: true, canceled: ["MERCADOPAGO", "REBILL"], skipped: false })
     expect(cancelPreApproval).toHaveBeenCalledWith("pre1")
     expect(cancelRebillSubscription).toHaveBeenCalledWith("rb1")
-    expect(cancelCreemSubscription).not.toHaveBeenCalled()
   })
 
   it("si uno falla intenta igual los demás y devuelve cuáles fallaron", async () => {

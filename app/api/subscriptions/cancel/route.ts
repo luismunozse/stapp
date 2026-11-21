@@ -3,7 +3,6 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval } from "@/lib/mercadopago"
 import { cancelRebillSubscription } from "@/lib/rebill"
-import { cancelCreemSubscription } from "@/lib/creem"
 
 export async function POST() {
   try {
@@ -38,12 +37,6 @@ export async function POST() {
       cancelaciones.push([
         "REBILL",
         () => cancelRebillSubscription(subscription.rebill_subscription_id),
-      ])
-    }
-    if (subscription.creem_subscription_id) {
-      cancelaciones.push([
-        "CREEM",
-        () => cancelCreemSubscription(subscription.creem_subscription_id),
       ])
     }
 

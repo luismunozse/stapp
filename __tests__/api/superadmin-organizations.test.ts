@@ -11,7 +11,6 @@ vi.mock("@/lib/superadmin-auth", () => ({
 
 vi.mock("@/lib/mercadopago", () => ({ cancelPreApproval: vi.fn() }))
 vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn() }))
-vi.mock("@/lib/creem", () => ({ cancelCreemSubscription: vi.fn() }))
 import { cancelRebillSubscription } from "@/lib/rebill"
 
 import { DELETE } from "@/app/api/superadmin/organizations/[id]/route"

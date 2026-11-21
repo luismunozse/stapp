@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
 /**
- * Reembolsos y contracargos de pagos de suscripción (MercadoPago, Creem, Rebill).
+ * Reembolsos y contracargos de pagos de suscripción (MercadoPago, Rebill).
  *
  * Un pago que se devuelve por completo deja de pagar el período que había
  * extendido. Al recibir la reversión:
@@ -22,7 +22,7 @@ import { supabaseAdmin } from "@/lib/supabase"
  */
 
 export type ReversalKind = "REFUND" | "CHARGEBACK"
-export type ReversalProvider = "MERCADOPAGO" | "CREEM" | "REBILL"
+export type ReversalProvider = "MERCADOPAGO" | "REBILL"
 
 export interface RegisteredSubscriptionPayment {
   id: string

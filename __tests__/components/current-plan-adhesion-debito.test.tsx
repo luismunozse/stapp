@@ -84,7 +84,7 @@ describe("CurrentPlan — adhesion al debito automatico", () => {
     expect(onActivarDebito).toHaveBeenCalledTimes(1)
   })
 
-  it("quien paga por Creem no ve el boton: Creem ya cobra solo", () => {
+  it("una fila vieja de Creem no ve el boton: es un rail retirado", () => {
     renderPlan({ paymentProvider: "CREEM" })
 
     expect(screen.queryByRole("button", { name: BOTON })).toBeNull()

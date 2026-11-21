@@ -12,7 +12,7 @@ import { useCurrency } from "@/contexts/currency-context"
  * Proveedores a los que se les puede ofrecer la adhesión al débito automático
  * de MercadoPago.
  *
- * Creem queda afuera porque ya cobra solo, y Rebill porque es un rail muerto.
+ * Creem y Rebill quedan afuera: son rails retirados (pueden quedar filas viejas).
  * MANUAL sí entra: la adhesión pide una tarjeta en su propio link, no reutiliza
  * ninguna, así que "activado a mano" no implica "sin medio de pago". El cajón
  * MANUAL mezcla orgs con el plan regalado y clientes reales reactivados a mano

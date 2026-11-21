@@ -6,7 +6,7 @@ import { isPublicPath } from "@/lib/public-paths"
 const HISTORICAS = [
   "/login", "/registro", "/forgot-password", "/reset-password", "/verificar-email", "/tenant-not-found",
   "/api/auth/session", "/api/public/catalogo/x", "/api/cron/x", "/api/mercadopago/webhook", "/api/rebill/webhook",
-  "/api/creem/webhook", "/_next/static/a.js", "/favicon.ico", "/manifest.json", "/sw.js", "/logo.png", "/icons/a.png",
+  "/_next/static/a.js", "/favicon.ico", "/manifest.json", "/sw.js", "/logo.png", "/icons/a.png",
   "/seguimiento/abc", "/cotizacion/abc", "/kiosco", "/api/whatsapp/webhook", "/api/v1/x", "/api/health",
   "/app-entry", "/ayuda", "/descargar", "/google-auth",
 ]
