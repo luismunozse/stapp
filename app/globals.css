@@ -517,6 +517,46 @@
   }
 }
 
+/* Screen change on phones (app/(dashboard)/template.tsx): opacity only, so
+   fixed children (floating buttons, full-screen forms) keep their place. */
+@keyframes screen-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (max-width: 1023.98px) and (prefers-reduced-motion: no-preference) {
+  .screen-in {
+    animation: screen-in 200ms var(--ease-out);
+  }
+}
+
+/* Native feel in the Android WebView: no blue tap flash on every touch, no
+   text selection / callout when a control is long-pressed, no double-tap zoom
+   delay on controls. Links keep selection (phone numbers get copied). */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+[role="button"],
+[role="tab"],
+nav {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button,
+a,
+[role="button"],
+[role="tab"] {
+  touch-action: manipulation;
+}
+
+/* Full-screen fixed overlays never take a margin. Mounted inside a space-y-*
+   stack they inherit its margin-top, which shifts the whole overlay down and
+   lets the app bar peek above it (seen on the new-order screen). */
+.fixed.inset-0 {
+  margin: 0 !important;
+}
+
 /* Touch device polish */
 @media (pointer: coarse) {
   button[data-touch-icon],

@@ -436,7 +436,8 @@ export function Navbar() {
             <CommandPaletteTrigger variant="icon" />
             <NotificationBell />
             <DeadlineCalendar />
-            <ThemeToggle variant="icon" />
+            {/* Theme lives in the menu drawer on phones: six icons here
+                squeezed the business name down to "STAp…" */}
             <button
               data-touch-icon=""
               className="inline-flex items-center justify-center h-11 w-11 rounded-full active:bg-accent/60 focus:outline-none focus:ring-2 focus:ring-primary"
@@ -475,7 +476,10 @@ export function Navbar() {
       >
         <div className="flex flex-col h-full pt-[calc(3.5rem+env(safe-area-inset-top,0px))] safe-area-inset">
           <div className="px-4 pt-4 pb-3 border-b border-border">
-            <p className="text-sm font-semibold truncate">{displayName}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="min-w-0 text-sm font-semibold truncate">{displayName}</p>
+              <ThemeToggle variant="icon" className="-my-2 -mr-2 shrink-0" />
+            </div>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-xs text-muted-foreground capitalize truncate">
                 {session?.user?.role?.toLowerCase()}
@@ -626,8 +630,16 @@ export function Navbar() {
                 )}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={cn("h-5 w-5", isActive && "text-primary")} />
-                <span className="truncate max-w-full px-1">{item.label}</span>
+                {/* Android-style active indicator: a pill behind the icon */}
+                <span
+                  className={cn(
+                    "flex h-7 w-14 max-w-full items-center justify-center rounded-full transition-colors duration-200",
+                    isActive && "bg-primary/10"
+                  )}
+                >
+                  <Icon className={cn("h-5 w-5", isActive && "text-primary")} />
+                </span>
+                <span className={cn("truncate max-w-full px-1", isActive && "font-semibold")}>{item.label}</span>
               </Link>
             )
           })}
@@ -644,8 +656,15 @@ export function Navbar() {
             )}
             aria-label="Más opciones"
           >
-            <MoreHorizontal className={cn("h-5 w-5", isMoreActive && "text-primary")} />
-            <span>Más</span>
+            <span
+              className={cn(
+                "flex h-7 w-14 max-w-full items-center justify-center rounded-full transition-colors duration-200",
+                isMoreActive && "bg-primary/10"
+              )}
+            >
+              <MoreHorizontal className={cn("h-5 w-5", isMoreActive && "text-primary")} />
+            </span>
+            <span className={cn(isMoreActive && "font-semibold")}>Más</span>
           </button>
         </div>
       </nav>

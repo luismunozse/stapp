@@ -22,7 +22,9 @@ import {
   Printer,
   DollarSign,
   Layers,
+  MoreHorizontal,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
@@ -727,7 +729,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     <PullToRefresh onRefresh={() => mutate()} disabled={showForm}>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center justify-between">
+      {/* Phones: search, filters and an overflow menu share ONE row */}
+      <div className="flex flex-row gap-2 sm:gap-4 items-center justify-between">
         <div className="flex-1 w-full sm:w-auto">
           <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -753,12 +756,59 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-nowrap">
+        <div className="flex shrink-0 items-center gap-2 sm:w-auto flex-nowrap">
+          {/* Phones: icon-only filter toggle with a dot when filters apply */}
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative sm:hidden"
+            aria-label="Filtros"
+            aria-expanded={showFilters}
+          >
+            <Filter className="h-4 w-4" />
+            {hasActiveFilters && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </Button>
+          {(!isTecnico || canRecepcionMultiple) && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="sm:hidden" aria-label="Más opciones" title="Más opciones">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-1 space-y-1">
+                {canRecepcionMultiple && (
+                  <Button asChild variant="ghost" className="w-full justify-start">
+                    <Link href="/ordenes/recepcion">
+                      <Layers className="h-4 w-4 mr-2" />
+                      Recibir varios equipos
+                    </Link>
+                  </Button>
+                )}
+                {!isTecnico && (
+                  <ExportButton
+                    entity="ordenes"
+                    filters={{
+                      ...(estado && { estado }),
+                      ...(fechaDesde && { desde: fechaDesde }),
+                      ...(fechaHasta && { hasta: fechaHasta }),
+                      ...(tecnicoIdFilter && { tecnicoId: tecnicoIdFilter }),
+                      ...(tipoDispositivoFilter && { tipoDispositivo: tipoDispositivoFilter }),
+                      ...(marcaFilter && { marca: marcaFilter }),
+                      ...(estadoCobroFilter && { estadoCobro: estadoCobroFilter }),
+                    }}
+                    variant="ghost"
+                    className="w-full justify-start"
+                  />
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
           <Button
             variant={showFilters ? "secondary" : "outline"}
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+            className="gap-2 max-sm:hidden"
           >
             <Filter className="h-4 w-4" />
             Filtros
@@ -769,6 +819,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             )}
           </Button>
           {!isTecnico && (
+            <div className="max-sm:hidden">
             <ExportButton
               entity="ordenes"
               filters={{
@@ -783,13 +834,13 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
               variant="outline"
               size="sm"
             />
+            </div>
           )}
           {canRecepcionMultiple && (
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Button asChild variant="outline" size="sm" className="gap-1.5 max-sm:hidden">
               <Link href="/ordenes/recepcion">
                 <Layers className="h-4 w-4" />
-                <span className="sm:hidden">Varios</span>
-                <span className="hidden sm:inline">Recibir varios equipos</span>
+                Recibir varios equipos
               </Link>
             </Button>
           )}
@@ -1043,7 +1094,9 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
           scroll propio: no empuja ni se mezcla con el listado. z-[60] tapa
           navbar y bottom-nav. */}
       {showForm && (
-        <div className="fixed inset-0 z-[60] bg-background sm:flex sm:items-start sm:justify-center sm:bg-black/60 sm:p-6">
+        // !mt-0: this sits inside the list's space-y stack, whose margin-top
+        // shifted the fixed overlay 16px down and let the app bar peek above it.
+        <div className="fixed inset-0 z-[60] !mt-0 bg-background sm:flex sm:items-start sm:justify-center sm:bg-black/60 sm:p-6">
           {/* El scroll vive en la caja del modal, no en el fondo: asi el
               encabezado y la barra de acciones quedan pegados a sus bordes. */}
           <div className="h-full overflow-y-auto overscroll-contain sm:h-auto sm:max-h-full sm:w-full sm:max-w-3xl sm:rounded-lg">
@@ -1101,7 +1154,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             {haySeleccionables && (
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <CheckSquare className="h-4 w-4" />
                 {selectedIds.size > 0
@@ -1149,7 +1202,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
               </div>
             )}
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xs text-muted-foreground sm:text-sm">
             Mostrando {ordenes.length} de {total} órdenes
             {hasActiveFilters && " (filtradas)"}
           </div>

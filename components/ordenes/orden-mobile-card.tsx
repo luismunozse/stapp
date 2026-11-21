@@ -3,8 +3,15 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
-import { Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
+import { MoreVertical, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
 import Link from "next/link"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useCurrency } from "@/contexts/currency-context"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { CobroResumen } from "@/components/ui/cobro-resumen"
@@ -116,27 +123,39 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
                 </Button>
               )
             ) : (
-              <>
-                <Button aria-label="Imprimir orden"
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 w-9 p-0 text-muted-foreground hover:text-primary"
-                  onClick={(e) => onPrint(e, orden)}
-                >
-                  <Printer className="h-4 w-4" />
-                </Button>
-                {!hideDelete && (
-                  <Button aria-label="Eliminar orden"
+              // One quiet ⋯ instead of a print + trash pair on every card: a
+              // trash can within thumb reach of each row invited mis-taps.
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label={`Acciones de la orden ${orden.codigoOrden || orden.numeroOrden}`}
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive-text"
-                    onClick={(e) => onDelete(e, orden)}
-                    disabled={deleting}
+                    className="h-9 w-9 p-0 text-muted-foreground"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
-                )}
-              </>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem onClick={(e) => onPrint(e as unknown as React.MouseEvent, orden)}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Imprimir orden
+                  </DropdownMenuItem>
+                  {!hideDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive-text focus:text-destructive-text"
+                        disabled={deleting}
+                        onClick={(e) => onDelete(e as unknown as React.MouseEvent, orden)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar orden
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
