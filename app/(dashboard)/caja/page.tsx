@@ -136,7 +136,7 @@ export default function CajaPage() {
       )}
 
       {/* Selector de fecha */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:flex-wrap sm:gap-3">
         <IconButton label="Día anterior" variant="outline" onClick={() => cambiarDia(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </IconButton>
@@ -144,7 +144,7 @@ export default function CajaPage() {
           type="date"
           value={fecha}
           onChange={(e) => setFecha(e.target.value)}
-          className="w-auto"
+          className="min-w-0 flex-1 sm:w-auto sm:flex-none"
         />
         <IconButton label="Día siguiente" variant="outline" onClick={() => cambiarDia(1)} disabled={esHoy}>
           <ChevronRight className="h-4 w-4" />
@@ -182,10 +182,21 @@ export default function CajaPage() {
       ) : data ? (
         <Tabs defaultValue="resumen">
           <div className="overflow-x-auto">
+            {/* Short labels on phones so the three tabs fit without sideways scroll */}
             <TabsList className="w-auto min-w-full sm:min-w-0">
-              <TabsTrigger value="resumen">Resumen</TabsTrigger>
-              {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos manuales</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="historial">Historial de cierres</TabsTrigger>}
+              <TabsTrigger value="resumen" className="max-sm:flex-1">Resumen</TabsTrigger>
+              {puedeOperarCaja && (
+                <TabsTrigger value="movimientos" className="max-sm:flex-1">
+                  <span className="sm:hidden">Movimientos</span>
+                  <span className="hidden sm:inline">Movimientos manuales</span>
+                </TabsTrigger>
+              )}
+              {isAdmin && (
+                <TabsTrigger value="historial" className="max-sm:flex-1">
+                  <span className="sm:hidden">Cierres</span>
+                  <span className="hidden sm:inline">Historial de cierres</span>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 

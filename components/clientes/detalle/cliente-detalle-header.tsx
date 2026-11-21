@@ -48,8 +48,8 @@ export function ClienteDetalleHeader({
   return (
     <div>
       {/* Only the identity row sticks, and only where there is no fixed mobile topbar (lg+). */}
-      <div className="bg-background lg:border-b -mx-4 px-4 pb-4 sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:z-10">
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-3 pt-4">
+      <div className="bg-background lg:border-b pb-3 sm:-mx-6 sm:px-6 sm:pb-4 lg:sticky lg:top-0 lg:z-10">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-3 sm:pt-4">
           <Link href="/clientes" className="shrink-0 flex h-10 w-10 items-center justify-center -ml-2 rounded-lg hover:bg-accent transition-colors" aria-label="Volver a clientes">
             <ArrowLeft className="h-5 w-5 text-muted-foreground" />
           </Link>
@@ -74,7 +74,7 @@ export function ClienteDetalleHeader({
           <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0 sm:gap-1.5">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="default" size="sm" className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
+                <Button variant="default" size="sm" className="h-9 flex-1 gap-1.5 sm:flex-none">
                   <Plus className="h-4 w-4" /> Nuevo
                 </Button>
               </PopoverTrigger>
@@ -97,11 +97,11 @@ export function ClienteDetalleHeader({
                 )}
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" onClick={onEdit} className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
+            <Button variant="outline" size="sm" onClick={onEdit} className="h-9 flex-1 gap-1.5 sm:flex-none">
               <Edit className="h-4 w-4" /> Editar
             </Button>
             {!telefonoOculto && (
-              <Button variant="outline" size="sm" onClick={onWhatsApp} className="h-10 flex-1 gap-1.5 sm:h-9 sm:flex-none">
+              <Button variant="outline" size="sm" onClick={onWhatsApp} className="h-9 flex-1 gap-1.5 sm:flex-none">
                 <WhatsAppIcon className="h-4 w-4 text-success-600" /> WhatsApp
               </Button>
             )}

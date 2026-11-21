@@ -1,6 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import dynamic from "next/dynamic"
+import { cn } from "@/lib/utils"
+import { MobileSectionTabs, mobileSectionClass, type MobileSection } from "@/components/ui/mobile-section-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import type { EstadoOrden } from "@/types"
@@ -67,6 +70,14 @@ interface DashboardChartsProps {
   children?: React.ReactNode
 }
 
+type ChartKey = "estado" | "ingresos" | "tecnico"
+
+const CHART_TABS: MobileSection<ChartKey>[] = [
+  { key: "estado", label: "Estados" },
+  { key: "ingresos", label: "Ingresos" },
+  { key: "tecnico", label: "Técnicos" },
+]
+
 export function DashboardCharts({
   ordenesPorEstado,
   ingresosUltimos7Dias,
@@ -74,19 +85,33 @@ export function DashboardCharts({
   ordenesPorTecnico,
   children,
 }: DashboardChartsProps) {
+  // Mobile/app: one chart at a time behind a segmented control instead of
+  // three stacked ~300px cards. md+ keeps the 2×2 grid.
+  const [chart, setChart] = useState<ChartKey>("estado")
+  const mobileHidden = (key: ChartKey) => mobileSectionClass(chart, key, "md")
+
   return (
-    <>
-      {/* Gráficos principales */}
-      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
+      {/* Recent orders lead on mobile: it's what people open the app for */}
+      {children && <div className="max-md:order-first md:order-last [&>*]:h-full">{children}</div>}
+
+      <MobileSectionTabs
+        label="Gráficos"
+        hideFrom="md"
+        sections={CHART_TABS}
+        value={chart}
+        onChange={setChart}
+      />
+
+      <div className={cn("[&>*]:h-full", mobileHidden("estado"))}>
         <OrdenesPorEstadoChart data={ordenesPorEstado} />
+      </div>
+      <div className={cn("[&>*]:h-full", mobileHidden("ingresos"))}>
         <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
       </div>
-
-      {/* Órdenes por técnico + contenido adicional */}
-      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+      <div className={cn("[&>*]:h-full", mobileHidden("tecnico"))}>
         <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
-        {children}
       </div>
-    </>
+    </div>
   )
 }

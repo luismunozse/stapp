@@ -28,7 +28,7 @@ interface PageShellProps {
 /**
  * Page-level wrapper that standardizes vertical rhythm and the header.
  * The dashboard layout (SidebarMain) already supplies page padding, so this
- * only owns the `space-y-6` stack + a consistent PageHeader.
+ * only owns the vertical stack (`space-y-4`, `space-y-6` on desktop) + a consistent PageHeader.
  *
  *   <PageShell title="Órdenes de Servicio" description="…" actions={<Button…/>}>
  *     <OrdenesList />
@@ -48,7 +48,7 @@ export function PageShell({
   className,
 }: PageShellProps) {
   return (
-    <div className={cn("space-y-6", className)}>
+    <div className={cn("space-y-4 lg:space-y-6", className)}>
       {header ??
         (title && (
           <PageHeader

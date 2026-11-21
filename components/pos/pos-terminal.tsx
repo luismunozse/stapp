@@ -16,8 +16,17 @@ import {
   Unplug,
   AlertTriangle,
   RotateCcw,
+  MoreVertical,
+  Check,
 } from "lucide-react"
 import Link from "next/link"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { PosProductSearch, type PosProductSearchRef, type VentaSucursalInfo } from "./pos-product-search"
 import { PosCart } from "./pos-cart"
@@ -978,8 +987,8 @@ export function PosTerminal() {
             </Button>
           )}
 
-          {/* Printer width toggle */}
-          <div className="flex items-center rounded-md border overflow-hidden h-8">
+          {/* Printer width toggle (phones: in the ⋯ menu) */}
+          <div className="max-sm:hidden flex items-center rounded-md border overflow-hidden h-8">
             <button
               type="button"
               onClick={() => handleSetPrinterWidth(58)}
@@ -1013,7 +1022,7 @@ export function PosTerminal() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 text-xs"
+              className="h-8 gap-1.5 text-xs max-sm:hidden"
               onClick={async () => {
                 if (printer.connected) {
                   const impreso = await printTicket(lastSaleData)
@@ -1036,7 +1045,7 @@ export function PosTerminal() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 text-xs"
+              className="h-8 gap-1.5 text-xs max-sm:hidden"
               onClick={() => setDevolucionOpen(true)}
               title="Procesar devolución"
               aria-label="Devolución"
@@ -1046,6 +1055,46 @@ export function PosTerminal() {
             </Button>
           )}
 
+          {/* Phones: ticket width, reprint and returns share one overflow menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 sm:hidden" aria-label="Más opciones">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">Ancho del ticket</div>
+              {([58, 80] as const).map((w) => (
+                <DropdownMenuItem key={w} onClick={() => handleSetPrinterWidth(w)}>
+                  <Check className={cn("mr-2 h-4 w-4", printerWidth !== w && "invisible")} />
+                  {w} mm
+                </DropdownMenuItem>
+              ))}
+              {(lastSaleData || isAdmin) && <DropdownMenuSeparator />}
+              {lastSaleData && (
+                <DropdownMenuItem
+                  disabled={printing}
+                  onClick={async () => {
+                    if (printer.connected) {
+                      const impreso = await printTicket(lastSaleData)
+                      if (!impreso) await showError("No se pudo imprimir el ticket. Revisá la impresora.")
+                    } else {
+                      printTicketHTML(lastSaleData)
+                    }
+                  }}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reimprimir #{lastSaleData.numeroVenta}
+                </DropdownMenuItem>
+              )}
+              {isAdmin && (
+                <DropdownMenuItem onClick={() => setDevolucionOpen(true)}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Devolución
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* Shortcuts toggle - desktop only */}
           <Button
             variant="ghost"
@@ -1077,7 +1126,9 @@ export function PosTerminal() {
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/30 bg-warning-50 px-3 py-2 text-sm font-medium text-warning-700 dark:bg-warning/10 dark:text-warning-500">
           <span className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>Caja cerrada — las ventas no quedan registradas en el arqueo.</span>
+            <span>
+              Caja cerrada<span className="max-sm:hidden"> — las ventas no quedan registradas en el arqueo</span>.
+            </span>
           </span>
           <Button
             asChild

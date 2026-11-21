@@ -20,7 +20,7 @@ export function SidebarMain({ children, className }: { children: React.ReactNode
           }
         }
       `}</style>
-      <div className="p-4 lg:p-8">{children}</div>
+      <div className="px-4 pt-3 pb-4 sm:p-4 lg:p-8">{children}</div>
     </main>
   )
 }

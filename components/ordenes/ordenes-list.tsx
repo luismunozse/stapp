@@ -726,7 +726,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     <PullToRefresh onRefresh={() => mutate()} disabled={showForm}>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center justify-between">
         <div className="flex-1 w-full sm:w-auto">
           <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -752,7 +752,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-nowrap">
           <Button
             variant={showFilters ? "secondary" : "outline"}
             size="sm"
@@ -787,7 +787,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link href="/ordenes/recepcion">
                 <Layers className="h-4 w-4" />
-                Recibir varios equipos
+                <span className="sm:hidden">Varios</span>
+                <span className="hidden sm:inline">Recibir varios equipos</span>
               </Link>
             </Button>
           )}
@@ -1221,7 +1222,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
           </Card>
         ) : (
           <>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {ordenes.map((orden) => (
                 <OrdenMobileCard
                   key={orden.id}
