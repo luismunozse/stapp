@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
-import { X, Plus, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp, Check } from "lucide-react"
+import { X, Plus, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp, Check, ArrowLeft } from "lucide-react"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { cn } from "@/lib/utils"
 import { PatternLock } from "@/components/ui/pattern-lock"
@@ -1468,9 +1468,18 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     await showError(typeof mensaje === "string" && mensaje ? mensaje : "Revisá los datos de la orden")
   }
 
+  /** App-like step change: the new step starts at the top of the screen. */
+  const subirAlInicio = () => {
+    const scroller = formRef.current?.closest(".overflow-y-auto")
+    if (scroller) scroller.scrollTo({ top: 0 })
+  }
+
   const handleNextStep = async () => {
     const isValid = await validateStep(currentStep)
-    if (isValid) setCurrentStep((prev) => Math.min(prev + 1, totalSteps))
+    if (isValid) {
+      setCurrentStep((prev) => Math.min(prev + 1, totalSteps))
+      subirAlInicio()
+    }
   }
 
   useEffect(() => {
@@ -1496,7 +1505,36 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   const handlePrevStep = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1))
+    subirAlInicio()
   }
+
+  // Direction of the last step change, for the slide-in on phones. Tracked as
+  // state adjusted during render (React's "previous value" pattern).
+  const [pasoPrevio, setPasoPrevio] = useState(currentStep)
+  const [direccionPaso, setDireccionPaso] = useState<"adelante" | "atras">("adelante")
+  if (pasoPrevio !== currentStep) {
+    setDireccionPaso(currentStep > pasoPrevio ? "adelante" : "atras")
+    setPasoPrevio(currentStep)
+  }
+  const animacionPaso = cn(
+    "space-y-3 sm:space-y-4",
+    "max-sm:motion-safe:animate-in max-sm:motion-safe:fade-in max-sm:motion-safe:duration-200",
+    direccionPaso === "adelante" ? "max-sm:motion-safe:slide-in-from-right-8" : "max-sm:motion-safe:slide-in-from-left-8"
+  )
+
+  // Android hardware back (native app) while the form is open: step back, or
+  // close on step 1 — never leave the page behind the form. The draft keeps
+  // what was typed. See CapacitorBackButtonHandler ("app:back").
+  useEffect(() => {
+    if (!inSheet) return
+    const onBack = (e: Event) => {
+      e.preventDefault()
+      if (currentStep > 1) handlePrevStep()
+      else onClose()
+    }
+    window.addEventListener("app:back", onBack)
+    return () => window.removeEventListener("app:back", onBack)
+  })
 
   /** Los pasos 2 y 3 son opcionales, pero se puede saltar a cualquiera desde
    *  el indicador: hacia atras sin condiciones, hacia adelante validando cada
@@ -1505,6 +1543,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (destino === currentStep) return
     if (destino < currentStep) {
       setCurrentStep(destino)
+      subirAlInicio()
       return
     }
     for (let paso = currentStep; paso < destino; paso++) {
@@ -1514,6 +1553,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       }
     }
     setCurrentStep(destino)
+    subirAlInicio()
   }
 
   /** Items obligatorios del checklist que todavia faltan. Se avisa antes de
@@ -1528,17 +1568,34 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   ]
 
   return (
-    <Card>
+    <Card
+      className={cn(
+        // Phones: a full-screen app screen, not a card floating in the page
+        inSheet && "max-sm:flex max-sm:min-h-full max-sm:flex-col max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
+      )}
+    >
       {/* En el overlay el encabezado queda fijo: el formulario es largo y
           "Cerrar" no tiene que quedar arriba de todo el scroll. */}
       <CardHeader
         className={cn(
           "px-4 sm:px-6",
-          inSheet && "sticky top-0 z-20 rounded-t-lg border-b bg-card/95 py-2.5 backdrop-blur-sm sm:py-3"
+          inSheet && "sticky top-0 z-20 rounded-t-lg border-b bg-card/95 py-2.5 backdrop-blur-sm sm:py-3",
+          // Phones: app bar below the status bar, square corners
+          inSheet && "max-sm:rounded-none max-sm:pt-[calc(0.5rem+env(safe-area-inset-top,0px))] max-sm:pb-0 max-sm:pl-1"
         )}
       >
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-1">
+          {/* Phones: back arrow like any app screen — previous step, or close */}
+          <IconButton
+            label={currentStep > 1 ? "Paso anterior" : "Volver"}
+            variant="ghost"
+            className="shrink-0 sm:hidden"
+            onClick={() => (currentStep > 1 ? handlePrevStep() : onClose())}
+            tooltip={false}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </IconButton>
+          <div className="min-w-0 flex-1">
             <CardTitle className="text-lg sm:text-xl">Nueva {term("orden")}</CardTitle>
             {/* Phones: the step name rides in the fixed header instead of
                 costing its own row inside the form */}
@@ -1551,12 +1608,36 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               )
             })()}
           </div>
-          <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
+          <IconButton label="Cerrar" variant="ghost" onClick={onClose} className="max-sm:hidden">
             <X className="h-4 w-4" />
           </IconButton>
         </div>
+        {/* Phones: thin segmented progress under the app bar (tap = jump) */}
+        <div className="-ml-1 flex gap-1.5 pb-1 pt-1 sm:hidden" aria-label="Progreso del alta">
+          {pasos.map(({ step, label }) => (
+            <button
+              key={step}
+              type="button"
+              onClick={() => void irAPaso(step)}
+              aria-label={`Ir a ${label}`}
+              className="flex h-6 flex-1 items-center"
+            >
+              <span
+                className={cn(
+                  "h-1 w-full rounded-full transition-colors duration-300",
+                  step <= currentStep ? "bg-primary" : "bg-muted"
+                )}
+              />
+            </button>
+          ))}
+        </div>
       </CardHeader>
-      <CardContent className={cn("px-4 pb-4 sm:px-6 sm:pb-6", inSheet && "pt-3 sm:pt-4")}>
+      <CardContent
+        className={cn(
+          "px-4 pb-4 sm:px-6 sm:pb-6",
+          inSheet && "pt-3 sm:pt-4 max-sm:flex max-sm:flex-1 max-sm:flex-col"
+        )}
+      >
         {fromTurnoId && (
           <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
             <p className="text-sm font-medium">Origen: turno agendado</p>
@@ -1585,13 +1666,18 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           if (currentStep < totalSteps) {
             handleNextStep()
           }
-        }} className="space-y-3 sm:space-y-4">
+        }} className={cn(
+          "space-y-3 sm:space-y-4",
+          // Phones: taller touch fields (48px) and the action bar pinned to
+          // the bottom even when a step is short.
+          inSheet && "max-sm:flex max-sm:flex-1 max-sm:flex-col max-sm:[&_input:not([type=checkbox]):not([type=file]):not([type=radio])]:h-12 max-sm:[&_button[role=combobox]]:h-12"
+        )}>
           {draftNoticeVisible && (
             <DraftRestoredNotice onDiscard={discardDraft} />
           )}
 
           {/* Step indicator (phones: "Paso n/3 · …" lives in the header) */}
-          <nav aria-label="Pasos del alta" className="flex items-center gap-1.5 sm:gap-2">
+          <nav aria-label="Pasos del alta" className={cn("flex items-center gap-1.5 sm:gap-2", inSheet && "max-sm:hidden")}>
             {pasos.map(({ step, label }) => {
               const actual = step === currentStep
               const hecho = step < currentStep
@@ -1659,7 +1745,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             )
           })()}
 
-          {currentStep === 1 && (<>
+          {currentStep === 1 && (<div key="paso-1" className={animacionPaso}>
           <div>
             <ClienteSelector
               value={watch("clienteId") || null}
@@ -1985,9 +2071,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               </div>
             )}
           </div>
-          </>)}
+          </div>)}
 
-          {currentStep === 2 && (<>
+          {currentStep === 2 && (<div key="paso-2" className={animacionPaso}>
           <div>
             <Label htmlFor="trabajoARealizar">Trabajos a realizar (opcional)</Label>
             <TrabajosARealizarInput
@@ -2191,9 +2277,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               Uso interno del equipo. No aparece en comprobantes, PDFs ni portal del cliente.
             </p>
           </div>
-          </>)}
+          </div>)}
 
-          {currentStep === 3 && (<>
+          {currentStep === 3 && (<div key="paso-3" className={animacionPaso}>
           {/* Estado fisico del equipo al recibirlo */}
           <EstadoFisicoRecepcion
             codigoTipo={tipoDispositivo || null}
@@ -2388,7 +2474,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               )}
             </div>
           )}
-          </>)}
+          </div>)}
 
           {currentStep < totalSteps && checklistRequeridosPendientes > 0 && (
             <p className="text-sm text-warning-text" role="note">
@@ -2420,11 +2506,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {/* En el overlay la barra llega a los bordes de la tarjeta (CardContent
               tiene p-6): si no, el formulario se ve por los costados y abajo. */}
           <FormActionBar
-            className={cn("flex-wrap justify-between", inSheet && "-mx-4 -mb-4 rounded-b-lg px-4 sm:-mx-6 sm:-mb-6 sm:px-6")}
+            className={cn(
+              "flex-wrap justify-between",
+              inSheet && "-mx-4 -mb-4 rounded-b-lg px-4 sm:-mx-6 sm:-mb-6 sm:px-6",
+              // Phones: one row of big thumb buttons at the very bottom; going
+              // back lives in the app bar arrow (and Android's back button).
+              inSheet && "max-sm:!mt-auto max-sm:flex-nowrap max-sm:rounded-none"
+            )}
             inDialog={inSheet}
             alwaysSticky={inSheet}
           >
-            <div className="flex gap-2">
+            <div className={cn("flex gap-2", inSheet && "max-sm:hidden")}>
               {currentStep > 1 ? (
                 <Button type="button" variant="ghost" onClick={handlePrevStep}>
                   Anterior
@@ -2435,7 +2527,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 </Button>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className={cn("flex gap-2", inSheet && "max-sm:flex-1 max-sm:[&>button]:h-12 max-sm:[&>button]:flex-1")}>
               {/* Los pasos 2 y 3 son opcionales: "Crear orden" esta en todos y
                   avanzar queda como accion secundaria. */}
               {currentStep < totalSteps && (
