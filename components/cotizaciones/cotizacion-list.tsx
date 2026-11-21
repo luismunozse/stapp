@@ -408,8 +408,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   )
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold flex items-center gap-2">
           <FileText className="h-4 w-4" />
           Presupuestos ({cotizaciones.length})
@@ -418,13 +418,16 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           <div className="flex gap-2">
             {itemsPrefill.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => { setPrefillFromRepuestos(true); setShowForm(true) }}>
-                <Plus className="mr-2 h-4 w-4" />
-                Desde repuestos
+                <Plus className="mr-1.5 h-4 w-4 sm:mr-2" />
+                {/* Phones: short label so the header stays one row */}
+                <span className="sm:hidden">Repuestos</span>
+                <span className="hidden sm:inline">Desde repuestos</span>
               </Button>
             )}
             <Button size="sm" onClick={() => { setPrefillFromRepuestos(false); setShowForm(true) }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo presupuesto
+              <Plus className="mr-1.5 h-4 w-4 sm:mr-2" />
+              <span className="sm:hidden">Nuevo</span>
+              <span className="hidden sm:inline">Nuevo presupuesto</span>
             </Button>
           </div>
         )}
@@ -432,7 +435,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       {revisionPendiente && (
         <Card className="border-warning/30 bg-warning-50 dark:bg-warning/15">
-          <CardContent className="flex items-center gap-3 py-4">
+          <CardContent className="flex items-center gap-3 py-4 max-sm:p-3">
             <AlertTriangle className="h-5 w-5 text-warning-600 flex-shrink-0" />
             <p className="text-sm text-warning-700">
               Hay una revisión pendiente de firma del cliente. La orden sigue su curso con lo ya
@@ -492,7 +495,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           variant="search"
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {cotizaciones.map((cotizacion) => {
             const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
             // Espeja la regla del servidor (app/api/cotizaciones/[id]/route.ts):
@@ -515,7 +518,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
             if (isSuperseded) {
               return (
                 <Card key={cotizacion.id} className="opacity-75">
-                  <CardHeader className="py-3">
+                  <CardHeader className="py-3 max-sm:px-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <CardTitle className="text-base text-muted-foreground">
@@ -532,7 +535,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                     </div>
                   </CardHeader>
                   {cotizacion.firmaAprobacion && cotizacion.firmaMime && (
-                    <CardContent className="py-3">
+                    <CardContent className="py-3 max-sm:px-3">
                       <SignatureDisplay
                         signature={cotizacion.firmaAprobacion}
                         mime={cotizacion.firmaMime}
@@ -547,9 +550,9 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
             return (
               <Card key={cotizacion.id}>
-                <CardHeader className="py-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                <CardHeader className="py-3 max-sm:px-3 max-sm:pb-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                       <CardTitle className="text-base">
                         {cotizacion.numeroCotizacion}
                       </CardTitle>
@@ -557,13 +560,13 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         {config.label}
                       </StatusPill>
                     </div>
-                    <div className="text-lg font-bold">
+                    <div className="shrink-0 text-base font-bold sm:text-lg">
                       {formatPrice(cotizacion.total)}
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="py-3 space-y-3">
-                  <div className="text-sm text-muted-foreground flex flex-col sm:flex-row sm:gap-4">
+                <CardContent className="py-3 space-y-2 max-sm:px-3 max-sm:pt-0 sm:space-y-3">
+                  <div className="flex flex-row flex-wrap gap-x-3 text-xs text-muted-foreground sm:flex-nowrap sm:gap-4 sm:text-sm">
                     <span>Creado: {formatDate(cotizacion.createdAt)}</span>
                     {cotizacion.fechaVencimiento && (
                       <span>
@@ -573,8 +576,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                   </div>
 
                   {/* Items preview */}
-                  <div className="text-sm">
-                    <div className="font-medium mb-1">Items:</div>
+                  <div className="text-xs sm:text-sm">
+                    <div className="font-medium mb-1 max-sm:hidden">Items:</div>
                     <ul className="list-disc list-inside text-muted-foreground">
                       {cotizacion.items.slice(0, 3).map((item) => (
                         <li key={item.descripcion}>
@@ -600,7 +603,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {/* Mobile/app: one swipeable row of actions instead of 3-4 wrapped rows */}
+                  <div className="-mx-3 flex gap-2 overflow-x-auto border-t px-3 pt-2 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
                     {canSend && canCrear && (
                       !clienteEmail ? (
                         <Button

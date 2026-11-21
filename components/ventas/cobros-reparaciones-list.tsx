@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Search, Filter, X, Wrench, Calendar, User } from "lucide-react"
+import { Search, Filter, X, Wrench, Calendar } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -184,7 +185,8 @@ export function CobrosReparacionesList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      {/* Desktop only: on phones the "Reparaciones" tab already names the list */}
+      <div className="hidden items-center gap-2 sm:flex">
         <Wrench className="h-6 w-6 text-primary" />
         <div>
           <h2 className="text-xl font-semibold">Cobros de reparaciones</h2>
@@ -194,8 +196,8 @@ export function CobrosReparacionesList() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-row items-center gap-2 sm:gap-4">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar por cliente o nro de orden..."
@@ -204,10 +206,22 @@ export function CobrosReparacionesList() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
+        {/* Mobile: filters as an icon next to the search */}
+        <Button
+          variant={showFilters ? "secondary" : "outline"}
+          size="icon"
+          className="relative shrink-0 sm:hidden"
+          onClick={() => setShowFilters(!showFilters)}
+          aria-label="Filtros"
+          aria-expanded={showFilters}
+        >
+          <Filter className="h-4 w-4" />
+          {hasActiveFilters && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+        </Button>
         <Button
           variant="outline"
           onClick={() => setShowFilters(!showFilters)}
-          className={showFilters ? "bg-muted" : ""}
+          className={cn("hidden sm:inline-flex", showFilters && "bg-muted")}
         >
           <Filter className="mr-2 h-4 w-4" />
           Filtros
@@ -220,9 +234,9 @@ export function CobrosReparacionesList() {
       </div>
 
       {showFilters && (
-        <div className="rounded-lg border bg-card p-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
+        <div className="rounded-lg border bg-card p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+            <div className="col-span-2 sm:col-span-1">
               <label htmlFor="cobro-filter-metodo" className="mb-1.5 block text-sm font-medium">Método de pago</label>
               <Select
                 value={metodo || "all"}
@@ -255,7 +269,7 @@ export function CobrosReparacionesList() {
                 onChange={(date) => { setFechaHasta(date || ""); setPage(1) }}
               />
             </div>
-            <div className="flex items-end">
+            <div className={cn("col-span-2 flex items-end sm:col-span-1", !hasActiveFilters && "max-sm:hidden")}>
               {hasActiveFilters && (
                 <Button variant="ghost" onClick={clearFilters} className="w-full">
                   <X className="mr-2 h-4 w-4" />
@@ -289,10 +303,10 @@ export function CobrosReparacionesList() {
       {/* Mobile */}
       <div className="sm:hidden">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {[...Array(3)].map((_, i) => (
               <Card key={`skeleton-${i}`}>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
                   <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />
                   <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
@@ -309,45 +323,40 @@ export function CobrosReparacionesList() {
           />
         ) : (
           <>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {cobros.map((cobro) => (
                 <Card
                   key={cobro.id}
                   className="cursor-pointer active:bg-muted/50 transition-colors"
                   onClick={() => irALaOrden(cobro)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono font-medium text-primary text-sm">
-                        {etiquetaOrden(cobro.orden)}
-                      </span>
-                      {cobro.anulado
-                        ? <Badge variant="destructive" className="text-xs">Anulado</Badge>
-                        : <Badge variant="success" className="text-xs">Cobrado</Badge>}
-                    </div>
-                    <div className="font-medium text-sm">{cobro.orden.clienteNombre || "Sin cliente"}</div>
-                    {cobro.orden.equipo && (
-                      <div className="text-xs text-muted-foreground">{cobro.orden.equipo}</div>
-                    )}
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDateTime(cobro.fecha)}
-                      </span>
-                      {cobro.cobradoPor && (
-                        <span className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {cobro.cobradoPor}
+                  <CardContent className="p-3">
+                    {/* Row 1: order · client  |  amount */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 font-mono text-sm font-semibold text-primary">
+                          {etiquetaOrden(cobro.orden)}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-xs text-muted-foreground">
-                        {metodoPagoLabels[cobro.metodoPago] || cobro.metodoPago}
-                      </span>
-                      <span className={cobro.anulado ? "font-semibold line-through text-muted-foreground" : "font-semibold"}>
+                        <span className="truncate text-sm font-medium">
+                          {cobro.orden.clienteNombre || "Sin cliente"}
+                        </span>
+                      </div>
+                      <span className={cobro.anulado ? "shrink-0 font-semibold tabular-nums line-through text-muted-foreground" : "shrink-0 font-semibold tabular-nums"}>
                         {formatPrice(cobro.monto)}
                       </span>
+                    </div>
+                    {/* Row 2: date · method · device  |  status */}
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="flex min-w-0 items-center gap-1">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {formatDateTime(cobro.fecha)} · {metodoPagoLabels[cobro.metodoPago] || cobro.metodoPago}
+                          {cobro.orden.equipo ? ` · ${cobro.orden.equipo}` : ""}
+                        </span>
+                      </span>
+                      {cobro.anulado
+                        ? <Badge variant="destructive" className="shrink-0 text-xs">Anulado</Badge>
+                        : <Badge variant="success" className="shrink-0 text-xs">Cobrado</Badge>}
                     </div>
                   </CardContent>
                 </Card>

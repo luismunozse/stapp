@@ -32,6 +32,7 @@ import {
   Wallet,
   MoreHorizontal,
   RotateCcw,
+  ListChecks,
 } from "lucide-react"
 import Link from "next/link"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -47,6 +48,16 @@ import { ComprobanteFiscalCard } from "@/components/ventas/comprobante-fiscal-ca
 import { GarantiasVentaCard } from "@/components/ventas/garantias-venta-card"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
 import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
+import { MobileSectionTabs, mobileSectionClass, type MobileSection } from "@/components/ui/mobile-section-tabs"
+import { cn } from "@/lib/utils"
+
+// Mobile/app sections of the sale detail (desktop shows everything at once)
+type SeccionMovil = "resumen" | "cobro" | "productos"
+const SECCIONES_MOVIL: MobileSection<SeccionMovil>[] = [
+  { key: "resumen", label: "Resumen", icon: ListChecks },
+  { key: "cobro", label: "Cobro", icon: DollarSign },
+  { key: "productos", label: "Productos", icon: Package },
+]
 
 interface VentaItem {
   id: string
@@ -174,6 +185,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [showPagoForm, setShowPagoForm] = useState(false)
   const [expandedPagos, setExpandedPagos] = useState(false)
   const [pagoACorregir, setPagoACorregir] = useState<Pago | null>(null)
+  const [seccionMovil, setSeccionMovil] = useState<SeccionMovil>("resumen")
+  const soloEnMovil = (seccion: SeccionMovil) => mobileSectionClass(seccionMovil, seccion)
 
   const fetchOrganization = async () => {
     try {
@@ -320,8 +333,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </div>
       </div>
 
-      {/* Botones de acción - responsive */}
-      <div className="flex flex-wrap gap-2">
+      {/* Action buttons. Mobile/app: one swipeable row instead of several wrapped rows */}
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0 lg:pb-0">
         {venta.clienteTelefono && (
           <WhatsAppDialog
             context={{
@@ -477,7 +490,43 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         />
       )}
 
-      {/* Grid de información */}
+      {/* Mobile/app: section switcher */}
+      <MobileSectionTabs
+        label="Secciones de la venta"
+        value={seccionMovil}
+        onChange={setSeccionMovil}
+        sections={SECCIONES_MOVIL.map((s) => ({
+          ...s,
+          alert: s.key === "cobro" && saldoPendiente > 0 && venta.estado !== "ANULADA",
+        }))}
+      />
+
+      {/* Mobile: client, seller and total in one compact card */}
+      <Card className={cn("sm:hidden", soloEnMovil("resumen"))}>
+        <CardContent className="space-y-1 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{venta.clienteNombre}</span>
+              </div>
+              {venta.clienteTelefono && (
+                <div className="pl-5 text-xs text-muted-foreground">{venta.clienteTelefono}</div>
+              )}
+            </div>
+            <div className="shrink-0 text-lg font-bold text-primary tabular-nums">{formatPrice(venta.total)}</div>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="truncate">Vendedor: {venta.vendedor?.nombre || "N/A"}</span>
+            {venta.descuento > 0 && (
+              <span className="shrink-0">Descuento: {formatPrice(venta.descuento)}</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Grid de información (sm+; phones get the compact card above) */}
+      <div className={cn("max-sm:hidden", soloEnMovil("resumen"))}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Cliente */}
         <Card>
@@ -531,9 +580,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           </CardContent>
         </Card>
       </div>
+      </div>
 
       {/* Factura electrónica (ARCA): solo ADMIN; el bloque se oculta solo si no aplica */}
       {isAdmin && (
+        <div className={cn("empty:hidden", soloEnMovil("resumen"))}>
         <ComprobanteFiscalCard
           ventaId={ventaId}
           estadoVenta={venta.estado}
@@ -541,11 +592,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           clienteNombre={venta.clienteNombre}
           total={venta.total}
         />
+        </div>
       )}
 
       {/* Sección de Pagos */}
-      <Card>
-        <CardHeader>
+      <Card className={soloEnMovil("cobro")}>
+        <CardHeader className="max-sm:p-4 max-sm:pb-3">
           <div className="flex items-start justify-between">
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
@@ -554,7 +606,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             <PaymentStatusBadge status={venta.estadoPago} showIcon />
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 max-sm:px-4 max-sm:pb-4 sm:space-y-4">
           {/* Resumen financiero */}
           {(() => {
             const totalCostoFinanciero = (venta.pagos || []).reduce(
@@ -594,10 +646,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
 
           {/* Botón registrar pago si hay pendiente */}
           {saldoPendiente > 0 && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
-              <div>
+            <div className="flex flex-row items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
+              <div className="min-w-0">
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
-                <div className="text-xl font-bold text-destructive-text">
+                <div className="text-lg font-bold text-destructive-text sm:text-xl">
                   {formatPrice(saldoPendiente)}
                 </div>
               </div>
@@ -605,7 +657,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 <Button
                   onClick={() => setShowPagoForm(!showPagoForm)}
                   variant={showPagoForm ? "outline" : "default"}
-                  className="w-full sm:w-auto"
+                  className="shrink-0"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Registrar pago
@@ -678,57 +730,51 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       </Card>
 
       {/* Items */}
-      <Card>
-        <CardHeader className="pb-2 sm:pb-6">
+      <Card className={soloEnMovil("productos")}>
+        <CardHeader className="pb-2 max-sm:p-4 max-sm:pb-2 sm:pb-6">
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             Productos ({venta.items.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="max-sm:px-4 max-sm:pb-4">
           {/* Vista mobile - Cards */}
-          <div className="space-y-3 sm:hidden">
+          <div className="space-y-2 sm:hidden">
             {venta.items.map((item) => {
               const garantia = getGarantiaForItem(item.id)
               return (
-                <div key={item.id} className="rounded-lg border bg-muted/30 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{item.descripcion}</div>
-                      {item.inventario && (
-                        <div className="text-xs text-muted-foreground">
-                          Código: {item.inventario.codigo}
-                        </div>
+                <div key={item.id} className="rounded-lg border bg-muted/30 p-2.5">
+                  {/* Row 1: description  |  subtotal */}
+                  <div className="flex items-start justify-between gap-2 text-sm">
+                    <div className="min-w-0 flex-1 font-medium">{item.descripcion}</div>
+                    <span className="shrink-0 font-medium tabular-nums">{formatPrice(item.subtotal)}</span>
+                  </div>
+                  {/* Row 2: qty × price · code · warranty  |  certificate */}
+                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span className="min-w-0 truncate">
+                      {item.cantidad} x {formatPrice(item.precioUnitario)}
+                      {item.inventario && ` · ${item.inventario.codigo}`}
+                      {item.diasGarantia > 0 && (
+                        <span className="text-success-text"> · {item.diasGarantia}d garantía</span>
                       )}
-                    </div>
-                    {item.diasGarantia > 0 && (
-                      <Badge variant="outline" className="shrink-0 text-success-text">
-                        {item.diasGarantia}d
-                      </Badge>
+                    </span>
+                    {garantia && garantia.estado !== "ANULADA" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="-my-1 -mr-1.5 h-8 shrink-0 px-2 text-xs"
+                        onClick={() =>
+                          window.open(
+                            `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <Shield className="mr-1 h-3.5 w-3.5" />
+                        Certificado
+                      </Button>
                     )}
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {item.cantidad} x {formatPrice(item.precioUnitario)}
-                    </span>
-                    <span className="font-medium">{formatPrice(item.subtotal)}</span>
-                  </div>
-                  {garantia && garantia.estado !== "ANULADA" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 w-full"
-                      onClick={() =>
-                        window.open(
-                          `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <Shield className="mr-1 h-4 w-4" />
-                      Certificado
-                    </Button>
-                  )}
                 </div>
               )
             })}
@@ -847,26 +893,28 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       </Card>
 
       {/* Garantías: estado derivado y reclamos por línea */}
-      <GarantiasVentaCard ventaId={ventaId} garantias={venta.garantias} items={venta.items} isAdmin={isAdmin} />
+      <div className={cn("empty:hidden", soloEnMovil("productos"))}>
+        <GarantiasVentaCard ventaId={ventaId} garantias={venta.garantias} items={venta.items} isAdmin={isAdmin} />
+      </div>
 
       {/* Notas de crédito (devoluciones de la venta) */}
       {venta.devoluciones && venta.devoluciones.length > 0 && (
-        <Card>
-          <CardHeader>
+        <Card className={soloEnMovil("cobro")}>
+          <CardHeader className="max-sm:p-4 max-sm:pb-3">
             <CardTitle className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5" />
               Notas de crédito ({venta.devoluciones.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="max-sm:px-4 max-sm:pb-4">
+            <div className="space-y-3 sm:space-y-4">
               {venta.devoluciones.map((dev) => (
                 <div
                   key={dev.id}
-                  className="rounded-lg border p-4 space-y-2"
+                  className="rounded-lg border p-3 space-y-2 sm:p-4"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-medium">{dev.numeroDevolucion}</span>
                       <Badge variant={dev.tipo === "TOTAL" ? "destructive" : "secondary"}>
                         {dev.tipo}
@@ -906,11 +954,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
 
       {/* Observaciones */}
       {venta.observaciones && (
-        <Card>
-          <CardHeader>
+        <Card className={soloEnMovil("resumen")}>
+          <CardHeader className="max-sm:p-4 max-sm:pb-2">
             <CardTitle className="text-base">Observaciones</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="max-sm:px-4 max-sm:pb-4">
             <p className="text-muted-foreground">{venta.observaciones}</p>
           </CardContent>
         </Card>

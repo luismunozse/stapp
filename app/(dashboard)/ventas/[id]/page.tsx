@@ -7,7 +7,7 @@ export default async function VentaDetailPage({
 }) {
   const { id } = await params
   return (
-    <div className="container py-6">
+    <div className="container py-6 max-sm:py-0">
       <VentaDetail ventaId={id} />
     </div>
   )

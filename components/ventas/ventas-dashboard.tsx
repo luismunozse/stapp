@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -47,7 +48,11 @@ const METODO_ICONS: Record<string, any> = {
 
 export function VentasDashboard() {
   const { formatPrice } = useCurrency()
-  const [expanded, setExpanded] = useState(true)
+  const isMobile = useIsMobileViewport()
+  // null = untouched: the breakdown starts open on desktop and folded on phones,
+  // where it pushed the sales list several screens down.
+  const [expandedElegido, setExpanded] = useState<boolean | null>(null)
+  const expanded = expandedElegido ?? !isMobile
   const { data, isLoading } = useSWR("/api/reportes/ventas-analytics", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30000,
@@ -55,12 +60,12 @@ export function VentasDashboard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <SectionHeader title="Resumen de ventas" />
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="h-4 bg-muted animate-pulse rounded w-1/2 mb-2" />
                 <div className="h-6 bg-muted animate-pulse rounded w-3/4" />
               </CardContent>
@@ -74,7 +79,7 @@ export function VentasDashboard() {
   if (!data || data.error) return null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <SectionHeader
         title="Resumen de ventas"
         actions={
@@ -86,36 +91,36 @@ export function VentasDashboard() {
       />
 
       {/* KPI Cards - Always visible */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Ventas de hoy</span>
               <ShoppingCart className="h-4 w-4 text-primary" />
             </div>
-            <div className="text-xl font-bold">{formatPrice(data.ventasHoy.total)}</div>
+            <div className="text-lg font-bold sm:text-xl">{formatPrice(data.ventasHoy.total)}</div>
             <p className="text-xs text-muted-foreground">{data.ventasHoy.count} venta{data.ventasHoy.count !== 1 ? "s" : ""}</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Ventas del mes</span>
               <Calendar className="h-4 w-4 text-info-text" />
             </div>
-            <div className="text-xl font-bold">{formatPrice(data.ventasMes.total)}</div>
+            <div className="text-lg font-bold sm:text-xl">{formatPrice(data.ventasMes.total)}</div>
             <p className="text-xs text-muted-foreground">{data.ventasMes.count} ventas</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Ticket promedio</span>
               <Receipt className="h-4 w-4 text-purple-500" />
             </div>
-            <div className="text-xl font-bold">{formatPrice(data.ticketPromedio)}</div>
+            <div className="text-lg font-bold sm:text-xl">{formatPrice(data.ticketPromedio)}</div>
             <p className="text-xs text-muted-foreground">este mes</p>
           </CardContent>
         </Card>
@@ -125,12 +130,12 @@ export function VentasDashboard() {
             como un margen real de cero y no como un permiso faltante. */}
         {data.margenBruto.porcentaje !== null && (
           <Card>
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-muted-foreground">Margen bruto</span>
                 <TrendingUp className="h-4 w-4 text-success-text" />
               </div>
-              <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success-text" : "text-destructive-text"}`}>
+              <div className={`text-lg font-bold sm:text-xl ${data.margenBruto.porcentaje >= 0 ? "text-success-text" : "text-destructive-text"}`}>
                 {data.margenBruto.porcentaje.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
