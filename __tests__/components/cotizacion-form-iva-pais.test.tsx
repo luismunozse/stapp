@@ -25,10 +25,10 @@ const stubConfigFetch = (ivaPorcentaje: number) => {
   )
 }
 
-const renderForm = () =>
+const renderForm = (tipo?: "ORDEN" | "PRESUPUESTO") =>
   render(
     <ModalProvider>
-      <CotizacionForm ordenId="orden-1" onClose={vi.fn()} onSuccess={vi.fn()} />
+      <CotizacionForm tipo={tipo} ordenId="orden-1" onClose={vi.fn()} onSuccess={vi.fn()} />
     </ModalProvider>
   )
 
@@ -56,6 +56,21 @@ describe("CotizacionForm — alicuotas de IVA segun el pais de la org", () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText("IVA")).toHaveTextContent("21%")
+    })
+  })
+
+  // Cotizacion y presupuesto comparten CotizacionForm (prop `tipo`), y el bloque
+  // de IVA no esta condicionado por isPresupuesto. Este caso deja constancia de
+  // que la alicuota del pais tambien llega al presupuesto.
+  it("muestra la tasa chilena (19%) tambien en un presupuesto", async () => {
+    paisMock.value = "CL"
+    stubConfigFetch(19)
+
+    renderForm("PRESUPUESTO")
+
+    expect(await screen.findByRole("heading", { name: /Presupuesto/ })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText("IVA")).toHaveTextContent("19%")
     })
   })
 })
