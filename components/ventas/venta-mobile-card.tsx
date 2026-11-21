@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CobroResumen } from "@/components/ui/cobro-resumen"
 import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
-import { Eye, FileText, Calendar, ShoppingCart } from "lucide-react"
+import { FileText, Calendar } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 const metodoPagoLabels: Record<string, string> = {
@@ -43,80 +43,66 @@ interface VentaMobileCardProps {
 export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
   const { formatPrice, formatDate } = useCurrency()
 
+  const anulada = venta.estado === "ANULADA"
+  const productos = `${venta.items.length} producto${venta.items.length !== 1 ? "s" : ""}`
+
   return (
     <Card className="cursor-pointer active:bg-muted/50 transition-colors" onClick={onClick}>
-      <CardContent className="p-4">
-        {/* Header: Numero + Estado */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-medium text-primary text-sm">
+      <CardContent className="p-3">
+        {/* Row 1: number · client  |  total */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="shrink-0 font-mono text-sm font-semibold text-primary">
               V{String(venta.numeroVenta).padStart(4, "0")}
             </span>
-            <VentaEstadoBadge estado={venta.estado} className="text-xs" />
+            <span className="truncate text-sm font-medium">{venta.clienteNombre}</span>
           </div>
+          <span
+            className={
+              anulada
+                ? "shrink-0 font-semibold tabular-nums text-muted-foreground line-through"
+                : "shrink-0 font-semibold tabular-nums"
+            }
+          >
+            {formatPrice(venta.total)}
+          </span>
         </div>
 
-        {/* Info */}
-        <div className="space-y-1.5 text-sm">
-          <div>
-            <div className="font-medium">{venta.clienteNombre}</div>
-            {venta.clienteTelefono && (
-              <div className="text-xs text-muted-foreground">{venta.clienteTelefono}</div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {formatDate(venta.createdAt)}
-            </div>
-            <div className="flex items-center gap-1">
-              <ShoppingCart className="h-3 w-3" />
-              {venta.items.length} producto{venta.items.length !== 1 ? "s" : ""}
-            </div>
-          </div>
-
-          <CobroResumen
-            estadoPago={venta.estadoPago}
-            saldoPendiente={venta.estado === "ANULADA" ? 0 : venta.saldoPendiente}
-            layout="inline"
-            className="pt-1"
-          />
-
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-xs text-muted-foreground">
-              {metodoPagoLabels[venta.metodoPago] || venta.metodoPago}
+        {/* Row 2: date · items · method  |  payment/status · PDF */}
+        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-1">
+            <Calendar className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {formatDate(venta.createdAt)} · {productos} · {metodoPagoLabels[venta.metodoPago] || venta.metodoPago}
             </span>
-            <span className="font-semibold">{formatPrice(venta.total)}</span>
+          </span>
+          <div className="-my-1 -mr-1 flex shrink-0 items-center gap-1">
+            {anulada ? (
+              <VentaEstadoBadge estado={venta.estado} />
+            ) : (
+              <CobroResumen
+                estadoPago={venta.estadoPago}
+                saldoPendiente={venta.saldoPendiente}
+                layout="inline"
+                className="justify-end"
+              />
+            )}
+            <div role="group" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0 text-muted-foreground hover:text-primary"
+                aria-label="Descargar comprobante"
+                title="Descargar comprobante"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(`/api/ventas/${venta.id}/pdf`, "_blank")
+                }}
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div role="group" className="flex items-center justify-end gap-1 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={(e) => {
-              e.stopPropagation()
-              onClick()
-            }}
-          >
-            <Eye className="h-3.5 w-3.5 mr-1" />
-            Ver
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={(e) => {
-              e.stopPropagation()
-              window.open(`/api/ventas/${venta.id}/pdf`, "_blank")
-            }}
-          >
-            <FileText className="h-3.5 w-3.5 mr-1" />
-            PDF
-          </Button>
         </div>
       </CardContent>
     </Card>

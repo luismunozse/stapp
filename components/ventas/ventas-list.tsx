@@ -19,6 +19,8 @@ import {
   X,
   ShoppingCart,
   Monitor,
+  MoreHorizontal,
+  ShieldCheck,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -27,6 +29,8 @@ import { ExportButton } from "@/components/export/export-button"
 import { VentaMobileCard } from "./venta-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -246,8 +250,8 @@ export function VentasList() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header (desktop only: on phones the page title and the tab already say "Ventas") */}
+      <div className="hidden gap-4 sm:flex sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <ShoppingCart className="h-6 w-6 text-primary" />
           <h2 className="text-xl font-semibold">Ventas</h2>
@@ -273,8 +277,8 @@ export function VentasList() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-row items-center gap-2 sm:gap-4">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={telefonoOculto ? "Buscar por cliente, nro de venta..." : "Buscar por cliente, teléfono, nro de venta..."}
@@ -283,10 +287,55 @@ export function VentasList() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
+        {/* Mobile: search, filters, POS and an overflow menu share one row */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            size="icon"
+            className="relative"
+            onClick={() => setShowFilters(!showFilters)}
+            aria-label="Filtros"
+            aria-expanded={showFilters}
+          >
+            <Filter className="h-4 w-4" />
+            {hasActiveFilters && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </Button>
+          <Button asChild size="icon" title="Ir al POS">
+            <Link href="/pos" aria-label="Ir al POS">
+              <Monitor className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Más opciones" title="Más opciones">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-1 space-y-1">
+              <ExportButton
+                entity="ventas"
+                filters={{
+                  ...(estado && { estado }),
+                  ...(fechaDesde && { desde: fechaDesde }),
+                  ...(fechaHasta && { hasta: fechaHasta }),
+                }}
+                variant="ghost"
+                label="Exportar"
+                className="w-full justify-start"
+              />
+              <Button asChild variant="ghost" className="w-full justify-start">
+                <Link href="/garantias?origen=VENTA">
+                  <ShieldCheck className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Garantías de ventas
+                </Link>
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
         <Button
           variant="outline"
           onClick={() => setShowFilters(!showFilters)}
-          className={showFilters ? "bg-muted" : ""}
+          className={cn("hidden sm:inline-flex", showFilters && "bg-muted")}
         >
           <Filter className="mr-2 h-4 w-4" />
           Filtros
@@ -300,9 +349,9 @@ export function VentasList() {
 
       {/* Expanded Filters */}
       {showFilters && (
-        <div className="rounded-lg border bg-card p-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
+        <div className="rounded-lg border bg-card p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+            <div className="col-span-2 sm:col-span-1">
               <label htmlFor="venta-filter-estado" className="mb-1.5 block text-sm font-medium">Estado</label>
               <Select
                 value={estado || "all"}
@@ -337,7 +386,7 @@ export function VentasList() {
                 onChange={(date) => setFechaHasta(date || "")}
               />
             </div>
-            <div className="flex items-end">
+            <div className={cn("col-span-2 flex items-end sm:col-span-1", !hasActiveFilters && "max-sm:hidden")}>
               {hasActiveFilters && (
                 <Button variant="ghost" onClick={clearFilters} className="w-full">
                   <X className="mr-2 h-4 w-4" />
@@ -371,10 +420,10 @@ export function VentasList() {
       {/* Mobile: Cards */}
       <div className="sm:hidden">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {[...Array(3)].map((_, i) => (
               <Card key={`skeleton-${i}`}>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
                   <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />
                   <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
@@ -386,7 +435,7 @@ export function VentasList() {
           <EmptyState icon={ShoppingCart} title="Sin ventas" description="No hay ventas registradas todavía" variant="search" />
         ) : (
           <>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {ventas.map((venta) => (
                 <VentaMobileCard
                   key={venta.id}

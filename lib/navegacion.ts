@@ -156,12 +156,25 @@ export function accionesVisibles(role: string, features: OrgFeatures): NavItem[]
   return ACCIONES_RAPIDAS.filter((item) => itemVisible(item, role, features))
 }
 
-export function bottomNavItems(role: string, features: OrgFeatures): NavItem[] {
+/** Most shortcuts a phone's bottom bar holds (plus "Más"). */
+export const MAX_BOTTOM_NAV = 5
+
+/**
+ * Items of the phone bottom bar. `preferidos` are the hrefs the user picked on
+ * this device; only those they can still see count (role/module may change),
+ * and when none survives the role default is used.
+ */
+export function bottomNavItems(role: string, features: OrgFeatures, preferidos?: string[] | null): NavItem[] {
   const visibles = itemsVisibles(role, features)
-  const hrefs = BOTTOM_NAV_HREFS[role] ?? BOTTOM_NAV_HREFS.ADMIN
-  return hrefs
-    .map((href) => visibles.find((item) => item.href === href))
-    .filter((item): item is NavItem => !!item)
+  const porHref = (hrefs: string[]) =>
+    hrefs
+      .map((href) => visibles.find((item) => item.href === href))
+      .filter((item): item is NavItem => !!item)
+      .filter((item, i, arr) => arr.findIndex((o) => o.href === item.href) === i)
+      .slice(0, MAX_BOTTOM_NAV)
+  const elegidos = preferidos?.length ? porHref(preferidos) : []
+  if (elegidos.length > 0) return elegidos
+  return porHref(BOTTOM_NAV_HREFS[role] ?? BOTTOM_NAV_HREFS.ADMIN)
 }
 
 export function esRutaActiva(pathname: string, href: string): boolean {

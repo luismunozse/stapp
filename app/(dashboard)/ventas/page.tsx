@@ -15,9 +15,10 @@ export default function VentasPage() {
     <PosAccessGate>
       <PageShell
         title="Ventas"
-        className="container py-6"
+        className="container py-6 max-sm:py-0"
         actions={
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
+          // Phones: this link lives in the list's "⋯" menu, so the header stays one row.
+          <Button asChild variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex">
             <Link href="/garantias?origen=VENTA">
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
               Garantías de ventas
@@ -32,7 +33,7 @@ export default function VentasPage() {
             <TabsTrigger value="ventas">Ventas</TabsTrigger>
             <TabsTrigger value="reparaciones">Reparaciones</TabsTrigger>
           </TabsList>
-          <TabsContent value="ventas" className="space-y-6">
+          <TabsContent value="ventas" className="space-y-4 sm:space-y-6">
             <VentasDashboard />
 
             <VentasList />

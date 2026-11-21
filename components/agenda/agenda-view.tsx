@@ -23,6 +23,7 @@ import {
   Truck,
   CheckCircle2,
   Clock,
+  Filter,
 } from "lucide-react"
 import {
   format,
@@ -46,6 +47,8 @@ import { TurnoBlock } from "./turno-block"
 import { EmptyState } from "@/components/ui/empty-state"
 import type { TurnoConRelaciones } from "@/types"
 import { TURNO_ESTADO_STYLES } from "@/lib/turno-colors"
+import { cn } from "@/lib/utils"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
@@ -77,11 +80,18 @@ export function AgendaView() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
 
-  const [vista, setVista] = useState<Vista>("semana")
+  // On phones the 7-column week grid is too narrow to read: until the user
+  // picks a view, phones start on the day view, which uses the full width.
+  const isMobile = useIsMobileViewport()
+  const [vistaElegida, setVista] = useState<Vista | null>(null)
+  const vista: Vista = vistaElegida ?? (isMobile ? "dia" : "semana")
   const [cursor, setCursor] = useState(new Date())
   const [filterTecnico, setFilterTecnico] = useState<string>("_todos_")
   const [filterEstado, setFilterEstado] = useState<string>("_todos_")
   const [filterTipo, setFilterTipo] = useState<string>("_todos_")
+  // Phones fold the filter selects behind a toggle so the toolbar is one row.
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false)
+  const filtrosActivos = filterTecnico !== "_todos_" || filterEstado !== "_todos_" || filterTipo !== "_todos_"
 
   const [formOpen, setFormOpen] = useState(false)
   const [editTurno, setEditTurno] = useState<TurnoConRelaciones | null>(null)
@@ -232,9 +242,9 @@ export function AgendaView() {
   }, [cursor, vista])
 
   return (
-    <div className="space-y-4">
-      {/* Stats chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="space-y-3 sm:space-y-4">
+      {/* Stats chips: one row of four compact tiles on phones */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
         <StatCard icon={<CalendarDays className="h-4 w-4" />} label="Hoy" value={stats.hoy} tone="blue" />
         <StatCard icon={<Truck className="h-4 w-4" />} label="En camino" value={stats.enCamino} tone="amber" />
         <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Realizados" value={stats.realizados} tone="emerald" sub="semana" />
@@ -242,8 +252,8 @@ export function AgendaView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-1">
           <Button variant="outline" size="icon" onClick={onPrev} aria-label="Anterior" className="h-9 w-9">
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -251,7 +261,7 @@ export function AgendaView() {
           <Button variant="outline" size="icon" onClick={onNext} aria-label="Siguiente" className="h-9 w-9">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium capitalize ml-3">{labelRango}</span>
+          <span className="min-w-0 truncate text-sm font-medium capitalize ml-2 sm:ml-3">{labelRango}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -262,9 +272,29 @@ export function AgendaView() {
             <VistaBtn active={vista === "lista"} onClick={() => setVista("lista")} icon={<List className="h-3.5 w-3.5" />} label="Lista" />
           </div>
 
+          <Button
+            type="button"
+            variant={filtrosMovilAbiertos ? "secondary" : "outline"}
+            size="icon"
+            className="relative h-9 w-9 sm:hidden"
+            onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+            aria-label="Filtros"
+            aria-expanded={filtrosMovilAbiertos}
+          >
+            <Filter className="h-4 w-4" />
+            {filtrosActivos && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </Button>
+
+          {/* Filters: inline on sm+ (display: contents keeps the old wrap), a 2-column panel on phones */}
+          <div
+            className={cn(
+              "contents max-sm:order-last max-sm:w-full max-sm:grid-cols-2 max-sm:gap-2",
+              filtrosMovilAbiertos ? "max-sm:grid" : "max-sm:hidden",
+            )}
+          >
           {isAdmin && (
             <Select value={filterTecnico} onValueChange={setFilterTecnico}>
-              <SelectTrigger className="w-[160px] h-9">
+              <SelectTrigger className="w-[160px] h-9 max-sm:col-span-2 max-sm:w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -277,7 +307,7 @@ export function AgendaView() {
           )}
 
           <Select value={filterTipo} onValueChange={setFilterTipo}>
-            <SelectTrigger className="w-[140px] h-9">
+            <SelectTrigger className="w-[140px] h-9 max-sm:w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -291,7 +321,7 @@ export function AgendaView() {
           </Select>
 
           <Select value={filterEstado} onValueChange={setFilterEstado}>
-            <SelectTrigger className="w-[140px] h-9">
+            <SelectTrigger className="w-[140px] h-9 max-sm:w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -305,8 +335,9 @@ export function AgendaView() {
               <SelectItem value="no_show">No se presentó</SelectItem>
             </SelectContent>
           </Select>
+          </div>
 
-          <Button onClick={() => handleNuevoSlot(new Date())}>
+          <Button onClick={() => handleNuevoSlot(new Date())} className="max-sm:ml-auto max-sm:h-9 max-sm:px-3">
             <Plus className="mr-2 h-4 w-4" />
             Nuevo turno
           </Button>
@@ -398,13 +429,13 @@ function StatCard({
     red: "bg-destructive/10 text-destructive-text border-destructive/25",
   }
   return (
-    <div className={`rounded-lg border p-3 ${tones[tone]}`}>
+    <div className={`min-w-0 rounded-lg border p-2 sm:p-3 ${tones[tone]}`}>
       <div className="flex items-center gap-1.5 text-xs font-medium opacity-80">
-        {icon}
-        {label}
-        {sub && <span className="text-xs opacity-70 ml-auto">{sub}</span>}
+        <span className="shrink-0 max-sm:hidden">{icon}</span>
+        <span className="truncate">{label}</span>
+        {sub && <span className="text-xs opacity-70 ml-auto max-sm:hidden">{sub}</span>}
       </div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
+      <div className="text-lg leading-tight sm:text-2xl sm:leading-normal font-bold mt-0.5 sm:mt-1">{value}</div>
     </div>
   )
 }
@@ -579,7 +610,7 @@ function MesView({
             <div
               key={key}
               className={`
-                border-l border-t first:border-l-0 min-h-[110px] flex flex-col
+                border-l border-t first:border-l-0 min-h-[56px] sm:min-h-[110px] flex flex-col
                 ${isCurMonth ? "bg-card" : "bg-muted/20"}
                 ${today ? "ring-2 ring-inset ring-primary/40" : ""}
               `}
@@ -601,7 +632,15 @@ function MesView({
                 )}
               </button>
 
-              <div className="flex-1 px-1 pb-1 space-y-0.5 overflow-hidden">
+              {/* Phones: cells are too narrow for times and names, show one dot per turno (tap the day to open it) */}
+              {turnos.length > 0 && (
+                <div className="flex flex-wrap gap-0.5 px-1.5 pb-1 sm:hidden" aria-hidden>
+                  {visibles.map((t) => (
+                    <span key={t.id} className={`w-1.5 h-1.5 rounded-full ${TURNO_ESTADO_STYLES[t.estado].dot}`} />
+                  ))}
+                </div>
+              )}
+              <div className="flex-1 px-1 pb-1 space-y-0.5 overflow-hidden max-sm:hidden">
                 {visibles.map((t) => {
                   const clienteNombre = t.cliente?.nombre || t.clienteSnapshot?.nombre || "Sin cliente"
                   return (
@@ -678,7 +717,7 @@ function ListaView({
         const turnos = turnosPorDia.get(key) || []
         return (
           <div key={key} className="border rounded-lg bg-card overflow-hidden">
-            <div className="px-4 py-2 bg-muted/40 border-b flex items-center justify-between">
+            <div className="px-3 sm:px-4 py-2 bg-muted/40 border-b flex items-center justify-between">
               <h3 className="text-sm font-semibold capitalize">
                 {format(day, "EEEE d 'de' MMMM", { locale: es })}
               </h3>

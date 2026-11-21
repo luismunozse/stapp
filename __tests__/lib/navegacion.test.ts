@@ -128,3 +128,31 @@ describe("paleta: coincidencias y destinos", () => {
     expect(hrefResultado("orden", "xyz")).toBe("/ordenes/xyz")
   })
 })
+
+describe("bottomNavItems con accesos elegidos por el usuario", () => {
+  const hrefsDe = (items: { href: string }[]) => items.map((i) => i.href)
+
+  it("respeta los elegidos y su orden", () => {
+    expect(hrefsDe(bottomNavItems("ADMIN", ORG_FEATURES_APAGADAS, ["/caja", "/ordenes"]))).toEqual(["/caja", "/ordenes"])
+  })
+
+  it("descarta los que el rol ya no ve y vuelve al default si no queda ninguno", () => {
+    const def = hrefsDe(bottomNavItems("VENDEDOR", ORG_FEATURES_APAGADAS))
+    expect(hrefsDe(bottomNavItems("VENDEDOR", ORG_FEATURES_APAGADAS, ["/caja"]))).toEqual(def)
+    expect(hrefsDe(bottomNavItems("VENDEDOR", ORG_FEATURES_APAGADAS, ["/caja", "/clientes"]))).toEqual(["/clientes"])
+  })
+
+  it("sin elegidos (null o vacío) usa el default del rol", () => {
+    const def = hrefsDe(bottomNavItems("ADMIN", ORG_FEATURES_APAGADAS))
+    expect(hrefsDe(bottomNavItems("ADMIN", ORG_FEATURES_APAGADAS, null))).toEqual(def)
+    expect(hrefsDe(bottomNavItems("ADMIN", ORG_FEATURES_APAGADAS, []))).toEqual(def)
+  })
+
+  it("no repite ni pasa del máximo", () => {
+    const items = bottomNavItems("ADMIN", ORG_FEATURES_APAGADAS, [
+      "/ordenes", "/ordenes", "/clientes", "/caja", "/pos", "/ventas", "/inventario", "/dashboard",
+    ])
+    expect(new Set(hrefsDe(items)).size).toBe(items.length)
+    expect(items.length).toBeLessThanOrEqual(5)
+  })
+})

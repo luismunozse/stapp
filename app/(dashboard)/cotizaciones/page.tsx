@@ -37,6 +37,8 @@ import {
   FileText,
   Wrench,
   Paperclip,
+  Filter,
+  MoreHorizontal,
 } from "lucide-react"
 
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
@@ -61,6 +63,8 @@ import { PageShell } from "@/components/ui/page-shell"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useHasFeature } from "@/hooks/use-subscription"
 import Link from "next/link"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
 interface Cotizacion {
   id: string
@@ -161,6 +165,8 @@ export default function CotizacionesPage() {
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [page, setPage] = useState(1)
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
+  // Mobile/app: the status filter stays folded behind an icon until asked for.
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false)
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const canCrear = cotizacionesLoading || hasCotizaciones
 
@@ -560,13 +566,14 @@ export default function CotizacionesPage() {
   }
 
   return (
-    <div className="container py-6">
+    <div className="container py-6 max-sm:py-0">
       <PageShell
         title="Presupuestos"
         icon={Receipt}
         className="space-y-4"
         actions={!showForm && !editingCotizacion && canCrear ? (
-          <Button onClick={() => setShowTipoSelector(true)}>
+          // Phones: a "+" next to the search replaces it, so the header stays one row.
+          <Button onClick={() => setShowTipoSelector(true)} className="hidden sm:inline-flex">
             <Plus className="mr-2 h-4 w-4" />
             Nuevo presupuesto
           </Button>
@@ -574,7 +581,7 @@ export default function CotizacionesPage() {
       >
 
       {!cotizacionesLoading && !hasCotizaciones && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Los presupuestos online son parte del plan Profesional</p>
             <p className="text-xs text-muted-foreground">
@@ -588,8 +595,8 @@ export default function CotizacionesPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-row flex-wrap gap-2 max-sm:items-center sm:flex-nowrap sm:gap-3">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por número o cliente..."
@@ -598,8 +605,27 @@ export default function CotizacionesPage() {
             className="pl-9"
           />
         </div>
+        {/* Mobile: filters and "new" share the search row */}
+        <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+          <Button
+            variant={filtrosMovilAbiertos ? "secondary" : "outline"}
+            size="icon"
+            className="relative"
+            onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+            aria-label="Filtros"
+            aria-expanded={filtrosMovilAbiertos}
+          >
+            <Filter className="h-4 w-4" />
+            {estadoFilter !== "TODOS" && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+          </Button>
+          {!showForm && !editingCotizacion && canCrear && (
+            <Button size="icon" onClick={() => setShowTipoSelector(true)} aria-label="Nuevo presupuesto" title="Nuevo presupuesto">
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className={cn("w-full sm:w-[180px]", !filtrosMovilAbiertos && "max-sm:hidden")}>
             <SelectValue placeholder="Estado" />
           </SelectTrigger>
           <SelectContent>
@@ -610,7 +636,8 @@ export default function CotizacionesPage() {
             <SelectItem value="RECHAZADA">Rechazado</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex border rounded-lg overflow-hidden">
+        {/* View switch is desktop-only: phones always get the compact cards */}
+        <div className="hidden border rounded-lg overflow-hidden sm:flex">
           <Button
             variant={viewMode === "cards" ? "default" : "ghost"}
             size="sm"
@@ -750,10 +777,208 @@ export default function CotizacionesPage() {
       ) : (
         <>
           {/* Result count */}
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground max-sm:hidden">
             {total} cotizacion{total !== 1 ? "es" : ""} encontrada{total !== 1 ? "s" : ""}
           </div>
 
+          {/* ========== MOBILE: compact cards ========== */}
+          <div className="space-y-2 sm:hidden">
+            {cotizaciones.map((cotizacion) => {
+              const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
+              const canEdit = puedeEditar(cotizacion)
+              const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
+              const canDelete = cotizacion.estado !== "ACEPTADA"
+              const vinculo = cotizacion.ventaId
+                ? "Convertido en venta"
+                : cotizacion.convertidaAOrdenId
+                  ? "Convertido a orden"
+                  : cotizacion.ordenNumero
+                    ? `Orden #${cotizacion.ordenNumero}`
+                    : null
+              const itemMenu = "w-full justify-start"
+              return (
+                <Card key={cotizacion.id}>
+                  <CardContent className="p-3">
+                    {/* Row 1: number · client  |  total */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 text-sm font-semibold">{cotizacion.numeroCotizacion}</span>
+                        {cotizacion.clienteNombre && (
+                          <span className="truncate text-sm text-muted-foreground">{cotizacion.clienteNombre}</span>
+                        )}
+                      </div>
+                      <span className="shrink-0 font-semibold tabular-nums">{formatPrice(cotizacion.total)}</span>
+                    </div>
+
+                    {/* Row 2: status · flags  |  date */}
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <StatusPill tone={config.tone} icon={config.icon} size="sm">
+                          {config.label}
+                        </StatusPill>
+                        {cotizacion.tipo === "PRESUPUESTO" && (
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-purple-700" aria-label="Independiente" />
+                        )}
+                        {cotizacion.origen === "CATALOGO_PUBLICO" && (
+                          <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-label="Catálogo" />
+                        )}
+                        {cotizacion.vistoAt && (
+                          <span className="flex shrink-0 items-center gap-0.5 text-blue-600">
+                            <Eye className="h-3.5 w-3.5" aria-hidden />
+                            Visto
+                          </span>
+                        )}
+                      </div>
+                      <span className="shrink-0">{formatDate(cotizacion.createdAt)}</span>
+                    </div>
+
+                    {/* Row 3: link to order/sale  |  quick actions */}
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">{vinculo}</span>
+                      <div className="-my-1 -mr-1 flex shrink-0 items-center">
+                        {cotizacion.estado === "ENVIADA" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 text-success-600"
+                            onClick={() => setApprovingCotizacion(cotizacion)}
+                            aria-label="Aprobar con firma"
+                          >
+                            <PenTool className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canSend && canCrear && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 text-muted-foreground"
+                            onClick={() => handleSend(cotizacion)}
+                            disabled={sendingId === cotizacion.id || !cotizacion.clienteEmail}
+                            aria-label={!cotizacion.clienteEmail ? "Sin email del cliente" : "Enviar por email"}
+                          >
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {cotizacion.publicToken && canCrear && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 text-success-600"
+                            onClick={() => handleShareWhatsApp(cotizacion)}
+                            aria-label={cotizacion.clienteTelefono ? "Compartir por WhatsApp al cliente" : "Compartir por WhatsApp"}
+                          >
+                            <WhatsAppIcon className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 text-muted-foreground"
+                          onClick={() => handleDownloadPDF(cotizacion)}
+                          aria-label="Descargar PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground" aria-label="Más acciones">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-56 p-1 space-y-0.5">
+                            {canEdit && canCrear && (
+                              <Button variant="ghost" size="sm" className={itemMenu} onClick={() => openEditForm(cotizacion)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </Button>
+                            )}
+                            {cotizacion.estado === "ENVIADA" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(itemMenu, "text-destructive-text")}
+                                onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Rechazar
+                              </Button>
+                            )}
+                            {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ventaId && puedeConvertirAVenta && (
+                              <Button variant="ghost" size="sm" className={cn(itemMenu, "text-success-600")} onClick={() => setConvertingCotizacion(cotizacion)}>
+                                <ShoppingCart className="mr-2 h-4 w-4" />
+                                Convertir a venta
+                              </Button>
+                            )}
+                            {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && puedeConvertirAOrden && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(itemMenu, "text-info-600")}
+                                onClick={() => handleConvertirOrden(cotizacion)}
+                                disabled={convertingOrdenId === cotizacion.id}
+                              >
+                                <Wrench className="mr-2 h-4 w-4" />
+                                {convertingOrdenId === cotizacion.id ? "Creando orden..." : "Convertir a orden"}
+                              </Button>
+                            )}
+                            {cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ordenId && ["BORRADOR", "ENVIADA"].includes(cotizacion.estado) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(itemMenu, "text-info-600")}
+                                onClick={() => { setLinkOrdenId(null); setLinkingCotizacion(cotizacion) }}
+                              >
+                                <Paperclip className="mr-2 h-4 w-4" />
+                                Vincular a orden
+                              </Button>
+                            )}
+                            {cotizacion.publicToken && (
+                              <Button variant="ghost" size="sm" className={itemMenu} onClick={() => handleShare(cotizacion)}>
+                                <Link2 className="mr-2 h-4 w-4" />
+                                Compartir link
+                              </Button>
+                            )}
+                            {canCrear && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={itemMenu}
+                                onClick={() => handleDuplicate(cotizacion)}
+                                disabled={duplicatingId === cotizacion.id}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
+                              </Button>
+                            )}
+                            {canCrear && (
+                              <Button variant="ghost" size="sm" className={itemMenu} onClick={() => setPlantillaDesde(cotizacion)}>
+                                <BookmarkPlus className="mr-2 h-4 w-4" />
+                                Guardar como plantilla
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(itemMenu, "text-destructive-text")}
+                                onClick={() => handleDelete(cotizacion.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </Button>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* ========== DESKTOP (sm+): cards or list ========== */}
+          <div className="hidden sm:block">
           {viewMode === "list" ? (
             /* ========== VISTA LISTA ========== */
             <Card>
@@ -1216,6 +1441,7 @@ export default function CotizacionesPage() {
             })}
           </div>
           )}
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (

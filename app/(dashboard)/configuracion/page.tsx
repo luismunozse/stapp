@@ -43,7 +43,7 @@ export default async function ConfiguracionPage({ searchParams }: ConfiguracionP
       description="Ajustes de tu taller: operación, finanzas, comunicación y sucursales"
     >
       {!allowEdit && (
-        <div className="bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg">
+        <div className="bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-3 py-2 sm:px-4 sm:py-3 rounded-lg">
           <p className="text-sm font-medium">Las cuentas demo no pueden editar la configuración</p>
         </div>
       )}

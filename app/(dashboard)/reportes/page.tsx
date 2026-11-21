@@ -39,7 +39,8 @@ export default async function ReportesPage() {
   ])
 
   return (
-    <div className="container py-6">
+    // Phones: the dashboard layout already pads the page, so drop the extra top/bottom gap.
+    <div className="container py-6 max-sm:py-0">
       <ReportesAvanzadosView verTopClientes={verTopClientes} reportesAvanzados={reportesAvanzados} />
     </div>
   )

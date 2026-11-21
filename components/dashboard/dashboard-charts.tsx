@@ -98,6 +98,7 @@ export function DashboardCharts({
       <MobileSectionTabs
         label="Gráficos"
         hideFrom="md"
+        sticky={false}
         sections={CHART_TABS}
         value={chart}
         onChange={setChart}

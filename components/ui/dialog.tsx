@@ -49,20 +49,46 @@ function useUnstickBodyPointerEvents() {
   }, [])
 }
 
+// Centered dialog geometry. Callers' unprefixed overrides (max-w-2xl, p-0,
+// max-h-[90vh]…) keep working on every breakpoint as before.
+const BASE =
+  "fixed left-[50%] top-[50%] z-[70] grid w-[calc(100%-2rem)] max-w-lg rounded-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card text-card-foreground p-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] shadow-lg duration-200 ease-snappy"
+
+const ZOOM_ANIMATION =
+  "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
+
+// Same zoom, sm+ only (literal: Tailwind can't see classes built at runtime).
+const ZOOM_ANIMATION_SM =
+  "sm:data-[state=open]:animate-in sm:data-[state=closed]:animate-out sm:data-[state=closed]:fade-out-0 sm:data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]"
+
+// Phones (<sm): turn it into a bottom sheet — full width, anchored to the
+// bottom, within thumb reach. Applied AFTER the caller's className so it wins
+// on phones only; the slide-up animation lives in `.responsive-sheet`
+// (globals.css) and the zoom one is limited to sm+.
+const PHONE_SHEET =
+  "responsive-sheet max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:left-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-full max-sm:max-w-none max-sm:max-h-[92dvh] max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * Phones open dialogs as a bottom sheet (default). Pass `false` for
+     * dialogs that position themselves (command palette anchored at the top).
+     */
+    mobileSheet?: boolean
+  }
+>(({ className, children, onCloseAutoFocus, mobileSheet = true, ...props }, ref) => {
   useUnstickBodyPointerEvents()
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
-        className={cn(
-          "fixed left-[50%] top-[50%] z-[70] grid w-[calc(100%-2rem)] max-w-lg rounded-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card text-card-foreground p-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] shadow-lg duration-200 ease-snappy data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-          className
-        )}
+        className={
+          mobileSheet
+            ? cn(BASE, ZOOM_ANIMATION_SM, className, PHONE_SHEET)
+            : cn(BASE, ZOOM_ANIMATION, "sm:rounded-lg", className)
+        }
         onCloseAutoFocus={(e) => {
           onCloseAutoFocus?.(e)
           if (typeof document !== "undefined" && document.body.style.pointerEvents === "none") {
@@ -71,6 +97,12 @@ const DialogContent = React.forwardRef<
         }}
         {...props}
       >
+        {mobileSheet && (
+          <div
+            className="sm:hidden mx-auto -mt-2 -mb-2 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/30"
+            aria-hidden="true"
+          />
+        )}
         {children}
         <DialogPrimitive.Close className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11">
           <X className="h-4 w-4" />

@@ -79,7 +79,9 @@ export function PageHeader({
         {meta}
       </div>
       {actions && (
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+        // Phones: collapse the slot when every action in it is phone-hidden
+        // (e.g. a button moved to the list's ⋯ menu), so no empty gap remains.
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2 max-sm:[&:not(:has(>:not(.hidden)))]:hidden">
           {actions}
         </div>
       )}

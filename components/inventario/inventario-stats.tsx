@@ -102,29 +102,30 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
 
   return (
     <div className="space-y-1">
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+    {/* Phones: one horizontally scrollable row of compact tiles instead of three stacked rows. */}
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 snap-x scrollbar-hide sm:mx-0 sm:grid sm:gap-3 sm:overflow-visible sm:px-0 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map((card) => {
         const Icon = card.icon
         const clickable = !!card.onClick
         return (
           <Card
             key={card.title}
-            className={`transition-shadow hover:shadow-md ${clickable ? "cursor-pointer hover:border-primary/50" : ""}`}
+            className={`max-sm:min-w-[8.5rem] max-sm:shrink-0 max-sm:snap-start transition-shadow hover:shadow-md ${clickable ? "cursor-pointer hover:border-primary/50" : ""}`}
             onClick={card.onClick}
           >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 max-sm:px-2.5 max-sm:pt-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">
                 {card.title}
               </CardTitle>
-              <div className={`p-1.5 rounded-lg ${card.bgClass}`}>
+              <div className={`p-1.5 rounded-lg max-sm:p-1 ${card.bgClass}`}>
                 <Icon className={`h-3.5 w-3.5 ${card.colorClass}`} />
               </div>
             </CardHeader>
-            <CardContent className="p-3 pt-0">
+            <CardContent className="p-3 pt-0 max-sm:px-2.5 max-sm:pb-2">
               <div className="text-base sm:text-lg font-bold text-foreground truncate">
                 {card.value}
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5 max-sm:hidden">
                 {card.description}
               </p>
             </CardContent>
