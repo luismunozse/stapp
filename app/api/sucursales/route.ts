@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { avisoCambioDePrincipal } from "@/lib/sucursal-principal"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -11,6 +12,8 @@ const createSchema = z.object({
   telefono: z.string().trim().max(40).nullable().optional(),
   notas: z.string().trim().max(500).nullable().optional(),
   principal: z.boolean().optional(),
+  // Confirmacion del aviso PRINCIPAL_CON_STOCK; nunca se escribe a la base.
+  confirmarCambioPrincipal: z.boolean().optional(),
 })
 
 function formatSucursal(row: any) {
@@ -73,6 +76,10 @@ export async function POST(request: Request) {
     // Solo 1 principal por org: si se marca principal, demote el actual.
     // La unique index parcial protege ante carrera.
     if (data.principal) {
+      // Promover no mueve stock: avisar ANTES de escribir si la actual tiene.
+      const aviso = await avisoCambioDePrincipal(organizationId!, data.confirmarCambioPrincipal)
+      if (aviso) return aviso
+
       await supabaseAdmin
         .from("sucursales")
         .update({ principal: false })
