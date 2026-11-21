@@ -679,12 +679,21 @@ export function InventarioList({ allowImport = true, onAnalisis }: InventarioLis
                 <X className="h-4 w-4" />
               </button>
             )}
+            {/* Phones: scan lives inside the search box, so the box keeps its width */}
+            {!search && (
+              <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                aria-label="Escanear"
+                title="Escanear"
+                className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:hidden"
+              >
+                <ScanLine className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {/* Phones: scan, filters, create and an overflow menu share the search row */}
+          {/* Phones: filters, create and an overflow menu share the search row */}
           <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
-            <Button variant="outline" size="icon" onClick={() => setShowScanner(true)} aria-label="Escanear" title="Escanear">
-              <ScanLine className="h-4 w-4" />
-            </Button>
             <Button
               variant={filtrosMovilAbiertos ? "secondary" : "outline"}
               size="icon"

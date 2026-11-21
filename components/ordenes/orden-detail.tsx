@@ -108,6 +108,7 @@ import { remitoActivo } from "@/lib/facturacion/remito-activo"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { cn } from "@/lib/utils"
+import { AppTitleSync } from "@/components/layout/app-title"
 import { MobileSectionTabs, mobileSectionClass, type MobileSection } from "@/components/ui/mobile-section-tabs"
 
 // Mobile/app sections of the order detail (desktop shows everything at once)
@@ -751,15 +752,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Header */}
       <div className="flex flex-col gap-3 lg:gap-4">
         <div className="flex items-start gap-3 lg:items-center lg:gap-4">
-          <Link href={listaHref} aria-label="Volver a órdenes" className="max-lg:-ml-2">
-            {/* Phones: a plain back arrow like any app screen (no boxed button) */}
-            <IconButton label="Volver a órdenes" variant="outline" className="max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none">
+          {/* Phones: back arrow + "Orden …" live in the app bar (AppTitleSync) */}
+          <AppTitleSync title={orden.codigoOrden || `Orden #${orden.numeroOrden}`} backHref={listaHref} />
+          <Link href={listaHref} aria-label="Volver a órdenes" className="max-lg:hidden">
+            <IconButton label="Volver a órdenes" variant="outline">
               <ArrowLeft className="h-4 w-4" />
             </IconButton>
           </Link>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h1 className="text-xl font-bold lg:text-2xl">
+              <h1 className="text-xl font-bold max-lg:sr-only lg:text-2xl">
                 Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
               </h1>
               <OrderStatusBadge status={orden.estado} showIcon />

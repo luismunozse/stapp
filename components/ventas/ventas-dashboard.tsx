@@ -136,7 +136,7 @@ export function VentasDashboard() {
                 <TrendingUp className="h-4 w-4 text-success-text" />
               </div>
               <div className={`text-lg font-bold sm:text-xl ${data.margenBruto.porcentaje >= 0 ? "text-success-text" : "text-destructive-text"}`}>
-                {data.margenBruto.porcentaje.toFixed(1)}%
+                {data.margenBruto.porcentaje.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
               </div>
               <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
             </CardContent>
@@ -167,8 +167,10 @@ export function VentasDashboard() {
                           </span>
                           <span className="truncate">{p.descripcion}</span>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Badge variant="secondary" className="text-xs">{p.cantidad} uds</Badge>
+                        <div className="flex items-center gap-2 shrink-0 sm:gap-3">
+                          {/* Phones: plain "64 u." leaves the product name room to breathe */}
+                          <span className="text-xs text-muted-foreground tabular-nums sm:hidden">{p.cantidad} u.</span>
+                          <Badge variant="secondary" className="text-xs max-sm:hidden">{p.cantidad} uds</Badge>
                           <span className="font-medium text-right text-xs sm:text-sm">{formatPrice(p.totalVentas)}</span>
                         </div>
                       </div>
@@ -272,7 +274,7 @@ export function VentasDashboard() {
                   data.tasaAnulacion.porcentaje > 10 ? "text-destructive-text" :
                   data.tasaAnulacion.porcentaje > 5 ? "text-warning-text" : "text-success-text"
                 }`}>
-                  {data.tasaAnulacion.porcentaje.toFixed(1)}%
+                  {data.tasaAnulacion.porcentaje.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
                   {data.tasaAnulacion.anuladas} anulada{data.tasaAnulacion.anuladas !== 1 ? "s" : ""} de {data.tasaAnulacion.total} ventas

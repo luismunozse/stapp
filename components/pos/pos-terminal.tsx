@@ -1231,28 +1231,27 @@ export function PosTerminal() {
               onClick={() => setMobileTab("products")}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 transition-colors",
-                mobileTab === "products"
-                  ? "text-primary bg-primary/5"
-                  : "text-muted-foreground"
+                mobileTab === "products" ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <Package className="h-5 w-5" />
-              <span className="text-xs font-medium">Productos</span>
+              {/* Same active pill as the app's bottom nav */}
+              <span className={cn("flex h-7 w-14 items-center justify-center rounded-full transition-colors", mobileTab === "products" && "bg-primary/10")}>
+                <Package className="h-5 w-5" />
+              </span>
+              <span className={cn("text-xs font-medium", mobileTab === "products" && "font-semibold")}>Productos</span>
             </button>
             <button
               type="button"
               onClick={() => setMobileTab("cart")}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 transition-colors",
-                mobileTab === "cart"
-                  ? "text-primary bg-primary/5"
-                  : "text-muted-foreground"
+                mobileTab === "cart" ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <div className="relative">
+              <div className={cn("relative flex h-7 w-14 items-center justify-center rounded-full transition-colors", mobileTab === "cart" && "bg-primary/10")}>
                 <ShoppingCart className="h-5 w-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs leading-none font-bold px-1">
+                  <span className="absolute -top-1 right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs leading-none font-bold px-1">
                     {cartCount}
                   </span>
                 )}

@@ -22,9 +22,15 @@ function EstadoBadge({ estado }: { estado: string }) {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+/** Quote numbers come formatted ("COT-0039", lib/counters); only bare numbers get a "#". */
+function numeroVisible(numero: number | string): string {
+  const texto = String(numero)
+  return /^\d+$/.test(texto) ? `#${texto}` : texto
+}
+
 interface CotizacionRow {
   id: string
-  numeroCotizacion: number
+  numeroCotizacion: number | string
   estado: string
   total: number
   createdAt: string
@@ -54,7 +60,7 @@ export function ClienteCotizaciones({ clienteId }: Props) {
     {
       key: "numeroCotizacion",
       header: "N°",
-      render: (c) => <span className="font-medium">#{c.numeroCotizacion}</span>,
+      render: (c) => <span className="font-medium">{numeroVisible(c.numeroCotizacion)}</span>,
     },
     {
       key: "estado",
@@ -91,7 +97,7 @@ export function ClienteCotizaciones({ clienteId }: Props) {
           renderMobileCard={(c) => (
             <div className="space-y-1.5">
               <div className="flex items-start justify-between gap-2">
-                <div className="font-medium text-sm">#{c.numeroCotizacion}</div>
+                <div className="font-medium text-sm">{numeroVisible(c.numeroCotizacion)}</div>
                 <EstadoBadge estado={c.estado} />
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">

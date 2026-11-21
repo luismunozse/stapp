@@ -136,7 +136,7 @@ export function CatalogoFilters({
         {categorias.length > 0 && (
           <div className="relative -mx-4 sm:mx-0">
             <div
-              className="flex gap-2 overflow-x-auto pb-1 px-4 sm:px-0 scrollbar-hide snap-x snap-mandatory"
+              className="flex gap-2 overflow-x-auto pb-1 px-4 scroll-px-4 sm:px-0 sm:scroll-px-0 scrollbar-hide snap-x snap-mandatory"
               style={{ scrollbarWidth: "none" }}
             >
             <Link

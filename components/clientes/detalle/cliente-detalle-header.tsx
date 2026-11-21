@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { AppTitleSync } from "@/components/layout/app-title"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, User, Building2, Edit, Plus, Wrench, Receipt } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
@@ -50,7 +51,9 @@ export function ClienteDetalleHeader({
       {/* Only the identity row sticks, and only where there is no fixed mobile topbar (lg+). */}
       <div className="bg-background lg:border-b pb-3 sm:-mx-6 sm:px-6 sm:pb-4 lg:sticky lg:top-0 lg:z-10">
         <div className="flex flex-wrap items-start gap-x-3 gap-y-3 sm:pt-4">
-          <Link href="/clientes" className="shrink-0 flex h-10 w-10 items-center justify-center -ml-2 rounded-lg hover:bg-accent transition-colors" aria-label="Volver a clientes">
+          {/* Phones: the back arrow lives in the app bar (AppTitleSync) */}
+          <AppTitleSync title="Cliente" backHref="/clientes" />
+          <Link href="/clientes" className="shrink-0 flex h-10 w-10 items-center justify-center -ml-2 rounded-lg hover:bg-accent transition-colors max-lg:hidden" aria-label="Volver a clientes">
             <ArrowLeft className="h-5 w-5 text-muted-foreground" />
           </Link>
           <div className={`h-11 w-11 rounded-full flex items-center justify-center shrink-0 ${esEmpresa ? "bg-warning/10" : "bg-primary/10"}`}>

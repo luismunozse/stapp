@@ -149,7 +149,7 @@ describe("Pantalla de caja — vendedor habilitado", () => {
       expect(screen.getByTestId("session-banner")).toBeTruthy()
       expect(screen.getByText("Movimientos manuales")).toBeTruthy()
       expect(screen.getByText("Historial de cierres")).toBeTruthy()
-      expect(screen.getByTestId("export")).toBeTruthy()
+      expect(screen.getAllByTestId("export").length).toBeGreaterThan(0)
     })
   })
 

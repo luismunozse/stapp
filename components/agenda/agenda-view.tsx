@@ -241,6 +241,15 @@ export function AgendaView() {
     return `${format(start, "d 'de' MMM", { locale: es })} – ${format(end, "d 'de' MMM yyyy", { locale: es })}`
   }, [cursor, vista])
 
+  // Phones: a short range label so it fits next to the arrows ("sáb 21 de nov")
+  const labelCorto = useMemo(() => {
+    if (vista === "dia") return format(cursor, "EEE d 'de' MMM", { locale: es })
+    if (vista === "mes") return format(cursor, "MMMM yyyy", { locale: es })
+    const start = startOfWeek(cursor, { weekStartsOn: 1 })
+    const end = endOfWeek(cursor, { weekStartsOn: 1 })
+    return `${format(start, "d MMM", { locale: es })} – ${format(end, "d MMM", { locale: es })}`
+  }, [cursor, vista])
+
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Stats chips: one row of four compact tiles on phones */}
@@ -261,7 +270,9 @@ export function AgendaView() {
           <Button variant="outline" size="icon" onClick={onNext} aria-label="Siguiente" className="h-9 w-9">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="min-w-0 truncate text-sm font-medium capitalize ml-2 sm:ml-3">{labelRango}</span>
+          {/* first-letter: "capitalize" also turned "de" into "De" */}
+          <span className="min-w-0 truncate text-sm font-medium first-letter:uppercase ml-2 sm:hidden">{labelCorto}</span>
+          <span className="hidden min-w-0 truncate text-sm font-medium first-letter:uppercase sm:ml-3 sm:inline">{labelRango}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -337,9 +348,10 @@ export function AgendaView() {
           </Select>
           </div>
 
-          <Button onClick={() => handleNuevoSlot(new Date())} className="max-sm:ml-auto max-sm:h-9 max-sm:px-3">
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo turno
+          {/* Phones: icon-only, so the view switcher can show words instead of icons */}
+          <Button onClick={() => handleNuevoSlot(new Date())} className="max-sm:ml-auto max-sm:h-9 max-sm:w-9 max-sm:px-0">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="max-sm:sr-only">Nuevo turno</span>
           </Button>
         </div>
       </div>
@@ -403,12 +415,13 @@ function VistaBtn({ active, onClick, icon, label }: { active: boolean; onClick: 
     <button
       onClick={onClick}
       className={`
-        inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors
+        inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors sm:px-3
         ${active ? "bg-primary text-primary-foreground" : "hover:bg-accent"}
       `}
     >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
+      {/* Phones: words — four look-alike calendar icons were guesswork */}
+      <span className="hidden sm:inline-flex">{icon}</span>
+      <span>{label}</span>
     </button>
   )
 }
@@ -718,7 +731,7 @@ function ListaView({
         return (
           <div key={key} className="border rounded-lg bg-card overflow-hidden">
             <div className="px-3 sm:px-4 py-2 bg-muted/40 border-b flex items-center justify-between">
-              <h3 className="text-sm font-semibold capitalize">
+              <h3 className="text-sm font-semibold first-letter:uppercase">
                 {format(day, "EEEE d 'de' MMMM", { locale: es })}
               </h3>
               <span className="text-xs text-muted-foreground">{turnos.length} turno{turnos.length !== 1 ? "s" : ""}</span>

@@ -252,7 +252,7 @@ describe("VentasDashboard — margen bruto nulo", () => {
     render(<VentasDashboard />)
 
     expect(screen.getByText("Margen bruto")).toBeInTheDocument()
-    expect(screen.getByText("85.7%")).toBeInTheDocument()
+    expect(screen.getByText("85,7%")).toBeInTheDocument()
     expect(screen.getByText("$6666")).toBeInTheDocument()
   })
 })

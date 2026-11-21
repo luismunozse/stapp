@@ -70,7 +70,7 @@ export function GarantiasVentaCard({ ventaId, garantias, items, isAdmin }: Garan
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-lg sm:text-2xl">
           <Shield className="h-5 w-5" />
           Certificados de garantía ({garantias.length})
         </CardTitle>

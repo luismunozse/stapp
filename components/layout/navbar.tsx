@@ -17,6 +17,7 @@ import {
   ChevronDown,
   CreditCard,
   SlidersHorizontal,
+  ArrowLeft,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { cn } from "@/lib/utils"
@@ -37,6 +38,7 @@ import { PlanBadge } from "@/components/billing/plan-badge"
 import { AsistenteNavButton } from "@/components/asistente/asistente-nav-button"
 import { BottomNavEditor } from "@/components/layout/bottom-nav-editor"
 import { useBottomNavPrefs } from "@/hooks/use-bottom-nav-prefs"
+import { useAppTitle } from "@/components/layout/app-title"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -193,6 +195,13 @@ export function Navbar() {
     }
   }
 
+  const appTitlePagina = useAppTitle()
+  // App bar: the short section name ("Órdenes") on a section's own screen;
+  // the page's own title on sub-screens ("Kits", "Lotes"…).
+  const appTitle = appTitlePagina
+    ? allNavItems.find((item) => item.href.split("?")[0] === pathname)?.label ?? appTitlePagina.title
+    : null
+  const appBackHref = appTitlePagina?.backHref
   const [bottomNavPrefs, setBottomNavPrefs] = useBottomNavPrefs()
   const [bottomNavEditorOpen, setBottomNavEditorOpen] = useState(false)
   const filteredBottomNavItems = bottomNavItems(userRole, orgFeatures, bottomNavPrefs)
@@ -428,11 +437,37 @@ export function Navbar() {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-inset-top">
         <div className="flex items-center justify-between h-14 pl-4 pr-2 gap-2">
-          <Link href="/dashboard" className="hover:opacity-80 transition-opacity min-w-0 flex-shrink overflow-hidden">
-            <BusinessLogo size="sm" showText={true} textClassName="text-base truncate" />
-          </Link>
+          {/* Like a native app bar: the current screen's name (published by
+              its PageHeader) next to a small logo; the business name only
+              where there is no screen title (Inicio, detail screens). */}
+          {appTitle && pathname !== "/dashboard" ? (
+            <div className="flex min-w-0 flex-shrink items-center gap-2.5 overflow-hidden">
+              {appBackHref ? (
+                // Sub/detail screen: back arrow where the logo goes
+                <Link
+                  href={appBackHref}
+                  aria-label="Volver"
+                  className="-ml-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-accent/60"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+              ) : (
+                <Link href="/dashboard" aria-label="Inicio" className="shrink-0 hover:opacity-80 transition-opacity">
+                  <BusinessLogo size="sm" showText={false} />
+                </Link>
+              )}
+              <span className="truncate text-lg font-semibold tracking-tight" aria-hidden>
+                {appTitle}
+              </span>
+            </div>
+          ) : (
+            <Link href="/dashboard" className="hover:opacity-80 transition-opacity min-w-0 flex-shrink overflow-hidden">
+              <BusinessLogo size="sm" showText={true} textClassName="text-base truncate" />
+            </Link>
+          )}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <AsistenteNavButton variant="icon" />
+            {/* The locked (upsell) assistant icon moves to the menu drawer */}
+            <AsistenteNavButton variant="icon" only="unlocked" />
             <CommandPaletteTrigger variant="icon" />
             <NotificationBell />
             <DeadlineCalendar />
@@ -478,7 +513,10 @@ export function Navbar() {
           <div className="px-4 pt-4 pb-3 border-b border-border">
             <div className="flex items-center justify-between gap-2">
               <p className="min-w-0 text-sm font-semibold truncate">{displayName}</p>
-              <ThemeToggle variant="icon" className="-my-2 -mr-2 shrink-0" />
+              <div className="-my-2 -mr-2 flex shrink-0 items-center">
+                <AsistenteNavButton variant="icon" only="locked" />
+                <ThemeToggle variant="icon" />
+              </div>
             </div>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-xs text-muted-foreground capitalize truncate">

@@ -50,6 +50,7 @@ import type { MetodoPagoVenta } from "@/lib/notifications/types"
 import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 import { MobileSectionTabs, mobileSectionClass, type MobileSection } from "@/components/ui/mobile-section-tabs"
 import { cn } from "@/lib/utils"
+import { AppTitleSync } from "@/components/layout/app-title"
 
 // Mobile/app sections of the sale detail (desktop shows everything at once)
 type SeccionMovil = "resumen" | "cobro" | "productos"
@@ -317,12 +318,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <IconButton label="Volver" variant="ghost" className="shrink-0" onClick={() => router.back()}>
+        {/* Phones: back arrow + sale number live in the app bar */}
+        <AppTitleSync title={`Venta V${String(venta.numeroVenta).padStart(4, "0")}`} backHref="/ventas" />
+        <IconButton label="Volver" variant="ghost" className="shrink-0 max-lg:hidden" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
         </IconButton>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold sm:text-2xl">
+            <h1 className="text-xl font-bold max-lg:sr-only sm:text-2xl">
               Venta V{String(venta.numeroVenta).padStart(4, "0")}
             </h1>
             <VentaEstadoBadge estado={venta.estado} />
@@ -732,7 +735,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       {/* Items */}
       <Card className={soloEnMovil("productos")}>
         <CardHeader className="pb-2 max-sm:p-4 max-sm:pb-2 sm:pb-6">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-2xl">
             <Package className="h-5 w-5" />
             Productos ({venta.items.length})
           </CardTitle>

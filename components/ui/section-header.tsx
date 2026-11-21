@@ -40,7 +40,10 @@ export function SectionHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between",
+        "flex gap-2 sm:flex-row sm:items-end sm:justify-between",
+        // Phones: with no supporting line, actions sit on the title's row
+        // instead of costing a row of their own.
+        description ? "flex-col" : "flex-row items-center justify-between",
         className
       )}
     >

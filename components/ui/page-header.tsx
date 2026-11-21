@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
+import { AppTitleSync } from "@/components/layout/app-title"
 
 interface PageHeaderProps {
   /** Page title. Rendered with the system `text-headline` scale. */
@@ -40,15 +41,22 @@ export function PageHeader({
   backLabel = "Volver",
   className,
 }: PageHeaderProps) {
+  // Phones: the title (and the back arrow) move up into the app bar
+  // (AppTitleSync → navbar), so the in-page heading row is only kept for
+  // screen readers. Rows that carry more than that (badges) stay visible.
+  const tituloEnBarra = !titleAddon
   return (
     <div
       className={cn(
         "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
+        // collapse the whole block on phones when nothing else is left in it
+        tituloEnBarra && !meta && !actions && "max-lg:contents",
         className
       )}
     >
-      <div className="min-w-0 space-y-1">
-        <div className="flex items-center gap-2 sm:gap-3">
+      <AppTitleSync title={title} backHref={backHref} />
+      <div className={cn("min-w-0 space-y-1", tituloEnBarra && !meta && "max-lg:contents")}>
+        <div className={cn("flex items-center gap-2 sm:gap-3", tituloEnBarra && "max-lg:sr-only")}>
           {backHref && (
             <Button
               asChild
