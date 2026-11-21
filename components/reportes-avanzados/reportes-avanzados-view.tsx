@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart, Lock } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -106,6 +107,20 @@ const RentabilidadTecnicos = dynamic(
  * y, si este valor se equivoca, el gráfico reconoce el 403 FEATURE_REQUIRED y
  * muestra el mismo bloqueo.
  */
+// Same order and names as the desktop tabs.
+const REPORTES_MOVIL = [
+  { value: "tecnicos", label: "Técnicos" },
+  { value: "vendedores", label: "Vendedores" },
+  { value: "clientes", label: "Clientes" },
+  { value: "inventario", label: "Inventario" },
+  { value: "tiempo-reparacion", label: "Tiempos de reparación" },
+  { value: "tasa-retorno", label: "Tasa de retorno" },
+  { value: "fallas", label: "Fallas comunes" },
+  { value: "rentabilidad", label: "Rentabilidad" },
+  { value: "rentabilidad-tecnicos", label: "Rentabilidad por técnico" },
+  { value: "prediccion", label: "Predicción de repuestos" },
+]
+
 export function ReportesAvanzadosView({
   verTopClientes = true,
   reportesAvanzados = true,
@@ -142,7 +157,22 @@ export function ReportesAvanzadosView({
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="overflow-x-auto">
+        {/* Phones: ten icon-only tabs (two sharing an icon) can't be told
+            apart, so the report is picked by name from a select instead. */}
+        <Select value={activeTab} onValueChange={setActiveTab}>
+          <SelectTrigger className="sm:hidden" aria-label="Elegir reporte">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {REPORTES_MOVIL.filter((r) => r.value !== "clientes" || verTopClientes).map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
+                {bloqueado(r.value) ? " · Plan Profesional" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="overflow-x-auto max-sm:hidden">
           <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-10">
             <TabsTrigger value="tecnicos" className="gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -195,45 +225,45 @@ export function ReportesAvanzadosView({
           </TabsList>
         </div>
 
-        <TabsContent value="tecnicos" className="mt-6">
+        <TabsContent value="tecnicos" className="mt-4 sm:mt-6">
           <PerformanceTecnicos />
         </TabsContent>
 
-        <TabsContent value="vendedores" className="mt-6">
+        <TabsContent value="vendedores" className="mt-4 sm:mt-6">
           <PerformanceVendedores />
         </TabsContent>
 
         {verTopClientes && (
-          <TabsContent value="clientes" className="mt-6">
+          <TabsContent value="clientes" className="mt-4 sm:mt-6">
             <TopClientes />
           </TabsContent>
         )}
 
-        <TabsContent value="inventario" className="mt-6">
+        <TabsContent value="inventario" className="mt-4 sm:mt-6">
           <AnalisisInventario />
         </TabsContent>
 
-        <TabsContent value="tiempo-reparacion" className="mt-6">
+        <TabsContent value="tiempo-reparacion" className="mt-4 sm:mt-6">
           {contenidoPro("tiempo-reparacion", <TiempoReparacionChart />)}
         </TabsContent>
 
-        <TabsContent value="tasa-retorno" className="mt-6">
+        <TabsContent value="tasa-retorno" className="mt-4 sm:mt-6">
           {contenidoPro("tasa-retorno", <TasaRetornoChart />)}
         </TabsContent>
 
-        <TabsContent value="fallas" className="mt-6">
+        <TabsContent value="fallas" className="mt-4 sm:mt-6">
           {contenidoPro("fallas", <FallasComunesChart />)}
         </TabsContent>
 
-        <TabsContent value="rentabilidad" className="mt-6">
+        <TabsContent value="rentabilidad" className="mt-4 sm:mt-6">
           {contenidoPro("rentabilidad", <RentabilidadChart />)}
         </TabsContent>
 
-        <TabsContent value="rentabilidad-tecnicos" className="mt-6">
+        <TabsContent value="rentabilidad-tecnicos" className="mt-4 sm:mt-6">
           {contenidoPro("rentabilidad-tecnicos", <RentabilidadTecnicos />)}
         </TabsContent>
 
-        <TabsContent value="prediccion" className="mt-6">
+        <TabsContent value="prediccion" className="mt-4 sm:mt-6">
           {contenidoPro("prediccion", <PrediccionRepuestosChart />)}
         </TabsContent>
       </Tabs>
