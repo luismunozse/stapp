@@ -44,7 +44,10 @@ import {
   Boxes,
   ChevronDown,
   FileSpreadsheet,
+  Filter,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -121,9 +124,11 @@ const categoriasPorTipo: Record<string, string[]> = {
 
 interface InventarioListProps {
   allowImport?: boolean
+  /** Opens the inventory analysis panel. On phones it lives in the "⋯" menu instead of the page header. */
+  onAnalisis?: () => void
 }
 
-export function InventarioList({ allowImport = true }: InventarioListProps) {
+export function InventarioList({ allowImport = true, onAnalisis }: InventarioListProps) {
   const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatPrice } = useCurrency()
@@ -165,6 +170,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
+  // Phones: the filter selects and toggles stay collapsed behind a "Filtros" button.
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
   // La preferencia se persiste en localStorage.
   // Lazy initializer: lee localStorage durante el primer render del cliente
@@ -331,6 +338,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   }, [items])
 
   const [consolidateGroup, setConsolidateGroup] = useState<Inventario[] | null>(null)
+
+  const filtrosActivos = !!(categoria || tipoDispositivo || proveedorId || bajoStock || monedaFiltro || includeArchived)
+  // Collapsed filter controls on phones (unless the panel is open).
+  const ocultoEnMovil = !filtrosMovilAbiertos && "max-sm:hidden"
 
   const handleDelete = async (id: string, nombre?: string) => {
     const confirmed = await confirm({
@@ -641,15 +652,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
   return (
     <PullToRefresh onRefresh={() => mutate()}>
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <InventarioStats
         refreshKey={refreshKey}
         onFilterSinStock={() => { setBajoStock(true); setPage(1) }}
         onFilterBajoStock={() => { setBajoStock(true); setPage(1) }}
       />
-      <div className="flex flex-col gap-4">
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${mostrarFiltroMoneda ? "lg:grid-cols-6" : "lg:grid-cols-5"} gap-2`}>
-          <div className="relative sm:col-span-2 lg:col-span-2">
+      <div className="flex flex-col gap-2 sm:gap-4">
+        <div className={`grid grid-cols-2 ${mostrarFiltroMoneda ? "lg:grid-cols-6" : "lg:grid-cols-5"} gap-2`}>
+          <div className="col-span-2 flex items-center gap-1.5 lg:col-span-2">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar por nombre, código, descripción o proveedor..."
@@ -668,11 +680,108 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               </button>
             )}
           </div>
+          {/* Phones: scan, filters, create and an overflow menu share the search row */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+            <Button variant="outline" size="icon" onClick={() => setShowScanner(true)} aria-label="Escanear" title="Escanear">
+              <ScanLine className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={filtrosMovilAbiertos ? "secondary" : "outline"}
+              size="icon"
+              className="relative"
+              onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+              aria-label="Filtros"
+              aria-expanded={filtrosMovilAbiertos}
+            >
+              <Filter className="h-4 w-4" />
+              {filtrosActivos && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden />}
+            </Button>
+            <Button onClick={() => setShowForm(true)} size="icon" aria-label="Nuevo ítem" title="Nuevo ítem">
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Más opciones" title="Más opciones">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-1 space-y-0.5">
+                {onAnalisis && (
+                  <Button onClick={onAnalisis} variant="ghost" className="w-full justify-start">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Análisis
+                  </Button>
+                )}
+                <Button onClick={() => setShowBulkForm(true)} variant="ghost" className="w-full justify-start">
+                  <ListPlus className="h-4 w-4 mr-2" />
+                  Carga en lista
+                </Button>
+                <Button
+                  onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}
+                  variant="ghost"
+                  className="w-full justify-start"
+                >
+                  {viewMode === "list" ? <LayoutGrid className="h-4 w-4 mr-2" /> : <LayoutList className="h-4 w-4 mr-2" />}
+                  {viewMode === "list" ? "Ver en cuadrícula" : "Ver en lista"}
+                </Button>
+                <ExportButton
+                  entity="inventario"
+                  filters={{
+                    ...(categoria && { categoria }),
+                    ...(tipoDispositivo && { tipo_dispositivo: tipoDispositivo }),
+                    ...(proveedorId && { proveedor_id: proveedorId }),
+                    ...(bajoStock && { bajo_stock: "true" }),
+                  }}
+                  variant="ghost"
+                  label="Exportar"
+                  className="w-full justify-start"
+                />
+                {allowImport && (
+                  <>
+                    <Button onClick={() => setShowImport(true)} variant="ghost" className="w-full justify-start">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importar productos
+                    </Button>
+                    <Button onClick={() => router.push("/inventario/importar-precios")} variant="ghost" className="w-full justify-start">
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Actualizar precios
+                    </Button>
+                  </>
+                )}
+                <div className="my-1 border-t" />
+                {[
+                  { href: "/inventario/conteos", icon: ClipboardCheck, label: "Conteos" },
+                  { href: "/inventario/reposicion", icon: Sparkles, label: "Reposición" },
+                  { href: "/inventario/analisis-abc", icon: BarChart3, label: "Análisis ABC" },
+                  { href: "/inventario/lotes", icon: Calendar, label: "Lotes" },
+                  { href: "/inventario/series", icon: Hash, label: "Series" },
+                  { href: "/inventario/kits", icon: Boxes, label: "Kits" },
+                ].map(({ href, icon: Icon, label }) => (
+                  <Button key={href} asChild variant="ghost" className="w-full justify-start">
+                    <Link href={href}>
+                      <Icon className="h-4 w-4 mr-2" />
+                      {label}
+                    </Link>
+                  </Button>
+                ))}
+                <div className="my-1 border-t" />
+                <Button
+                  onClick={() => setShowWipe(true)}
+                  variant="ghost"
+                  className="w-full justify-start text-destructive-text hover:text-destructive-text"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Vaciar inventario
+                </Button>
+              </PopoverContent>
+            </Popover>
+          </div>
+          </div>
           <Select
             value={categoria || "all"}
             onValueChange={(value) => setCategoria(value === "all" ? "" : value)}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className={cn("w-full", ocultoEnMovil)}>
               <SelectValue placeholder="Todas las categorías" />
             </SelectTrigger>
             <SelectContent>
@@ -689,7 +798,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             onValueChange={(value) => handleTipoChange(value === "all" ? "" : value as TipoDispositivo | "")}
             disabled={tiposLoading}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className={cn("w-full", ocultoEnMovil)}>
               <SelectValue placeholder="Todos los tipos" />
             </SelectTrigger>
             <SelectContent>
@@ -707,7 +816,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             value={proveedorId || "all"}
             onValueChange={(value) => { setProveedorId(value === "all" ? "" : value); setPage(1) }}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className={cn("w-full", ocultoEnMovil)}>
               <SelectValue placeholder="Todos los proveedores" />
             </SelectTrigger>
             <SelectContent>
@@ -725,7 +834,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               value={monedaFiltro || "all"}
               onValueChange={(value) => { setMonedaFiltro(value === "all" ? "" : (value as "local" | "divisa")); setPage(1) }}
             >
-              <SelectTrigger className="w-full" aria-label="Moneda">
+              <SelectTrigger className={cn("w-full", ocultoEnMovil)} aria-label="Moneda">
                 <SelectValue placeholder="Todas las monedas" />
               </SelectTrigger>
               <SelectContent>
@@ -750,7 +859,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             refreshKey={refreshKey}
           />
         )}
-        <div className="flex flex-wrap gap-2">
+        {/* Phones keep only the filter toggles (and "Generar OC") of this row; the rest lives in the "⋯" menu. */}
+        <div className={cn("flex flex-wrap gap-2", !bajoStock && ocultoEnMovil)}>
           <Button
             variant={bajoStock ? "default" : "outline"}
             size="sm"
@@ -763,7 +873,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="gap-1.5 max-sm:hidden"
             onClick={() => setShowScanner(true)}
           >
             <ScanLine className="h-4 w-4" />
@@ -813,11 +923,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               ...(bajoStock && { bajo_stock: "true" }),
             }}
             variant="outline"
+            className="max-sm:hidden"
           />
           {allowImport && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 max-sm:hidden">
                   <Upload className="h-4 w-4" />
                   <span>Importar</span>
                   <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -841,43 +952,43 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Link href="/inventario/conteos">
+          <Link href="/inventario/conteos" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <ClipboardCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Conteos</span>
             </Button>
           </Link>
-          <Link href="/inventario/reposicion">
+          <Link href="/inventario/reposicion" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">Reposición</span>
             </Button>
           </Link>
-          <Link href="/inventario/analisis-abc">
+          <Link href="/inventario/analisis-abc" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">ABC</span>
             </Button>
           </Link>
-          <Link href="/inventario/lotes">
+          <Link href="/inventario/lotes" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <Calendar className="h-4 w-4" />
               <span className="hidden sm:inline">Lotes</span>
             </Button>
           </Link>
-          <Link href="/inventario/series">
+          <Link href="/inventario/series" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <Hash className="h-4 w-4" />
               <span className="hidden sm:inline">Series</span>
             </Button>
           </Link>
-          <Link href="/inventario/kits">
+          <Link href="/inventario/kits" className="max-sm:hidden">
             <Button variant="outline" className="gap-2">
               <Boxes className="h-4 w-4" />
               <span className="hidden sm:inline">Kits</span>
             </Button>
           </Link>
-          <div className="flex items-center border rounded-md">
+          <div className="flex items-center border rounded-md max-sm:hidden">
             <Button aria-label="Vista de cuadrícula"
               variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
@@ -895,19 +1006,19 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               <LayoutList className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={() => setShowBulkForm(true)} variant="outline" className="gap-2">
+          <Button onClick={() => setShowBulkForm(true)} variant="outline" className="gap-2 max-sm:hidden">
             <ListPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Carga en lista</span>
             <span className="sm:hidden">Lista</span>
           </Button>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} className="gap-2 max-sm:hidden">
             <Plus className="h-4 w-4" />
             Nuevo ítem
           </Button>
           <Button
             variant="destructive"
             onClick={() => setShowWipe(true)}
-            className="gap-2 md:hidden"
+            className="gap-2 max-sm:hidden md:hidden"
             title="Eliminar todo el inventario"
           >
             <Trash2 className="h-4 w-4" />
@@ -1194,21 +1305,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 // Sin costo visible no se publica margen (ver columna Margen).
                 const margen = item.precioCompra === null ? null : item.precioVenta - item.precioCompra
                 return (
-                  <div className="flex items-start gap-3">
-                    <div className="h-11 w-11 shrink-0 rounded-md overflow-hidden bg-muted/50 flex items-center justify-center border">
+                  // Dense card: name on top, price · margin · code on a single second line.
+                  // -m-1 trims DataTable's p-4 mobile wrapper to an effective p-3.
+                  <div className="-m-1 flex items-center gap-2.5">
+                    <div className="h-10 w-10 shrink-0 rounded-md overflow-hidden bg-muted/50 flex items-center justify-center border">
                       <FotoInventario item={item} iconClassName="h-5 w-5 text-muted-foreground/50" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm flex items-center gap-1.5">
+                      <div className="font-medium text-sm leading-tight flex items-center gap-1.5">
                         <span className="truncate">{item.nombre}</span>
                         <ChipVariante item={item} />
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">{item.codigo}</div>
-                      <div className="mt-1.5 flex items-center gap-2 text-sm">
-                        <span className="font-semibold"><PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} /></span>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-sm min-w-0">
+                        <span className="font-semibold shrink-0"><PrecioEnMoneda monto={item.precioVenta} moneda={item.moneda ?? null} /></span>
                         {margen !== null && margen > 0 && (
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400">+<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} /></span>
+                          <span className="shrink-0 text-xs text-emerald-600 dark:text-emerald-400">+<PrecioEnMoneda monto={margen} moneda={item.moneda ?? null} /></span>
                         )}
+                        {item.codigo && <span className="truncate text-xs text-muted-foreground">· {item.codigo}</span>}
                       </div>
                       {item.moneda && <EquivalenteLocal monto={item.precioVenta} moneda={item.moneda} />}
                     </div>
@@ -1238,7 +1351,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             />
           ) : (
             <>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {items.map((item) => {
                   const itemThreshold = item.stockMinimo ?? umbralStockBajo
                   const esStockBajo = item.stock <= itemThreshold
@@ -1264,10 +1377,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       }}
                     >
                       {/* Hero image */}
-                      <div className="aspect-[16/9] w-full bg-muted/40 flex items-center justify-center border-b">
+                      <div className="aspect-[16/9] max-sm:aspect-[3/1] w-full bg-muted/40 flex items-center justify-center border-b">
                         <FotoInventario item={item} iconClassName="h-10 w-10 text-muted-foreground/40" />
                       </div>
-                      <CardContent className="p-4">
+                      <CardContent className="p-4 max-sm:p-3">
                         {/* Row 1: Name + Actions */}
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="min-w-0 flex-1">
@@ -1429,7 +1542,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 })}
               </div>
               {total > pageSize && (
-                <div className="mt-4">
+                <div className="mt-3 sm:mt-4">
                   <DataTablePagination
                     page={page}
                     pageSize={pageSize}

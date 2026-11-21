@@ -8,6 +8,7 @@ import { InventarioAnalytics } from "@/components/inventario/inventario-analytic
 import { Button } from "@/components/ui/button"
 import { BarChart3, AlertTriangle, RefreshCw, LogOut, Loader2 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 
 /**
  * Cuánto se espera al chequeo antes de darlo por no contestado.
@@ -65,6 +66,8 @@ interface VeredictoAcceso {
 
 export default function InventarioPage() {
   const [showAnalytics, setShowAnalytics] = useState(false)
+  // Phones: "Análisis" moves into the list's "⋯" menu so the header doesn't spend a full-width row on it.
+  const esMovil = useIsMobileViewport()
   const { data: session, status } = useSession()
   const router = useRouter()
   const [veredicto, setVeredicto] = useState<VeredictoAcceso | null>(null)
@@ -218,14 +221,16 @@ export default function InventarioPage() {
       title="Inventario"
       description="Gestioná el stock de repuestos, accesorios y productos"
       actions={
-        <Button variant="outline" onClick={() => setShowAnalytics(true)} className="gap-1.5 flex-1 sm:flex-none">
-          <BarChart3 className="h-4 w-4" />
-          Análisis
-        </Button>
+        esMovil ? undefined : (
+          <Button variant="outline" onClick={() => setShowAnalytics(true)} className="gap-1.5 flex-1 sm:flex-none">
+            <BarChart3 className="h-4 w-4" />
+            Análisis
+          </Button>
+        )
       }
     >
       {esVendedor && resultado === "indeterminado" && (
-        <div className="mb-4 flex flex-col gap-2 rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 sm:mb-4 flex flex-col gap-2 rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
           <span className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             No se pudo verificar tu permiso sobre el inventario. Podés seguir trabajando; si la
@@ -243,7 +248,7 @@ export default function InventarioPage() {
       )}
 
       {esVendedor && resultado === "denegado-se-queda" && (
-        <div className="mb-4 flex flex-col gap-2 rounded-md border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 px-3 py-2 text-sm text-red-900 dark:text-red-200 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 sm:mb-4 flex flex-col gap-2 rounded-md border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 px-3 py-2 text-sm text-red-900 dark:text-red-200 sm:flex-row sm:items-center sm:justify-between">
           <span className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             Tu organización no te habilitó la administración de inventario: no vas a poder guardar
@@ -260,7 +265,7 @@ export default function InventarioPage() {
         </div>
       )}
 
-      <InventarioList allowImport={puedeImportar} />
+      <InventarioList allowImport={puedeImportar} onAnalisis={() => setShowAnalytics(true)} />
 
       <InventarioAnalytics open={showAnalytics} onOpenChange={setShowAnalytics} />
     </PageShell>
