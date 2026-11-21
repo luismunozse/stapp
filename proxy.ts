@@ -738,12 +738,6 @@ export async function proxy(request: NextRequest) {
   const sinSuscripcion = await suscripcionBloqueadaResponse(request, token, pathname)
   if (sinSuscripcion) return sinSuscripcion
 
-  // NOTE: /login must never redirect to the panel on the cookie alone. The
-  // panel re-checks the session against the database (auth(), the user's row,
-  // role and branch) and sends a stale one back to /login; redirecting here
-  // too made the two bounce forever and the app stopped opening. The native
-  // app reaches the panel through /app-entry → /dashboard instead.
-
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {
     return NextResponse.next({
