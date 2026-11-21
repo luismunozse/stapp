@@ -135,7 +135,7 @@ export function GlobalSearch({ navItems, acciones }: GlobalSearchProps) {
   let indice = -1
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-      <DialogContent className="top-[12vh] translate-y-0 data-[state=closed]:slide-out-to-top-[10%] data-[state=open]:slide-in-from-top-[10%] max-w-lg gap-0 p-0 pb-0 overflow-hidden">
+      <DialogContent mobileSheet={false} className="top-[12vh] translate-y-0 data-[state=closed]:slide-out-to-top-[10%] data-[state=open]:slide-in-from-top-[10%] max-w-lg gap-0 p-0 pb-0 overflow-hidden">
         <DialogTitle className="sr-only">Buscar o ir a</DialogTitle>
         <DialogDescription className="sr-only">
           Buscá clientes y órdenes, saltá a una sección o empezá una acción.

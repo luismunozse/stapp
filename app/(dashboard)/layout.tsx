@@ -113,7 +113,20 @@ export default async function DashboardLayout({
       <OfflineProvider>
         {/* Asistente IA: botón en la barra superior + panel lateral (bloqueado si el plan no lo incluye) */}
         <AsistenteProvider enabled={asistenteEnabled}>
-        <div className="min-h-dvh bg-background">
+        <div
+          className="min-h-dvh bg-background"
+          style={
+            {
+              // Where sticky in-page bars (MobileSectionTabs) stop on phones:
+              // under the fixed mobile header, plus the fixed trial/maintenance
+              // pill when it shows. Desktop has no fixed top bar.
+              "--app-sticky-top":
+                showMaintenanceBanner || showTrialBanner
+                  ? "calc(3.5rem + 2.5rem + env(safe-area-inset-top, 0px))"
+                  : "calc(3.5rem + env(safe-area-inset-top, 0px))",
+            } as React.CSSProperties
+          }
+        >
           <SkipLinks />
           {session.user.isImpersonating && (
             <ImpersonationBanner viewingAs={session.user.name || session.user.email || "tenant"} />

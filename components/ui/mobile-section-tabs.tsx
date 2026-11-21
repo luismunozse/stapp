@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef } from "react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,12 @@ interface MobileSectionTabsProps<K extends string> {
   label: string
   /** Breakpoint from which the switcher disappears (content shows all at once). */
   hideFrom?: "md" | "lg"
+  /**
+   * Stays pinned under the app header while scrolling (default), so switching
+   * section never needs a scroll back up. Offset comes from `--app-sticky-top`
+   * (set by the dashboard layout).
+   */
+  sticky?: boolean
   className?: string
 }
 
@@ -34,14 +41,33 @@ export function MobileSectionTabs<K extends string>({
   onChange,
   label,
   hideFrom = "lg",
+  sticky = true,
   className,
 }: MobileSectionTabsProps<K>) {
+  // Marks where the bar sits in the flow, to bring a new section to its start
+  // when switching from further down the page.
+  const anchorRef = useRef<HTMLDivElement>(null)
+
+  const select = (key: K) => {
+    onChange(key)
+    if (!sticky || typeof window === "undefined") return
+    const anchor = anchorRef.current
+    const bar = anchor?.nextElementSibling as HTMLElement | null
+    if (!anchor || !bar) return
+    const stickyTop = parseFloat(getComputedStyle(bar).top) || 0
+    const target = anchor.getBoundingClientRect().top + window.scrollY - stickyTop
+    if (window.scrollY > target) window.scrollTo({ top: target })
+  }
+
   return (
+    <>
+    {sticky && <div ref={anchorRef} aria-hidden className={hideFrom === "md" ? "md:hidden" : "lg:hidden"} />}
     <div
       role="tablist"
       aria-label={label}
       className={cn(
         "grid gap-1 rounded-lg bg-muted p-1",
+        sticky && "sticky top-[var(--app-sticky-top,0px)] z-30 shadow-sm ring-4 ring-background",
         hideFrom === "md" ? "md:hidden" : "lg:hidden",
         className
       )}
@@ -56,7 +82,7 @@ export function MobileSectionTabs<K extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(s.key)}
+            onClick={() => select(s.key)}
             className={cn(
               "relative flex items-center justify-center rounded-md text-xs font-medium transition-colors",
               Icon ? "flex-col gap-0.5 py-1.5" : "py-2",
@@ -72,6 +98,7 @@ export function MobileSectionTabs<K extends string>({
         )
       })}
     </div>
+    </>
   )
 }
 

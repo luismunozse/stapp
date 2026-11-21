@@ -723,6 +723,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   const visibleColumns = isTecnico ? columns.filter(c => c.key !== "tecnico") : columns
 
   return (
+    <>
     <PullToRefresh onRefresh={() => mutate()} disabled={showForm}>
     <div className="space-y-4">
       {/* Header */}
@@ -792,7 +793,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
               </Link>
             </Button>
           )}
-          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
+          {/* Phones: the floating "Nueva orden" button below replaces this one */}
+          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto max-sm:hidden">
             <Plus className="h-4 w-4" />
             Nueva
           </Button>
@@ -1186,8 +1188,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
         />
       </div>
 
-      {/* Mobile: Cards */}
-      <div className="sm:hidden">
+      {/* Mobile: Cards (pb: room so the floating "Nueva orden" never covers the last one) */}
+      <div className="sm:hidden pb-16">
         {isLoading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
@@ -1257,5 +1259,19 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       </div>
     </div>
     </PullToRefresh>
+
+    {/* Phones/app: creating an order is the main action, so it floats above
+        the bottom nav and is always one tap away, whatever the scroll.
+        Outside PullToRefresh: its pull transform would drag a fixed child. */}
+    {!showForm && (
+      <Button
+        onClick={() => setShowForm(true)}
+        className="sm:hidden fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+1rem)] z-40 h-12 gap-2 rounded-full px-5 text-sm font-semibold shadow-lg"
+      >
+        <Plus className="h-5 w-5" />
+        Nueva orden
+      </Button>
+    )}
+    </>
   )
 }

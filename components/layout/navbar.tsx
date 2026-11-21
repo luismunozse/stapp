@@ -16,6 +16,7 @@ import {
   BookOpen,
   ChevronDown,
   CreditCard,
+  SlidersHorizontal,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,8 @@ import { UserAvatar } from "@/components/shared/user-avatar"
 import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
 import { PlanBadge } from "@/components/billing/plan-badge"
 import { AsistenteNavButton } from "@/components/asistente/asistente-nav-button"
+import { BottomNavEditor } from "@/components/layout/bottom-nav-editor"
+import { useBottomNavPrefs } from "@/hooks/use-bottom-nav-prefs"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -190,7 +193,9 @@ export function Navbar() {
     }
   }
 
-  const filteredBottomNavItems = bottomNavItems(userRole, orgFeatures)
+  const [bottomNavPrefs, setBottomNavPrefs] = useBottomNavPrefs()
+  const [bottomNavEditorOpen, setBottomNavEditorOpen] = useState(false)
+  const filteredBottomNavItems = bottomNavItems(userRole, orgFeatures, bottomNavPrefs)
 
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(
@@ -519,6 +524,17 @@ export function Navbar() {
                 </div>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false)
+                setBottomNavEditorOpen(true)
+              }}
+              className="mt-4 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-primary hover:bg-accent touch-target"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Personalizar barra de abajo
+            </button>
           </nav>
           {/* Accesos de cuenta en una sola fila de íconos: apilados como filas
               ocupaban ~260px y en un teléfono dejaban la navegación con 4 ítems
@@ -582,6 +598,14 @@ export function Navbar() {
           </div>
         </div>
       </div>
+
+      <BottomNavEditor
+        open={bottomNavEditorOpen}
+        onOpenChange={setBottomNavEditorOpen}
+        items={allNavItems}
+        actuales={filteredBottomNavItems}
+        onSave={setBottomNavPrefs}
+      />
 
       {/* Mobile Bottom Navigation - Optimizado para touch */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border safe-bottom">

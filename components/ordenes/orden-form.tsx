@@ -1533,17 +1533,30 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           "Cerrar" no tiene que quedar arriba de todo el scroll. */}
       <CardHeader
         className={cn(
-          inSheet && "sticky top-0 z-20 rounded-t-lg border-b bg-card/95 py-3 backdrop-blur-sm"
+          "px-4 sm:px-6",
+          inSheet && "sticky top-0 z-20 rounded-t-lg border-b bg-card/95 py-2.5 backdrop-blur-sm sm:py-3"
         )}
       >
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg sm:text-xl">Nueva {term("orden")}</CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="text-lg sm:text-xl">Nueva {term("orden")}</CardTitle>
+            {/* Phones: the step name rides in the fixed header instead of
+                costing its own row inside the form */}
+            {(() => {
+              const current = pasos.find((s) => s.step === currentStep)
+              return (
+                <p className="truncate text-xs text-muted-foreground sm:hidden">
+                  Paso {currentStep}/{totalSteps}{current ? ` · ${current.label}` : ""}
+                </p>
+              )
+            })()}
+          </div>
           <IconButton label="Cerrar" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
           </IconButton>
         </div>
       </CardHeader>
-      <CardContent className={cn(inSheet && "pt-4")}>
+      <CardContent className={cn("px-4 pb-4 sm:px-6 sm:pb-6", inSheet && "pt-3 sm:pt-4")}>
         {fromTurnoId && (
           <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
             <p className="text-sm font-medium">Origen: turno agendado</p>
@@ -1572,20 +1585,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           if (currentStep < totalSteps) {
             handleNextStep()
           }
-        }} className="space-y-4">
+        }} className="space-y-3 sm:space-y-4">
           {draftNoticeVisible && (
             <DraftRestoredNotice onDiscard={discardDraft} />
           )}
 
-          {/* Step indicator */}
-          {(() => {
-            const current = pasos.find((s) => s.step === currentStep)
-            return (
-              <p className="text-xs text-center text-muted-foreground sm:hidden">
-                Paso {currentStep}/{totalSteps}{current ? ` · ${current.label}` : ""}
-              </p>
-            )
-          })()}
+          {/* Step indicator (phones: "Paso n/3 · …" lives in the header) */}
           <nav aria-label="Pasos del alta" className="flex items-center gap-1.5 sm:gap-2">
             {pasos.map(({ step, label }) => {
               const actual = step === currentStep
@@ -1739,7 +1744,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           />
 
           {/* Marca y Dispositivo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {/* Marca with quick select */}
             {showMarca && (
               <div>
@@ -1820,7 +1825,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {/* Color and IMEI/Serial - driven by config visibility */}
           {(showColor || showImei) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {showColor && (
                 <div>
                   <Label htmlFor="color">Color</Label>
@@ -1907,7 +1912,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {/* Contacto y acceso al equipo: se piden con el cliente delante, asi
               que viven en el paso 1 y no detras del presupuesto. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start">
             <div>
               <Label htmlFor="telefonoContacto">Teléfono de contacto</Label>
               <Input
@@ -2000,7 +2005,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               <p className="text-sm text-destructive-text mt-1">{errors.trabajoARealizar.message}</p>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <Label htmlFor="presupuesto">Presupuesto (opcional)</Label>
               <Input
@@ -2030,7 +2035,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           </div>
 
           {((!isTecnicoRole && tecnicosDisponibles.length > 0) || operadoresDisponibles.length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start">
           {!isTecnicoRole && tecnicosDisponibles.length > 0 && (
             <div>
               <Label htmlFor="tecnicoId">{term("tecnico")} asignado (opcional)</Label>
@@ -2415,7 +2420,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {/* En el overlay la barra llega a los bordes de la tarjeta (CardContent
               tiene p-6): si no, el formulario se ve por los costados y abajo. */}
           <FormActionBar
-            className={cn("flex-wrap justify-between", inSheet && "-mx-6 -mb-6 rounded-b-lg px-6")}
+            className={cn("flex-wrap justify-between", inSheet && "-mx-4 -mb-4 rounded-b-lg px-4 sm:-mx-6 sm:-mb-6 sm:px-6")}
             inDialog={inSheet}
             alwaysSticky={inSheet}
           >
