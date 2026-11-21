@@ -59,6 +59,7 @@ function setup(opts: {
   detalle?: { data: any; error: any }
   stock?: number
   depositoError?: { message: string } | null
+  movimientoError?: { message: string } | null
 }) {
   const depositos = createChainMock(opts.deposito ?? null, opts.depositoError ?? null)
   const inventario = createChainMock({ ...itemRow, stock: opts.stock ?? 5 })
@@ -66,17 +67,19 @@ function setup(opts: {
     opts.detalle?.data ?? [{ id: "det-1" }],
     opts.detalle?.error ?? null
   )
+  const movimientos = createChainMock(null, opts.movimientoError ?? null)
   mockSupabaseFrom({
     organizations: createChainMock({ vendedores_administran_inventario: true }),
     depositos,
     inventario, inventario_depositos: detalle,
+    movimientos_inventario: movimientos,
     audit_logs: createChainMock(null),
   })
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
     data: opts.principal === undefined ? "dep-principal" : opts.principal,
     error: null,
   } as any)
-  return { depositos, inventario, detalle }
+  return { depositos, inventario, detalle, movimientos }
 }
 
 describe("POST /api/inventario — depósito del stock inicial", () => {
@@ -208,6 +211,41 @@ describe("POST /api/inventario — depósito del stock inicial", () => {
     const res = await post({ depositoId: "dep-2" })
     expect((await parseResponse(res)).status).toBe(201)
     expect(detalle.insert).toHaveBeenCalledWith(expect.objectContaining({ deposito_id: "dep-2", stock: 5 }))
+  })
+
+  it("re-apunta el movimiento STOCK_INICIAL al depósito elegido y sella el usuario", async () => {
+    const { movimientos } = setup({ deposito: { id: "dep-2" } })
+    const res = await post({ depositoId: "dep-2" })
+
+    expect((await parseResponse(res)).status).toBe(201)
+    expect(movimientos.update).toHaveBeenCalledWith({ deposito_id: "dep-2", usuario_id: "user-1" })
+    expect(movimientos.in).toHaveBeenCalledWith("inventario_id", ["inv-new"])
+    expect(movimientos.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(movimientos.eq).toHaveBeenCalledWith("referencia_tipo", "STOCK_INICIAL")
+  })
+
+  it("no toca el kardex si el elegido es el principal, el stock es 0 o no hay depositoId", async () => {
+    const a = setup({ deposito: { id: "dep-principal" } })
+    await post({ depositoId: "dep-principal" })
+    expect(a.movimientos.update).not.toHaveBeenCalled()
+
+    const b = setup({ deposito: { id: "dep-2" }, stock: 0 })
+    await post({ depositoId: "dep-2", stock: 0 })
+    expect(b.movimientos.update).not.toHaveBeenCalled()
+
+    const c = setup({})
+    await post()
+    expect(c.movimientos.update).not.toHaveBeenCalled()
+  })
+
+  it("si el re-apunte del kardex falla igual responde 201 sin advertencia", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    setup({ deposito: { id: "dep-2" }, movimientoError: { message: "boom" } })
+    const res = await post({ depositoId: "dep-2" })
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.advertencia).toBeUndefined()
   })
 
   it("si el movimiento falla responde 201 con advertencia (el item ya existe)", async () => {
