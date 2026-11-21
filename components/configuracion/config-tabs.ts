@@ -13,6 +13,12 @@ export const CONFIG_TABS = [
 
 export type ConfigTab = (typeof CONFIG_TABS)[number]["value"]
 
+// Short labels shown on phones so the tab row fits the screen (the full label stays as the accessible name).
+export const CONFIG_TAB_SHORT: Partial<Record<ConfigTab, string>> = {
+  facturacion: "IVA/ARCA",
+  moneda: "Moneda",
+}
+
 export const DEFAULT_CONFIG_TAB: ConfigTab = "secciones"
 
 // Solo estas pestañas guardan el formulario con la barra inferior. Avisos y Comisiones se

@@ -20,7 +20,7 @@ import { NotificationSettings } from "@/components/configuracion/notification-se
 import { DanosConfig } from "@/components/configuracion/danos-config"
 import { GarantiasConfig, type GarantiasConfigValor } from "@/components/configuracion/garantias-config"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
+import { CONFIG_TABS, CONFIG_TAB_SHORT, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
@@ -166,6 +166,18 @@ export function ConfiguracionForm({
   })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Horizontal tab strip: keeps the active tab visible when it starts off-screen on a phone.
+  const tabStripRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const strip = tabStripRef.current
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return
+    const active = strip.querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+    if (!active) return
+    const left = active.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft
+    const right = left + active.offsetWidth
+    if (left < strip.scrollLeft) strip.scrollLeft = left - 16
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth + 16
+  }, [tab])
 
   // La pestaña activa vive en la URL (?tab=) para sobrevivir al refresh y poder
   // compartirse. replaceState evita el salto de scroll y no ensucia el historial.
@@ -531,14 +543,29 @@ export function ConfiguracionForm({
   )
 
   return (
-    <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
-      <div className="overflow-x-auto">
-        <TabsList className="inline-flex h-11 w-auto min-w-full sm:h-10 sm:min-w-0">
-          {CONFIG_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="min-h-9 text-xs sm:text-sm">
-              {t.label}
-            </TabsTrigger>
-          ))}
+    <Tabs value={tab} onValueChange={handleTabChange} className="space-y-3 sm:space-y-4">
+      {/* Phones: edge-to-edge swipeable strip pinned under the app header, so switching
+          section never needs a scroll back up. */}
+      <div
+        ref={tabStripRef}
+        className="overflow-x-auto max-sm:sticky max-sm:top-[var(--app-sticky-top,0px)] max-sm:z-20 max-sm:-mx-4 max-sm:bg-background max-sm:px-4 max-sm:py-1 max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden"
+      >
+        <TabsList className="inline-flex h-10 w-auto min-w-full sm:min-w-0">
+          {CONFIG_TABS.map((t) => {
+            const short = CONFIG_TAB_SHORT[t.value]
+            return (
+              <TabsTrigger key={t.value} value={t.value} className="min-h-8 px-2.5 text-xs sm:min-h-9 sm:px-3 sm:text-sm">
+                {short ? (
+                  <>
+                    <span className="sm:hidden" aria-hidden>{short}</span>
+                    <span className="max-sm:sr-only">{t.label}</span>
+                  </>
+                ) : (
+                  t.label
+                )}
+              </TabsTrigger>
+            )
+          })}
         </TabsList>
       </div>
 

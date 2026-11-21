@@ -189,21 +189,21 @@ const SECTIONS: SettingSection[] = [
 
 export function SettingsNav() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       {SECTIONS.map((section) => (
-        <section key={section.title} className="space-y-3">
+        <section key={section.title} className="space-y-2 sm:space-y-3">
           <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {section.title}
           </h2>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
             {section.cards.map((card) => {
               const Icon = card.icon
               return (
                 <Link key={card.href} href={card.href} className="group block">
                   <Card className="h-full transition-[transform,border-color,box-shadow] duration-200 ease-out hover:border-foreground/20 hover:shadow-sm active:scale-[0.98]">
-                    <CardContent className="flex items-start gap-3 p-3 sm:p-4">
+                    <CardContent className="flex items-start gap-2 p-2.5 sm:gap-3 sm:p-4">
                       <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${section.accent}`}
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 ${section.accent}`}
                       >
                         <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                       </span>

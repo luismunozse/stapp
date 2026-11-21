@@ -117,7 +117,9 @@ describe("ConfiguracionForm — tabs", () => {
     await renderForm()
 
     const tabs = screen.getAllByRole("tab")
-    expect(tabs.map((t) => t.textContent)).toEqual(LABELS)
+    // Accessible names, not textContent: on phones some tabs render a short visible label (aria-hidden) next to the full one.
+    expect(tabs).toHaveLength(LABELS.length)
+    LABELS.forEach((label, i) => expect(tabs[i]).toHaveAccessibleName(label))
     expect(screen.getByRole("tab", { name: "Secciones" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByText("slot-secciones")).toBeVisible()
     expect(screen.getByLabelText("Nombre de la Empresa")).not.toBeVisible()

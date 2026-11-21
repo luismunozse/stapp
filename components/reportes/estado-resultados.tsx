@@ -211,7 +211,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
   }, [data, desde, hasta])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Toolbar: exportar (el período se controla desde el selector global) */}
       <div className="flex justify-end">
         <Button
@@ -246,7 +246,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
       {data && !isLoading && (
         <>
           {/* Tarjetas resumen */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <StatCard
               icon={TrendingUp}
               title="Ingresos"
