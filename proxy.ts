@@ -19,7 +19,6 @@ import {
   IMPERSONATION_EXIT_PATH,
 } from "@/lib/impersonation"
 import { isPublicPath } from "@/lib/public-paths"
-import { safeCallbackPath } from "@/lib/safe-callback-path"
 import { clearSessionCookie, sessionCookieName } from "@/lib/session-cookie"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
@@ -739,22 +738,11 @@ export async function proxy(request: NextRequest) {
   const sinSuscripcion = await suscripcionBloqueadaResponse(request, token, pathname)
   if (sinSuscripcion) return sinSuscripcion
 
-  // A signed-in member of THIS tenant opening /login goes to their panel. The
-  // native app lands on /login on every cold start (and after every update),
-  // and without this a still-valid 30-day session showed an empty login form.
-  // Only when the tenant lookup succeeded: the ownership check above has then
-  // already sent other orgs' tokens away.
-  if (
-    pathname === "/login" &&
-    token &&
-    tenantStatus &&
-    !token.error &&
-    !isImpersonationExpired(token) &&
-    (request.method === "GET" || request.method === "HEAD")
-  ) {
-    const destino = safeCallbackPath(request.nextUrl.searchParams.get("callbackUrl"))
-    return NextResponse.redirect(new URL(destino, request.url))
-  }
+  // NOTE: /login must never redirect to the panel on the cookie alone. The
+  // panel re-checks the session against the database (auth(), the user's row,
+  // role and branch) and sends a stale one back to /login; redirecting here
+  // too made the two bounce forever and the app stopped opening. The native
+  // app reaches the panel through /app-entry → /dashboard instead.
 
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {
