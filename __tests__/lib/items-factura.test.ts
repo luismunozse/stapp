@@ -108,3 +108,122 @@ describe("construirItemsFactura", () => {
     expect(subtotal).toBe(0)
   })
 })
+
+/**
+ * Los renglones de la factura viajan a AFIP: tusfacturas-provider.ts los manda
+ * como `detalle`, con precio unitario e importe por cada uno. Facturar el costo
+ * en vez del precio de venta no es un numero feo en un papel: es declarar mal.
+ */
+describe("construirItemsFactura — precio de venta de los repuestos", () => {
+  it("factura el precio de VENTA, no el costo", () => {
+    const { items } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 60000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Pantalla", cantidad: 1, precio_unitario: 22000, precio_venta_unitario: 40000 },
+      ],
+      servicios: [],
+    })
+
+    const pantalla = items.find((i) => i.descripcion === "Pantalla")!
+    expect(pantalla.precioUnitario).toBe(40000)
+    expect(pantalla.subtotal).toBe(40000)
+  })
+
+  it("cae al costo en las filas anteriores a la migracion 286", () => {
+    const { items } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 30000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Bisagra", cantidad: 1, precio_unitario: 5000, precio_venta_unitario: null },
+      ],
+      servicios: [],
+    })
+
+    expect(items.find((i) => i.descripcion === "Bisagra")!.precioUnitario).toBe(5000)
+  })
+
+  it("el residual de mano de obra se calcula sobre el precio de venta", () => {
+    const { items } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 60000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Pantalla", cantidad: 1, precio_unitario: 22000, precio_venta_unitario: 40000 },
+      ],
+      servicios: [],
+    })
+
+    // 60000 - 40000 de venta = 20000. Con el costo daria 38000 y le estaria
+    // cobrando al cliente mano de obra que no hizo.
+    expect(items.find((i) => i.tipo === "MANO_DE_OBRA")!.subtotal).toBe(20000)
+  })
+})
+
+describe("construirItemsFactura — cuando los renglones se pasan del total", () => {
+  it("prorratea para que sumen exactamente lo cobrado", () => {
+    const { items, subtotal } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 50000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Pantalla", cantidad: 1, precio_unitario: 22000, precio_venta_unitario: 40000 },
+      ],
+      servicios: [{ nombre: "Mano de obra", cantidad: 1, precio_unitario: 20000 }],
+    })
+
+    expect(subtotal).toBe(50000)
+    const suma = items.reduce((s, i) => s + i.subtotal, 0)
+    expect(suma).toBe(50000)
+  })
+
+  it("no emite mano de obra residual cuando ya se paso", () => {
+    const { items } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 50000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Pantalla", cantidad: 1, precio_unitario: 22000, precio_venta_unitario: 40000 },
+      ],
+      servicios: [{ nombre: "Mano de obra", cantidad: 1, precio_unitario: 20000 }],
+    })
+
+    expect(items.some((i) => i.tipo === "MANO_DE_OBRA")).toBe(false)
+  })
+
+  it("cierra al centavo aunque el prorrateo no sea exacto", () => {
+    // 3 renglones iguales contra un total que no divide en tres: el redondeo a
+    // dos decimales deja diferencia, y la factura tiene que cerrar igual.
+    const { items, subtotal } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 10000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "A", cantidad: 1, precio_unitario: 1, precio_venta_unitario: 5000 },
+        { nombre: "B", cantidad: 1, precio_unitario: 1, precio_venta_unitario: 5000 },
+        { nombre: "C", cantidad: 1, precio_unitario: 1, precio_venta_unitario: 5000 },
+      ],
+      servicios: [],
+    })
+
+    const suma = items.reduce((s, i) => s + i.subtotal, 0)
+    expect(Math.round(suma * 100)).toBe(Math.round(subtotal * 100))
+  })
+
+  it("ningun renglon queda negativo", () => {
+    const { items } = construirItemsFactura({
+      cotizacion: null,
+      costoFinal: 1000,
+      presupuesto: null,
+      repuestos: [
+        { nombre: "Cara", cantidad: 1, precio_unitario: 1, precio_venta_unitario: 90000 },
+        { nombre: "Barata", cantidad: 1, precio_unitario: 1, precio_venta_unitario: 100 },
+      ],
+      servicios: [],
+    })
+
+    for (const i of items) expect(i.subtotal).toBeGreaterThanOrEqual(0)
+  })
+})
