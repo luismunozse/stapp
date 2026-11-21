@@ -751,8 +751,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Header */}
       <div className="flex flex-col gap-3 lg:gap-4">
         <div className="flex items-start gap-3 lg:items-center lg:gap-4">
-          <Link href={listaHref} aria-label="Volver a órdenes">
-            <IconButton label="Volver a órdenes" variant="outline">
+          <Link href={listaHref} aria-label="Volver a órdenes" className="max-lg:-ml-2">
+            {/* Phones: a plain back arrow like any app screen (no boxed button) */}
+            <IconButton label="Volver a órdenes" variant="outline" className="max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none">
               <ArrowLeft className="h-4 w-4" />
             </IconButton>
           </Link>
@@ -1099,7 +1100,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onUpdateEstado={handleUpdateEstado}
           esRetiro={isRetiro}
           onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
-          accionPrincipal={accionEstadoPrincipal}
+          accionPrincipal={null /* phones: the sticky bottom bar already carries it */}
           soloLectura={!acciones.puedeCambiarEstado}
         />
         <OrdenTecnicoCard

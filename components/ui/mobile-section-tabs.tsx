@@ -44,25 +44,25 @@ export function MobileSectionTabs<K extends string>({
   sticky = true,
   className,
 }: MobileSectionTabsProps<K>) {
-  // Marks where the bar sits in the flow, to bring a new section to its start
-  // when switching from further down the page.
-  const anchorRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
 
+  // Switching from further down the page brings the new section to its start.
+  // The bar's resting place is right under its previous sibling (no spacer
+  // element: an empty flex item would add a stray gap above the bar).
   const select = (key: K) => {
     onChange(key)
     if (!sticky || typeof window === "undefined") return
-    const anchor = anchorRef.current
-    const bar = anchor?.nextElementSibling as HTMLElement | null
-    if (!anchor || !bar) return
+    const bar = barRef.current
+    const prev = bar?.previousElementSibling
+    if (!bar || !prev) return
     const stickyTop = parseFloat(getComputedStyle(bar).top) || 0
-    const target = anchor.getBoundingClientRect().top + window.scrollY - stickyTop
+    const target = prev.getBoundingClientRect().bottom + window.scrollY - stickyTop
     if (window.scrollY > target) window.scrollTo({ top: target })
   }
 
   return (
-    <>
-    {sticky && <div ref={anchorRef} aria-hidden className={hideFrom === "md" ? "md:hidden" : "lg:hidden"} />}
     <div
+      ref={barRef}
       role="tablist"
       aria-label={label}
       className={cn(
@@ -98,7 +98,6 @@ export function MobileSectionTabs<K extends string>({
         )
       })}
     </div>
-    </>
   )
 }
 
