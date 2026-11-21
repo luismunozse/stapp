@@ -853,7 +853,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       </div>
 
       {/* Quick filter chips */}
-      <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:mx-0 sm:px-0 sm:flex-wrap">
+      <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:mx-0 sm:px-0 sm:flex-wrap">
         {/* Estado quick filters for tecnico */}
         {isTecnico && tecnicoQuickFilters.map((qf) => (
           <button

@@ -103,7 +103,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
   return (
     <div className="space-y-1">
     {/* Phones: one horizontally scrollable row of compact tiles instead of three stacked rows. */}
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 snap-x scrollbar-hide sm:mx-0 sm:grid sm:gap-3 sm:overflow-visible sm:px-0 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scroll-px-4 snap-x scrollbar-hide sm:mx-0 sm:grid sm:gap-3 sm:overflow-visible sm:px-0 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map((card) => {
         const Icon = card.icon
         const clickable = !!card.onClick

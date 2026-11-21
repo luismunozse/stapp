@@ -345,7 +345,7 @@ export function CatalogoView({
                   </button>
                 </div>
                 <div className="-mx-4 sm:mx-0 relative">
-                  <div className="flex gap-2.5 overflow-x-auto px-4 sm:px-0 scrollbar-hide snap-x snap-mandatory pb-1">
+                  <div className="flex gap-2.5 overflow-x-auto px-4 scroll-px-4 sm:px-0 sm:scroll-px-0 scrollbar-hide snap-x snap-mandatory pb-1">
                     {itemsRecientes.map((it) => (
                       <button
                         key={it.id}

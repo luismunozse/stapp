@@ -9,12 +9,20 @@ import { useAsistente } from "./asistente-context"
 interface AsistenteNavButtonProps {
   /** "pill" muestra el texto (barra de escritorio); "icon" solo el ícono (header móvil). */
   variant?: "pill" | "icon"
+  /**
+   * "locked": render only the plan-upsell button (the phone menu drawer hosts
+   * it). "unlocked": render only the working button (the phone app bar keeps
+   * one-tap access for plans that include it). Default: whichever applies.
+   */
+  only?: "locked" | "unlocked"
 }
 
-export function AsistenteNavButton({ variant = "pill" }: AsistenteNavButtonProps) {
+export function AsistenteNavButton({ variant = "pill", only }: AsistenteNavButtonProps) {
   const asistente = useAsistente()
   if (!asistente) return null
   const { enabled, open, toggle } = asistente
+  if (only === "locked" && enabled) return null
+  if (only === "unlocked" && !enabled) return null
 
   const base = cn(
     "inline-flex items-center justify-center gap-1.5 rounded-full text-sm font-medium transition-colors",
