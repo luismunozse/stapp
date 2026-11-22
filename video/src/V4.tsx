@@ -88,30 +88,36 @@ const Beneficios: React.FC = () => {
   );
 };
 
-const scenes: Part[] = [
-  [100, <><Title text="Tu cliente quiere saber *cómo va su reparación*" top={200} size={84} /><Preguntas /></>],
-  [130, <Link />],
-  [150, <>
+const build = (d: number[], v?: [number, number][]): Part[] => [
+  [d[0], <><Title text="Tu cliente quiere saber *cómo va su reparación*" top={200} size={84} /><Preguntas /></>, v?.[0]],
+  [d[1], <Link />, v?.[1]],
+  [d[2], <>
     <Title text="Ve el estado de su equipo, *siempre al día*" top={190} size={78} />
     <Phone {...REP} top={500} keys={[{f: 0, ...TOP}, {f: 20, ...TOP}, {f: 50, z: 1.12, x: 585, y: 1250}, {f: 95, z: 1.12, x: 585, y: 1250}, {f: 125, z: 1.12, x: 585, y: 1550}]}>
       {(ts) => <>
         <Highlight toScreen={ts} x={50} y={733} w={1070} h={612} from={55} label="Estado y progreso" />
       </>}
     </Phone>
-  </>],
-  [150, <>
+  </>, v?.[2]],
+  [d[3], <>
     <Title text="Cada paso, *con fecha y hora*" top={220} size={84} />
     <Phone {...LISTO} top={500} keys={[{f: 0, z: 1.12, x: 585, y: 1700}, {f: 15, z: 1.12, x: 585, y: 1700}, {f: 70, z: 1.12, x: 585, y: 2500}]}>
       {(ts) => <Highlight toScreen={ts} x={50} y={1853} w={1070} h={1368} from={75} label="Historial de la reparación" />}
     </Phone>
-  </>],
-  [140, <>
+  </>, v?.[3]],
+  [d[4], <>
     <Title text="Y cuando está listo, *coordina el retiro*" top={190} size={80} />
     <Phone {...LISTO} top={500} keys={[{f: 0, ...TOP}, {f: 20, ...TOP}, {f: 55, z: 1.12, x: 585, y: 1250}]}>
       {(ts) => <Highlight toScreen={ts} x={50} y={1262} w={1070} h={216} from={60} label="Un toque y te escribe" />}
     </Phone>
-  </>],
-  [120, <Beneficios />],
+  </>, v?.[4]],
+  [d[5], <Beneficios />, v?.[5]],
 ];
+const scenes = build([100, 130, 150, 150, 140, 120]);
 export const V4_DUR = total(scenes);
 export const V4: React.FC = () => <Chain scenes={scenes} />;
+
+// Versión con locución (Facundo, toma A)
+const scenesVoz = build([135, 175, 150, 130, 130, 140], [[0, 4.3], [4.3, 9.8], [9.8, 12.8], [12.8, 15.95], [15.95, 19.05], [19.05, 23.4]]);
+export const V4VOZ_DUR = total(scenesVoz, 135);
+export const V4Voz: React.FC = () => <Chain scenes={scenesVoz} cta={135} voz="voz/v4a.mp3" ctaVoz={[23.4, 27.36]} />;

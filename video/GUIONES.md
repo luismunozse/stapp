@@ -99,3 +99,7 @@ Capturas reales de `/seguimiento/[token]`: la app corre en local y las respuesta
 
 **Texto de la publicación:** Tu cliente no quiere llamarte: quiere saber cómo va su equipo 📲 Con STApp recibe un link y ve el estado, cada paso con fecha y cuándo pasar a retirar. Sin descargar nada. Probalo 30 días gratis en stapp.com.ar
 **Hashtags:** #serviciotecnico #tallerdereparacion #atencionalcliente #emprendedoresargentinos #stapp
+
+**Versión con voz** (`out/TikTok4-Seguimiento-Voz.mp4`, 33 s, Facundo, toma A `public/voz/v4a.mp3`):
+"Tu cliente quiere saber cómo va su reparación… y te lo pregunta a vos. Con STApp, cuando deja el equipo, recibe su link de seguimiento. Sin descargar nada. Ahí ve el estado de su equipo, siempre al día. Cada paso de la reparación, con fecha y hora. Y cuando está listo, coordina el retiro con un toque. Menos llamadas, más confianza, y un taller que se ve profesional. Probá STApp un mes sin costo, en stapp punto com punto ar."
+(Guion escrito sin "gratis, sin tarjeta, link en la bio" para no volver a activar el filtro de ElevenLabs.)
