@@ -55,26 +55,26 @@ export const Pill: React.FC<{children: React.ReactNode; bg?: string; color?: str
 export type Cam = {f: number; z: number; x: number; y: number};
 export const SHOT_W = 1169;
 export const SHOT_H = 2531;
-export const Phone: React.FC<{src: string; keys: Cam[]; top?: number; width?: number; children?: (toScreen: (x: number, y: number) => {x: number; y: number; k: number}) => React.ReactNode}> = ({src, keys, top = 560, width = 620, children}) => {
+export const Phone: React.FC<{src: string; keys: Cam[]; top?: number; width?: number; shotW?: number; shotH?: number; children?: (toScreen: (x: number, y: number) => {x: number; y: number; k: number}) => React.ReactNode}> = ({src, keys, top = 560, width = 620, shotW = SHOT_W, shotH = SHOT_H, children}) => {
   const f = useCurrentFrame();
   const {fps} = useVideoConfig();
   const enter = spring({frame: f, fps, config: {damping: 20, stiffness: 120}});
-  const s0 = width / SHOT_W;
-  const winH = SHOT_H * s0;
+  const s0 = width / shotW;
+  const winH = SHOT_H * (width / SHOT_W);
   const fr = keys.map((k) => k.f);
   const v = (p: 'z' | 'x' | 'y') => keys.length === 1 ? keys[0][p] : interpolate(f, fr, keys.map((k) => k[p]), {extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: easeInOut});
   const z = v('z');
   const k = s0 * z;
   let tx = width / 2 - v('x') * k;
   let ty = winH / 2 - v('y') * k;
-  tx = Math.min(0, Math.max(width - SHOT_W * k, tx));
-  ty = Math.min(0, Math.max(winH - SHOT_H * k, ty));
+  tx = Math.min(0, Math.max(width - shotW * k, tx));
+  ty = Math.min(0, Math.max(winH - shotH * k, ty));
   const toScreen = (x: number, y: number) => ({x: tx + x * k, y: ty + y * k, k});
   const bez = 20;
   return (
     <div style={{position: 'absolute', left: (1080 - width) / 2 - bez, top: top + (1 - enter) * 300, width: width + bez * 2, height: winH + bez * 2, borderRadius: 86, background: C.fg, padding: bez, boxShadow: SHADOW, opacity: enter}}>
       <div style={{position: 'relative', width, height: winH, borderRadius: 66, overflow: 'hidden', background: C.card}}>
-        <Img src={staticFile(src)} style={{position: 'absolute', left: 0, top: 0, width: SHOT_W, height: SHOT_H, transformOrigin: '0 0', transform: `translate(${tx}px, ${ty}px) scale(${k})`}} />
+        <Img src={staticFile(src)} style={{position: 'absolute', left: 0, top: 0, width: shotW, height: shotH, transformOrigin: '0 0', transform: `translate(${tx}px, ${ty}px) scale(${k})`}} />
         {children?.(toScreen)}
       </div>
     </div>

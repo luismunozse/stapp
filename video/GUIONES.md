@@ -79,3 +79,23 @@ Sin voz. Al subirlo, agregale un audio en tendencia con ritmo marcado. Los corte
 - Después del render se normaliza el volumen para TikTok:
   `ffmpeg -i in.mp4 -c:v copy -af loudnorm=I=-14:TP=-1.5:LRA=11 -ar 48000 -c:a aac -b:a 192k out.mp4`
 - Al subirlos, si agregás música de TikTok, bajala a 10-20 % para que se entienda la voz.
+
+---
+
+## 4. "El link de seguimiento": por qué importa, 31 s, solo texto
+`out/TikTok4-Seguimiento.mp4`
+
+Capturas reales de `/seguimiento/[token]`: la app corre en local y las respuestas de `/api/public/ordenes/*` se simulan con una orden ficticia. Se regeneran con `node scripts/capturar-seguimiento.cjs` mientras corre `next dev`.
+
+| Tiempo | En pantalla |
+|---|---|
+| 0:00–0:03 | Preguntas del cliente: "¿Ya lo revisaron?", "¿Cuánto me sale?"… |
+| 0:03–0:08 | WhatsApp con el link de seguimiento · sin descargar nada, sin usuario, sin contraseña |
+| 0:08–0:13 | Seguimiento "En reparación": estado, progreso y fecha estimada |
+| 0:13–0:18 | Historial de la reparación con fecha y hora |
+| 0:18–0:22,5 | "Listo para retirar" + botón "Coordinar retiro" por WhatsApp |
+| 0:22,5–0:26,5 | Por qué importa: menos llamadas, más confianza, imagen profesional |
+| 0:26,5–0:31 | Cierre |
+
+**Texto de la publicación:** Tu cliente no quiere llamarte: quiere saber cómo va su equipo 📲 Con STApp recibe un link y ve el estado, cada paso con fecha y cuándo pasar a retirar. Sin descargar nada. Probalo 30 días gratis en stapp.com.ar
+**Hashtags:** #serviciotecnico #tallerdereparacion #atencionalcliente #emprendedoresargentinos #stapp
