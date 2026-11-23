@@ -91,6 +91,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     expect(status).toBe(201)
     expect(body.servicio).toEqual({
       id: "lin-2", servicioId: null, nombre: "Ajuste", cantidad: 1, precioUnitario: 101,
+      incluidoEnPresupuesto: false,
     })
   })
 

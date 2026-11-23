@@ -104,10 +104,18 @@ export async function GET(
         ${NOTAS_CREDITO_APLICADO_EMBED},
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
+          numero_cotizacion,
           estado,
+          total,
           deleted_at,
+          reemplazada_por,
           items_cotizacion (
+            id,
+            descripcion,
             cantidad,
+            precio_unitario,
+            subtotal,
+            costo_unitario,
             inventario_id,
             inventario:inventario_id ( precio_compra )
           )
@@ -194,7 +202,8 @@ export async function GET(
         ...c,
         items_cotizacion: Array.isArray(c.items_cotizacion)
           ? c.items_cotizacion.map((it: any) =>
-              it?.inventario ? { ...it, inventario: { ...it.inventario, precio_compra: null } } : it
+              // costo_unitario es el costo que se cargó en la cotización: mismo permiso.
+              ({ ...(it?.inventario ? { ...it, inventario: { ...it.inventario, precio_compra: null } } : it), costo_unitario: null })
             )
           : c.items_cotizacion,
       }))

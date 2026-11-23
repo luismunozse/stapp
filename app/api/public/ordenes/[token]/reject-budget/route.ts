@@ -5,7 +5,7 @@ import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
-import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { montoCalculadoDeOrden } from "@/lib/cotizacion-presupuesto"
 
 const rejectSchema = z.object({
   motivo: z.string().max(500).optional(),
@@ -89,7 +89,7 @@ export async function POST(
     if (huboRestauracion) {
       // La cifra restaurada no aparece sola: hay que recalcular para que
       // aterrice en la orden.
-      const { total } = await totalPresupuestoDeOrden(orden.id)
+      const { monto: total } = await montoCalculadoDeOrden(orden.id)
       await supabaseAdmin
         .from("ordenes_servicio")
         .update({ presupuesto: total, costo_final: total })

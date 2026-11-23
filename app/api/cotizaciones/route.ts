@@ -10,7 +10,7 @@ import { parsePagination } from "@/lib/api-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO, dateNumberInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
-import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { montoCalculadoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { randomBytes } from "crypto"
 import { z } from "zod"
@@ -589,7 +589,7 @@ export async function POST(request: Request) {
 
     // Auto-fill presupuesto on the linked order — sum non-rejected cotizaciones for this orden
     if (data.ordenId) {
-      const { total: totalPresupuesto } = await totalPresupuestoDeOrden(data.ordenId)
+      const { monto: totalPresupuesto } = await montoCalculadoDeOrden(data.ordenId)
       await supabaseAdmin
         .from("ordenes_servicio")
         .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })

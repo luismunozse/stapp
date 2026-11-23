@@ -114,3 +114,20 @@ export async function parseResponse(response: Response) {
   const json = await response.json()
   return { status: response.status, body: json }
 }
+
+/**
+ * Migración 421: las rutas de cotizaciones escriben en la orden lo que devuelve
+ * el RPC suma_lineas_orden (cotizaciones vigentes + líneas que suman aparte).
+ * En una orden sin servicios ni repuestos es la suma de las cotizaciones, que
+ * es lo que estos tests fijan. Los demás RPCs siguen con el mock que tuvieran.
+ */
+export function mockSumaLineasOrden(monto: number) {
+  const rpc = vi.mocked(supabaseAdmin.rpc)
+  const previa = rpc.getMockImplementation()
+  rpc.mockImplementation(((fn: string, args?: unknown) =>
+    fn === "suma_lineas_orden"
+      ? Promise.resolve({ data: monto, error: null })
+      : previa
+        ? (previa as any)(fn, args)
+        : undefined) as any)
+}

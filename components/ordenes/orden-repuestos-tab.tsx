@@ -18,7 +18,8 @@ import {
   type InventarioOption,
 } from "./inventario-search-combobox"
 import { AplicarAlTotalAviso } from "./aplicar-al-total-aviso"
-import { sumaLineasOrden } from "@/lib/servicios/suma-lineas-orden"
+import { sumaLineasOrden, cotizacionesVigentes, type CotizacionDeOrden } from "@/lib/servicios/suma-lineas-orden"
+import { MarcaIncluidoEnPresupuesto, PreguntaIncluidoEnPresupuesto } from "./incluido-en-presupuesto"
 
 interface Repuesto {
   id: string
@@ -32,6 +33,8 @@ interface Repuesto {
   /** Precio de VENTA unitario: lo que se le cobra al cliente.
    *  NULL en repuestos cargados antes de la migración 286. */
   precioVentaUnitario?: number | null
+  /** Ya está dentro de la cotización de la orden: no suma aparte (421). */
+  incluidoEnPresupuesto?: boolean
 }
 
 interface OrdenRepuestosTabProps {
@@ -49,6 +52,9 @@ interface OrdenRepuestosTabProps {
    *  en la que el panel muestra "sin repuestos" mientras el padre aun no
    *  refrescó (lo que invitaba a reintentar y crear un repuesto duplicado). */
   onRepuestosChanged: () => void | Promise<void>
+  /** Cotizaciones de la orden. Con alguna vigente, cada repuesto dice si ya
+   *  está dentro del presupuesto o suma aparte al cobro (migración 421). */
+  cotizaciones?: CotizacionDeOrden[]
   /** Montos de la orden para el aviso "Aplicar al total": los repuestos suman
    *  al monto igual que los servicios (migración 420). Sin ellos el aviso no
    *  se muestra. Solo tiene sentido junto con mostrarCostos. */
@@ -56,13 +62,13 @@ interface OrdenRepuestosTabProps {
     presupuesto: number | null
     costoFinal: number | null
     totalCobrado: number
-    servicios: Array<{ cantidad: number; precioUnitario: number }>
+    servicios: Array<{ cantidad: number; precioUnitario: number; incluidoEnPresupuesto?: boolean }>
   }
 }
 
 const ESTADOS_CERRADOS: string[] = [...ESTADOS_ENTREGA, "CANCELADO"]
 
-export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, ordenEstado, onRepuestosChanged, montos }: OrdenRepuestosTabProps) {
+export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, ordenEstado, onRepuestosChanged, montos, cotizaciones = [] }: OrdenRepuestosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const ordenCerrada = !!ordenEstado && ESTADOS_CERRADOS.includes(ordenEstado)
@@ -82,6 +88,12 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
   const [cantidadDraft, setCantidadDraft] = useState("1")
   const [precioDraft, setPrecioDraft] = useState("")
   const [precioVentaDraft, setPrecioVentaDraft] = useState("")
+  // null = todavía no respondió si ya está en el presupuesto (solo se pregunta
+  // si la orden tiene cotización vigente).
+  const [incluido, setIncluido] = useState<boolean | null>(null)
+  const vigentes = cotizacionesVigentes(cotizaciones)
+  const hayPresupuesto = vigentes.length > 0
+  const numerosPresupuesto = vigentes.map((c) => c.numero_cotizacion).filter(Boolean).join(", ") || "presupuesto"
   // Carga en lote: tras agregar, el form queda abierto y el foco vuelve al buscador.
   const [focusSignal, setFocusSignal] = useState(0)
   const [ultimoAgregado, setUltimoAgregado] = useState<string | null>(null)
@@ -126,6 +138,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
     setCantidadDraft("1")
     setPrecioDraft("")
     setPrecioVentaDraft("")
+    setIncluido(null)
   }
 
   const handleAddRepuesto = async () => {
@@ -156,6 +169,14 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
         return
       }
     }
+    if (hayPresupuesto && incluido === null) {
+      await alert({
+        title: "Falta un dato",
+        description: "Indicá si este repuesto ya está incluido en el presupuesto o si suma al cobro.",
+        variant: "warning",
+      })
+      return
+    }
 
     setUpdating(true)
     try {
@@ -164,6 +185,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
             tipo: "inventario",
             inventarioId: itemSeleccionado!.id,
             cantidad: nuevoRepuesto.cantidad,
+            incluidoEnPresupuesto: hayPresupuesto && incluido === true,
           }
         : {
             tipo: "manual",
@@ -174,6 +196,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
             ...(precioVentaDraft.trim()
               ? { precioVentaUnitario: nuevoRepuesto.precioVentaUnitario }
               : {}),
+            incluidoEnPresupuesto: hayPresupuesto && incluido === true,
           }
 
       const res = await fetch(`/api/ordenes/${ordenId}/repuestos`, {
@@ -238,6 +261,24 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
     } catch (error) {
       console.error("Error removing repuesto:", error)
       await alert({ title: "Error", description: "Error al eliminar repuesto", variant: "error" })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleToggleIncluido = async (repuesto: Repuesto) => {
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/repuestos?repuestoId=${repuesto.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incluidoEnPresupuesto: !repuesto.incluidoEnPresupuesto }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        await alert({ title: "Error", description: error.error || "No se pudo cambiar el repuesto", variant: "error" })
+      }
+      await onRepuestosChanged?.()
     } finally {
       setUpdating(false)
     }
@@ -340,7 +381,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
             presupuesto={montos.presupuesto}
             costoFinal={montos.costoFinal}
             totalCobrado={montos.totalCobrado}
-            sumaLineas={sumaLineasOrden({ servicios: montos.servicios, repuestos })}
+            sumaLineas={sumaLineasOrden({ servicios: montos.servicios, repuestos, cotizaciones })}
             cantidadLineas={montos.servicios.length + (repuestos?.length ?? 0)}
             onAplicado={onRepuestosChanged}
           />
@@ -490,6 +531,15 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
               </div>
             )}
 
+            {hayPresupuesto && (
+              <PreguntaIncluidoEnPresupuesto
+                idPrefix={`repuesto-${ordenId}`}
+                presupuestos={numerosPresupuesto}
+                value={incluido}
+                onChange={setIncluido}
+              />
+            )}
+
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={handleAddRepuesto} disabled={updating || excedeStock}>
                 Agregar
@@ -532,6 +582,13 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                       <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
                         Manual
                       </span>
+                    )}
+                    {hayPresupuesto && (
+                      <MarcaIncluidoEnPresupuesto
+                        incluido={!!repuesto.incluidoEnPresupuesto}
+                        disabled={updating}
+                        onToggle={() => handleToggleIncluido(repuesto)}
+                      />
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">

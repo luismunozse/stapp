@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { mockAuthSuccess, createChainMock, mockSupabaseFrom } from "./helpers"
+import { mockAuthSuccess, createChainMock, mockSupabaseFrom, mockSumaLineasOrden } from "./helpers"
 
 vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn().mockResolvedValue(true),
@@ -46,6 +46,7 @@ describe("PUT /api/cotizaciones/[id] — presupuesto de la orden", () => {
       items_cotizacion: createChainMock([]),
       orden_eventos: createChainMock(null),
     })
+    mockSumaLineasOrden(150)
 
     // El item que se edita vale 999, no 150: si la implementación escribiera
     // el total de ESTA cotización (999) en vez de la suma de las vigentes

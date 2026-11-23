@@ -10,7 +10,7 @@
 // `presupuesto`/`costo_final` de la orden en 0 o NULL, mientras la firma de la
 // original sigue siendo el acuerdo vigente y su stock sigue reservado.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { mockAuthSuccess, createChainMock, mockSupabaseFrom, parseResponse } from "./helpers"
+import { mockAuthSuccess, createChainMock, mockSupabaseFrom, parseResponse, mockSumaLineasOrden } from "./helpers"
 
 vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn().mockResolvedValue(true),
@@ -29,6 +29,8 @@ vi.mock("@/lib/audit", () => ({
 // afectadas). Un solo array no vacio sirve para las dos ultimas.
 function cotChain(fila: any, vigentes: any[] = [{ total: 100 }]) {
   const chain = createChainMock(vigentes)
+  // 421: la orden recibe suma_lineas_orden; sin líneas = suma de las vigentes.
+  mockSumaLineasOrden(vigentes.reduce((s, c) => s + Number(c.total ?? 0), 0))
   chain.single = vi.fn().mockResolvedValue({ data: fila, error: null })
   return chain
 }

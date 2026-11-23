@@ -13,8 +13,8 @@ interface AplicarAlTotalAvisoProps {
   presupuesto: number | null
   costoFinal: number | null
   totalCobrado: number
-  /** Servicios + repuestos (ver sumaLineasOrden). */
-  sumaLineas: { servicios: number; repuestos: number; total: number }
+  /** Presupuestos vigentes + servicios y repuestos que suman (ver sumaLineasOrden). */
+  sumaLineas: { presupuestos?: number; servicios: number; repuestos: number; total: number }
   /** Cantidad de líneas (servicios + repuestos) de la orden. */
   cantidadLineas: number
   /** Una mutación de esta sesión informó que el monto no se sincronizó. Cubre
@@ -96,9 +96,10 @@ export function AplicarAlTotalAviso({
       <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
       <div className="flex-1">
         <div className="font-medium mb-1">
-          El {etiquetaMonto} no coincide con servicios + repuestos
+          El {etiquetaMonto} no coincide con {(sumaLineas.presupuestos ?? 0) > 0 ? "presupuesto + servicios + repuestos" : "servicios + repuestos"}
         </div>
         <div>
+          {(sumaLineas.presupuestos ?? 0) > 0 && <>Presupuesto: {formatPrice(sumaLineas.presupuestos ?? 0)} — </>}
           Servicios: {formatPrice(sumaLineas.servicios)} — Repuestos: {formatPrice(sumaLineas.repuestos)} — Total:{" "}
           {formatPrice(sumaLineas.total)} — {campoVivo === "presupuesto" ? "Presupuesto" : "Costo final"} actual:{" "}
           {formatPrice(montoVivoNum)}

@@ -4,6 +4,7 @@ import {
   createChainMock,
   mockSupabaseFrom,
   parseResponse,
+  mockSumaLineasOrden,
 } from "./helpers"
 
 vi.mock("@/lib/audit", () => ({
@@ -65,6 +66,7 @@ describe("DELETE /api/cotizaciones/[id] — bug #6a (bloqueo en APROBADO)", () =
     const ordenes = ordChainMock("PRESUPUESTADO", [{ id: "o1" }]) // update atómico afecta 1 fila
     const eventos = createChainMock(null)
     mockSupabaseFrom({ cotizaciones, ordenes_servicio: ordenes, orden_eventos: eventos })
+    mockSumaLineasOrden(0)
 
     const res = await DELETE(createDeleteRequest(), createParams("cot1"))
     const { status } = await parseResponse(res)

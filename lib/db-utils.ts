@@ -237,6 +237,8 @@ export function formatRepuesto(repuesto: any, includeCost = true) {
     // Este último es NULL en filas anteriores a la migración 286.
     precioUnitario: includeCost ? repuesto.precio_unitario : null,
     precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
+    // Ya está dentro de una cotización de la orden: no suma aparte (421).
+    incluidoEnPresupuesto: !!repuesto.incluido_en_presupuesto,
     // El embed de inventario trae el costo VIVO (precio_compra), no la copia
     // congelada: sale por el mismo permiso que precioUnitario.
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario, includeCost) : undefined,
@@ -253,6 +255,7 @@ export function formatServicioOrden(servicio: any) {
     nombre: servicio.nombre, // Snapshot, ver comentario en 300_servicios.sql
     cantidad: servicio.cantidad,
     precioUnitario: servicio.precio_unitario,
+    incluidoEnPresupuesto: !!servicio.incluido_en_presupuesto,
   }
 }
 

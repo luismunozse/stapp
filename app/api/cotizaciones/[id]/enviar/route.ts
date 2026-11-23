@@ -6,7 +6,7 @@ import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { montoCalculadoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada } from "@/lib/cotizacion-revision"
 import { esInforme } from "@/lib/cotizacion-informe"
 
@@ -202,7 +202,7 @@ export async function POST(
 
       if (ordenActual && validStates.includes(ordenActual.estado)) {
         const estadoAnterior = ordenActual.estado
-        const { total: totalPresupuesto } = await totalPresupuestoDeOrden(orden.id)
+        const { monto: totalPresupuesto } = await montoCalculadoDeOrden(orden.id)
         await supabaseAdmin
           .from("ordenes_servicio")
           .update({
