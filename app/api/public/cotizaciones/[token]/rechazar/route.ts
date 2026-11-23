@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
-import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { montoCalculadoDeOrden } from "@/lib/cotizacion-presupuesto"
 
 export async function POST(
   request: Request,
@@ -80,7 +80,7 @@ export async function POST(
       // La orden NO perdió su presupuesto: volvió al de la versión firmada
       // antes. Por eso acá se recalcula en vez de revertir el estado de la
       // orden como en el rechazo de una cotización común.
-      const { total } = await totalPresupuestoDeOrden(cotizacion.orden_id)
+      const { monto: total } = await montoCalculadoDeOrden(cotizacion.orden_id)
       await supabaseAdmin
         .from("ordenes_servicio")
         .update({ presupuesto: total, costo_final: total })

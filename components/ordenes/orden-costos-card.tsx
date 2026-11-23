@@ -1,5 +1,6 @@
 "use client"
 
+import type { ComponentProps } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +11,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { pendienteOrden } from "@/lib/ordenes/pendiente"
 import { parseTrabajosARealizar } from "@/lib/ordenes/trabajo-a-realizar"
 import { TrabajosARealizarInput } from "@/components/ordenes/trabajos-a-realizar-input"
+import { DetalleCobroOrden } from "@/components/ordenes/detalle-cobro-orden"
 
 interface OrdenCostosCardProps {
   ordenId: string
@@ -28,6 +30,9 @@ interface OrdenCostosCardProps {
   onUpdateField: (field: string, value: any) => void
   onCobrar?: () => void
   readOnly?: boolean
+  /** Presupuestos, servicios y repuestos para el detalle con costo y ganancia.
+   *  Solo para ADMIN: sin esto el detalle no se muestra. */
+  detalle?: ComponentProps<typeof DetalleCobroOrden>["detalle"]
 }
 
 export function OrdenCostosCard({
@@ -45,6 +50,7 @@ export function OrdenCostosCard({
   onUpdateField,
   onCobrar,
   readOnly,
+  detalle,
 }: OrdenCostosCardProps) {
   const { formatPrice } = useCurrency()
   const pendienteReal = Math.max(
@@ -168,6 +174,8 @@ export function OrdenCostosCard({
             </div>
           </>
         )}
+
+        {detalle && <DetalleCobroOrden detalle={detalle} />}
 
         {costoFinal && costoFinal > 0 && (
           <div className="pt-3 border-t space-y-2">

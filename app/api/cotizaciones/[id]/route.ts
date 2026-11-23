@@ -7,7 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
-import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
+import { montoCalculadoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
@@ -164,9 +164,11 @@ async function revertirOrdenSinPresupuestoActivo(
 }
 
 async function recalcPresupuestoOrden(ordenId: string, organizationId: string, userId?: string | null) {
-  const { total, cantidad } = await totalPresupuestoDeOrden(ordenId)
+  const { monto: total, cotizaciones: cantidad } = await montoCalculadoDeOrden(ordenId)
 
-  if (cantidad > 0) {
+  // Sin cotizaciones pero con servicios o repuestos, el monto son esas líneas
+  // (migración 421): no se borra un monto que todavía tiene de dónde salir.
+  if (cantidad > 0 || total > 0) {
     await supabaseAdmin
       .from("ordenes_servicio")
       .update({ presupuesto: total, costo_final: total })
@@ -1121,7 +1123,7 @@ export async function PUT(
 
         if (ordenActual && validStates.includes(ordenActual.estado)) {
           const estadoAnterior = ordenActual.estado
-          const { total: totalPresupuesto } = await totalPresupuestoDeOrden(cotWithOrder.orden_id)
+          const { monto: totalPresupuesto } = await montoCalculadoDeOrden(cotWithOrder.orden_id)
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({
@@ -1281,9 +1283,10 @@ export async function DELETE(
         .single()
 
       if (orden) {
-        const { total: totalPresupuesto, cantidad } = await totalPresupuestoDeOrden(cotizacion.orden_id)
+        const { monto: totalPresupuesto, cotizaciones: cantidad } = await montoCalculadoDeOrden(cotizacion.orden_id)
 
-        if (cantidad > 0) {
+        // Con servicios o repuestos sueltos el monto sigue siendo esas líneas (421).
+        if (cantidad > 0 || totalPresupuesto > 0) {
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })

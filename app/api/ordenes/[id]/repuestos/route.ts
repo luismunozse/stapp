@@ -11,6 +11,7 @@ const repuestoInventarioSchema = z.object({
   tipo: z.literal("inventario"),
   inventarioId: z.string().min(1),
   cantidad: z.number().int().min(1),
+  incluidoEnPresupuesto: z.boolean().default(false),
 })
 
 // Schema para repuesto manual.
@@ -26,6 +27,7 @@ const repuestoManualSchema = z.object({
     .number()
     .min(0, "El precio de venta debe ser mayor o igual a 0")
     .optional(),
+  incluidoEnPresupuesto: z.boolean().default(false),
 })
 
 // Schema combinado
@@ -34,9 +36,13 @@ const repuestoSchema = z.discriminatedUnion("tipo", [
   repuestoManualSchema,
 ])
 
-// Edición de cantidad de un repuesto ya cargado
+// Edición de un repuesto ya cargado: la cantidad, o si ya está dentro de la
+// cotización de la orden (migración 421; el trigger mueve el monto).
 const cantidadPatchSchema = z.object({
   cantidad: z.number().int().min(1, "La cantidad debe ser al menos 1"),
+})
+const incluidoPatchSchema = z.object({
+  incluidoEnPresupuesto: z.boolean(),
 })
 
 export async function POST(
@@ -99,6 +105,17 @@ export async function POST(
           { status: result.error === "Stock insuficiente" ? 400 : 404 }
         )
       }
+      // El RPC de stock no conoce la marca: se pone después. Entre las dos
+      // escrituras el trigger suma el repuesto y luego lo resta, así que el
+      // monto final es el mismo que si hubiera entrado marcado (421).
+      if (data.incluidoEnPresupuesto && result?.id) {
+        const { error: marcaError } = await supabaseAdmin
+          .from("repuestos_orden")
+          .update({ incluido_en_presupuesto: true })
+          .eq("id", result.id)
+          .eq("orden_id", ordenId)
+        if (marcaError) throw marcaError
+      }
     } else {
       // Repuesto manual (sin inventario). Si no se informa precio de venta, se
       // usa el costo: es lo que hacía el sistema antes de la migración 286 y
@@ -109,6 +126,7 @@ export async function POST(
         cantidad: data.cantidad,
         precio_unitario: data.precioUnitario,
         precio_venta_unitario: data.precioVentaUnitario ?? data.precioUnitario,
+        incluido_en_presupuesto: data.incluidoEnPresupuesto,
       })
     }
 
@@ -146,7 +164,10 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const data = cantidadPatchSchema.parse(body)
+    const marca = body && typeof body === "object" && "incluidoEnPresupuesto" in body
+      ? incluidoPatchSchema.parse(body)
+      : null
+    const data = marca ? null : cantidadPatchSchema.parse(body)
 
     // The order must belong to the org and be within the caller's scope
     const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
@@ -163,6 +184,20 @@ export async function PATCH(
     if (!repuesto || repuesto.orden_id !== ordenId) {
       return NextResponse.json({ error: "Repuesto no encontrado" }, { status: 404 })
     }
+
+    if (marca) {
+      // Solo cambia lo que suma al cobro, no el stock: el trigger de la 421
+      // mueve el monto de la orden con la regla de siempre.
+      const { error: marcaError } = await supabaseAdmin
+        .from("repuestos_orden")
+        .update({ incluido_en_presupuesto: marca.incluidoEnPresupuesto })
+        .eq("id", repuestoId)
+        .eq("orden_id", ordenId)
+      if (marcaError) throw marcaError
+      return NextResponse.json({ success: true, incluidoEnPresupuesto: marca.incluidoEnPresupuesto })
+    }
+
+    if (!data) return NextResponse.json({ error: "Cantidad requerida" }, { status: 400 })
 
     // El RPC ajusta sólo el delta de reserva y valida el estado de la orden.
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(

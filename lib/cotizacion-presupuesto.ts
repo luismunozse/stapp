@@ -39,6 +39,30 @@ export async function cotizacionesVigentesDeOrden(
   return (data || []) as Array<{ total: number }>
 }
 
+/**
+ * Lo que las rutas de cotizaciones escriben en presupuesto/costo_final de la
+ * orden: cotizaciones vigentes + servicios y repuestos que NO están incluidos
+ * en ellas (sin cotización vigente, todas las líneas). Lo calcula
+ * suma_lineas_orden (migración 421), la misma función que usa la
+ * sincronización de las líneas: antes cada camino escribía su propio número
+ * (solo cotizaciones / solo líneas) y se pisaban — la orden 82 cobraba el pin
+ * de la cotización y perdía el servicio cargado aparte.
+ *
+ * `cotizaciones` es cuántas cotizaciones vigentes hay: los llamadores la usan
+ * para decidir si la orden se quedó sin presupuesto. Igual que arriba, un error
+ * explota en vez de devolver 0.
+ */
+export async function montoCalculadoDeOrden(
+  ordenId: string
+): Promise<{ monto: number; cotizaciones: number }> {
+  const vigentes = await cotizacionesVigentesDeOrden(ordenId)
+  const { data, error } = await supabaseAdmin.rpc("suma_lineas_orden", { p_orden_id: ordenId })
+  if (error) {
+    throw new Error(`No se pudo calcular el monto de la orden ${ordenId}: ${error.message}`)
+  }
+  return { monto: Number(data ?? 0), cotizaciones: vigentes.length }
+}
+
 /** Total presupuestado de una orden y cuántas cotizaciones lo componen. */
 export async function totalPresupuestoDeOrden(
   ordenId: string

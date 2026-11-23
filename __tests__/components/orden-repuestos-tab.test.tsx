@@ -153,6 +153,8 @@ describe("OrdenRepuestosTab — busqueda de repuestos del inventario", () => {
         tipo: "inventario",
         inventarioId: "inv-1",
         cantidad: 1,
+        // Sin cotización vigente no se pregunta: el repuesto suma (421).
+        incluidoEnPresupuesto: false,
       })
     })
   })

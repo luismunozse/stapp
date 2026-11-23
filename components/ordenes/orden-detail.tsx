@@ -728,6 +728,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const telefonoOculto = (orden as { telefonoOculto?: boolean }).telefonoOculto === true
   const estadoSinCobro = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
   // Mismas condiciones que el botón "Cobrar" de OrdenCostosCard.
+  // Detalle con costos y ganancia de la tarjeta "Presupuesto y costos": solo ADMIN.
+  const detalleCobro = isAdmin
+    ? {
+        cotizaciones: (orden as any).cotizaciones || [],
+        servicios: (orden as any).servicios || [],
+        repuestos: (orden as any).repuestos || [],
+      }
+    : undefined
   const mostrarCobrar = puedeCobrar && userRole !== "TECNICO" && costoFinalNum > 0 && saldoPendiente > 0 && !estadoSinCobro
   // La acción que la ficha empuja según estado y rol: la usan la tarjeta Estado y la barra del celular.
   const puedeTomarOrden = (orden as any).puedeTomar === true && !orden.tecnicoId
@@ -1386,6 +1394,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   totalCobrado: orden.totalCobrado || 0,
                   servicios: (orden as any).servicios || [],
                 }}
+                cotizaciones={(orden as any).cotizaciones || []}
               />
             </TabsContent>
 
@@ -1399,6 +1408,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   estado={orden.estado}
                   totalCobrado={orden.totalCobrado || 0}
                   repuestos={(orden as any).repuestos || []}
+                  cotizaciones={(orden as any).cotizaciones || []}
                   onServiciosChanged={fetchOrden}
                 />
               )}
@@ -1525,6 +1535,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             onUpdateField={handleUpdateField}
             onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
             readOnly={userRole === "TECNICO"}
+            detalle={detalleCobro}
           />
 
           {isAdmin && <DobleCargaWarning orden={orden} />}
@@ -1564,6 +1575,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onUpdateField={handleUpdateField}
           onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
           readOnly={userRole === "TECNICO"}
+          detalle={detalleCobro}
         />
         {isAdmin && (
           <OrdenComisionCard

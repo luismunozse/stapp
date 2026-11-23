@@ -12,6 +12,7 @@ const lineaSchema = z.discriminatedUnion("tipo", [
     servicioId: z.string().min(1),
     cantidad: z.number().int().positive("La cantidad debe ser mayor a cero"),
     precioUnitario: z.number().min(0).optional(),
+    incluidoEnPresupuesto: z.boolean().default(false),
   }),
   z.object({
     tipo: z.literal("manual"),
@@ -19,6 +20,7 @@ const lineaSchema = z.discriminatedUnion("tipo", [
     cantidad: z.number().int().positive("La cantidad debe ser mayor a cero"),
     precioUnitario: z.number().min(0, "El precio no puede ser negativo"),
     guardarEnCatalogo: z.boolean().default(false),
+    incluidoEnPresupuesto: z.boolean().default(false),
   }),
 ])
 
@@ -29,6 +31,7 @@ function lineaDTO(l: any) {
     nombre: l.nombre,
     cantidad: l.cantidad,
     precioUnitario: Number(l.precio_unitario),
+    incluidoEnPresupuesto: !!l.incluido_en_presupuesto,
   }
 }
 
@@ -103,6 +106,8 @@ export async function POST(
         p_nombre: nombre,
         p_cantidad: parsed.cantidad,
         p_precio_unitario: precioUnitario,
+        // Ya está dentro de una cotización de la orden: no suma aparte (421).
+        p_incluido_en_presupuesto: parsed.incluidoEnPresupuesto,
       }
     )
 
@@ -209,7 +214,16 @@ export async function DELETE(
  *
  * El RPC rechaza dejar costo_final por debajo de total_cobrado, que es la guarda
  * que evita que estado_cobro pase a COBRADO y la deuda desaparezca.
+ *
+ * Con `{ servicioOrdenId, incluidoEnPresupuesto }` en el cuerpo, en cambio,
+ * marca si esa línea ya está dentro de la cotización de la orden o suma aparte
+ * al cobro (migración 421). Mueve el monto con la misma regla que el alta.
  */
+const marcarIncluidoSchema = z.object({
+  servicioOrdenId: z.string().min(1),
+  incluidoEnPresupuesto: z.boolean(),
+})
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -220,6 +234,12 @@ export async function PATCH(
     if (error) return error
 
     const { id: ordenId } = await params
+    // Sin cuerpo (lo que manda "Aplicar al total") el JSON no parsea: es null.
+    const body = await request.json().catch(() => null)
+    const marcar = body && "servicioOrdenId" in body ? marcarIncluidoSchema.safeParse(body) : null
+    if (marcar && !marcar.success) {
+      return NextResponse.json({ error: marcar.error.issues[0].message }, { status: 400 })
+    }
 
     // The order must belong to the org and be within the caller's scope
     const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
@@ -228,6 +248,26 @@ export async function PATCH(
     // After the scope check, so a practice order of another branch is "not found" too.
     const practica = await rejectIfPractica(ordenId, organizationId!)
     if (practica) return practica
+
+    if (marcar?.success) {
+      const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+        "marcar_servicio_incluido_presupuesto",
+        {
+          p_orden_id: ordenId,
+          p_organization_id: organizationId!,
+          p_servicio_orden_id: marcar.data.servicioOrdenId,
+          p_incluido: marcar.data.incluidoEnPresupuesto,
+        }
+      )
+      if (rpcError) throw rpcError
+      if (result?.error) {
+        return NextResponse.json({ error: result.error }, { status: 404 })
+      }
+      return NextResponse.json({
+        campoSincronizado: result.campoSincronizado ?? null,
+        montoActualizado: result.montoActualizado ?? false,
+      })
+    }
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(
       "aplicar_monto_servicios_orden",

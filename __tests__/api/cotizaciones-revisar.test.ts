@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { mockAuthSuccess, mockAuthError, createChainMock, mockSupabaseFrom, parseResponse } from "./helpers"
+import { mockAuthSuccess, mockAuthError, createChainMock, mockSupabaseFrom, parseResponse, mockSumaLineasOrden } from "./helpers"
 
 // El envio (Task 5) genera PDF y manda email de verdad si no se mockean: son
 // costosos (pdf-lib/fontkit) o pegan a una API externa (Envialosimple). El
@@ -293,6 +293,7 @@ describe("POST /api/cotizaciones/[id]/enviar — revision reemplaza a la origina
       ordenes_servicio: ordenesChain,
       orden_eventos: createChainMock(null),
     })
+    mockSumaLineasOrden(120)
 
     const { POST } = await import("@/app/api/cotizaciones/[id]/enviar/route")
     const response = await POST(

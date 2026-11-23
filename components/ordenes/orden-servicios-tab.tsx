@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-import { sumaLineasOrden } from "@/lib/servicios/suma-lineas-orden"
+import { sumaLineasOrden, cotizacionesVigentes, type CotizacionDeOrden } from "@/lib/servicios/suma-lineas-orden"
+import { MarcaIncluidoEnPresupuesto, PreguntaIncluidoEnPresupuesto } from "./incluido-en-presupuesto"
 import { AplicarAlTotalAviso } from "./aplicar-al-total-aviso"
 import { useModal } from "@/contexts/modal-context"
 
@@ -19,6 +20,7 @@ interface ServicioOrdenLinea {
   nombre: string
   cantidad: number
   precioUnitario: number
+  incluidoEnPresupuesto?: boolean
 }
 
 interface OrdenServiciosTabProps {
@@ -44,7 +46,10 @@ interface OrdenServiciosTabProps {
   totalCobrado: number
   /** Repuestos de la orden: suman al monto igual que los servicios (migración
    *  420), así que el aviso "Aplicar al total" compara contra los dos. */
-  repuestos?: Array<{ cantidad: number; precioVentaUnitario?: number | null; precioUnitario?: number | null }>
+  repuestos?: Array<{ cantidad: number; precioVentaUnitario?: number | null; precioUnitario?: number | null; incluidoEnPresupuesto?: boolean }>
+  /** Cotizaciones de la orden. Con alguna vigente, cada línea dice si ya está
+   *  dentro del presupuesto o suma aparte al cobro (migración 421). */
+  cotizaciones?: CotizacionDeOrden[]
   /** Puede devolver una promesa: el llamador espera a que el refetch del
    *  padre termine antes de reactivar los controles, para evitar la ventana
    *  en la que el panel muestra "sin servicios" mientras el padre aun no
@@ -52,7 +57,7 @@ interface OrdenServiciosTabProps {
   onServiciosChanged: () => void | Promise<void>
 }
 
-export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto, estado, totalCobrado, repuestos = [], onServiciosChanged }: OrdenServiciosTabProps) {
+export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto, estado, totalCobrado, repuestos = [], cotizaciones = [], onServiciosChanged }: OrdenServiciosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const [showAddServicio, setShowAddServicio] = useState(false)
@@ -73,6 +78,12 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
   // Raw editing strings so the inputs can show empty while a valid numeric stays in nuevoServicio.
   const [cantidadDraft, setCantidadDraft] = useState("1")
   const [precioDraft, setPrecioDraft] = useState("")
+  // null = todavía no respondió si ya está en el presupuesto (solo se pregunta
+  // si la orden tiene cotización vigente).
+  const [incluido, setIncluido] = useState<boolean | null>(null)
+  const vigentes = cotizacionesVigentes(cotizaciones)
+  const hayPresupuesto = vigentes.length > 0
+  const numerosPresupuesto = vigentes.map((c) => c.numero_cotizacion).filter(Boolean).join(", ") || "presupuesto"
 
   // Lazy load catalogo only when add form is opened
   useEffect(() => {
@@ -107,6 +118,14 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
         return
       }
     }
+    if (hayPresupuesto && incluido === null) {
+      await alert({
+        title: "Falta un dato",
+        description: "Indicá si este servicio ya está incluido en el presupuesto o si suma al cobro.",
+        variant: "warning",
+      })
+      return
+    }
 
     setUpdating(true)
     try {
@@ -118,6 +137,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
             // El precio del catalogo es un default: lo que haya quedado en el
             // input (editado o no) es lo que se manda.
             precioUnitario: nuevoServicio.precioUnitario,
+            incluidoEnPresupuesto: hayPresupuesto && incluido === true,
           }
         : {
             tipo: "manual",
@@ -125,6 +145,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
             cantidad: nuevoServicio.cantidad,
             precioUnitario: nuevoServicio.precioUnitario,
             guardarEnCatalogo: nuevoServicio.guardarEnCatalogo,
+            incluidoEnPresupuesto: hayPresupuesto && incluido === true,
           }
 
       const res = await fetch(`/api/ordenes/${ordenId}/servicios`, {
@@ -146,6 +167,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
         setCantidadDraft("1")
         setPrecioDraft("")
         setShowAddServicio(false)
+        setIncluido(null)
         setCatalogoLoaded(false) // Por si se guardó un servicio nuevo en el catalogo
       } else {
         const error = await res.json()
@@ -201,7 +223,28 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
     (sum, s) => sum + s.cantidad * s.precioUnitario,
     0
   ) || 0
-  const sumaLineas = sumaLineasOrden({ servicios, repuestos })
+  const sumaLineas = sumaLineasOrden({ servicios, repuestos, cotizaciones })
+
+  const handleToggleIncluido = async (servicio: ServicioOrdenLinea) => {
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/servicios`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ servicioOrdenId: servicio.id, incluidoEnPresupuesto: !servicio.incluidoEnPresupuesto }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMontoNoSincronizado(data.montoActualizado === false)
+        await onServiciosChanged?.()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        await alert({ title: "Error", description: error.error || "No se pudo cambiar el servicio", variant: "error" })
+      }
+    } finally {
+      setUpdating(false)
+    }
+  }
 
   return (
     <Card>
@@ -367,6 +410,15 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
               </div>
             )}
 
+            {hayPresupuesto && (
+              <PreguntaIncluidoEnPresupuesto
+                idPrefix={`servicio-${ordenId}`}
+                presupuestos={numerosPresupuesto}
+                value={incluido}
+                onChange={setIncluido}
+              />
+            )}
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleAddServicio} disabled={updating}>
                 Agregar
@@ -380,6 +432,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
                   setNuevoServicio({ servicioId: "", cantidad: 1, nombre: "", precioUnitario: 0, guardarEnCatalogo: false })
                   setCantidadDraft("1")
                   setPrecioDraft("")
+                  setIncluido(null)
                 }}
               >
                 Cancelar
@@ -402,6 +455,13 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto,
                       <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                         Manual
                       </span>
+                    )}
+                    {hayPresupuesto && (
+                      <MarcaIncluidoEnPresupuesto
+                        incluido={!!servicio.incluidoEnPresupuesto}
+                        disabled={updating}
+                        onToggle={() => handleToggleIncluido(servicio)}
+                      />
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">

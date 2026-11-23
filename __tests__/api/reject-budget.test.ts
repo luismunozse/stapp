@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"
+import { createChainMock, mockSupabaseFrom, createPostRequest, parseResponse, mockSumaLineasOrden } from "./helpers"
 
 vi.mock("@/lib/notifications/queue", () => ({
   queueNotification: vi.fn().mockResolvedValue(undefined),
@@ -94,6 +94,7 @@ describe("POST /api/public/ordenes/[token]/reject-budget", () => {
     const cotizaciones = createChainMock([{ id: "rev-1", revision_de: "cot-1", total: 100 }])
     const eventos = createChainMock(null)
     mockSupabaseFrom({ ordenes_servicio: ordenes, cotizaciones, orden_eventos: eventos })
+    mockSumaLineasOrden(100)
 
     const res = await POST(createPostRequest({ motivo: "Muy caro" }), createParams("tok"))
     const { status } = await parseResponse(res)
