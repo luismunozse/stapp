@@ -17,6 +17,9 @@ import { cotizacionesVigentes, type CotizacionDeOrden } from "@/lib/servicios/su
  *     costo (lo habitual hoy: el costo vive en la pestaña Repuestos). Si la
  *     cotización ya trae costos, contarlos sería duplicar.
  *   - servicios: no tienen costo cargado; todo su precio es ganancia.
+ * Es la misma regla que costo_repuestos_orden (migración 422), la base de la
+ * comisión del técnico: cambiar una sin la otra hace que la ganancia que ve el
+ * taller y la que comisiona el técnico no coincidan.
  * Las filas sin costo conocido muestran costo null y no restan.
  */
 
