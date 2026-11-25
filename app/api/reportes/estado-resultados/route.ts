@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { ESTADOS_ORDEN_NUNCA_DEVENGAN, NC_ORDEN_ESTADO_EMBED, notaCreditoRestaDevengado } from "@/lib/reportes/notas-credito-devengado"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Estado de Resultados (P&L) — devengado
@@ -543,6 +544,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error en estado-resultados:", err)
+    reportarError(err, { ruta: "/api/reportes/estado-resultados" })
     return NextResponse.json(
       { error: "Error al calcular estado de resultados" },
       { status: 500 }

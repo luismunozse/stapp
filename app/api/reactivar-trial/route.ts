@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 const EXTENSION_DAYS = 7
 const MAX_REACTIVATIONS = 1
@@ -83,6 +84,7 @@ export async function POST() {
     })
   } catch (error) {
     console.error("Error reactivating trial:", error)
+    reportarError(error, { ruta: "/api/reactivar-trial" })
     return NextResponse.json(
       { error: "Error al reactivar la cuenta" },
       { status: 500 }

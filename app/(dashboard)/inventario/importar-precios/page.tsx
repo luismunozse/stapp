@@ -24,6 +24,7 @@ import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 import { useMoneda } from "@/hooks/use-moneda"
 import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
 import type { MonedaCatalogo } from "@/lib/currency/catalogo"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 type Cell = string | number | null
 
@@ -339,7 +340,7 @@ export default function ImportarPreciosPage() {
       setStep("sheet")
     } catch (e) {
       console.error(e)
-      toast.error(e instanceof Error ? e.message : "Error al leer el archivo")
+      toast.error(mensajeDeError(e, "Error al leer el archivo"))
     } finally {
       setLoading(false)
     }

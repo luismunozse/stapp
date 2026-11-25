@@ -5,6 +5,7 @@ import { requireCronAuth } from "@/lib/cron-auth"
 import { resolveTerminologia } from "@/lib/terminologia"
 import { HORA_RECORDATORIOS_LOCAL } from "@/lib/cron-config"
 import { DEFAULT_TIMEZONE, dayRangeUtc, getZonedParts, todayInTimeZone } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 // El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
 export const maxDuration = 60
@@ -171,6 +172,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error en cron de recordatorios:", error)
+    reportarError(error, { ruta: "/api/cron/recordatorios", source: "CRON" })
     return NextResponse.json(
       { error: "Error procesando recordatorios" },
       { status: 500 }

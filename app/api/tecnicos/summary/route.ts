@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { reingresosPorTecnicoOriginal } from "@/lib/tecnicos/reingresos"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
     )
   } catch (err) {
     console.error("Error summary tecnicos:", err)
+    reportarError(err, { ruta: "/api/tecnicos/summary" })
     return NextResponse.json(
       { error: "Error al obtener resumen" },
       { status: 500 }

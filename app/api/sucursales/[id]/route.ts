@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   nombre: z.string().trim().min(1).max(100).optional(),
@@ -177,6 +178,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting sucursal:", err)
+    reportarError(err, { ruta: "/api/sucursales/[id]" })
     return NextResponse.json({ error: "Error al archivar sucursal" }, { status: 500 })
   }
 }

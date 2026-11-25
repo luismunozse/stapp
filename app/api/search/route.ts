@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
     return NextResponse.json(data || { clientes: [], ordenes: [] })
   } catch (err) {
     console.error("Error en búsqueda:", err)
+    reportarError(err, { ruta: "/api/search" })
     return NextResponse.json(
       { error: "Error al buscar" },
       { status: 500 }

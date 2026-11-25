@@ -5,6 +5,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { getPlatformEvolutionConfig, buildSucursalInstanceName } from "@/lib/whatsapp/platform-config"
 import { connectInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
 import { updateSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
+import { reportarError } from "@/lib/api-error"
 
 async function guard(sucursalId: string) {
   const { error, organizationId } = await requireAdmin()
@@ -52,6 +53,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     })
   } catch (err) {
     console.error("Error QR Evolution sucursal:", err)
+    reportarError(err, { ruta: "/api/sucursales/[id]/whatsapp/qr" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -85,6 +87,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     })
   } catch (err) {
     console.error("Error poll Evolution sucursal:", err)
+    reportarError(err, { ruta: "/api/sucursales/[id]/whatsapp/qr" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

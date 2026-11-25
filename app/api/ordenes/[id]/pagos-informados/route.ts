@@ -4,6 +4,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { firmarReferencias } from "@/lib/storage-privado"
 import { prefijoComprobantesOrden } from "@/lib/ordenes/pagos-informados"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET — avisos de pago que el cliente mandó desde el seguimiento, del más
@@ -55,6 +56,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })
   } catch (err) {
     console.error("[pagos-informados] Error:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/pagos-informados" })
     return NextResponse.json({ error: "Error al cargar los pagos informados" }, { status: 500 })
   }
 }

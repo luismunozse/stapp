@@ -5,6 +5,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 const changePasswordSchema = z
   .object({
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, message: "Contraseña actualizada correctamente" })
   } catch (err) {
     console.error("Error changing password:", err)
+    reportarError(err, { ruta: "/api/superadmin/profile/change-password" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

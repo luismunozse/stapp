@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadInventarioImage, deleteInventarioImage } from "@/lib/storage"
+import { reportarError } from "@/lib/api-error"
 
 const MAX_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
@@ -96,6 +97,7 @@ export async function POST(
     return NextResponse.json({ imagenUrl: url, imagenPath: path })
   } catch (err) {
     console.error("Error uploading inventario image:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/imagen" })
     return NextResponse.json(
       { error: "Error al subir imagen" },
       { status: 500 }
@@ -157,6 +159,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting inventario image:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/imagen" })
     return NextResponse.json(
       { error: "Error al eliminar imagen" },
       { status: 500 }

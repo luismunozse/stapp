@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks/dispatcher"
 import { validarDestinoWebhook } from "@/lib/webhooks/destino-seguro"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(100),
@@ -49,6 +50,7 @@ export async function GET() {
     return NextResponse.json({ data: (data || []).map((r) => formatWebhook(r)) })
   } catch (err) {
     console.error("Error fetching webhooks:", err)
+    reportarError(err, { ruta: "/api/webhooks", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al obtener webhooks" }, { status: 500 })
   }
 }

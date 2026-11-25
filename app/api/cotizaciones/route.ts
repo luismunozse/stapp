@@ -21,6 +21,7 @@ import {
   resolverAlcanceOrdenesDeSesion,
   resolverAlcanceOrdenesPorId,
 } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -329,6 +330,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching cotizaciones:", error)
+    reportarError(error, { ruta: "/api/cotizaciones" })
     return NextResponse.json(
       { error: "Error al obtener cotizaciones" },
       { status: 500 }

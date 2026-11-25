@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval } from "@/lib/mercadopago"
 import { cancelRebillSubscription } from "@/lib/rebill"
 import { cancelCreemSubscription } from "@/lib/creem"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST() {
   try {
@@ -79,6 +80,7 @@ export async function POST() {
     })
   } catch (error) {
     console.error("Error canceling subscription:", error)
+    reportarError(error, { ruta: "/api/subscriptions/cancel" })
     return NextResponse.json(
       { error: "Error al cancelar suscripción" },
       { status: 500 }

@@ -5,6 +5,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { DEFAULT_TIMEZONE, dayRangeUtc, getZonedParts, monthRangeUtc } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -316,6 +317,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error en resumen de ingresos:", error)
+    reportarError(error, { ruta: "/api/reportes/resumen-ingresos" })
     return NextResponse.json(
       { error: "Error al obtener resumen de ingresos" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const templateSchema = z.object({
   nombre: z.string().min(1, "Nombre requerido"),
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
     )
   } catch (error) {
     console.error("Error fetching templates:", error)
+    reportarError(error, { ruta: "/api/cotizacion-templates" })
     return NextResponse.json(
       { error: "Error al obtener plantillas" },
       { status: 500 }

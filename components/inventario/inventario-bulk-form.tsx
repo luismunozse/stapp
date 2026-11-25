@@ -28,6 +28,7 @@ import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTerminologia } from "@/contexts/currency-context"
 import { useFormDraft } from "@/hooks/use-form-draft"
 import { ignoreSelectEcho } from "@/lib/radix-select-echo"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ProveedorLite {
   id: string
@@ -579,7 +580,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
         })
       }
     } catch (e) {
-      setGlobalError(e instanceof Error ? e.message : "Error de red")
+      setGlobalError(mensajeDeError(e, "Error de red"))
     } finally {
       setSubmitting(false)
     }

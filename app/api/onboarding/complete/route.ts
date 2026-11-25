@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { registrarCamino } from "@/lib/onboarding/practica"
+import { reportarError } from "@/lib/api-error"
 
 // "practica" is not accepted here: only the practice POST sets it.
 const completeSchema = z.object({
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Onboarding completado" })
   } catch (err) {
     console.error("Error completing onboarding:", err)
+    reportarError(err, { ruta: "/api/onboarding/complete" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

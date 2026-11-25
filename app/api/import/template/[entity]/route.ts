@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { generateCSVTemplate } from "@/lib/csv-parser"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -29,6 +30,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating template:", error)
+    reportarError(error, { ruta: "/api/import/template/[entity]" })
     return NextResponse.json(
       { error: "Error al generar plantilla" },
       { status: 500 }

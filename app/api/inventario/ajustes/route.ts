@@ -4,6 +4,7 @@ import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const STOCK_INSUFICIENTE_DEPOSITO =
   "No hay stock suficiente en el depósito de tu sucursal para este ajuste. Si el stock está en otro depósito, transferilo primero."
@@ -67,6 +68,7 @@ export async function GET(request: Request) {
     )
   } catch (err) {
     console.error("Error fetching ajustes:", err)
+    reportarError(err, { ruta: "/api/inventario/ajustes" })
     return NextResponse.json({ error: "Error al obtener ajustes" }, { status: 500 })
   }
 }

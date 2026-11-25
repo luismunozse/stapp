@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/proveedores/[id]/stats
 // KPIs detallados para la página del proveedor:
@@ -112,6 +113,7 @@ export async function GET(
     )
   } catch (error) {
     console.error("Error en stats proveedor:", error)
+    reportarError(error, { ruta: "/api/proveedores/[id]/stats" })
     return NextResponse.json({ error: "Error al calcular stats" }, { status: 500 })
   }
 }

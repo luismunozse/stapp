@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // Devuelve los datos necesarios para pre-llenar el form de creación de orden
 // a partir de un turno. Si el turno tiene cliente_snapshot (cliente nuevo no
@@ -76,6 +77,7 @@ export async function GET(
     }, await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (err) {
     console.error("Error fetching prefill-orden:", err)
+    reportarError(err, { ruta: "/api/turnos/[id]/prefill-orden" })
     return NextResponse.json({ error: "Error al obtener datos" }, { status: 500 })
   }
 }

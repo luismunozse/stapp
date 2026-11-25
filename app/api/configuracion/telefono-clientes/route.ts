@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { leerTecnicosVenTelefonoClientes } from "@/lib/telefono-cliente"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Permiso "los técnicos ven el teléfono de los clientes" (migración 416).
@@ -27,6 +28,7 @@ export async function GET() {
     )
   } catch (e) {
     console.error("Error leyendo tecnicos_ven_telefono_clientes:", e)
+    reportarError(e, { ruta: "/api/configuracion/telefono-clientes" })
     return NextResponse.json({ error: "No se pudo leer el permiso" }, { status: 500 })
   }
 }
@@ -61,6 +63,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ disponible: true, tecnicosVenTelefonoClientes: datos.data.tecnicosVenTelefonoClientes })
   } catch (e) {
     console.error("Error guardando tecnicos_ven_telefono_clientes:", e)
+    reportarError(e, { ruta: "/api/configuracion/telefono-clientes" })
     return NextResponse.json({ error: "No se pudo guardar el permiso" }, { status: 500 })
   }
 }

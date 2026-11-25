@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
+import { respuestaError } from "@/lib/api-error"
 
 const slugRegex = /^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/
 
@@ -66,7 +67,7 @@ export async function GET() {
     .eq("organization_id", organizationId!)
     .maybeSingle()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/config" })
 
   if (existing) {
     const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/catalogo/${existing.slug}`
@@ -93,7 +94,7 @@ export async function GET() {
     .select("*")
     .single()
 
-  if (errCreate) return NextResponse.json({ error: errCreate.message }, { status: 500 })
+  if (errCreate) return respuestaError(errCreate, { ruta: "/api/catalogo/config" })
 
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/catalogo/${created.slug}`
   return NextResponse.json({ config: created, url })
@@ -166,7 +167,7 @@ export async function PUT(req: Request) {
 
   if (error) {
     if (error.code === "23505") return NextResponse.json({ error: "Slug ya en uso" }, { status: 409 })
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return respuestaError(error, { ruta: "/api/catalogo/config" })
   }
 
   await revalidateCatalogo(organizationId!)

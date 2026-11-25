@@ -1,5 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { generarRefCliente, reportarErrorCliente } from "@/lib/errores-cliente"
+
 export default function GlobalError({
   error,
   reset,
@@ -7,6 +10,14 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  // Se genera una vez por montaje: es lo que el usuario le pasa a soporte.
+  const [ref] = useState(generarRefCliente)
+
+  useEffect(() => {
+    console.error("Global Error:", error)
+    reportarErrorCliente(error, "global", ref)
+  }, [error, ref])
+
   return (
     <html>
       <body>
@@ -24,8 +35,14 @@ export default function GlobalError({
             Algo salió mal
           </h2>
           <p style={{ color: "#666", marginBottom: "2rem" }}>
-            Ocurrió un error inesperado.
+            Ocurrió un error inesperado. Intentá de nuevo.
           </p>
+          {ref && (
+            <p style={{ color: "#666", fontSize: "0.8rem", marginBottom: "1.5rem" }}>
+              Si sigue pasando, pasale a soporte este código:{" "}
+              <strong style={{ fontFamily: "monospace" }}>{ref}</strong>
+            </p>
+          )}
           <button
             onClick={reset}
             style={{

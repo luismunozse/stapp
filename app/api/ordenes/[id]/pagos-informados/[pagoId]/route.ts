@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { logAudit } from "@/lib/audit"
 import { claveCobroPagoInformado, METODO_PAGO_INFORMADO_LABEL, type MetodoPagoInformado } from "@/lib/ordenes/pagos-informados"
+import { reportarError } from "@/lib/api-error"
 
 const bodySchema = z.discriminatedUnion("accion", [
   z.object({ accion: z.literal("confirmar") }),
@@ -147,6 +148,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })
   } catch (err) {
     console.error("[pagos-informados] Error:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/pagos-informados/[pagoId]" })
     return NextResponse.json({ error: "Error al resolver el pago informado" }, { status: 500 })
   }
 }

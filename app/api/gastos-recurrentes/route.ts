@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const gastoSchema = z.object({
   categoriaGastoId: z.string().nullable().optional(),
@@ -58,6 +59,7 @@ export async function GET() {
     return NextResponse.json({ gastos: (data || []).map(mapGasto) })
   } catch (err) {
     console.error(err)
+    reportarError(err, { ruta: "/api/gastos-recurrentes" })
     return NextResponse.json({ error: "Error al obtener gastos recurrentes" }, { status: 500 })
   }
 }

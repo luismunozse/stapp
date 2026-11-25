@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const createSchema = z.object({
   nombre: z.string().trim().min(1, "Nombre requerido").max(100),
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: (data || []).map(formatSucursal) })
   } catch (err) {
     console.error("Error fetching sucursales:", err)
+    reportarError(err, { ruta: "/api/sucursales" })
     return NextResponse.json({ error: "Error al obtener sucursales" }, { status: 500 })
   }
 }

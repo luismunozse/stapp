@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, ArrowRight, AlertTriangle, Warehouse, Star } from "lucide-react"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface DepositoStock {
   depositoId: string
@@ -112,13 +113,12 @@ export function TransferirStockDialog({
         }),
       })
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || "Error al transferir")
+        throw new Error(await leerError(res, "Error al transferir"))
       }
       onSuccess?.()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al transferir")
+      setError(mensajeDeError(err, "Error al transferir"))
     } finally {
       setSubmitting(false)
     }

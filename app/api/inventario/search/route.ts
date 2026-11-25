@@ -12,6 +12,7 @@ import {
 } from "@/lib/sucursal"
 import { camposDeVarianteParaPos, selectConFallback } from "@/lib/variantes"
 import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
+import { reportarError } from "@/lib/api-error"
 
 // Today's selects, plus the variant columns (migration 355) as their own, first step.
 const SELECT_VERTODAS =
@@ -273,6 +274,7 @@ export async function GET(request: Request) {
     return withVentaHeaders(NextResponse.json(await conFotoDeRespaldo(formatted)))
   } catch (error) {
     console.error("Error searching inventario:", error)
+    reportarError(error, { ruta: "/api/inventario/search" })
     return NextResponse.json(
       { error: "Error al buscar items de inventario" },
       { status: 500 }

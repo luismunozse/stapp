@@ -6,6 +6,7 @@ import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 const renewSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -367,6 +368,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Error renewing subscription:", error)
+    reportarError(error, { ruta: "/api/superadmin/subscriptions/renew" })
     return NextResponse.json(
       { error: "Error al renovar suscripción" },
       { status: 500 }

@@ -555,13 +555,17 @@ describe("an error that is NOT a missing column is never retried by the new step
     expect(calls[0].errorCode).toBe("57014")
   })
 
-  it("PUT write: one attempt with the key still in the payload, a 500 that passes the message through, nothing stored", async () => {
+  it("PUT write: one attempt with the key still in the payload, a 500 with a safe message and a ref, nothing stored", async () => {
     const { calls, store } = fakeOrganizations({ ...FULL_ROW }, [], { fail: TIMEOUT })
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({ ordenFormatoPapel: "A4", umbralStockBajo: 9 }))) as Response)
 
     expect(status).toBe(500)
-    expect(body.error).toContain("canceling statement due to statement timeout")
+    // El mensaje interno de Postgres ya no viaja al cliente: va a error_logs y
+    // la respuesta lleva un mensaje entendible + el codigo de referencia.
+    expect(body.error).not.toContain("canceling statement")
+    expect(body.error).toContain("No se pudo guardar la configuración")
+    expect(body.ref).toMatch(/^E-[2-9A-HJ-NP-Z]{6}$/)
     expect(calls).toHaveLength(1)
     expect(calls[0].update).toEqual({ [COLUMN]: "A4", umbral_stock_bajo: 9 })
     expect(store.umbral_stock_bajo).toBe(5)

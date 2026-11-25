@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { generateReciboCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 // Emisor columns in two tiers: migration 295's fiscal identity columns may
 // not be applied yet, and a recibo must still print without them. Same
@@ -161,6 +162,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating recibo de cuenta corriente:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]/cuenta-corriente/[movimientoId]/recibo" })
     return NextResponse.json({ error: "Error al generar el recibo" }, { status: 500 })
   }
 }

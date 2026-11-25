@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -87,6 +88,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error en reporte tasa-retorno:", err)
+    reportarError(err, { ruta: "/api/reportes/tasa-retorno" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

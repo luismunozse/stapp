@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { firmarReferencias } from "@/lib/storage-privado"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -94,6 +95,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching ticket:", error)
+    reportarError(error, { ruta: "/api/soporte/[id]" })
     return NextResponse.json(
       { error: "Error al obtener ticket" },
       { status: 500 }

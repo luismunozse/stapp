@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { reportarError } from "@/lib/api-error"
 
 export const maxDuration = 60
 
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, processed, fecha: fechaStr, timestamp: new Date().toISOString() })
   } catch (error) {
     console.error("Error en cron engagement:", error)
+    reportarError(error, { ruta: "/api/cron/engagement", source: "CRON" })
     return NextResponse.json({ error: "Error calculando engagement" }, { status: 500 })
   }
 }

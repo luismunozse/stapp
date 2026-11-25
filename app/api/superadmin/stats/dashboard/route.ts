@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getSuperadminOrgId } from "@/lib/superadmin-org"
 import { montosDesdeRpc } from "@/lib/superadmin-montos"
+import { reportarError } from "@/lib/api-error"
 
 const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -167,6 +168,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching dashboard stats:", error)
+    reportarError(error, { ruta: "/api/superadmin/stats/dashboard" })
     return NextResponse.json(
       { error: "Error al obtener estadísticas del dashboard" },
       { status: 500 }

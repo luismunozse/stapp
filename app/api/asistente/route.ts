@@ -12,6 +12,7 @@ import { sugerenciasPara } from "@/lib/asistente/sugerencias"
 import { actorDeSesion } from "@/lib/ordenes/alcance"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const DAILY_LIMIT_PER_ORG = 50
 const HISTORY_TURNS = 6 // últimos 6 mensajes (3 idas y vueltas) van al modelo
@@ -114,6 +115,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("[Asistente] GET error:", err)
+    reportarError(err, { ruta: "/api/asistente" })
     return NextResponse.json({ error: "No se pudo cargar el asistente." }, { status: 500 })
   }
 }

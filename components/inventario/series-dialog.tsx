@@ -31,6 +31,7 @@ import {
   ShieldCheck,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Serie {
   id: string
@@ -199,7 +200,7 @@ export function SeriesDialog({
       onSuccess?.()
       await loadAll()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar series")
+      setError(mensajeDeError(err, "Error al guardar series"))
     } finally {
       setSubmitting(false)
     }

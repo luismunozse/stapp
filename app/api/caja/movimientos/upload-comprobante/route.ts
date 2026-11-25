@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { firmarReferencia } from "@/lib/storage-privado"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Sube un archivo (imagen o PDF) al bucket privado comprobantes-gastos
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ url, path })
   } catch (err) {
     console.error(err)
+    reportarError(err, { ruta: "/api/caja/movimientos/upload-comprobante" })
     return NextResponse.json({ error: "Error al subir comprobante" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
+import { respuestaError } from "@/lib/api-error"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -15,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     .eq("slug", slug)
     .maybeSingle()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/public/catalogo/[slug]" })
   if (!config || !config.activo) {
     return NextResponse.json({ error: "Catálogo no encontrado" }, { status: 404 })
   }

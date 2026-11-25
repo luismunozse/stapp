@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { getPlatformEvolutionConfig, buildInstanceName } from "@/lib/whatsapp/platform-config"
 import { connectInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
+import { reportarError } from "@/lib/api-error"
 
 async function resolveCreds(organizationId: string) {
   const platform = getPlatformEvolutionConfig()
@@ -59,6 +60,7 @@ export async function POST() {
     })
   } catch (err) {
     console.error("Error fetching Evolution QR:", err)
+    reportarError(err, { ruta: "/api/whatsapp/evolution/qr" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -107,6 +109,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error polling Evolution state:", err)
+    reportarError(err, { ruta: "/api/whatsapp/evolution/qr" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

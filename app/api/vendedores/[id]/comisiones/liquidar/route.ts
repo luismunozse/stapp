@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { liquidarBodySchema, payCommissions } from "@/lib/commissions/payouts"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -56,6 +57,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("[comisiones] liquidar POST failed", err)
+    reportarError(err, { ruta: "/api/vendedores/[id]/comisiones/liquidar" })
     return NextResponse.json({ error: "No se pudo procesar la operación." }, { status: 500 })
   }
 }

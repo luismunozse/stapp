@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 import { CATEGORIA_SLUG_REGEX, generarSlugCategoriaUnico } from "@/lib/catalogo-slug"
+import { respuestaError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   nombre: z.string().min(1).max(80).optional(),
@@ -42,7 +43,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/categorias/[id]" })
   if (!data) return NextResponse.json({ error: "Categoría no encontrada" }, { status: 404 })
   await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ categoria: data })
@@ -59,7 +60,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq("id", id)
     .eq("organization_id", auth.organizationId!)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/categorias/[id]" })
   await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ ok: true })
 }

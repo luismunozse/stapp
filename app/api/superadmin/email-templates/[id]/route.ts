@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 // GET - leer un template
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,6 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ template: data })
   } catch (err) {
     console.error("Error GET email-template:", err)
+    reportarError(err, { ruta: "/api/superadmin/email-templates/[id]" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }
@@ -158,6 +160,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ template: updated })
   } catch (err) {
     console.error("Error PATCH email-template:", err)
+    reportarError(err, { ruta: "/api/superadmin/email-templates/[id]" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

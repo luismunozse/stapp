@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -94,6 +95,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ tickets: formatted, total: count || 0 })
   } catch (error) {
     console.error("Error fetching support tickets:", error)
+    reportarError(error, { ruta: "/api/superadmin/soporte" })
     return NextResponse.json(
       { error: "Error al obtener tickets" },
       { status: 500 }

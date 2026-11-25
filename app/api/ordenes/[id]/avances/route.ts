@@ -5,6 +5,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { AVANCE_MAX_CHARS, TIPO_AVANCE, esVisibleCliente } from "@/lib/ordenes/avances"
+import { reportarError } from "@/lib/api-error"
 
 const avanceSchema = z.object({
   texto: z.string().trim().min(1, "Escribí el avance").max(AVANCE_MAX_CHARS, `Máximo ${AVANCE_MAX_CHARS} caracteres`),
@@ -61,6 +62,7 @@ export async function GET(
     return NextResponse.json(((data ?? []) as AvanceRow[]).map(avanceDTO))
   } catch (error) {
     console.error("Error fetching avances:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/avances" })
     return NextResponse.json({ error: "Error al obtener los avances" }, { status: 500 })
   }
 }
@@ -105,6 +107,7 @@ export async function POST(
     return NextResponse.json(avanceDTO(data as AvanceRow), { status: 201 })
   } catch (error) {
     console.error("Error creating avance:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/avances" })
     return NextResponse.json({ error: "Error al guardar el avance" }, { status: 500 })
   }
 }

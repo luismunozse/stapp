@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { z } from "zod"
 import { v4 as uuidv4 } from "uuid"
+import { reportarError } from "@/lib/api-error"
 
 const ticketSchema = z.object({
   tipo: z.enum(["BUG", "SUGERENCIA", "PREGUNTA"]),
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
     return NextResponse.json(formatted)
   } catch (error) {
     console.error("Error fetching tickets:", error)
+    reportarError(error, { ruta: "/api/soporte" })
     return NextResponse.json(
       { error: "Error al obtener tickets" },
       { status: 500 }

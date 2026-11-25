@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PLANTILLAS_CATALOG } from "@/lib/whatsapp/plantillas-catalog"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 // Las keys deben existir en el catálogo de plantillas (validación server-side, no
 // solo en el front): evita persistir keys arbitrarias en plantillas_whatsapp JSONB.
@@ -43,6 +44,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching notification config:", error)
+    reportarError(error, { ruta: "/api/notificaciones/config" })
     return NextResponse.json(
       { error: "Error al obtener configuracion" },
       { status: 500 }

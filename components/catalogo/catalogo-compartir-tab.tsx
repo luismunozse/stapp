@@ -45,6 +45,7 @@ const TRUST_ICON_OPTIONS: Array<{ value: TrustBadgeIcon; label: string }> = [
 
 const MAX_TRUST_BADGES = 6
 import { CatalogoStatsCard } from "./catalogo-stats-card"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 export function CatalogoCompartirTab() {
   const { hasFeature: hasCotizaciones, loading: planLoading } = useHasFeature("cotizaciones_online")
@@ -86,7 +87,7 @@ export function CatalogoCompartirTab() {
         setReservaHoras(String(data.config.reserva_horas ?? 48))
         setTrustBadges(Array.isArray(data.config.trust_badges) ? data.config.trust_badges : [])
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error cargando configuración")
+        toast.error(mensajeDeError(err, "Error cargando configuración"))
       } finally {
         setLoading(false)
       }
@@ -113,7 +114,7 @@ export function CatalogoCompartirTab() {
       if (!res.ok) throw new Error(data.error || "Error al subir")
       setBannerUrl(data.url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir banner")
+      toast.error(mensajeDeError(err, "Error al subir banner"))
     } finally {
       setUploadingBanner(false)
     }
@@ -151,7 +152,7 @@ export function CatalogoCompartirTab() {
       setUrl(data.url)
       toast.success("Configuración guardada")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al guardar")
+      toast.error(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

@@ -16,6 +16,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { toast } from "sonner"
 import type { Cliente } from "@/types"
 import { RevertirCargoDialog } from "./revertir-cargo-dialog"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 // This app has no global SWR fetcher: every component declares its own
 // (see cliente-detalle.tsx). useSWR(key) with no fetcher would throw.
@@ -182,7 +183,7 @@ export function ReparacionesExpressDialog({
       idempotencyKeyRef.current = null
       onDone()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al cargar las reparaciones")
+      toast.error(mensajeDeError(err, "Error al cargar las reparaciones"))
     } finally {
       setLoading(false)
     }

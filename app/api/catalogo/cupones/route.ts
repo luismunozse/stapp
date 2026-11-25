@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const cuponSchema = z.object({
   codigo: z.string().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/, "Solo letras, números, guion y guion bajo"),
@@ -25,7 +26,7 @@ export async function GET() {
     .eq("organization_id", auth.organizationId!)
     .order("created_at", { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/cupones" })
   return NextResponse.json({ cupones: data ?? [] })
 }
 
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     if (error.code === "23505") {
       return NextResponse.json({ error: "Ya existe un cupón con ese código" }, { status: 409 })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return respuestaError(error, { ruta: "/api/catalogo/cupones" })
   }
 
   return NextResponse.json({ cupon: data }, { status: 201 })

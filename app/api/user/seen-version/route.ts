@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { APP_VERSION } from "@/lib/changelog"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, version: APP_VERSION })
   } catch (error) {
     console.error("[seen-version] Error:", error)
+    reportarError(error, { ruta: "/api/user/seen-version" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

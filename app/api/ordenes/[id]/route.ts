@@ -17,6 +17,7 @@ import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
+import { reportarError } from "@/lib/api-error"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
 // además de cambiar el estado, registra la fecha de entrega, las firmas, el cargo
@@ -241,6 +242,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching orden:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]" })
     return NextResponse.json(
       { error: "Error al obtener orden" },
       { status: 500 }
@@ -764,6 +766,7 @@ export async function DELETE(
     })
   } catch (error) {
     console.error("Error deleting orden:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar orden" },
       { status: 500 }

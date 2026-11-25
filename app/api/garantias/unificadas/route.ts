@@ -7,6 +7,7 @@ import {
 } from "@/lib/ordenes/alcance-lectura"
 import { listarGarantias, parseFiltrosGarantias } from "@/lib/garantias/listado"
 import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/garantias/unificadas — garantías de reparación y de venta en una
@@ -67,6 +68,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error listando garantías:", err)
+    reportarError(err, { ruta: "/api/garantias/unificadas" })
     return NextResponse.json({ error: "Error al obtener las garantías" }, { status: 500 })
   }
 }

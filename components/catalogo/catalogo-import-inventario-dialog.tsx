@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Loader2, CheckSquare, Square, Package, Download } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoCategoria } from "@/types/database"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface InventarioItem {
   id: string
@@ -64,7 +65,7 @@ export function CatalogoImportInventarioDialog({ open, onClose, onImported, cate
       if (!res.ok) throw new Error(data.error)
       setItems(data.items ?? data.data ?? [])
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error cargando inventario")
+      toast.error(mensajeDeError(err, "Error cargando inventario"))
     } finally {
       setLoading(false)
     }
@@ -117,7 +118,7 @@ export function CatalogoImportInventarioDialog({ open, onClose, onImported, cate
         toast.info(data.mensaje || "Todos los items seleccionados ya estaban en el catálogo")
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al importar")
+      toast.error(mensajeDeError(err, "Error al importar"))
     } finally {
       setImporting(false)
     }

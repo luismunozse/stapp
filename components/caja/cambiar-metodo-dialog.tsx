@@ -21,6 +21,7 @@ import {
   type PagoLineItem,
 } from "@/components/pagos/multi-pago-input"
 import { esMarcaDeSena } from "@/lib/caja-observaciones"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 // Mismo set que acepta PATCH /api/caja/movimientos/metodo-pago: sin cuenta
 // corriente, que mueve deuda del cliente y no se corrige desde la caja.
@@ -127,13 +128,12 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
         }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error al corregir el pago")
+        throw new Error(await leerError(res, "Error al corregir el pago"))
       }
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al corregir el pago")
+      setError(mensajeDeError(err, "Error al corregir el pago"))
     } finally {
       setLoading(false)
     }

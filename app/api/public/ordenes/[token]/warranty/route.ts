@@ -12,6 +12,7 @@ import {
   type FilaGarantiaPublica,
   type FilaReclamoPublico,
 } from "@/lib/garantias/seguimiento-publico"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Endpoint PÚBLICO (sin auth, solo el token de seguimiento): la garantía de la
@@ -83,6 +84,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching warranty:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]/warranty" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

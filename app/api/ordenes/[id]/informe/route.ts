@@ -10,6 +10,7 @@ import { getDeviceTypeLabel } from "@/lib/device-types"
 import { getEstadoOrdenUi } from "@/lib/estado-orden-ui"
 import { getTerminologia } from "@/lib/terminologia-server"
 import { t } from "@/lib/terminologia"
+import { reportarError } from "@/lib/api-error"
 
 const TOKENS_TELEFONO = new Set(["celular", "telefono", "smartphone", "movil"])
 const esTelefono = (tipo: string) =>
@@ -122,6 +123,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating informe técnico:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/informe" })
     return NextResponse.json({ error: "Error al generar el informe técnico" }, { status: 500 })
   }
 }

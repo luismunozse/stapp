@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
 import type { PlanAudit } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 interface RouteParams {
   params: Promise<{
@@ -62,6 +63,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error in GET /api/superadmin/plans/[id]/audit:", error)
+    reportarError(error, { ruta: "/api/superadmin/plans/[id]/audit" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

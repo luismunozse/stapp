@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import crypto from "crypto"
 import { sendVerificationEmail } from "@/lib/email"
 import { persistentRateLimit } from "@/lib/rate-limit"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (emailError) {
       console.error("Error sending verification email:", emailError)
+      reportarError(emailError, { ruta: "/api/auth/resend-verification" })
       return NextResponse.json(
         { error: "Error al enviar el email de verificación" },
         { status: 500 }
@@ -111,6 +113,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Resend verification error:", error)
+    reportarError(error, { ruta: "/api/auth/resend-verification" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

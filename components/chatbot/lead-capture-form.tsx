@@ -6,6 +6,7 @@ import { Loader2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { validateLeadForm } from "./lead-form-validation"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface LeadCaptureFormProps {
   sessionId: string
@@ -40,12 +41,11 @@ export function LeadCaptureForm({ sessionId, conversacionId, onCaptured }: LeadC
         }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || "No se pudo enviar")
+        throw new Error(await leerError(res, "No se pudo enviar"))
       }
       onCaptured()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo enviar. Probá de nuevo.")
+      setError(mensajeDeError(e, "No se pudo enviar. Probá de nuevo."))
     } finally {
       setSubmitting(false)
     }

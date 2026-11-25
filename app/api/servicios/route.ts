@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { validarMonedaEscritura } from "@/lib/currency/catalogo"
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const servicioSchema = z.object({
   codigo: z.string().min(1, "El código es requerido").max(40),
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ servicios: (data || []).map(toDTO) })
   } catch (err) {
     console.error("Error fetching servicios:", err)
+    reportarError(err, { ruta: "/api/servicios" })
     return NextResponse.json({ error: "Error al obtener servicios" }, { status: 500 })
   }
 }

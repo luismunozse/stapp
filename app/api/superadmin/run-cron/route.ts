@@ -13,6 +13,7 @@ import { GET as recordatoriosCron } from "@/app/api/cron/recordatorios/route"
 import { GET as lifecycleEmailsCron } from "@/app/api/cron/lifecycle-emails/route"
 import { GET as subscriptionSweepCron } from "@/app/api/cron/subscription-sweep/route"
 import { GET as whatsappHealthCron } from "@/app/api/cron/whatsapp-health/route"
+import { reportarError } from "@/lib/api-error"
 
 const CRON_HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "/api/cron/engagement": engagementCron,
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
     console.error("Error running cron:", error)
+    reportarError(error, { ruta: "/api/superadmin/run-cron" })
     return NextResponse.json({ error: "Error al ejecutar cron" }, { status: 500 })
   }
 }

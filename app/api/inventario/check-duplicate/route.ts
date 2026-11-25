@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, lazyInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { selectConFallback } from "@/lib/variantes"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/check-duplicate?nombre=...&tipo=...&categoria=...&excludeId=...
 // Señal suave de duplicado para la UX. Devuelve items similares por nombre
@@ -198,6 +199,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ matches })
   } catch (err) {
     console.error("Error checking duplicates:", err)
+    reportarError(err, { ruta: "/api/inventario/check-duplicate" })
     return NextResponse.json({ error: "Error al verificar duplicados" }, { status: 500 })
   }
 }

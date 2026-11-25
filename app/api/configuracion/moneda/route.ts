@@ -5,6 +5,7 @@ import { fuentesPara } from "@/lib/currency/config-moneda"
 import { validarTipoCambio } from "@/lib/currency/convert"
 import { configMonedaSchema } from "@/lib/currency/config-moneda-schema"
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
+import { reportarError } from "@/lib/api-error"
 
 /** Postgres: undefined_table / undefined_column (migration not applied yet). */
 const MIGRACION_PENDIENTE = new Set(["42P01", "42703"])
@@ -43,6 +44,7 @@ export async function GET() {
     return await respuesta(organizationId!, role)
   } catch (e) {
     console.error("[configuracion/moneda] GET:", e)
+    reportarError(e, { ruta: "/api/configuracion/moneda" })
     return NextResponse.json({ error: "Error al obtener la configuración de moneda" }, { status: 500 })
   }
 }
@@ -121,6 +123,7 @@ export async function PUT(request: Request) {
     return await respuesta(organizationId!, role)
   } catch (e) {
     console.error("[configuracion/moneda] PUT:", e)
+    reportarError(e, { ruta: "/api/configuracion/moneda" })
     return NextResponse.json({ error: "Error al guardar la configuración de moneda" }, { status: 500 })
   }
 }

@@ -6,6 +6,7 @@ import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { getPrincipalId } from "@/lib/sucursal"
 import { isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
+import { reportarError } from "@/lib/api-error"
 
 const changeRoleSchema = z.object({
   rol: z.enum(["ADMIN", "TECNICO", "VENDEDOR"]),
@@ -111,6 +112,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error changing user role:", error)
+    reportarError(error, { ruta: "/api/superadmin/users/[userId]/change-role" })
     return NextResponse.json(
       { error: "Error al cambiar rol del usuario" },
       { status: 500 }

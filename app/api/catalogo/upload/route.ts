@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin, STORAGE_BUCKETS, getPublicUrl } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"]
 const MAX_BYTES = 4 * 1024 * 1024
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ url, path })
   } catch (err) {
     console.error(err)
+    reportarError(err, { ruta: "/api/catalogo/upload" })
     return NextResponse.json({ error: "Error al subir imagen" }, { status: 500 })
   }
 }

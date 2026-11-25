@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/series/buscar?q=...
 // Búsqueda global por número de serie (parcial). Devuelve serie + item asociado.
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: data ?? [] })
   } catch (err) {
     console.error("Error searching series:", err)
+    reportarError(err, { ruta: "/api/inventario/series/buscar" })
     return NextResponse.json({ error: "Error al buscar series" }, { status: 500 })
   }
 }

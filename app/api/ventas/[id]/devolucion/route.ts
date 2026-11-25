@@ -8,6 +8,7 @@ import { aggregateReturnItems } from "@/lib/devolucion-refund"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const itemDevolucionSchema = z.object({
   itemVentaId: z.string().min(1, "El ID del item de venta es requerido"),
@@ -104,6 +105,7 @@ export async function GET(
     )
   } catch (error) {
     console.error("Error fetching devoluciones:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]/devolucion" })
     return NextResponse.json(
       { error: "Error al obtener devoluciones" },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const patchSchema = z.object({
   cantidad: z.number().int().positive().optional(),
@@ -97,6 +98,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error eliminando componente kit:", err)
+    reportarError(err, { ruta: "/api/inventario/kit/componentes/[componenteId]" })
     return NextResponse.json(
       { error: "Error al eliminar componente" },
       { status: 500 }

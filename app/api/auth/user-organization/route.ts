@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET: Obtener la organización del usuario autenticado
 export async function GET() {
@@ -33,6 +34,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error getting user organization:", error)
+    reportarError(error, { ruta: "/api/auth/user-organization" })
     return NextResponse.json(
       { error: "Error interno" },
       { status: 500 }

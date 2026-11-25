@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -47,6 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     })
   } catch (error) {
     console.error("Error fetching conversación:", error)
+    reportarError(error, { ruta: "/api/leads/[id]/conversacion" })
     return NextResponse.json({ error: "Error al obtener conversación" }, { status: 500 })
   }
 }

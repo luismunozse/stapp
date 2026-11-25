@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { invalidateRefreshToken } from "@/lib/auth-tokens"
+import { reportarError } from "@/lib/api-error"
 
 const toggleActiveSchema = z.object({
   activo: z.boolean(),
@@ -102,6 +103,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error toggling user access:", error)
+    reportarError(error, { ruta: "/api/superadmin/users/[userId]/toggle-active" })
     return NextResponse.json(
       { error: "Error al cambiar el acceso del usuario" },
       { status: 500 }

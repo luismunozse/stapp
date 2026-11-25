@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // POST: Verificar que el usuario pertenece al tenant del slug
 export async function POST(request: NextRequest) {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error verifying tenant:", error)
+    reportarError(error, { ruta: "/api/auth/verify-tenant" })
     return NextResponse.json(
       { error: "Error de verificación" },
       { status: 500 }

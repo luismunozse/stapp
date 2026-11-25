@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error exporting report:", err)
+    reportarError(err, { ruta: "/api/export/reportes" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

@@ -8,6 +8,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 interface TecnicoRentabilidad {
   tecnicoId: string
@@ -274,6 +275,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error en rentabilidad por técnico:", err)
+    reportarError(err, { ruta: "/api/reportes/rentabilidad-tecnicos" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

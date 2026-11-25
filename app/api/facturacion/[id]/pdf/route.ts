@@ -6,6 +6,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 import { generateFacturaPDF } from "@/lib/pdf"
 import { addDaysInTimeZone } from "@/lib/timezone"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { reportarError } from "@/lib/api-error"
 
 // Org columns for the emisor block, in three tiers of decreasing fiscal
 // detail, added by migrations 295 (cuit, condicion_iva, domicilio_fiscal,
@@ -281,6 +282,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating factura PDF:", error)
+    reportarError(error, { ruta: "/api/facturacion/[id]/pdf" })
     return NextResponse.json(
       { error: "Error al generar PDF de remito" },
       { status: 500 }

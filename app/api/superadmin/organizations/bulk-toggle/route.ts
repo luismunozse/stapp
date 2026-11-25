@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 const bulkToggleSchema = z.object({
   ids: z.array(z.string().min(1, "ID inválido")).min(1, "Debe seleccionar al menos una organización"),
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, count })
   } catch (error) {
     console.error("Error bulk toggling organizations:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/bulk-toggle" })
     return NextResponse.json(
       { error: "Error al cambiar estado de organizaciones en lote" },
       { status: 500 }

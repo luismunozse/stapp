@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -65,6 +66,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching NPS stats:", error)
+    reportarError(error, { ruta: "/api/superadmin/stats/nps" })
     return NextResponse.json({ error: "Error al obtener NPS" }, { status: 500 })
   }
 }

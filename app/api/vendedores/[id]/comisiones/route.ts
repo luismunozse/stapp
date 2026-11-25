@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { readCommissionRows } from "@/lib/commissions/rows"
 import { round2 } from "@/lib/precios"
+import { reportarError } from "@/lib/api-error"
 
 type EstadoFiltro = "pendiente" | "pagada" | "all"
 
@@ -73,6 +74,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching comisiones:", error)
+    reportarError(error, { ruta: "/api/vendedores/[id]/comisiones" })
     return NextResponse.json(
       { error: "Error al obtener comisiones" },
       { status: 500 }

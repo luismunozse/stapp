@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolverContextoValuacion, valuarLocal, contarExcluidos } from "@/lib/currency/valuacion.server"
+import { reportarError } from "@/lib/api-error"
 
 // Stats agregadas para el header de /inventario:
 // - totalSkus, valor a costo, valor a venta, sin stock, bajo stock, valor en riesgo
@@ -106,6 +107,7 @@ export async function GET() {
     )
   } catch (error) {
     console.error("Error fetching inventario stats:", error)
+    reportarError(error, { ruta: "/api/inventario/stats" })
     return NextResponse.json(
       { error: "Error al obtener estadísticas de inventario" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 interface TecnicoPerformance {
   tecnicoId: string
@@ -144,6 +145,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error en performance técnicos:", error)
+    reportarError(error, { ruta: "/api/reportes/performance-tecnicos" })
     return NextResponse.json(
       { error: "Error al obtener performance de técnicos" },
       { status: 500 }

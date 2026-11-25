@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "La descripción es requerida"),
@@ -55,6 +56,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching ordenes de compra:", error)
+    reportarError(error, { ruta: "/api/ordenes-compra" })
     return NextResponse.json({ error: "Error al obtener órdenes de compra" }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   tipo: z.enum(["PRODUCTO", "SERVICIO"]).optional(),
@@ -92,7 +93,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]" })
   await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ item: data })
 }
@@ -108,7 +109,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq("id", id)
     .eq("organization_id", auth.organizationId!)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]" })
   await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ ok: true })
 }

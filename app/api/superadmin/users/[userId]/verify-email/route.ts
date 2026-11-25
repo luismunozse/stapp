@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -61,6 +62,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error verifying user email:", error)
+    reportarError(error, { ruta: "/api/superadmin/users/[userId]/verify-email" })
     return NextResponse.json(
       { error: "Error al verificar email del usuario" },
       { status: 500 }

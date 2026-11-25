@@ -14,6 +14,7 @@ import { CatalogoVariantesEditor } from "./catalogo-variantes-editor"
 import { TagsInput } from "./tags-input"
 import { ImageGalleryInput } from "./image-gallery-input"
 import type { Gallery } from "@/lib/catalogo/gallery"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Props {
   item: CatalogoItem | null
@@ -84,7 +85,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
       if (!res.ok) throw new Error(data.error || "Error al subir imagen")
       return data.url as string
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir imagen")
+      toast.error(mensajeDeError(err, "Error al subir imagen"))
       throw err
     } finally {
       setUploading(false)
@@ -133,7 +134,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
       toast.success(item ? "Item actualizado" : "Item creado")
       onSaved()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al guardar")
+      toast.error(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

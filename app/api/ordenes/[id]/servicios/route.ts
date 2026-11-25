@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { reportarError } from "@/lib/api-error"
 
 const lineaSchema = z.discriminatedUnion("tipo", [
   z.object({
@@ -198,6 +199,7 @@ export async function DELETE(
     })
   } catch (err) {
     console.error("Error deleting servicio de orden:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/servicios" })
     return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
   }
 }
@@ -290,6 +292,7 @@ export async function PATCH(
     })
   } catch (err) {
     console.error("Error aplicando el monto de servicios:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/servicios" })
     return NextResponse.json({ error: "Error al aplicar el total" }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -108,6 +109,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching ingresos:", error)
+    reportarError(error, { ruta: "/api/reportes/ingresos" })
     return NextResponse.json(
       { error: "Error al obtener ingresos" },
       { status: 500 }

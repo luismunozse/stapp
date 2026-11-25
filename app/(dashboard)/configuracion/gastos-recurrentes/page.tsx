@@ -16,6 +16,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Repeat, PlayCircle,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface Categoria {
   id: string
@@ -152,13 +153,12 @@ export default function GastosRecurrentesPage() {
             body: JSON.stringify(body),
           })
       if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
       setDialogOpen(false)
       fetchAll()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar")
+      setError(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
+import { reportarError } from "@/lib/api-error"
 
 export async function PATCH(
   request: Request,
@@ -63,6 +64,7 @@ export async function PATCH(
     })
   } catch (err) {
     console.error("Error updating tecnico estado:", err)
+    reportarError(err, { ruta: "/api/tecnicos/[id]/estado" })
     return NextResponse.json(
       { error: "Error al actualizar estado del técnico" },
       { status: 500 }

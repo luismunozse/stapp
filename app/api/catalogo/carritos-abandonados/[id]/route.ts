@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const patchSchema = z.object({
   action: z.enum(["mark_contacted", "discard"]),
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .delete()
       .eq("id", id)
       .eq("organization_id", auth.organizationId!)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return respuestaError(error, { ruta: "/api/catalogo/carritos-abandonados/[id]" })
     return NextResponse.json({ ok: true })
   }
 
@@ -40,6 +41,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/carritos-abandonados/[id]" })
   return NextResponse.json({ carrito: data })
 }

@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
+import { reportarError } from "@/lib/api-error"
 
 const turnoPatchSchema = z.object({
   clienteId: z.string().min(1).nullable().optional(),
@@ -118,6 +119,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json(conTelefonoSegunPermiso(formatTurno(data), await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (err) {
     console.error("Error fetching turno:", err)
+    reportarError(err, { ruta: "/api/turnos/[id]" })
     return NextResponse.json({ error: "Error al obtener turno" }, { status: 500 })
   }
 }
@@ -299,6 +301,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("Error deleting turno:", err)
+    reportarError(err, { ruta: "/api/turnos/[id]" })
     return NextResponse.json({ error: "Error al eliminar turno" }, { status: 500 })
   }
 }

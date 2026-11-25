@@ -7,6 +7,7 @@ import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { normalizeOrdenPapel, parseOrdenPapel } from "@/lib/orden-papel"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -304,6 +305,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching config:", error)
+    reportarError(error, { ruta: "/api/configuracion" })
     return NextResponse.json({ error: "Error al obtener configuraciÃ³n" }, { status: 500 })
   }
 }
@@ -369,6 +371,7 @@ export async function PUT(request: Request) {
         updateData.logo_path = path
       } catch (uploadError) {
         console.error("Error uploading logo:", uploadError)
+        reportarError(uploadError, { ruta: "/api/configuracion" })
         return NextResponse.json(
           { error: "Error al subir logo" },
           { status: 500 }
@@ -984,10 +987,10 @@ export async function PUT(request: Request) {
 
     if (result2.error) {
       console.error("DB Error updating config:", result2.error)
-      return NextResponse.json(
-        { error: `Error de base de datos: ${result2.error.message || result2.error.code || JSON.stringify(result2.error)}` },
-        { status: 500 }
-      )
+      return respuestaError(result2.error, {
+        ruta: "/api/configuracion",
+        mensaje: "No se pudo guardar la configuración. Intentá de nuevo.",
+      })
     }
 
     const organization = result2.data as any
@@ -1077,6 +1080,7 @@ export async function DELETE() {
     })
   } catch (error) {
     console.error("Error deleting logo:", error)
+    reportarError(error, { ruta: "/api/configuracion" })
     return NextResponse.json({ error: "Error al eliminar logo" }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadInventarioImage } from "@/lib/storage"
+import { reportarError } from "@/lib/api-error"
 
 const MAX_SIZE = 5 * 1024 * 1024
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
@@ -43,6 +44,7 @@ export async function GET(
     return NextResponse.json({ data: (data || []).map(formatImg) })
   } catch (err) {
     console.error("Error fetching imagenes:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/imagenes" })
     return NextResponse.json({ error: "Error al obtener imágenes" }, { status: 500 })
   }
 }
@@ -124,6 +126,7 @@ export async function POST(
     return NextResponse.json(formatImg(row), { status: 201 })
   } catch (err) {
     console.error("Error uploading imagen:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/imagenes" })
     return NextResponse.json({ error: "Error al subir imagen" }, { status: 500 })
   }
 }

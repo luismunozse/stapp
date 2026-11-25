@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { reingresosPorTecnicoOriginal } from "@/lib/tecnicos/reingresos"
+import { reportarError } from "@/lib/api-error"
 
 interface TopRepuesto {
   nombre: string
@@ -222,6 +223,7 @@ export async function GET(
     }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error insights tecnico:", err)
+    reportarError(err, { ruta: "/api/tecnicos/[id]/insights" })
     return NextResponse.json({ error: "Error al obtener insights" }, { status: 500 })
   }
 }

@@ -8,6 +8,7 @@ import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { condicionesGarantiaDePresupuesto } from "@/lib/garantias/condiciones"
 import { randomBytes } from "crypto"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Convierte una cotización tipo PRESUPUESTO en una orden de servicio real.
@@ -263,6 +264,7 @@ export async function POST(
     )
   } catch (err) {
     console.error("Error converting presupuesto to orden:", err)
+    reportarError(err, { ruta: "/api/cotizaciones/[id]/convertir-orden" })
     return NextResponse.json(
       { error: "Error al convertir presupuesto a orden" },
       { status: 500 }

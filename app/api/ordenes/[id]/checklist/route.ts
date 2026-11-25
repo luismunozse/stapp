@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 const checklistSchema = z.object({
   templateId: z.string().min(1, "Template requerido"),
@@ -143,6 +144,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching order checklist:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/checklist" })
     return NextResponse.json(
       { error: "Error al obtener checklist" },
       { status: 500 }
@@ -218,10 +220,10 @@ export async function POST(
 
     if (createError) {
       console.error("[CHECKLIST POST] Error:", createError.message, createError.details, createError.code)
-      return NextResponse.json(
-        { error: "Error al crear checklist: " + createError.message },
-        { status: 500 }
-      )
+      return respuestaError(createError, {
+        ruta: "/api/ordenes/[id]/checklist",
+        mensaje: "No se pudo crear el checklist. Intentá de nuevo.",
+      })
     }
 
     console.log("[CHECKLIST POST] Checklist creado exitosamente:", checklist.id)
@@ -343,6 +345,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Checklist eliminado" })
   } catch (error) {
     console.error("Error deleting order checklist:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/checklist" })
     return NextResponse.json(
       { error: "Error al eliminar checklist" },
       { status: 500 }

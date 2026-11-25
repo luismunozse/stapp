@@ -14,6 +14,7 @@ import {
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { MoverSucursal } from "@/components/usuarios/mover-sucursal"
 import { Eye, EyeOff } from "lucide-react"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface VendedorFormProps {
   open: boolean
@@ -137,15 +138,14 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
 
       onSuccess()
       onOpenChange(false)
       resetForm()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar vendedor")
+      setError(mensajeDeError(err, "Error al guardar vendedor"))
     } finally {
       setLoading(false)
     }

@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, Loader2, Warehouse, Star } from "lucide-react"
 import { toast } from "sonner"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface Deposito {
   id: string
@@ -108,13 +109,12 @@ export default function DepositosPage() {
             body: JSON.stringify(body),
           })
       if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
       setDialogOpen(false)
       fetchDepositos()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar")
+      setError(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

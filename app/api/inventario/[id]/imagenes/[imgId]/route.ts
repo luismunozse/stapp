@@ -3,6 +3,7 @@ import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { deleteInventarioImage } from "@/lib/storage"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const patchSchema = z.object({
   esPrincipal: z.boolean().optional(),
@@ -99,6 +100,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting imagen:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/imagenes/[imgId]" })
     return NextResponse.json({ error: "Error al eliminar imagen" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface SubscriptionStatus {
   isPremium: boolean
@@ -58,7 +59,7 @@ export function useSubscription(): UseSubscriptionReturn {
         featureFlags: data.featureFlags || {},
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
       // En caso de error, asumir FREE por seguridad
       setStatus({
         isPremium: false,

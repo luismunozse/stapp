@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const sectorSchema = z.object({
   nombre: z.string().min(1, "El nombre del sector es requerido"),
@@ -64,6 +65,7 @@ export async function GET(
     return NextResponse.json(sectores?.map(formatSector) || [])
   } catch (error) {
     console.error("Error fetching sectores:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]/sectores" })
     return NextResponse.json(
       { error: "Error al obtener sectores" },
       { status: 500 }
@@ -254,6 +256,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting sector:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]/sectores" })
     return NextResponse.json(
       { error: "Error al eliminar sector" },
       { status: 500 }

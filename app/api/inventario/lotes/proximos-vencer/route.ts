@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/lotes/proximos-vencer?dias=30
 // Wrapper sobre RPC lotes_proximos_vencer. Incluye vencidos si dias_restantes < 0.
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: data ?? [], dias })
   } catch (err) {
     console.error("Error proximos a vencer:", err)
+    reportarError(err, { ruta: "/api/inventario/lotes/proximos-vencer" })
     return NextResponse.json({ error: "Error al obtener lotes" }, { status: 500 })
   }
 }

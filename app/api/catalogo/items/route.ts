@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { parsePagination } from "@/lib/api-utils"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const itemSchema = z.object({
   tipo: z.enum(["PRODUCTO", "SERVICIO"]),
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
     .range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items" })
   const total = count ?? 0
   return NextResponse.json({ items: data ?? [], total, page, limit, totalPages: Math.ceil(total / limit) })
 }
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items" })
   await revalidateCatalogo(auth.organizationId!, { itemId: data?.id })
   return NextResponse.json({ item: data }, { status: 201 })
 }

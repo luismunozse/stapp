@@ -31,6 +31,7 @@ import {
   RotateCw,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 // Lista de eventos disponibles. Mantener en sync con EVENT_TYPES del dispatcher.
 const EVENT_TYPES = [
@@ -197,8 +198,7 @@ export default function WebhooksPage() {
             body: JSON.stringify(body),
           })
       if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
       const saved = await res.json()
       setDialogOpen(false)
@@ -206,7 +206,7 @@ export default function WebhooksPage() {
       if (!editing && saved.secret) setNewSecret(saved.secret)
       fetchWebhooks()
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Error al guardar")
+      setFormError(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

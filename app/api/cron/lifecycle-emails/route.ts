@@ -4,6 +4,7 @@ import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecyc
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { fetchAllRows } from "@/lib/fetch-all-rows"
+import { reportarError } from "@/lib/api-error"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -288,6 +289,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, results, timestamp: new Date().toISOString() })
   } catch (error) {
     console.error("Error en cron lifecycle-emails:", error)
+    reportarError(error, { ruta: "/api/cron/lifecycle-emails", source: "CRON" })
     return NextResponse.json({ error: "Error procesando lifecycle emails" }, { status: 500 })
   }
 }

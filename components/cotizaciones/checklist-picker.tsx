@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ClipboardCheck, Loader2 } from "lucide-react"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface TemplateItem {
   id: string
@@ -92,7 +93,7 @@ export function ChecklistPicker({ tipoDispositivoId, value, onChange, disabled }
         }
       } catch (e) {
         if (cancelled) return
-        setError(e instanceof Error ? e.message : "Error cargando checklist")
+        setError(mensajeDeError(e, "Error cargando checklist"))
         setTemplate(null)
         onChange(null)
       } finally {

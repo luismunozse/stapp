@@ -29,6 +29,7 @@ import {
   Star,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface Lote {
   id: string
@@ -165,8 +166,7 @@ export function LotesDialog({
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || "Error al guardar lote")
+        throw new Error(await leerError(res, "Error al guardar lote"))
       }
       setOkMsg("Lote registrado correctamente")
       setNumeroLote("")
@@ -177,7 +177,7 @@ export function LotesDialog({
       onSuccess?.()
       await loadLotes()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar lote")
+      setError(mensajeDeError(err, "Error al guardar lote"))
     } finally {
       setSubmitting(false)
     }

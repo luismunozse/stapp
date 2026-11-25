@@ -27,6 +27,7 @@ import { z } from "zod"
 import { getIvaGeneral } from "@/lib/countries"
 import { escapeOrIlikeTerm } from "@/lib/pg-search"
 import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const METODOS_PAGO = [
   "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
@@ -206,6 +207,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching ventas:", error)
+    reportarError(error, { ruta: "/api/ventas" })
     return NextResponse.json(
       { error: "Error al obtener ventas" },
       { status: 500 }

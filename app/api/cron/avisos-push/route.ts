@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { enviarPushDeAvisos } from "@/lib/notifications/push-avisos"
+import { reportarError } from "@/lib/api-error"
 
 // Cron cada minuto: manda como push los avisos (user_notifications) que todavía
 // no salieron, sin importar quién los escribió.
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, ...result, timestamp: new Date().toISOString() })
   } catch (error) {
     console.error("Error en cron de avisos-push:", error)
+    reportarError(error, { ruta: "/api/cron/avisos-push", source: "CRON" })
     return NextResponse.json({ error: "Error enviando push de avisos" }, { status: 500 })
   }
 }

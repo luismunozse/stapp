@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 export async function PATCH() {
   try {
@@ -16,12 +17,13 @@ export async function PATCH() {
       .select("id")
 
     if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+      return respuestaError(dbError, { ruta: "/api/user-notifications/mark-all-read" })
     }
 
     return NextResponse.json({ success: true, updated: data?.length || 0 })
   } catch (err) {
     console.error("Error marking all as read:", err)
+    reportarError(err, { ruta: "/api/user-notifications/mark-all-read" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

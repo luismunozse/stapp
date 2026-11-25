@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 interface ClienteTop {
   clienteId: string
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error en top clientes:", error)
+    reportarError(error, { ruta: "/api/reportes/top-clientes" })
     return NextResponse.json(
       { error: "Error al obtener top clientes" },
       { status: 500 }

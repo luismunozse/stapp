@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadAvatar, deleteAvatar } from "@/lib/storage"
+import { reportarError } from "@/lib/api-error"
 
 const MAX_SIZE = 2 * 1024 * 1024 // 2MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ avatar_url: url })
   } catch (err) {
     console.error("Error uploading avatar:", err)
+    reportarError(err, { ruta: "/api/users/avatar" })
     return NextResponse.json({ error: "Error al subir avatar" }, { status: 500 })
   }
 }
@@ -83,6 +85,7 @@ export async function DELETE() {
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting avatar:", err)
+    reportarError(err, { ruta: "/api/users/avatar" })
     return NextResponse.json({ error: "Error al eliminar avatar" }, { status: 500 })
   }
 }

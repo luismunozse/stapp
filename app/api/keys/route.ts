@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateApiKey } from "@/lib/api-keys"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const createSchema = z.object({ name: z.string().min(1, "El nombre es requerido") })
 
@@ -19,6 +20,7 @@ export async function GET() {
     return NextResponse.json({ data: data || [] })
   } catch (e) {
     console.error("Error listing api keys:", e)
+    reportarError(e, { ruta: "/api/keys" })
     return NextResponse.json({ error: "Error al listar API keys" }, { status: 500 })
   }
 }

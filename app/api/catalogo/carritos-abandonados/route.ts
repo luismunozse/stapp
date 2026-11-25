@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { respuestaError } from "@/lib/api-error"
 
 export async function GET(req: Request) {
   const auth = await requireAdmin()
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
   }
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/carritos-abandonados" })
 
   const { count: pendientes } = await supabaseAdmin
     .from("catalogo_carritos_abandonados")

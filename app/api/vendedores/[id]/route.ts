@@ -7,6 +7,7 @@ import { readCommissionRows } from "@/lib/commissions/rows"
 import { round2 } from "@/lib/precios"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const vendedorUpdateSchema = z.object({
   nombre: z.string().trim().min(1).optional(),
@@ -109,6 +110,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching vendedor:", error)
+    reportarError(error, { ruta: "/api/vendedores/[id]" })
     return NextResponse.json(
       { error: "Error al obtener vendedor" },
       { status: 500 }
@@ -263,6 +265,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Vendedor eliminado correctamente" })
   } catch (error) {
     console.error("Error deleting vendedor:", error)
+    reportarError(error, { ruta: "/api/vendedores/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar vendedor" },
       { status: 500 }

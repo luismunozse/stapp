@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // POST /api/inventario/lotes/marcar-vencidos
 // Trigger manual de la RPC marcar_lotes_vencidos para los lotes de la
@@ -18,6 +19,7 @@ export async function POST() {
     return NextResponse.json({ count: Number(data ?? 0) })
   } catch (err) {
     console.error("Error marcar vencidos:", err)
+    reportarError(err, { ruta: "/api/inventario/lotes/marcar-vencidos" })
     return NextResponse.json({ error: "Error al marcar lotes vencidos" }, { status: 500 })
   }
 }

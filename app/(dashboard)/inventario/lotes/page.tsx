@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface LoteVencer {
   lote_id: string
@@ -74,7 +75,7 @@ export default function LotesPage() {
       setOkMsg(`${json.count} lote(s) marcado(s) como vencidos y descontados del stock.`)
       mutate()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al marcar vencidos")
+      setError(mensajeDeError(err, "Error al marcar vencidos"))
     } finally {
       setMarking(false)
     }

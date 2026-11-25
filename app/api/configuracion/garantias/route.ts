@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { leerConfigGarantias } from "@/lib/garantias/config-org"
 import { validarConfigGarantias } from "@/lib/garantias/config"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET/PUT /api/configuracion/garantias — términos de garantía de la org,
@@ -22,6 +23,7 @@ export async function GET() {
     return NextResponse.json(await leerConfigGarantias(organizationId!))
   } catch (err) {
     console.error("Error leyendo la configuración de garantías:", err)
+    reportarError(err, { ruta: "/api/configuracion/garantias" })
     return NextResponse.json({ error: "Error al obtener la configuración de garantías" }, { status: 500 })
   }
 }
@@ -58,6 +60,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(await leerConfigGarantias(organizationId!))
   } catch (err) {
     console.error("Error guardando la configuración de garantías:", err)
+    reportarError(err, { ruta: "/api/configuracion/garantias" })
     return NextResponse.json({ error: "No se pudo guardar la configuración de garantías" }, { status: 500 })
   }
 }

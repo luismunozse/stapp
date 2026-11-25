@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 function formatDelivery(row: any) {
   return {
@@ -62,6 +63,7 @@ export async function GET(
     return NextResponse.json({ data: (data || []).map(formatDelivery) })
   } catch (err) {
     console.error("Error fetching deliveries:", err)
+    reportarError(err, { ruta: "/api/webhooks/[id]/deliveries", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al obtener entregas" }, { status: 500 })
   }
 }

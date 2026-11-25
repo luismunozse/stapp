@@ -25,6 +25,7 @@ import { Loader2, AlertTriangle, AlertCircle } from "lucide-react"
 import type { TipoTurno, TurnoConRelaciones } from "@/types"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError } from "@/lib/errores-cliente"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
@@ -252,8 +253,7 @@ export function TurnoFormDialog({
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al guardar turno")
+        throw new Error(await leerError(res, "Error al guardar turno"))
       }
       onSaved()
       onClose()

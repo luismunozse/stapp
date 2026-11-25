@@ -11,6 +11,7 @@ import { getTerminologia } from "@/lib/terminologia-server"
 import { construirTrabajos } from "@/lib/ordenes/trabajos-orden"
 import { resolveOrdenPapel } from "@/lib/orden-papel"
 import { listarDanosOrden } from "@/lib/ordenes/danos-server"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -337,6 +338,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating orden PDF:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/pdf" })
     return NextResponse.json(
       { error: "Error al generar PDF" },
       { status: 500 }

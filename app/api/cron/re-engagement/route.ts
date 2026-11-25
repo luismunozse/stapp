@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { fetchAllRows } from "@/lib/fetch-all-rows"
+import { reportarError } from "@/lib/api-error"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -167,6 +168,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error en cron re-engagement:", error)
+    reportarError(error, { ruta: "/api/cron/re-engagement", source: "CRON" })
     return NextResponse.json(
       { error: "Error procesando re-engagement" },
       { status: 500 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET: Obtener info pública del tenant por slug
 export async function GET(request: NextRequest) {
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ available: true })
   } catch (error) {
     console.error("Error checking slug:", error)
+    reportarError(error, { ruta: "/api/public/tenant" })
     return NextResponse.json(
       { error: "Error al verificar disponibilidad" },
       { status: 500 }

@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateFacturaSchema = z.object({
   estadoPago: z.enum(["PENDIENTE", "PAGADO_PARCIAL", "PAGADO", "ANULADA"]).optional(),
@@ -183,6 +184,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching factura:", error)
+    reportarError(error, { ruta: "/api/facturacion/[id]" })
     return NextResponse.json(
       { error: "Error al obtener remito" },
       { status: 500 }
@@ -483,6 +485,7 @@ export async function DELETE(
 
   } catch (error) {
     console.error("Error deleting factura:", error)
+    reportarError(error, { ruta: "/api/facturacion/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar remito" },
       { status: 500 }

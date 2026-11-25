@@ -37,6 +37,7 @@ import {
 import { useCurrency } from "@/contexts/currency-context"
 import { PrecioEnMoneda } from "@/components/moneda/precio-en-moneda"
 import type { MonedaCatalogo } from "@/lib/currency/catalogo"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface Componente {
   id: string // id del row inventario_kit_items
@@ -160,13 +161,12 @@ export function KitDialog({
         }`
         const res = await fetch(url)
         if (!res.ok) {
-          const j = await res.json().catch(() => ({}))
-          throw new Error(j.error || "Error al cargar kit")
+          throw new Error(await leerError(res, "Error al cargar kit"))
         }
         const j: KitData = await res.json()
         setData(j)
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Error al cargar kit")
+        setError(mensajeDeError(e, "Error al cargar kit"))
       } finally {
         setLoading(false)
       }
@@ -275,15 +275,14 @@ export function KitDialog({
         }
       )
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al agregar componente")
+        throw new Error(await leerError(res, "Error al agregar componente"))
       }
       setSearchTerm("")
       setSearchResults([])
       await cargar(false)
       onSuccess?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al agregar componente")
+      setError(mensajeDeError(e, "Error al agregar componente"))
     } finally {
       setSubmitting(false)
     }
@@ -304,13 +303,12 @@ export function KitDialog({
         }
       )
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al actualizar")
+        throw new Error(await leerError(res, "Error al actualizar"))
       }
       await cargar(false)
       onSuccess?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al actualizar")
+      setError(mensajeDeError(e, "Error al actualizar"))
     }
   }
 
@@ -322,13 +320,12 @@ export function KitDialog({
         { method: "DELETE" }
       )
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al eliminar")
+        throw new Error(await leerError(res, "Error al eliminar"))
       }
       await cargar(false)
       onSuccess?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al eliminar")
+      setError(mensajeDeError(e, "Error al eliminar"))
     }
   }
 
@@ -341,13 +338,12 @@ export function KitDialog({
         body: JSON.stringify({ esKit: true, tipoKit: nuevo }),
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al cambiar tipo")
+        throw new Error(await leerError(res, "Error al cambiar tipo"))
       }
       await cargar(false)
       onSuccess?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cambiar tipo")
+      setError(mensajeDeError(e, "Error al cambiar tipo"))
     }
   }
 
@@ -381,7 +377,7 @@ export function KitDialog({
       await cargar(false)
       onSuccess?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error en operación")
+      setError(mensajeDeError(e, "Error en operación"))
     } finally {
       setSubmitting(false)
     }

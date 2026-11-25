@@ -6,6 +6,7 @@ import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { purgeOrganization } from "@/lib/account-deletion/purge-organization"
 import type { OrganizationDetailResponse, PaymentWithOrg } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Calcula el storage real (en MB) de una organización sumando el tamaño
@@ -191,6 +192,7 @@ export async function GET(
     return NextResponse.json(response)
   } catch (error) {
     console.error("Error fetching organization detail:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/[id]" })
     return NextResponse.json(
       { error: "Error al obtener detalle de organización" },
       { status: 500 }
@@ -335,6 +337,7 @@ export async function DELETE(
     })
   } catch (error) {
     console.error("Error in DELETE /api/superadmin/organizations/[id]:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/[id]" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -378,6 +381,7 @@ export async function PUT(
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error updating organization:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/[id]" })
     return NextResponse.json(
       { error: "Error al actualizar organización" },
       { status: 500 }

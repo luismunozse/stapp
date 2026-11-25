@@ -19,6 +19,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
 import { round2 } from "@/lib/precios"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ComisionPendiente {
   clave: string
@@ -165,7 +166,7 @@ export function LiquidarComisionesDialog({
       onLiquidated()
       onOpenChange(false)
     } catch (err) {
-      await showError(err instanceof Error ? err.message : "Error al liquidar comisiones")
+      await showError(mensajeDeError(err, "Error al liquidar comisiones"))
     } finally {
       setSubmitting(false)
     }

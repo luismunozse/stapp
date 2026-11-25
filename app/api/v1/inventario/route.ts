@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireApiKey } from "@/lib/api-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 const COLUMNS =
   "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_venta, moneda, created_at"
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
     })
   } catch (e) {
     console.error("v1 inventario error:", e)
+    reportarError(e, { ruta: "/api/v1/inventario" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

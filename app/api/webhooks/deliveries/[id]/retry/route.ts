@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { dispatch } from "@/lib/webhooks/dispatcher"
+import { reportarError } from "@/lib/api-error"
 
 // Retry manual de una delivery FAILED. Verifica ownership por org antes de
 // despachar — dispatch() no chequea organization_id (corre con service role).
@@ -41,6 +42,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("Error retrying delivery:", err)
+    reportarError(err, { ruta: "/api/webhooks/deliveries/[id]/retry", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al reintentar" }, { status: 500 })
   }
 }

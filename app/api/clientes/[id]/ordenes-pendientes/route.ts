@@ -3,6 +3,7 @@ import { requireAuth, puedeVerDeudaClientes, respuestaDeudaNoPermitida } from "@
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Obtener órdenes con cobro pendiente de un cliente
 export async function GET(
@@ -84,6 +85,7 @@ export async function GET(
     )
   } catch (err) {
     console.error("Error fetching ordenes pendientes:", err)
+    reportarError(err, { ruta: "/api/clientes/[id]/ordenes-pendientes" })
     return NextResponse.json({ error: "Error al obtener órdenes pendientes" }, { status: 500 })
   }
 }

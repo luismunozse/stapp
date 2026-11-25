@@ -18,6 +18,7 @@ import { useCupon } from "./use-cupon"
 import { useCatalogoUpload } from "./use-catalogo-upload"
 import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 import { construirMensajePedidoWhatsApp, NOTAS_PEDIDO_MAX } from "@/lib/catalogo/pedido-whatsapp"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Props {
   open: boolean
@@ -248,7 +249,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
       }
       router.push(data.url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al enviar")
+      toast.error(mensajeDeError(err, "Error al enviar"))
     } finally {
       setSubmitting(false)
     }

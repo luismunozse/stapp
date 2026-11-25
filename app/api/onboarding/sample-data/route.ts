@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { generateSampleData, cleanSampleData } from "@/lib/onboarding/sample-data"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST() {
   try {
@@ -19,6 +20,7 @@ export async function POST() {
     })
   } catch (err) {
     console.error("Error generating sample data:", err)
+    reportarError(err, { ruta: "/api/onboarding/sample-data" })
     return NextResponse.json({ error: "Error al generar datos de ejemplo" }, { status: 500 })
   }
 }
@@ -33,6 +35,7 @@ export async function DELETE() {
     return NextResponse.json({ message: "Datos de ejemplo eliminados exitosamente" })
   } catch (err) {
     console.error("Error cleaning sample data:", err)
+    reportarError(err, { ruta: "/api/onboarding/sample-data" })
     return NextResponse.json({ error: "Error al eliminar datos de ejemplo" }, { status: 500 })
   }
 }

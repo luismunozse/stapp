@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks/dispatcher"
 import { validarDestinoWebhook } from "@/lib/webhooks/destino-seguro"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
@@ -54,6 +55,7 @@ export async function GET(
     return NextResponse.json(formatWebhook(data))
   } catch (err) {
     console.error("Error fetching webhook:", err)
+    reportarError(err, { ruta: "/api/webhooks/[id]", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al obtener webhook" }, { status: 500 })
   }
 }
@@ -150,6 +152,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting webhook:", err)
+    reportarError(err, { ruta: "/api/webhooks/[id]", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al archivar webhook" }, { status: 500 })
   }
 }

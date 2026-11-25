@@ -5,6 +5,7 @@ import { isSuperadminEmail } from "@/lib/auth-tokens"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
 import bcrypt from "bcryptjs"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -71,6 +72,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching tecnico:", error)
+    reportarError(error, { ruta: "/api/tecnicos/[id]" })
     return NextResponse.json(
       { error: "Error al obtener técnico" },
       { status: 500 }
@@ -225,6 +227,7 @@ export async function PUT(
     return NextResponse.json(updatedTecnico)
   } catch (error) {
     console.error("Error updating tecnico:", error)
+    reportarError(error, { ruta: "/api/tecnicos/[id]" })
     return NextResponse.json(
       { error: "Error al actualizar técnico" },
       { status: 500 }
@@ -303,6 +306,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Técnico eliminado correctamente" })
   } catch (error) {
     console.error("Error deleting tecnico:", error)
+    reportarError(error, { ruta: "/api/tecnicos/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar técnico" },
       { status: 500 }

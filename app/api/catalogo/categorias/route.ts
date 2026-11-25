@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 import { CATEGORIA_SLUG_REGEX, generarSlugCategoriaUnico } from "@/lib/catalogo-slug"
+import { respuestaError } from "@/lib/api-error"
 
 const categoriaSchema = z.object({
   nombre: z.string().min(1).max(80),
@@ -25,7 +26,7 @@ export async function GET() {
     .order("orden", { ascending: true })
     .order("created_at", { ascending: true })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/categorias" })
   return NextResponse.json({ categorias: data ?? [] })
 }
 
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/categorias" })
   await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ categoria: data }, { status: 201 })
 }

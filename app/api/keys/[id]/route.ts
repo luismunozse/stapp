@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,6 +17,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ message: "API key revocada" })
   } catch (e) {
     console.error("Error revoking api key:", e)
+    reportarError(e, { ruta: "/api/keys/[id]" })
     return NextResponse.json({ error: "Error al revocar API key" }, { status: 500 })
   }
 }

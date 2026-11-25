@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorAdjunto } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const BUCKET = "proveedor-adjuntos"
 const SIGNED_URL_TTL = 60 * 60 * 24 * 7 // 7 días
@@ -80,6 +81,7 @@ export async function GET(
     return NextResponse.json(items)
   } catch (err) {
     console.error("Error fetching adjuntos:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/adjuntos" })
     return NextResponse.json({ error: "Error al obtener adjuntos" }, { status: 500 })
   }
 }

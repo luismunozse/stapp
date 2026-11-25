@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const reorderSchema = z.object({
   orden: z.array(z.object({
@@ -31,7 +32,7 @@ export async function PATCH(req: Request) {
 
   const results = await Promise.all(updates)
   const failed = results.find((r) => r.error)
-  if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 500 })
+  if (failed?.error) return respuestaError(failed.error, { ruta: "/api/catalogo/items/reorder" })
 
   await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ ok: true })

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { esErrorColumnaOrigen, sinOrigen } from "@/lib/caja-utils"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Materializa todos los gastos recurrentes vencidos (proximo_vencimiento <= hoy)
@@ -133,6 +134,7 @@ export async function POST() {
     return NextResponse.json({ generados: generados.length, movimientos: generados })
   } catch (err) {
     console.error("Error materializando gastos recurrentes:", err)
+    reportarError(err, { ruta: "/api/gastos-recurrentes/materializar" })
     return NextResponse.json({ error: "Error al materializar gastos" }, { status: 500 })
   }
 }

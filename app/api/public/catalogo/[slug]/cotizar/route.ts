@@ -8,6 +8,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 import { normalizarWhatsAppCatalogo, catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 import { rateLimitDb } from "@/lib/rate-limit-db"
+import { respuestaError } from "@/lib/api-error"
 
 // Topes por IP + catalogo. Una tienda detras de un mismo NAT (wifi del local)
 // rara vez manda mas de 5 pedidos en 10 minutos; un script si.
@@ -118,7 +119,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .in("id", itemIds)
     .eq("organization_id", organizationId)
 
-  if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 })
+  if (itemsErr) return respuestaError(itemsErr, { ruta: "/api/public/catalogo/[slug]/cotizar" })
 
   if (!catalogItems || catalogItems.length !== itemIds.length) {
     return NextResponse.json({ error: "Algunos items no existen" }, { status: 400 })

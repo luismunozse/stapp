@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { runWhatsAppHealthCheck } from "@/lib/whatsapp/health"
+import { reportarError } from "@/lib/api-error"
 
 // El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
 export const maxDuration = 60
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, ...result, timestamp: new Date().toISOString() })
   } catch (error) {
     console.error("Error en cron de whatsapp-health:", error)
+    reportarError(error, { ruta: "/api/cron/whatsapp-health", source: "CRON" })
     return NextResponse.json({ error: "Error chequeando instancias de WhatsApp" }, { status: 500 })
   }
 }

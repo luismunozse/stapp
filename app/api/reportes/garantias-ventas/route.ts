@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { traerTodas } from "@/lib/supabase-paginar"
 import { NextResponse } from "next/server"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   const { error, organizationId, role, session } = await requireAdminOrVendedor()
@@ -160,6 +161,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error en garantias-ventas:", err)
+    reportarError(err, { ruta: "/api/reportes/garantias-ventas" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

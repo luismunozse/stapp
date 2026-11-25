@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
 import { montoCalculadoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -121,6 +122,7 @@ export async function POST(
     return NextResponse.json({ message: "Cotizacion rechazada" })
   } catch (error) {
     console.error("Error rejecting cotizacion:", error)
+    reportarError(error, { ruta: "/api/public/cotizaciones/[token]/rechazar" })
     return NextResponse.json(
       { error: "Error al rechazar cotizacion" },
       { status: 500 }

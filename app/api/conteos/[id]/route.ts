@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 function formatConteo(row: any) {
   return {
@@ -53,6 +54,7 @@ const { error, organizationId } = await requireInventarioAccess()
     return NextResponse.json(formatConteo(data))
   } catch (err) {
     console.error("Error fetching conteo:", err)
+    reportarError(err, { ruta: "/api/conteos/[id]" })
     return NextResponse.json({ error: "Error al obtener conteo" }, { status: 500 })
   }
 }
@@ -102,6 +104,7 @@ export async function DELETE(
     return NextResponse.json(result)
   } catch (err) {
     console.error("Error cancelling conteo:", err)
+    reportarError(err, { ruta: "/api/conteos/[id]" })
     return NextResponse.json({ error: "Error al cancelar conteo" }, { status: 500 })
   }
 }

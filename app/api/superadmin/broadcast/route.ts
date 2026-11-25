@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { fetchAllRows, fetchAllRowsIn } from "@/lib/fetch-all-rows"
+import { reportarError } from "@/lib/api-error"
 
 const broadcastSchema = z.object({
   title: z.string().min(1, "Titulo requerido").max(200),
@@ -49,6 +50,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error fetching broadcasts:", err)
+    reportarError(err, { ruta: "/api/superadmin/broadcast" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -184,6 +186,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("Error sending broadcast:", err)
+    reportarError(err, { ruta: "/api/superadmin/broadcast" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

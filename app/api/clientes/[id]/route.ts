@@ -5,6 +5,7 @@ import { formatCliente } from "@/lib/db-utils"
 import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 /** Tablas cuyo registro con este cliente_id cuenta como historial e impide borrarlo. */
 const TABLAS_HISTORIAL_CLIENTE = [
@@ -119,6 +120,7 @@ export async function GET(
     return NextResponse.json(clienteFormatted)
   } catch (error) {
     console.error("Error fetching cliente:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]" })
     return NextResponse.json(
       { error: "Error al obtener cliente" },
       { status: 500 }
@@ -295,6 +297,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting cliente:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar cliente" },
       { status: 500 }

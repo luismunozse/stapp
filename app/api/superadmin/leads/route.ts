@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { escapeOrIlikeTerm } from "@/lib/pg-search"
+import { reportarError } from "@/lib/api-error"
 
 const updateLeadSchema = z.object({
   id: z.string().min(1, "ID requerido"),
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ leads: data || [], total: count || 0 })
   } catch (err) {
     console.error("Error fetching leads:", err)
+    reportarError(err, { ruta: "/api/superadmin/leads" })
     return NextResponse.json({ error: "Error al obtener leads" }, { status: 500 })
   }
 }
@@ -112,6 +114,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(data)
   } catch (err) {
     console.error("Error updating lead:", err)
+    reportarError(err, { ruta: "/api/superadmin/leads" })
     return NextResponse.json({ error: "Error al actualizar lead" }, { status: 500 })
   }
 }

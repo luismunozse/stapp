@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorCatalogoItem } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   nombre: z.string().min(1).optional(),
@@ -102,6 +103,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting catalogo item:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/catalogo/[itemId]" })
     return NextResponse.json({ error: "Error al eliminar item" }, { status: 500 })
   }
 }

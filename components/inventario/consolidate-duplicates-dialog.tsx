@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowRight, Package } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { toast } from "sonner"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ConsolidateDuplicatesDialogProps {
   open: boolean
@@ -56,7 +57,7 @@ export function ConsolidateDuplicatesDialog({
       setTargetId(null)
     } catch (err) {
       console.error("Error consolidando:", err)
-      toast.error(err instanceof Error ? err.message : "No se pudieron consolidar los duplicados")
+      toast.error(mensajeDeError(err, "No se pudieron consolidar los duplicados"))
     } finally {
       setLoading(false)
       setProgress(null)

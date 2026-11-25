@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorContacto } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const whatsappValidator = z
   .string()
@@ -94,6 +95,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting contacto:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/contactos/[contactoId]" })
     return NextResponse.json({ error: "Error al eliminar contacto" }, { status: 500 })
   }
 }

@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 export type ExportEntity =
   | "ordenes"
@@ -83,8 +84,7 @@ export function ExportButton({
             }).toString()}`
           )
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Error al exportar")
+        throw new Error(await leerError(response, "Error al exportar"))
       }
 
       const disposition = response.headers.get("Content-Disposition")
@@ -97,7 +97,7 @@ export function ExportButton({
       const blob = await response.blob()
       await triggerDownload(blob, filename)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al exportar")
+      setError(mensajeDeError(err, "Error al exportar"))
       console.error("Export error:", err)
     } finally {
       setLoading(false)

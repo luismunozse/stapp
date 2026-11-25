@@ -25,6 +25,7 @@ import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { useCurrency } from "@/contexts/currency-context"
 import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
 import { formatCompactCurrency } from "@/lib/utils"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface TecnicoRentabilidad {
   tecnicoId: string
@@ -154,7 +155,7 @@ export function RentabilidadTecnicos() {
       setTotales(result.totales)
       setMargenPromedio(result.margenPromedio)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

@@ -3,6 +3,7 @@ import { requireAdmin, requirePosAccess, requireCajaAccess } from "@/lib/auth-ut
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const aperturaSchema = z.object({
   saldoInicial: z.number().min(0, "El saldo inicial no puede ser negativo"),
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching sesiones caja:", err)
+    reportarError(err, { ruta: "/api/caja/sesiones" })
     return NextResponse.json({ error: "Error al obtener sesiones" }, { status: 500 })
   }
 }

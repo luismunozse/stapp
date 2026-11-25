@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getAuditLogs } from "@/lib/audit"
 import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 // The typed client infers an embedded to-one relation as an array; the row carries one order.
 type ConAlcance = Parameters<typeof cotizacionEnAlcance>[1]
@@ -48,6 +49,7 @@ export async function GET(
     return NextResponse.json(logs || [])
   } catch (error) {
     console.error("Error fetching cotizacion history:", error)
+    reportarError(error, { ruta: "/api/cotizaciones/[id]/historial" })
     return NextResponse.json(
       { error: "Error al obtener historial" },
       { status: 500 }

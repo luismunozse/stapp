@@ -8,6 +8,7 @@ import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -97,6 +98,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching tecnicos:", error)
+    reportarError(error, { ruta: "/api/tecnicos" })
     return NextResponse.json(
       { error: "Error al obtener técnicos" },
       { status: 500 }
@@ -260,6 +262,7 @@ export async function POST(request: Request) {
     return NextResponse.json(tecnico, { status: 201 })
   } catch (error) {
     console.error("Error creating tecnico:", error)
+    reportarError(error, { ruta: "/api/tecnicos" })
     return NextResponse.json(
       { error: "Error al crear técnico" },
       { status: 500 }

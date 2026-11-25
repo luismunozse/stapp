@@ -8,6 +8,7 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 const garantiaSchema = z.object({
   ordenId: z.string().min(1, "Orden requerida"),
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
     )
   } catch (error) {
     console.error("Error fetching garantias:", error)
+    reportarError(error, { ruta: "/api/garantias" })
     return NextResponse.json(
       { error: "Error al obtener garantías" },
       { status: 500 }

@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface AperturaDialogProps {
   open: boolean
@@ -40,15 +41,14 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al abrir caja")
+        throw new Error(await leerError(res, "Error al abrir caja"))
       }
 
       setSaldoInicial(null)
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al abrir caja")
+      setError(mensajeDeError(err, "Error al abrir caja"))
     } finally {
       setLoading(false)
     }

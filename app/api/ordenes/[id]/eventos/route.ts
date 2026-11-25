@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -34,6 +35,7 @@ export async function GET(
     return NextResponse.json(eventos || [])
   } catch (error) {
     console.error("Error fetching eventos:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/eventos" })
     return NextResponse.json(
       { error: "Error al obtener eventos" },
       { status: 500 }

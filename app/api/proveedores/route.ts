@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const CONDICION_IVA = [
   "RESPONSABLE_INSCRIPTO",
@@ -71,6 +72,7 @@ export async function GET() {
     return NextResponse.json(proveedores?.map(formatProveedor))
   } catch (error) {
     console.error("Error fetching proveedores:", error)
+    reportarError(error, { ruta: "/api/proveedores" })
     return NextResponse.json(
       { error: "Error al obtener proveedores" },
       { status: 500 }

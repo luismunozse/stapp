@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error exporting audit logs:", error)
+    reportarError(error, { ruta: "/api/superadmin/audit-logs/export" })
     return NextResponse.json(
       { error: "Error al exportar logs de auditoría" },
       { status: 500 }

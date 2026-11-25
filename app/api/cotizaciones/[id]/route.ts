@@ -14,6 +14,7 @@ import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
 import { motivoNoEditableAceptada } from "@/lib/cotizacion-puede-revisar"
 import { cotizacionEnAlcance, ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 // The typed client infers an embedded to-one relation as an array; the row carries one order.
 type ConAlcance = Parameters<typeof cotizacionEnAlcance>[1]
@@ -323,6 +324,7 @@ export async function GET(
     )
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
+    reportarError(error, { ruta: "/api/cotizaciones/[id]" })
     return NextResponse.json(
       { error: "Error al obtener cotización" },
       { status: 500 }
@@ -1321,6 +1323,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Cotización eliminada" })
   } catch (error) {
     console.error("Error deleting cotizacion:", error)
+    reportarError(error, { ruta: "/api/cotizaciones/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar cotización" },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/proveedores/stats
 // Devuelve KPIs agregados por proveedor para la lista:
@@ -85,6 +86,7 @@ export async function GET() {
     return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     console.error("Error en stats proveedores:", error)
+    reportarError(error, { ruta: "/api/proveedores/stats" })
     return NextResponse.json({ error: "Error al calcular stats" }, { status: 500 })
   }
 }

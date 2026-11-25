@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { readDocumentCommissionRows } from "@/lib/commissions/rows"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,6 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ filas }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error fetching order commission rows:", err)
+    reportarError(err, { ruta: "/api/comisiones/orden/[id]" })
     return NextResponse.json({ error: "Error al obtener la comisión de la orden" }, { status: 500 })
   }
 }

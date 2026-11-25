@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET: Exportar datos del sistema en CSV.
@@ -166,6 +167,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error exporting data:", err)
+    reportarError(err, { ruta: "/api/superadmin/export" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

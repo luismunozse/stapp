@@ -13,6 +13,7 @@ import {
   zonaHorariaDeOrganizacion,
   type FilaVistaNC,
 } from "@/lib/notas-credito/listado"
+import { reportarError } from "@/lib/api-error"
 
 const itemSchema = z.object({
   itemVentaId: z.string().nullable().optional(),
@@ -149,6 +150,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error listando notas de credito:", err)
+    reportarError(err, { ruta: "/api/notas-credito" })
     return NextResponse.json({ error: "Error al obtener notas de crédito" }, { status: 500 })
   }
 }

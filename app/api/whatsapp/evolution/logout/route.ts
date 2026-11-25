@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getPlatformEvolutionConfig, buildInstanceName } from "@/lib/whatsapp/platform-config"
 import { logoutInstance } from "@/lib/whatsapp/providers/evolution"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST() {
   try {
@@ -33,6 +34,7 @@ export async function POST() {
     return NextResponse.json({ success: result.success, error: result.error || null })
   } catch (err) {
     console.error("Error logout Evolution:", err)
+    reportarError(err, { ruta: "/api/whatsapp/evolution/logout" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

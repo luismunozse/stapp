@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * POST: Revocar todas las sesiones activas (excepto la del superadmin actual).
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("Error revoking sessions:", err)
+    reportarError(err, { ruta: "/api/superadmin/sessions" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

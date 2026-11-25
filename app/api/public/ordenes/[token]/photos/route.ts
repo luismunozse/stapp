@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { firmarCampo } from "@/lib/storage-privado"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -33,6 +34,7 @@ export async function GET(
     return NextResponse.json(grouped)
   } catch (error) {
     console.error("Error fetching photos:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]/photos" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

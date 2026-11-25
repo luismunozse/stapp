@@ -6,6 +6,7 @@ import { IconButton } from "@/components/ui/icon-button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Plus, Trash2, Loader2, Save } from "lucide-react"
+import { leerError } from "@/lib/errores-cliente"
 
 type DiaSemana = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom"
 interface Franja { de: string; a: string }
@@ -75,8 +76,7 @@ export function HorarioLaboralEditor({ tecnicoId, initial, onSaved }: HorarioLab
         body: JSON.stringify({ horarioLaboral: horario }),
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
       setMsg("Guardado")
       onSaved?.()

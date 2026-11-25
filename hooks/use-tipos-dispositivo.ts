@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { TipoDispositivoCustom } from "@/types"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface UseTiposDispositivoOptions {
   incluirTodos?: boolean
@@ -42,7 +43,7 @@ export function useTiposDispositivo(
       setTipos(data)
     } catch (err) {
       console.error("Error fetching tipos dispositivo:", err)
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

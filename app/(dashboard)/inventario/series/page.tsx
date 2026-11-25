@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface SerieRow {
   id: string
@@ -59,7 +60,7 @@ export default function SeriesGlobalPage() {
         if (!res.ok) throw new Error(json.error || "Error al buscar")
         if (!cancelled) setResults(json.data ?? [])
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Error")
+        if (!cancelled) setError(mensajeDeError(err, "Error"))
       } finally {
         if (!cancelled) setLoading(false)
       }

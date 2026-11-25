@@ -16,6 +16,7 @@ import { FormActionBar } from "@/components/ui/form-action-bar"
 import { MoverSucursal } from "@/components/usuarios/mover-sucursal"
 import { Eye, EyeOff, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface TecnicoFormProps {
   open: boolean
@@ -174,15 +175,14 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
 
       onSuccess()
       onOpenChange(false)
       resetForm()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar técnico")
+      setError(mensajeDeError(err, "Error al guardar técnico"))
     } finally {
       setLoading(false)
     }

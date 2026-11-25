@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecycle-templates"
 import { EMAIL_SAMPLE_DATA, LIFECYCLE_TEMPLATE_TYPES, interpolateSample } from "@/lib/emails/sample-data"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Live preview de borrador NO guardado.
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
   } catch (err) {
     console.error("Error preview:", err)
+    reportarError(err, { ruta: "/api/superadmin/email-templates/[id]/preview" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

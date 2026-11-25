@@ -7,6 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
 import { sucursalParaLectura, sucursalParaEscritura } from "@/lib/sucursal"
 import { zonedTimeToUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const clienteSnapshotSchema = z.object({
   nombre: z.string().min(1),
@@ -189,6 +190,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching turnos:", err)
+    reportarError(err, { ruta: "/api/turnos" })
     return NextResponse.json({ error: "Error al obtener turnos" }, { status: 500 })
   }
 }

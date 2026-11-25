@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getPrincipalId } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * POST /api/onboarding/seed-demo-data
@@ -237,6 +238,7 @@ export async function POST() {
     })
   } catch (err) {
     console.error("Error seeding demo data:", err)
+    reportarError(err, { ruta: "/api/onboarding/seed-demo-data" })
     return NextResponse.json(
       { error: "No se pudieron cargar los datos de ejemplo" },
       { status: 500 }

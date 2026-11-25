@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
+import { reportarError } from "@/lib/api-error"
 
 // POST /api/ordenes/[id]/tomar
 //
@@ -129,6 +130,7 @@ export async function POST(
     return NextResponse.json({ id, tecnicoId: userId })
   } catch (error) {
     console.error("Error taking orden:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/tomar" })
     return NextResponse.json({ error: "Error al tomar la orden" }, { status: 500 })
   }
 }

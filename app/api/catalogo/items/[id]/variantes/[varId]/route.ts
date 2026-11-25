@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   etiqueta: z.string().min(1).max(80).optional(),
@@ -37,7 +38,7 @@ export async function PUT(
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]/variantes/[varId]" })
   if (!data) return NextResponse.json({ error: "Variante no encontrada" }, { status: 404 })
   await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ variante: data })
@@ -58,7 +59,7 @@ export async function DELETE(
     .eq("item_id", id)
     .eq("organization_id", auth.organizationId!)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]/variantes/[varId]" })
   await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ ok: true })
 }

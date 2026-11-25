@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { getPlatformEvolutionConfig, buildInstanceName } from "@/lib/whatsapp/platform-config"
 import { createInstance, connectInstance } from "@/lib/whatsapp/providers/evolution"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Conecta WhatsApp de la org contra el servidor Evolution COMPARTIDO de plataforma.
@@ -64,6 +65,7 @@ export async function POST() {
     })
   } catch (err) {
     console.error("Error connect Evolution:", err)
+    reportarError(err, { ruta: "/api/whatsapp/evolution/connect" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

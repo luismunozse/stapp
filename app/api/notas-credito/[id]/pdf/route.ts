@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { cargarDocumentoNC, NC_NO_ENCONTRADA } from "@/lib/notas-credito/documento"
 import { respuestaPdfNotaCredito } from "@/lib/notas-credito/pdf"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/notas-credito/[id]/pdf — el PDF A4 de cualquier NC (de venta, de
@@ -28,6 +29,7 @@ export async function GET(
     return await respuestaPdfNotaCredito(doc)
   } catch (err) {
     console.error("Error generando PDF de nota de credito:", err)
+    reportarError(err, { ruta: "/api/notas-credito/[id]/pdf" })
     return NextResponse.json({ error: "Error al generar el PDF de la nota de crédito" }, { status: 500 })
   }
 }

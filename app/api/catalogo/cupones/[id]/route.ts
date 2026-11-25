@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   descripcion: z.string().max(280).nullable().optional(),
@@ -38,7 +39,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/cupones/[id]" })
   if (!data) return NextResponse.json({ error: "Cupón no encontrado" }, { status: 404 })
   return NextResponse.json({ cupon: data })
 }
@@ -54,6 +55,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq("id", id)
     .eq("organization_id", auth.organizationId!)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/cupones/[id]" })
   return NextResponse.json({ ok: true })
 }

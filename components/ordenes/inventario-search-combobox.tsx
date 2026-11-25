@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Loader2, PackageSearch, Search, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 export interface InventarioOption {
   id: string
@@ -102,7 +103,7 @@ export function InventarioSearchCombobox({
       } catch (e) {
         if (seq !== requestSeq.current) return
         setResults([])
-        setError(e instanceof Error ? e.message : "No se pudo buscar en el inventario")
+        setError(mensajeDeError(e, "No se pudo buscar en el inventario"))
       } finally {
         if (seq === requestSeq.current) setLoading(false)
       }

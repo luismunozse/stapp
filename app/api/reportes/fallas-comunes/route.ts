@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data, total: ordenes.length })
   } catch (err) {
     console.error("Error en reporte fallas-comunes:", err)
+    reportarError(err, { ruta: "/api/reportes/fallas-comunes" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

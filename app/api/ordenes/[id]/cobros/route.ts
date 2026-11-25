@@ -7,6 +7,7 @@ import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { generarCuotasCobros } from "@/lib/ordenes/cuotas-cobro"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
+import { reportarError } from "@/lib/api-error"
 
 const pagoLineSchema = z.object({
   monto: z.number().positive("El monto debe ser mayor a 0"),
@@ -131,6 +132,7 @@ export async function GET(
     )
   } catch (err) {
     console.error("Error fetching cobros:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/cobros" })
     return NextResponse.json({ error: "Error al obtener cobros" }, { status: 500 })
   }
 }
@@ -507,6 +509,7 @@ export async function DELETE(
 
   } catch (err) {
     console.error("Error anulando cobro:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/cobros" })
     return NextResponse.json({ error: "Error al anular cobro" }, { status: 500 })
   }
 }

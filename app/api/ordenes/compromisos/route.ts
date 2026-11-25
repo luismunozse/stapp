@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -116,6 +117,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching compromisos:", error)
+    reportarError(error, { ruta: "/api/ordenes/compromisos" })
     return NextResponse.json(
       { error: "Error al obtener compromisos" },
       { status: 500 }

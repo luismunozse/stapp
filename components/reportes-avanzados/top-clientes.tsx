@@ -21,6 +21,7 @@ import {
 import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { chartSeriesColor } from "@/lib/chart-colors"
 import { formatCompactCurrency } from "@/lib/utils"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface ClienteTop {
   clienteId: string
@@ -61,13 +62,12 @@ export function TopClientes() {
       setLoading(true)
       const response = await fetch(`/api/reportes/top-clientes?tipo=${ordenarPor}`)
       if (!response.ok) {
-        const errData = await response.json().catch(() => null)
-        throw new Error(errData?.error || "Error al cargar datos")
+        throw new Error(await leerError(response, "Error al cargar datos"))
       }
       const result = await response.json()
       setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

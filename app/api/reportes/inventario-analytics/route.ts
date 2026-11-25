@@ -6,6 +6,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolverContextoValuacion, valuarLocal, contarExcluidos, montoLocal } from "@/lib/currency/valuacion.server"
 import { NextResponse } from "next/server"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   const { error, organizationId, role } = await requireAdminOrVendedor()
@@ -244,6 +245,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error en inventario-analytics:", err)
+    reportarError(err, { ruta: "/api/reportes/inventario-analytics" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

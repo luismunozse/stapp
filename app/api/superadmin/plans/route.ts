@@ -5,6 +5,7 @@ import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadm
 import { z } from "zod"
 import type { PlanWithUsage } from "@/types/superadmin"
 import { invalidatePricesCache } from "@/lib/pricing"
+import { reportarError } from "@/lib/api-error"
 
 // Schema de validación para crear plan
 const createPlanSchema = z.object({
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error in GET /api/superadmin/plans:", error)
+    reportarError(error, { ruta: "/api/superadmin/plans" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }
@@ -198,6 +200,7 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error("Error in POST /api/superadmin/plans:", error)
+    reportarError(error, { ruta: "/api/superadmin/plans" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

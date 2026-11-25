@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { fetchAllRowsIn } from "@/lib/fetch-all-rows"
+import { reportarError } from "@/lib/api-error"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -171,6 +172,7 @@ export async function GET() {
     return NextResponse.json({ segments, campaigns })
   } catch (error) {
     console.error("Error fetching email campaign data:", error)
+    reportarError(error, { ruta: "/api/superadmin/email-campaigns" })
     return NextResponse.json(
       { error: "Error al obtener datos de campañas" },
       { status: 500 }
@@ -301,6 +303,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error sending email campaign:", error)
+    reportarError(error, { ruta: "/api/superadmin/email-campaigns" })
     return NextResponse.json(
       { error: "Error al enviar campaña" },
       { status: 500 }

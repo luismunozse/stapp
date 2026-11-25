@@ -40,6 +40,7 @@ import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { danoInputSchema, validarDanosParaTipo, MAX_DANOS_POR_ORDEN, mensajeErrorDanos } from "@/lib/ordenes/danos"
 import { ESTADOS_ACTIVOS, COBRO_PENDIENTE_ESTADOS_COBRO, COBRO_PENDIENTE_ESTADOS_ORDEN } from "@/lib/ordenes/filtros-url"
+import { reportarError } from "@/lib/api-error"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -401,6 +402,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching ordenes:", error)
+    reportarError(error, { ruta: "/api/ordenes" })
     return NextResponse.json(
       { error: "Error al obtener órdenes" },
       { status: 500 }

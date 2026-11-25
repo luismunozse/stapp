@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Verificación de la delegación ARCA de una organización (migración 385).
@@ -55,6 +56,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ delegacion: aRespuesta(data as FilaDelegacion | null) })
   } catch (err) {
     console.error("[superadmin] Error leyendo delegación ARCA:", err)
+    reportarError(err, { ruta: "/api/superadmin/organizations/[id]/facturacion-delegada" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -114,6 +116,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ delegacion: aRespuesta(actualizada as FilaDelegacion) })
   } catch (err) {
     console.error("[superadmin] Error verificando delegación ARCA:", err)
+    reportarError(err, { ruta: "/api/superadmin/organizations/[id]/facturacion-delegada" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

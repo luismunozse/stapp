@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -107,6 +108,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("Error reasignando órdenes:", err)
+    reportarError(err, { ruta: "/api/tecnicos/[id]/reasignar" })
     return NextResponse.json(
       { error: "Error al reasignar órdenes" },
       { status: 500 }

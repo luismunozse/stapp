@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { getSubscriptionInfo, isPremium, getTrialInfo } from "@/lib/subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/subscription/status
@@ -61,6 +62,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching subscription status:", error)
+    reportarError(error, { ruta: "/api/subscription/status" })
     return NextResponse.json(
       { error: "Error al obtener estado de suscripción" },
       { status: 500 }

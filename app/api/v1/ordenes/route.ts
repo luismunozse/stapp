@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireApiKey } from "@/lib/api-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { assertSucursalEnOrg } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 const COLUMNS =
   "id, numero_orden, codigo_orden, estado, dispositivo, tipo_dispositivo, marca, problema_reportado, presupuesto, costo_final, cliente_id, tecnico_id, fecha_ingreso, fecha_prometida, fecha_completado, created_at"
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
     })
   } catch (e) {
     console.error("v1 ordenes error:", e)
+    reportarError(e, { ruta: "/api/v1/ordenes" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

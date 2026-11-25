@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { toast } from "sonner"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface UseSuperadminFetchOptions {
   /** Show toast on error (default: true) */
@@ -83,7 +84,7 @@ export function useSuperadminFetch<T>(
           return null
         }
         const errorMsg =
-          error instanceof Error ? error.message : "Error de conexión"
+          mensajeDeError(error, "Error de conexión")
         setState({ data: null, loading: false, error: errorMsg })
         if (showErrorToast) {
           toast.error(errorMsg)
@@ -153,7 +154,7 @@ export function useSuperadminMutation<TResponse = unknown>() {
         return data
       } catch (error: unknown) {
         const msg =
-          error instanceof Error ? error.message : "Error de conexión"
+          mensajeDeError(error, "Error de conexión")
         toast.error(options.errorMessage || msg)
         return null
       } finally {

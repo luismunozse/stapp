@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { createPaymentPreference } from "@/lib/mercadopago"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const preferenceSchema = z.object({
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional(),
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error creating MercadoPago preference:", error)
+    reportarError(error, { ruta: "/api/mercadopago/preference" })
     return NextResponse.json(
       { error: "Error al crear preferencia de pago" },
       { status: 500 }

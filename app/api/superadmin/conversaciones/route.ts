@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: NextRequest) {
   const { error } = await requireSuperadmin()
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (err) {
     console.error("Error fetching conversaciones:", err)
+    reportarError(err, { ruta: "/api/superadmin/conversaciones" })
     return NextResponse.json({ error: "Error al obtener conversaciones" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { respuestaError } from "@/lib/api-error"
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -41,7 +42,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   if (search) query = query.ilike("nombre", `%${search}%`)
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/public/catalogo/[slug]/items" })
 
   // Resolver disponibilidad: si linkeado a inventario, source = inventario
   // neto de reservas (stock - stock_reservado).

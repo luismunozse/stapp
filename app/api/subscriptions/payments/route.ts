@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -45,6 +46,7 @@ export async function GET() {
     return NextResponse.json({ payments })
   } catch (error) {
     console.error("Error returning subscription payments:", error)
+    reportarError(error, { ruta: "/api/subscriptions/payments" })
     return NextResponse.json(
       { error: "Error al obtener pagos" },
       { status: 500 }

@@ -15,6 +15,7 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { MoneyInput } from "@/components/ui/money-input"
 import { round2 } from "@/lib/ventas/totales"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface CierreDialogProps {
   open: boolean
@@ -76,14 +77,13 @@ export function CierreDialog({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al cerrar caja")
+        throw new Error(await leerError(res, "Error al cerrar caja"))
       }
 
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al cerrar caja")
+      setError(mensajeDeError(err, "Error al cerrar caja"))
     } finally {
       setLoading(false)
     }

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { guardarFotoOrden } from "@/lib/fotos/guardar-foto-orden"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { MIMES_FOTO_CELULAR, esTokenCargaValido, hashTokenCarga } from "@/lib/fotos/carga-sesion"
+import { reportarError } from "@/lib/api-error"
 
 // Carga de fotos desde el celular con un enlace temporal (QR), sin login.
 // El token es la única credencial: 256 bits, vence, se puede revocar y solo
@@ -57,6 +58,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error leyendo sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/public/fotos-celular/[token]" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

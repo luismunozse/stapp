@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { remitoActivo } from "@/lib/facturacion/remito-activo"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
     )
   } catch (error) {
     console.error("Error fetching facturacion candidatos:", error)
+    reportarError(error, { ruta: "/api/facturacion/candidatos" })
     return NextResponse.json({ error: "Error al obtener candidatos" }, { status: 500 })
   }
 }

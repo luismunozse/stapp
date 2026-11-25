@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { sendPasswordResetEmail } from "@/lib/email"
 import { randomBytes } from "crypto"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -61,6 +62,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error resetting password:", error)
+    reportarError(error, { ruta: "/api/superadmin/users/[userId]/reset-password" })
     return NextResponse.json(
       { error: "Error al enviar reset de contraseña" },
       { status: 500 }

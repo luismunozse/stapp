@@ -23,6 +23,7 @@ import { validarMonedaEscritura, type MonedaCatalogo } from "@/lib/currency/cata
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { argumentosGuardarGrupo, compartidosDeFila, validarGuardarGrupo } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
+import { reportarError } from "@/lib/api-error"
 
 type Contexto = { params: Promise<{ id: string }> }
 type Fila = Record<string, any>
@@ -124,6 +125,7 @@ export async function GET(_request: Request, { params }: Contexto) {
     return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
   } catch (error) {
     console.error("Error fetching grupo de variantes:", error)
+    reportarError(error, { ruta: "/api/inventario/grupos/[id]" })
     return NextResponse.json({ error: "Error al obtener el grupo" }, { status: 500 })
   }
 }
@@ -393,6 +395,7 @@ export async function PUT(request: Request, { params }: Contexto) {
     })
   } catch (error) {
     console.error("Error guardando grupo de variantes:", error)
+    reportarError(error, { ruta: "/api/inventario/grupos/[id]" })
     return NextResponse.json({ error: "Error al guardar las variantes" }, { status: 500 })
   }
 }
@@ -440,6 +443,7 @@ export async function DELETE(request: Request, { params }: Contexto) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error ungrouping variantes:", error)
+    reportarError(error, { ruta: "/api/inventario/grupos/[id]" })
     return NextResponse.json({ error: "Error al desagrupar las variantes" }, { status: 500 })
   }
 }

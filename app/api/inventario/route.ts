@@ -14,6 +14,7 @@ import { registrarCreacion } from "@/lib/inventario-eventos"
 import { validarMonedaEscritura } from "@/lib/currency/catalogo"
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const inventarioSchema = z.object({
   codigo: z.string().min(1, "El código es requerido"),
@@ -217,6 +218,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching inventario:", error)
+    reportarError(error, { ruta: "/api/inventario" })
     return NextResponse.json(
       { error: "Error al obtener inventario" },
       { status: 500 }

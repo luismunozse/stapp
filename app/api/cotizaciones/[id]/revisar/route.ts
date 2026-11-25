@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { randomBytes } from "crypto"
+import { reportarError } from "@/lib/api-error"
 
 // Crea una revision de una cotizacion ACEPTADA: la firma del cliente queda
 // atada a esa fila exacta (y a la reserva de stock hecha sobre sus items),
@@ -177,6 +178,7 @@ export async function POST(
     return NextResponse.json({ id: revision.id }, { status: 201 })
   } catch (error) {
     console.error("Error creating cotizacion revision:", error)
+    reportarError(error, { ruta: "/api/cotizaciones/[id]/revisar" })
     return NextResponse.json(
       { error: "Error al crear la revisión de la cotización" },
       { status: 500 }

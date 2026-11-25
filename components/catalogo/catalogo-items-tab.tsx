@@ -26,6 +26,7 @@ import { InlineEditCell } from "./inline-edit-cell"
 import { parseStock, parsePrecio } from "@/lib/catalogo/inline-edit"
 import { buildItemsQuery } from "@/lib/catalogo/items-query"
 import { useDebouncedValue } from "./use-debounced-value"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 type ItemConCategoria = CatalogoItem & {
   categoria?: { id: string; nombre: string } | null
@@ -176,12 +177,11 @@ export function CatalogoItemsTab() {
         body: JSON.stringify({ [field]: value }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error al guardar")
+        throw new Error(await leerError(res, "Error al guardar"))
       }
     } catch (err) {
       setItems(prev)
-      toast.error(err instanceof Error ? err.message : "Error al guardar")
+      toast.error(mensajeDeError(err, "Error al guardar"))
     }
   }
 
@@ -195,7 +195,7 @@ export function CatalogoItemsTab() {
       await load()
       await loadMeta()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al duplicar", { id: t })
+      toast.error(mensajeDeError(err, "Error al duplicar"), { id: t })
     }
   }
 
@@ -245,7 +245,7 @@ export function CatalogoItemsTab() {
       await load()
       await loadMeta()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error en la operación masiva")
+      toast.error(mensajeDeError(err, "Error en la operación masiva"))
     } finally {
       setBulkLoading(false)
       setBulkConfirm(null)

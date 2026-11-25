@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolverContextoValuacion, valuarLocal, contarExcluidos } from "@/lib/currency/valuacion.server"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/summary?proveedorId=...&categoria=...&tipoDispositivo=...&bajoStock=true
 // Agrega totales del inventario (solo activos, no archivados) para los filtros
@@ -102,6 +103,7 @@ export async function GET(request: Request) {
     }, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     console.error("Error en summary inventario:", error)
+    reportarError(error, { ruta: "/api/inventario/summary" })
     return NextResponse.json(
       { error: "Error al calcular resumen" },
       { status: 500 }

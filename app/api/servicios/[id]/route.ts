@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { validarMonedaEscritura } from "@/lib/currency/catalogo"
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   codigo: z.string().min(1).max(40).optional(),
@@ -151,6 +152,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("Error deleting servicio:", err)
+    reportarError(err, { ruta: "/api/servicios/[id]" })
     return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
   }
 }

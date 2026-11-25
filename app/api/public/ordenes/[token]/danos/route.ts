@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { listarDanosOrden } from "@/lib/ordenes/danos-server"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   _request: Request,
@@ -21,6 +22,7 @@ export async function GET(
     return NextResponse.json({ danos: publicos, sinDanos, diagrama })
   } catch (error) {
     console.error("Error fetching danos:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]/danos" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

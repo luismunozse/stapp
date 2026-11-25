@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NotificationService } from "@/lib/notifications"
 import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json(history)
   } catch (error) {
     console.error("Error fetching notification history:", error)
+    reportarError(error, { ruta: "/api/notificaciones" })
     return NextResponse.json(
       { error: "Error al obtener historial" },
       { status: 500 }

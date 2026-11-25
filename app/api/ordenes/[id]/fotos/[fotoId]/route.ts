@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { firmarReferencia } from "@/lib/storage-privado"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Obtener una foto específica con su URL
 export async function GET(
@@ -45,6 +46,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching foto:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/fotos/[fotoId]" })
     return NextResponse.json(
       { error: "Error al obtener foto" },
       { status: 500 }

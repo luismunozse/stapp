@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { esAdhesionSinCobro, inicioAdhesion, venceLaGracia } from "@/lib/subscriptions/sweep-rules"
+import { reportarError } from "@/lib/api-error"
 
 // Cron diario: barre subscriptions ACTIVE con current_period_end vencido.
 //   - MANUAL  → downgrade plan a Free (admin no renovó → asumimos churn)
@@ -352,6 +353,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("[subscription-sweep] error:", error)
+    reportarError(error, { ruta: "/api/cron/subscription-sweep", source: "CRON" })
     return NextResponse.json({ error: "Error en sweep" }, { status: 500 })
   }
 }
