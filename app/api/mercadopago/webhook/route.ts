@@ -333,8 +333,21 @@ export async function handlePaymentNotification(
       externalRef = JSON.parse(payment.external_reference || "{}")
     } catch {
       console.error(`[MP webhook] Invalid external_reference for payment ${paymentId}:`, payment.external_reference)
-      return { status: "SKIPPED", reason: "invalid_external_reference" }
+      const fromPreApproval = await resolveExternalRefFromPreApproval(payment, paymentId)
+      if (!fromPreApproval) return { status: "SKIPPED", reason: "invalid_external_reference" }
+      externalRef = fromPreApproval
     }
+  }
+
+  // Cobro del débito automático que llegó como `payment` (o por la
+  // reconciliación manual): no trae external_reference. MercadoPago no
+  // garantiza mandar un `subscription_authorized_payment` en estado
+  // "processed" para cada cobro, y sin este rescate el pago quedaba SKIPPED
+  // (missing_organization_id) y había que renovar a mano. Se resuelve la
+  // organización por la adhesión (preapproval) de la que salió el pago.
+  if (!externalRef.organization_id) {
+    const fromPreApproval = await resolveExternalRefFromPreApproval(payment, paymentId)
+    if (fromPreApproval) externalRef = fromPreApproval
   }
 
   const organizationId = externalRef.organization_id
@@ -626,6 +639,81 @@ export async function handlePaymentNotification(
     organizationId,
     subscriptionPaymentId: paymentRecordId,
   }
+}
+
+/**
+ * Id de la adhesión (preapproval) que generó un pago, si es un cobro del
+ * débito automático. MercadoPago lo expone en distintos lugares según la
+ * versión de la API, así que se miran todos.
+ */
+export function preApprovalIdFromPayment(payment: any): string | null {
+  const candidates = [
+    payment?.metadata?.preapproval_id,
+    payment?.point_of_interaction?.transaction_data?.subscription_id,
+    payment?.subscription_id,
+  ]
+  for (const c of candidates) {
+    if (c != null && String(c).trim() !== "") return String(c).trim()
+  }
+  return null
+}
+
+async function resolveExternalRefFromPreApproval(
+  payment: any,
+  paymentId: string
+): Promise<PaymentExternalRef | null> {
+  const preApprovalId = preApprovalIdFromPayment(payment)
+  if (!preApprovalId) return null
+
+  const res = await fetch(`https://api.mercadopago.com/preapproval/${preApprovalId}`, {
+    headers: { Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}` },
+  })
+
+  if (res.ok) {
+    const preApproval = await res.json()
+    try {
+      const ref = JSON.parse(preApproval?.external_reference || "{}") as PaymentExternalRef
+      if (ref.organization_id) {
+        console.log(
+          `[MP webhook] Payment ${paymentId} resuelto por preapproval ${preApprovalId} → org ${ref.organization_id}`
+        )
+        return ref
+      }
+    } catch {
+      console.error(
+        `[MP webhook] Invalid external_reference in preapproval ${preApprovalId} (payment ${paymentId})`
+      )
+    }
+  } else {
+    console.error(
+      `[MP webhook] Error fetching preapproval ${preApprovalId} (payment ${paymentId}):`,
+      await res.text()
+    )
+  }
+
+  // Último recurso: la adhesión vigente guardada en la suscripción.
+  const { data: sub } = await supabaseAdmin
+    .from("subscriptions")
+    .select("organization_id, billing_period")
+    .eq("mercadopago_preapproval_id", preApprovalId)
+    .maybeSingle()
+
+  if (sub?.organization_id) {
+    console.log(
+      `[MP webhook] Payment ${paymentId} resuelto por subscriptions.mercadopago_preapproval_id=${preApprovalId} → org ${sub.organization_id}`
+    )
+    return {
+      organization_id: sub.organization_id,
+      billing_period: sub.billing_period ?? undefined,
+    }
+  }
+
+  if (!res.ok) {
+    // Sin la API de MP ni registro propio no hay a quién imputarlo: que MP
+    // reintente en vez de descartar el cobro.
+    throw new Error(`MP API error fetching preapproval ${preApprovalId} for payment ${paymentId}`)
+  }
+  return null
 }
 
 export async function handlePreApprovalNotification(
