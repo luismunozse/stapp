@@ -42,6 +42,36 @@ async function resolvePlan(planSlug?: string): Promise<PlanDetails> {
   return plan
 }
 
+/**
+ * URL a la que MercadoPago avisa los pagos (notification_url).
+ *
+ * NO sale de NEXTAUTH_URL: en producción vale https://www.stapp.com.ar y
+ * www responde 308 hacia el dominio raíz. MercadoPago no sigue redirecciones,
+ * así que los avisos se perdían sin dejar rastro y cada pago había que
+ * conciliarlo a mano. Se usa el dominio raíz, que responde directo.
+ *
+ * Orden: MERCADOPAGO_WEBHOOK_URL (override explícito) → dominio raíz en
+ * producción → NEXTAUTH_URL (desarrollo, túneles tipo ngrok).
+ */
+export function getMercadoPagoNotificationUrl(): string {
+  const PATH = "/api/mercadopago/webhook"
+
+  const explicit = process.env.MERCADOPAGO_WEBHOOK_URL?.trim()
+  if (explicit) return explicit
+
+  if (process.env.NODE_ENV === "production") {
+    const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar")
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/+$/, "")
+    return `https://${root}${PATH}`
+  }
+
+  const base = (process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/+$/, "")
+  return `${base}${PATH}`
+}
+
 // Crear preferencia de pago único (para suscripción manual)
 export async function createPaymentPreference({
   organizationId,
@@ -121,7 +151,7 @@ export async function createPaymentPreference({
         plan_id: plan.id,
         plan_slug: plan.slug,
       }),
-      notification_url: `${process.env.NEXTAUTH_URL}/api/mercadopago/webhook`,
+      notification_url: getMercadoPagoNotificationUrl(),
       statement_descriptor: "SERVICIO TECNICO",
     },
   })
