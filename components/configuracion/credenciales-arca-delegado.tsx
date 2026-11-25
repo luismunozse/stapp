@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { useCurrency } from "@/contexts/currency-context"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { nombreSistemaPuntoVenta } from "@/lib/facturacion/arca/ayuda-errores"
 
 type CondicionFiscal = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 
@@ -58,13 +59,6 @@ function formatHora(fecha: Date, timeZone: string): string {
 }
 
 /** Sistema de ARCA con el que hay que crear el punto de venta para que un sistema externo lo vea. */
-function nombreSistemaPuntoVenta(condicionFiscal: unknown): string {
-  const monotributo = "“Factura Electronica - Monotributo - Web Service”"
-  const inscripto = "“RECE para aplicativo y Web Service”"
-  if (condicionFiscal === "MONOTRIBUTO") return monotributo
-  if (condicionFiscal === "RESPONSABLE_INSCRIPTO") return inscripto
-  return `${monotributo} (Monotributo) o ${inscripto} (Responsable Inscripto)`
-}
 
 export function CredencialesArcaDelegado({
   allowEdit,
@@ -168,7 +162,10 @@ export function CredencialesArcaDelegado({
         }
         setMensaje({
           tone: "error",
-          text: `ARCA rechazó la operación: ${data.error}. Revisá que la delegación esté hecha y aceptada.`,
+          // El error ya trae qué hacer cuando ARCA devuelve un rechazo conocido
+          // (lib/facturacion/arca/ayuda-errores.ts): no se le agrega un consejo
+          // genérico que puede no tener nada que ver.
+          text: `ARCA rechazó la operación: ${data.error}`,
         })
         return
       }
@@ -210,7 +207,10 @@ export function CredencialesArcaDelegado({
         return
       }
 
-      setMensaje({ tone: "ok", text: `Conexión OK. ARCA reconoce: ${lista}.` })
+      setMensaje({
+        tone: "ok",
+        text: `Conexión OK. ARCA reconoce: ${lista}. El punto de venta tiene que ser del sistema ${sistema}: si cambiaste de condición fiscal, el punto de venta anterior no sirve y hay que crear uno nuevo.`,
+      })
     } catch {
       setMensaje({ tone: "error", text: "Error al probar la conexión" })
     } finally {

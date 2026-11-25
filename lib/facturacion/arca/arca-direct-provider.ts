@@ -31,6 +31,12 @@ import {
 import { CBTE_TIPO_FACTURA, esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import { ErrorDeNegocioFacturacion, mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
+import {
+  ayudaDeMensajes,
+  describirErroresArca,
+  mensajePuntoVentaOtraCondicion,
+  sistemaPuntoVentaNoCorresponde,
+} from "@/lib/facturacion/arca/ayuda-errores"
 import { formatearNumeroComprobante } from "@/lib/facturacion/numero-comprobante"
 import type {
   ArcaCredenciales,
@@ -115,6 +121,21 @@ function extraerErrores(response: any): string[] {
   }
 
   return errores.length > 0 ? errores : ["ARCA rechazó el comprobante sin detallar el motivo"]
+}
+
+/** Agrega al final qué hacer, si el rechazo es uno que reconocemos. */
+function conAyuda(errores: string[], creds: { condicionFiscal?: ArcaCredenciales["condicionFiscal"] }): string[] {
+  const ayuda = ayudaDeMensajes(errores, creds.condicionFiscal)
+  return ayuda ? [...errores, ayuda] : errores
+}
+
+function conAyudaSiRechazada<T extends { kind: string }>(
+  r: T,
+  creds: { condicionFiscal?: ArcaCredenciales["condicionFiscal"] }
+): T {
+  if (r.kind !== "rechazada") return r
+  const conErrores = r as T & { errores: string[] }
+  return { ...conErrores, errores: conAyuda(conErrores.errores ?? [], creds) }
 }
 
 function erroresDeAfip(respuesta: any): Array<{ code?: number; msg?: string }> {
@@ -341,13 +362,49 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
           errores.length > 0 && errores.every((e) => e.code === AFIP_SIN_RESULTADOS)
 
         if (errores.length > 0 && !soloSinResultados) {
-          return { ok: false, error: descripcionDeErrores(errores) }
+          return { ok: false, error: describirErroresArca(errores, creds.condicionFiscal) }
         }
 
         const puntosVenta: PuntoVenta[] = (respuesta?.resultGet?.ptoVenta ?? []).map((p: any) => ({
           numero: Number(p.nro),
           bloqueado: p.bloqueado === "S",
         }))
+
+        // Que el punto de venta figure en la lista no alcanza: ARCA lo lista
+        // aunque sea de un sistema que no corresponde a la condición fiscal
+        // actual (p. ej. un "RECE" de cuando el taller era Responsable
+        // Inscripto, usado ahora como Monotributo), y recién lo rechaza al
+        // emitir con 10005. Se pregunta el último comprobante de la letra que
+        // se va a emitir en ese punto de venta: si ARCA lo rechaza, se avisa
+        // acá y no con un cliente esperando.
+        const configurado = puntosVenta.find((p) => p.numero === Number(creds.puntoVenta))
+        const crudoConfigurado = (respuesta?.resultGet?.ptoVenta ?? []).find(
+          (p: any) => Number(p?.nro) === Number(creds.puntoVenta)
+        )
+        if (configurado && sistemaPuntoVentaNoCorresponde(crudoConfigurado?.emisionTipo, creds.condicionFiscal)) {
+          return {
+            ok: false,
+            puntosVenta,
+            error: mensajePuntoVentaOtraCondicion(
+              configurado.numero,
+              String(crudoConfigurado.emisionTipo),
+              creds.condicionFiscal
+            ),
+          }
+        }
+        if (configurado && !configurado.bloqueado) {
+          try {
+            const cbteTipo = CBTE_TIPO_FACTURA[deriveTipo(creds.condicionFiscal)]
+            const ultimo = await arca.electronicBillingService.getLastVoucher(configurado.numero, cbteTipo)
+            const erroresPv = erroresDeAfip(ultimo).filter((e) => e.code !== AFIP_SIN_RESULTADOS)
+            if (erroresPv.length > 0) {
+              return { ok: false, puntosVenta, error: describirErroresArca(erroresPv, creds.condicionFiscal) }
+            }
+          } catch {
+            // Sin respuesta concluyente no se bloquea el diagnóstico: la
+            // conexión y la lista de puntos de venta ya están verificadas.
+          }
+        }
 
         return { ok: true, puntosVenta }
       } catch (e: any) {
@@ -379,9 +436,19 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
           }
         }
 
-        return { ok: false, tipo, errores: extraerErrores(resultado?.response), raw: resultado?.response ?? null }
+        return {
+          ok: false,
+          tipo,
+          errores: conAyuda(extraerErrores(resultado?.response), creds),
+          raw: resultado?.response ?? null,
+        }
       } catch (e: any) {
-        return { ok: false, tipo, errores: [mensajeSeguroDeError(e, "fallo emitiendo contra ARCA")], raw: null }
+        return {
+          ok: false,
+          tipo,
+          errores: conAyuda([mensajeSeguroDeError(e, "fallo emitiendo contra ARCA")], creds),
+          raw: null,
+        }
       }
     },
 
@@ -455,7 +522,7 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
       } catch (e: unknown) {
         return {
           kind: "rechazada",
-          errores: [mensajeSeguroDeError(e, "fallo preparando el envío de la nota de crédito a ARCA")],
+          errores: conAyuda([mensajeSeguroDeError(e, "fallo preparando el envío de la nota de crédito a ARCA")], creds),
           raw: null,
         }
       }
@@ -467,7 +534,7 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
         return { kind: "incierta", error: mensajeSeguroDeError(e, "fallo enviando la nota de crédito a ARCA") }
       }
 
-      return clasificarRespuestaNotaCredito(resultado, voucher)
+      return conAyudaSiRechazada(clasificarRespuestaNotaCredito(resultado, voucher), creds)
     },
 
     /**
@@ -488,7 +555,7 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
       } catch (e: unknown) {
         return {
           kind: "rechazada",
-          errores: [mensajeSeguroDeError(e, "fallo preparando el envío de la factura a ARCA")],
+          errores: conAyuda([mensajeSeguroDeError(e, "fallo preparando el envío de la factura a ARCA")], creds),
           raw: null,
         }
       }
@@ -500,7 +567,10 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
         return { kind: "incierta", error: mensajeSeguroDeError(e, "fallo enviando la factura a ARCA") }
       }
 
-      return clasificarRespuestaNumerada(resultado, voucher, MENSAJE_FACTURA_SIN_CONFIRMAR, "la factura")
+      return conAyudaSiRechazada(
+        clasificarRespuestaNumerada(resultado, voucher, MENSAJE_FACTURA_SIN_CONFIRMAR, "la factura"),
+        creds
+      )
     },
   }
 }

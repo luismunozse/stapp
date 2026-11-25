@@ -215,7 +215,7 @@ describe("arcaDirectProvider.emitir — caminos de error", () => {
 
     expect(result.ok).toBe(false)
     expect(result.cae).toBeUndefined()
-    expect(result.errores).toEqual(["10048: El campo ImpTotal no es igual a la suma"])
+    expect(result.errores).toEqual(["10048: El campo ImpTotal no es igual a la suma", expect.stringContaining("importes del comprobante no cierran")])
   })
 
   /**
@@ -351,6 +351,42 @@ describe("arcaDirectProvider.probarConexion", () => {
     expect(res.ok).toBe(false)
     expect(res.error).toContain("600")
     expect(res.error).toContain("no autorizada")
+  })
+
+  it("punto de venta RECE usado como Monotributo: lo detecta sin emitir", async () => {
+    const sdk = fakeSdk(respuestaAprobada(), {
+      resultGet: { ptoVenta: [{ nro: 1, emisionTipo: "CAE - RECE", bloqueado: "N", fechaBaja: "NULL" }] },
+    })
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain("CAE - RECE")
+    expect(res.error).toContain("Factura Electronica - Monotributo - Web Service")
+  })
+
+  it("si ARCA rechaza el último comprobante de ese punto de venta, lo reporta con la ayuda", async () => {
+    const base = fakeSdk(respuestaAprobada(), {
+      resultGet: { ptoVenta: [{ nro: 1, emisionTipo: "CAE", bloqueado: "N", fechaBaja: "NULL" }] },
+    })
+    const llamadas: Array<[number, number]> = []
+    const createArca = (ctx: any) => {
+      const arca = base.createArca(ctx)
+      ;(arca.electronicBillingService as any).getLastVoucher = async (pv: number, tipo: number) => {
+        llamadas.push([pv, tipo])
+        return { errors: { err: [{ code: 10005, msg: "NO AUTORIZADO A EMITIR COMPROBANTES" }] } }
+      }
+      return arca
+    }
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(llamadas).toEqual([[1, 11]]) // Monotributo → Factura C
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain("10005")
+    expect(res.error).toContain("Administración de puntos de venta")
   })
 
   it("no propaga la excepción si falla la renovación del ticket", async () => {
@@ -775,7 +811,10 @@ describe("arcaDirectProvider.emitirNotaCredito — desenlaces del envío", () =>
 
     expect(res).toEqual({
       kind: "rechazada",
-      errores: ["10016: El numero o fecha del comprobante no se corresponde con el proximo a autorizar"],
+      errores: [
+        "10016: El numero o fecha del comprobante no se corresponde con el proximo a autorizar",
+        expect.stringContaining("último comprobante autorizado"),
+      ],
       raw: response,
     })
   })
@@ -847,7 +886,7 @@ describe("arcaDirectProvider.emitirNotaCredito — desenlaces del envío", () =>
 
     const res = await proveedorNc(sdk).emitirNotaCredito(creds, voucherNcB)
 
-    expect(res).toEqual({ kind: "rechazada", errores: ["10015: Doc invalido"], raw: response })
+    expect(res).toEqual({ kind: "rechazada", errores: ["10015: Doc invalido", expect.stringContaining("documento del cliente")], raw: response })
   })
 
   it("rechazo en la cabecera sin detalle: rechazada con el mensaje por defecto", async () => {
@@ -1098,7 +1137,7 @@ describe("arcaDirectProvider.emitirFacturaNumerada", () => {
 
     const res = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherFacturaB)
 
-    expect(res).toMatchObject({ kind: "rechazada", errores: ["10016: no correlativo"] })
+    expect(res).toMatchObject({ kind: "rechazada", errores: ["10016: no correlativo", expect.stringContaining("último comprobante autorizado")] })
   })
 
   it("respuesta sin Resultado (error interno de ARCA): incierta", async () => {
