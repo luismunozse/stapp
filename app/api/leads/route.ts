@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ leads, total: count })
   } catch (error) {
     console.error("Error fetching leads:", error)
+    reportarError(error, { ruta: "/api/leads" })
     return NextResponse.json({ error: "Error al obtener leads" }, { status: 500 })
   }
 }

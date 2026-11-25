@@ -10,6 +10,7 @@ import { sendVerificationEmail } from "@/lib/email"
 import { verifyGoogleIdToken } from "@/lib/google"
 import { isRubroId, DEFAULT_RUBRO_ID } from "@/lib/rubros"
 import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
+import { reportarError } from "@/lib/api-error"
 
 // Schema de validación (password opcional para Google)
 const registerSchema = z.object({
@@ -375,6 +376,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Register error:", error)
+    reportarError(error, { ruta: "/api/auth/register" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -139,6 +140,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching facturas:", error)
+    reportarError(error, { ruta: "/api/facturacion" })
     return NextResponse.json(
       { error: "Error al obtener remitos" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { createSubscription } from "@/lib/mercadopago"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const preapprovalSchema = z.object({
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional(),
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error creando adhesión de MercadoPago:", error)
+    reportarError(error, { ruta: "/api/mercadopago/preapproval" })
     return NextResponse.json(
       { error: "Error al crear la adhesión al débito automático" },
       { status: 500 }

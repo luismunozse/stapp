@@ -20,6 +20,7 @@ import {
 import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { CHART_CONCEPT_COLORS } from "@/lib/chart-colors"
 import { formatCompactCurrency } from "@/lib/utils"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ComparativaData {
   mesActual: {
@@ -59,7 +60,7 @@ export function ComparativaIngresos() {
       const result = await response.json()
       setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

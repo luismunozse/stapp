@@ -22,6 +22,7 @@ import {
   toPracticaOrden,
   type PracticaOrdenRow,
 } from "@/lib/onboarding/practica"
+import { reportarError } from "@/lib/api-error"
 
 // The onboarding practice order. Every query is scoped to the caller's org AND
 // es_practica = true, so this endpoint cannot read or change a real order. It
@@ -276,6 +277,7 @@ export async function GET() {
     return NextResponse.json({ practica: await getPracticaOrden(organizationId!) })
   } catch (err) {
     console.error("Error reading the practice order:", err)
+    reportarError(err, { ruta: "/api/onboarding/practica" })
     return NextResponse.json({ error: "No pudimos leer la práctica" }, { status: 500 })
   }
 }
@@ -405,6 +407,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ practica: toPracticaOrden(row) }, { status: 201 })
   } catch (err) {
     console.error("Error creating the practice order:", err)
+    reportarError(err, { ruta: "/api/onboarding/practica" })
     return NextResponse.json({ error: "No pudimos crear la práctica" }, { status: 500 })
   }
 }
@@ -430,6 +433,7 @@ export async function PATCH(request: Request) {
       : await entregar(orgId, userId!, actual)
   } catch (err) {
     console.error("Error advancing the practice order:", err)
+    reportarError(err, { ruta: "/api/onboarding/practica" })
     return NextResponse.json({ error: "No pudimos avanzar la práctica" }, { status: 500 })
   }
 }
@@ -442,6 +446,7 @@ export async function DELETE() {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("Error deleting the practice order:", err)
+    reportarError(err, { ruta: "/api/onboarding/practica" })
     return NextResponse.json({ error: "No pudimos borrar la práctica" }, { status: 500 })
   }
 }

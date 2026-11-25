@@ -5,6 +5,7 @@ import { fetchAllRows } from "@/lib/fetch-all-rows"
 import { resolverContextoValuacion } from "@/lib/currency/valuacion.server"
 import { montoLocal } from "@/lib/currency/valuacion.server"
 import type { MonedaCatalogo } from "@/lib/currency/catalogo"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/analisis-abc?dias=90&diasMuerto=90
 // Devuelve análisis ABC + rotación por item, con totales agregados.
@@ -189,6 +190,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error in analisis-abc:", err)
+    reportarError(err, { ruta: "/api/inventario/analisis-abc" })
     return NextResponse.json({ error: "Error al calcular análisis" }, { status: 500 })
   }
 }

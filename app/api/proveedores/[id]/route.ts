@@ -3,6 +3,7 @@ import { requireAdmin, requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const CONDICION_IVA = [
   "RESPONSABLE_INSCRIPTO",
@@ -72,6 +73,7 @@ export async function GET(
     return NextResponse.json(formatProveedor(proveedor))
   } catch (error) {
     console.error("Error fetching proveedor:", error)
+    reportarError(error, { ruta: "/api/proveedores/[id]" })
     return NextResponse.json(
       { error: "Error al obtener proveedor" },
       { status: 500 }
@@ -225,6 +227,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting proveedor:", error)
+    reportarError(error, { ruta: "/api/proveedores/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar proveedor" },
       { status: 500 }

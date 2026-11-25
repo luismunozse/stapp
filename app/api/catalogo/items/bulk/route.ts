@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const bulkSchema = z.discriminatedUnion("action", [
   z.object({
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
       .delete({ count: "exact" })
       .in("id", d.ids)
       .eq("organization_id", orgId)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return respuestaError(error, { ruta: "/api/catalogo/items/bulk" })
     await revalidateCatalogo(orgId)
     return NextResponse.json({ ok: true, affected: count ?? 0 })
   }
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
     .in("id", d.ids)
     .eq("organization_id", orgId)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/bulk" })
   await revalidateCatalogo(orgId)
   return NextResponse.json({ ok: true, affected: count ?? 0 })
 }

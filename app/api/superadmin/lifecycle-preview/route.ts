@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecycle-templates"
 import { EMAIL_SAMPLE_DATA, LIFECYCLE_TEMPLATE_TYPES, interpolateSample } from "@/lib/emails/sample-data"
+import { reportarError } from "@/lib/api-error"
 
 const CATEGORY_ORDER: Record<string, number> = {
   onboarding: 0,
@@ -67,6 +68,7 @@ export async function GET() {
     return NextResponse.json({ templates, types: templates })
   } catch (err) {
     console.error("Error:", err)
+    reportarError(err, { ruta: "/api/superadmin/lifecycle-preview" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }
@@ -118,6 +120,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ subject, html, type, source, status: row?.status || null })
   } catch (err) {
     console.error("Error rendering preview:", err)
+    reportarError(err, { ruta: "/api/superadmin/lifecycle-preview" })
     return NextResponse.json({ error: "Error al renderizar preview" }, { status: 500 })
   }
 }

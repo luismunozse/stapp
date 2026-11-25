@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useCurrency } from "@/contexts/currency-context"
 import { Search, FileText } from "lucide-react"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface CandidatoOrden {
   id: string
@@ -90,13 +91,12 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al generar el remito")
+        throw new Error(await leerError(res, "Error al generar el remito"))
       }
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al generar el remito")
+      setError(mensajeDeError(err, "Error al generar el remito"))
     } finally {
       setGenerandoId(null)
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/reposicion?coberturaDias=30&soloCriticos=true
 // Devuelve sugerencias agrupadas por proveedor.
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error calculating reposicion:", err)
+    reportarError(err, { ruta: "/api/inventario/reposicion" })
     return NextResponse.json({ error: "Error al calcular reposición" }, { status: 500 })
   }
 }

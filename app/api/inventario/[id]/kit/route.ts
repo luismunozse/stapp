@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { cargarConfigMoneda, resolverTipoCambio } from "@/lib/currency/tipo-cambio.server"
 import { unidadRedondeo } from "@/lib/currency/convert"
 import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/[id]/kit
 // Devuelve receta del kit + costo calculado.
@@ -178,6 +179,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error fetching kit:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/kit" })
     return NextResponse.json(
       { error: "Error al obtener kit" },
       { status: 500 }

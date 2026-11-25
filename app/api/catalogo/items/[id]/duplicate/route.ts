@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
+import { respuestaError } from "@/lib/api-error"
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
@@ -16,7 +17,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     .eq("organization_id", orgId)
     .maybeSingle()
 
-  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+  if (fetchErr) return respuestaError(fetchErr, { ruta: "/api/catalogo/items/[id]/duplicate" })
   if (!original) return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
 
   const { data: maxOrden } = await supabaseAdmin
@@ -47,7 +48,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]/duplicate" })
   await revalidateCatalogo(orgId, { itemId: nuevo?.id })
   return NextResponse.json({ item: nuevo }, { status: 201 })
 }

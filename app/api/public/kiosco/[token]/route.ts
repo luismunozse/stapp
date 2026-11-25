@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -75,6 +76,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching kiosk data:", error)
+    reportarError(error, { ruta: "/api/public/kiosco/[token]" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

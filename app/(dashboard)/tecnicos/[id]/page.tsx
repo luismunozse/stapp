@@ -31,6 +31,7 @@ import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-
 import { HorarioLaboralEditor } from "@/components/tecnicos/horario-laboral-editor"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface TecnicoDetalle {
   id: string
@@ -126,15 +127,14 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
         body: JSON.stringify({ activo: nuevo }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error al actualizar estado")
+        throw new Error(await leerError(res, "Error al actualizar estado"))
       }
       const data = await res.json()
       toast.success(nuevo ? "Técnico reactivado" : "Técnico desactivado")
       if (data.warning) toast.warning(data.warning)
       fetchTecnico()
     } catch (err) {
-      await showError(err instanceof Error ? err.message : "Error al actualizar estado")
+      await showError(mensajeDeError(err, "Error al actualizar estado"))
     } finally {
       setTogglingEstado(false)
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { validateRefreshToken } from "@/lib/auth-tokens"
 import { sessionCookieName } from "@/lib/session-cookie"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Devuelve el refresh token de la sesión actual para que la PWA lo guarde y
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
     )
   } catch (error) {
     console.error("[get-refresh-token] Error:", error)
+    reportarError(error, { ruta: "/api/auth/get-refresh-token" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

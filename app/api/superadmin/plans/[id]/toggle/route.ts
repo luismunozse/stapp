@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger, HEADER_AUTOR_PLANES } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import { invalidatePricesCache } from "@/lib/pricing"
+import { reportarError } from "@/lib/api-error"
 
 const toggleSchema = z.object({
   activo: z.boolean(),
@@ -106,6 +107,7 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error in POST /api/superadmin/plans/[id]/toggle:", error)
+    reportarError(error, { ruta: "/api/superadmin/plans/[id]/toggle" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

@@ -34,6 +34,7 @@ import {
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
 import { KitDialog } from "@/components/inventario/kit-dialog"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface KitRow {
   id: string
@@ -305,8 +306,7 @@ function NuevoKitDialog({
         }),
       })
       if (!createRes.ok) {
-        const j = await createRes.json().catch(() => ({}))
-        throw new Error(j.error || "Error al crear item")
+        throw new Error(await leerError(createRes, "Error al crear item"))
       }
       const item = await createRes.json()
       const newId = item.id
@@ -318,12 +318,11 @@ function NuevoKitDialog({
         body: JSON.stringify({ esKit: true, tipoKit }),
       })
       if (!flagRes.ok) {
-        const j = await flagRes.json().catch(() => ({}))
-        throw new Error(j.error || "Error al marcar como kit")
+        throw new Error(await leerError(flagRes, "Error al marcar como kit"))
       }
       onCreated(newId, item.nombre || nombre.trim())
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al crear kit")
+      setError(mensajeDeError(e, "Error al crear kit"))
     } finally {
       setSubmitting(false)
     }

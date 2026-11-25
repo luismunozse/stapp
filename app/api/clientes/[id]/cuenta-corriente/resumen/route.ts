@@ -6,6 +6,7 @@ import { generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { dayRangeUtc, todayInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 // Same two-tier emisor select as the recibo route: migration 295's fiscal
 // columns may not be applied yet and the statement must still print.
@@ -192,6 +193,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating resumen de cuenta corriente:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]/cuenta-corriente/resumen" })
     return NextResponse.json({ error: "Error al generar el resumen de cuenta" }, { status: 500 })
   }
 }

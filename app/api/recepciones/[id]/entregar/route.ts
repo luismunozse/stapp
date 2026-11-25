@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { calcularTotalLote, prorratearLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { esEstadoEntregado, esEstadoExcluidoDeLote, liquidarEntregadosPrevios } from "@/lib/lote-estados"
+import { reportarError } from "@/lib/api-error"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -268,6 +269,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })
   } catch (error) {
     console.error("Error delivering lote:", error)
+    reportarError(error, { ruta: "/api/recepciones/[id]/entregar" })
     return NextResponse.json({ error: "No se pudo entregar el lote" }, { status: 500 })
   }
 }

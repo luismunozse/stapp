@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/conteos/[id]/items?soloPendientes=true|false&soloDiferencia=true|false&search=...
 export async function GET(
@@ -83,6 +84,7 @@ const { error, organizationId } = await requireInventarioAccess()
     })
   } catch (err) {
     console.error("Error fetching conteo items:", err)
+    reportarError(err, { ruta: "/api/conteos/[id]/items" })
     return NextResponse.json({ error: "Error al obtener items" }, { status: 500 })
   }
 }

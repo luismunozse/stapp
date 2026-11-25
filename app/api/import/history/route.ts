@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatImportacion } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json(importaciones?.map(formatImportacion))
   } catch (error) {
     console.error("Error fetching import history:", error)
+    reportarError(error, { ruta: "/api/import/history" })
     return NextResponse.json(
       { error: "Error al obtener historial" },
       { status: 500 }

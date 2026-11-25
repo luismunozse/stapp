@@ -11,6 +11,7 @@ import {
 } from "@/lib/caja-utils"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const movimientoSchema = z.object({
   tipo: z.enum(["INGRESO", "EGRESO"]),
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching movimientos:", err)
+    reportarError(err, { ruta: "/api/caja/movimientos" })
     return NextResponse.json({ error: "Error al obtener movimientos" }, { status: 500 })
   }
 }

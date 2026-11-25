@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { firmarReferencias } from "@/lib/storage-privado"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   estado: z.enum(["ABIERTO", "EN_PROCESO", "RESUELTO", "CERRADO"]),
@@ -99,6 +100,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching ticket:", error)
+    reportarError(error, { ruta: "/api/superadmin/soporte/[id]" })
     return NextResponse.json(
       { error: "Error al obtener ticket" },
       { status: 500 }

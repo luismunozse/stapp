@@ -17,6 +17,7 @@ import {
   redondearMonto,
   requiereComprobante,
 } from "@/lib/ordenes/pagos-informados"
+import { reportarError } from "@/lib/api-error"
 
 const camposSchema = z.object({
   metodo: z.enum(METODOS_PAGO_INFORMADO),
@@ -215,6 +216,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     )
   } catch (err) {
     console.error("[informar-pago] Error:", err)
+    reportarError(err, { ruta: "/api/public/ordenes/[token]/informar-pago" })
     return NextResponse.json({ error: "No se pudo informar el pago" }, { status: 500 })
   }
 }

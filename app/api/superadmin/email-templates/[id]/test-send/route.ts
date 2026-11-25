@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecycle-templates"
 import { EMAIL_SAMPLE_DATA, LIFECYCLE_TEMPLATE_TYPES, interpolateSample } from "@/lib/emails/sample-data"
+import { reportarError } from "@/lib/api-error"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, to, subject })
   } catch (err) {
     console.error("Error test-send:", err)
+    reportarError(err, { ruta: "/api/superadmin/email-templates/[id]/test-send" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

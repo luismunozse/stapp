@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
+import { reportarError } from "@/lib/api-error"
 
 type EstadoFiltro = "activas" | "completadas" | "todas" | string
 
@@ -100,6 +101,7 @@ export async function GET(
     )
   } catch (err) {
     console.error("Error listing tecnico ordenes:", err)
+    reportarError(err, { ruta: "/api/tecnicos/[id]/ordenes" })
     return NextResponse.json(
       { error: "Error al obtener órdenes" },
       { status: 500 }

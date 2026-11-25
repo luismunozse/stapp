@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -40,6 +41,7 @@ export async function POST(
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error marking messages as read:", error)
+    reportarError(error, { ruta: "/api/superadmin/soporte/[id]/leido" })
     return NextResponse.json(
       { error: "Error al marcar mensajes como leídos" },
       { status: 500 }

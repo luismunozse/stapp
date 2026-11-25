@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Plus, Paperclip, X, FileText } from "lucide-react"
 import { MoneyInput } from "@/components/ui/money-input"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 const CONCEPTOS_INGRESO = [
   "Ingreso manual",
@@ -96,7 +97,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       if (!res.ok) throw new Error(data.error || "Error al subir comprobante")
       setComprobanteUrl(data.url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al subir comprobante")
+      setError(mensajeDeError(err, "Error al subir comprobante"))
       setComprobanteFile(null)
     } finally {
       setUploadingComprobante(false)
@@ -139,8 +140,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al crear movimiento")
+        throw new Error(await leerError(res, "Error al crear movimiento"))
       }
 
       // Reset form
@@ -153,7 +153,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       setComprobanteUrl("")
       onCreated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear movimiento")
+      setError(mensajeDeError(err, "Error al crear movimiento"))
     } finally {
       setLoading(false)
     }

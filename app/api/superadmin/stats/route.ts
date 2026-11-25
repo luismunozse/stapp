@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getSuperadminOrgId } from "@/lib/superadmin-org"
 import { montosDesdeRpc } from "@/lib/superadmin-montos"
 import type { SuperadminStats } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -137,6 +138,7 @@ export async function GET() {
     return NextResponse.json(stats)
   } catch (error) {
     console.error("Error fetching superadmin stats:", error)
+    reportarError(error, { ruta: "/api/superadmin/stats" })
     return NextResponse.json(
       { error: "Error al obtener estadísticas" },
       { status: 500 }

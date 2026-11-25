@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { TIPO_AVANCE } from "@/lib/ordenes/avances"
+import { reportarError } from "@/lib/api-error"
 
 /** Borra un avance. Lo puede borrar quien lo escribió o un ADMIN. */
 export async function DELETE(
@@ -45,6 +46,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error deleting avance:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/avances/[avanceId]" })
     return NextResponse.json({ error: "Error al borrar el avance" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 // Registrar o actualizar push token
 export async function POST(request: Request) {
@@ -29,12 +30,13 @@ export async function POST(request: Request) {
       )
 
     if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+      return respuestaError(dbError, { ruta: "/api/push-token" })
     }
 
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error registering push token:", err)
+    reportarError(err, { ruta: "/api/push-token" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -58,12 +60,13 @@ export async function DELETE(request: Request) {
       .eq("token", token)
 
     if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+      return respuestaError(dbError, { ruta: "/api/push-token" })
     }
 
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error unregistering push token:", err)
+    reportarError(err, { ruta: "/api/push-token" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

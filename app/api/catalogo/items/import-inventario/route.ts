@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const importSchema = z.object({
   inventarioIds: z.array(z.string()).min(1).max(500),
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
     .in("id", inventarioIds)
     .eq("organization_id", orgId)
 
-  if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 })
+  if (invErr) return respuestaError(invErr, { ruta: "/api/catalogo/items/import-inventario" })
   if (!inv || inv.length === 0) {
     return NextResponse.json({ error: "No se encontraron items de inventario" }, { status: 400 })
   }
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     .insert(rows)
     .select("id")
 
-  if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
+  if (insertErr) return respuestaError(insertErr, { ruta: "/api/catalogo/items/import-inventario" })
 
   await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({

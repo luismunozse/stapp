@@ -3,6 +3,7 @@ import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { reportarError } from "@/lib/api-error"
 
 // A cap on the read of the children that remain: PostgREST answers at most this many rows, and a
 // group is only deleted when the answer proves which groups still have a child.
@@ -136,6 +137,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ deleted, blocked })
   } catch (err) {
     console.error("Error wiping inventario:", err)
+    reportarError(err, { ruta: "/api/inventario/all" })
     return NextResponse.json(
       { error: "Error al eliminar el inventario" },
       { status: 500 }

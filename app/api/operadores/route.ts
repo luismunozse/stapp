@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
     })
   } catch (e) {
     console.error("Error fetching operadores:", e)
+    reportarError(e, { ruta: "/api/operadores" })
     return NextResponse.json({ error: "Error al obtener operadores" }, { status: 500 })
   }
 }

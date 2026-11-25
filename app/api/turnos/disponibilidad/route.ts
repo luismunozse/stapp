@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { dentroDeHorarioLaboral, type HorarioLaboral } from "@/lib/turnos/disponibilidad"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 // GET ?tecnicoId=&inicio=ISO&fin=ISO&excludeTurnoId=
 // Devuelve: { disponible, conflictos: [...], fueraDeHorario, razon? }
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error checking disponibilidad:", err)
+    reportarError(err, { ruta: "/api/turnos/disponibilidad" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

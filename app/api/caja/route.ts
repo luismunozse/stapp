@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const PAGE = 1000
 const LOTE = 100
@@ -191,6 +192,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching caja:", err)
+    reportarError(err, { ruta: "/api/caja" })
     return NextResponse.json({ error: "Error al obtener caja diaria" }, { status: 500 })
   }
 }

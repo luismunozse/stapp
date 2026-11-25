@@ -5,6 +5,7 @@ import { cargarConfigMoneda, resolverTipoCambio } from "@/lib/currency/tipo-camb
 import { costoKitLocal, type MonedaCatalogo } from "@/lib/currency/catalogo"
 import type { ConfigMoneda } from "@/lib/currency/config-moneda"
 import type { ResultadoTipoCambio } from "@/lib/currency/tipo-cambio"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/kits
 // Lista items con es_kit=true, con conteo de componentes y costo calculado.
@@ -152,6 +153,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching kits:", err)
+    reportarError(err, { ruta: "/api/inventario/kits" })
     return NextResponse.json(
       { error: "Error al obtener kits" },
       { status: 500 }

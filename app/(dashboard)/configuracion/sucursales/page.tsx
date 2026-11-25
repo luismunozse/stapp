@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { SucursalWhatsAppCard } from "@/components/configuracion/sucursal-whatsapp-card"
 import { Plus, Pencil, Trash2, Loader2, Store, Star } from "lucide-react"
 import { toast } from "sonner"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Sucursal {
   id: string
@@ -120,7 +121,7 @@ export default function SucursalesPage() {
       setDialogOpen(false)
       fetchSucursales()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar")
+      setError(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

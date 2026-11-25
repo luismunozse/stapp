@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { getSubscriptionInfo, getUsageInfo, getAvailablePlans, getTrialInfo } from "@/lib/subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -29,6 +30,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching subscription:", error)
+    reportarError(error, { ruta: "/api/subscriptions" })
     return NextResponse.json(
       { error: "Error al obtener suscripción" },
       { status: 500 }

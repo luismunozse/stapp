@@ -5,6 +5,7 @@ import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/
 import { getNextQuoteNumber } from "@/lib/counters"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { randomBytes } from "crypto"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   request: Request,
@@ -148,6 +149,7 @@ export async function POST(
     )
   } catch (error) {
     console.error("Error duplicating cotizacion:", error)
+    reportarError(error, { ruta: "/api/cotizaciones/[id]/duplicar" })
     return NextResponse.json(
       { error: "Error al duplicar cotizacion" },
       { status: 500 }

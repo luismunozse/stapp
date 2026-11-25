@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Obtener template de checklist por tipo de dispositivo
 export async function GET(request: Request) {
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching checklist template by device type:", error)
+    reportarError(error, { ruta: "/api/checklist-templates/by-device-type" })
     return NextResponse.json(
       { error: "Error al obtener template" },
       { status: 500 }

@@ -5,6 +5,7 @@ import { getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia } from "@/lib/terminologia"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { normalizeOrdenPapel } from "@/lib/orden-papel"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/configuracion/operativa — lo que cualquier usuario de la org necesita
@@ -74,6 +75,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching configuracion operativa:", error)
+    reportarError(error, { ruta: "/api/configuracion/operativa" })
     return NextResponse.json({ error: "Error al obtener la configuración" }, { status: 500 })
   }
 }

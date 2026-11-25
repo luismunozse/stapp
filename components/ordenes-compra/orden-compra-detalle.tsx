@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { AlertTriangle, Package } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { estadoBadge } from "./estado-badge"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ItemOC {
   id: string
@@ -66,7 +67,7 @@ export function OrdenCompraDetalle({ ordenCompraId }: OrdenCompraDetalleProps) {
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <AlertTriangle className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground">
-            {error instanceof Error ? error.message : "Orden de compra no encontrada"}
+            {mensajeDeError(error, "Orden de compra no encontrada")}
           </p>
         </CardContent>
       </Card>

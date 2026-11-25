@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorContacto } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const whatsappValidator = z
   .string()
@@ -55,6 +56,7 @@ export async function GET(
     return NextResponse.json((data || []).map(formatProveedorContacto))
   } catch (err) {
     console.error("Error fetching contactos:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/contactos" })
     return NextResponse.json({ error: "Error al obtener contactos" }, { status: 500 })
   }
 }

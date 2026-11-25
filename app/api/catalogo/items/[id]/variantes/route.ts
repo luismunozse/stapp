@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
+import { respuestaError } from "@/lib/api-error"
 
 const varianteSchema = z.object({
   etiqueta: z.string().min(1).max(80),
@@ -27,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .order("orden", { ascending: true })
     .order("created_at", { ascending: true })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]/variantes" })
   return NextResponse.json({ variantes: data ?? [] })
 }
 
@@ -79,7 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .select("*")
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/items/[id]/variantes" })
   await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ variante }, { status: 201 })
 }

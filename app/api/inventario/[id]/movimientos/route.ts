@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatMovimiento } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/[id]/movimientos?page=1&limit=20
 // Paginated movement history for an inventory item
@@ -55,6 +56,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching movimientos:", error)
+    reportarError(error, { ruta: "/api/inventario/[id]/movimientos" })
     return NextResponse.json(
       { error: "Error al obtener movimientos" },
       { status: 500 }

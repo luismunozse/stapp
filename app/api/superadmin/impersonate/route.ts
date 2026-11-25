@@ -10,6 +10,7 @@ import {
   IMPERSONATION_MAX_AGE,
 } from "@/lib/impersonation"
 import { sessionCookieDomain } from "@/lib/session-cookie"
+import { reportarError } from "@/lib/api-error"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -158,6 +159,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, url })
   } catch (error) {
     console.error("Error starting impersonation:", error)
+    reportarError(error, { ruta: "/api/superadmin/impersonate" })
     return NextResponse.json({ error: "Error al iniciar impersonación" }, { status: 500 })
   }
 }

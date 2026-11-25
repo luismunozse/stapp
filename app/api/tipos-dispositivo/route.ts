@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import { DEFAULT_TIPO_CONFIG } from "@/lib/tipos-dispositivo-defaults"
 import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 const tipoDispositivoSchema = z.object({
   codigo: z
@@ -107,6 +108,7 @@ export async function GET(request: Request) {
     return NextResponse.json(data?.map(formatTipoDispositivo) || [])
   } catch (error) {
     console.error("Error fetching tipos dispositivo:", error)
+    reportarError(error, { ruta: "/api/tipos-dispositivo" })
     return NextResponse.json(
       { error: "Error al obtener tipos de dispositivo" },
       { status: 500 }
@@ -163,10 +165,10 @@ export async function POST(request: Request) {
         )
       }
       console.error("DB Error creating tipo dispositivo:", dbError)
-      return NextResponse.json(
-        { error: `Error de base de datos: ${dbError.message}` },
-        { status: 500 }
-      )
+      return respuestaError(dbError, {
+        ruta: "/api/tipos-dispositivo",
+        mensaje: "No se pudo guardar el tipo de dispositivo. Intentá de nuevo.",
+      })
     }
 
     return NextResponse.json(formatTipoDispositivo(tipo), { status: 201 })

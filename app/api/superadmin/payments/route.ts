@@ -5,6 +5,7 @@ import { parsePagination } from "@/lib/api-utils"
 import { escapeOrIlikeTerm } from "@/lib/pg-search"
 import { montosDesdeRpc } from "@/lib/superadmin-montos"
 import type { PaymentStats } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -241,6 +242,7 @@ export async function GET(request: Request) {
     return NextResponse.json(response)
   } catch (error) {
     console.error("Error fetching payments:", error)
+    reportarError(error, { ruta: "/api/superadmin/payments" })
     return NextResponse.json(
       { error: "Error al obtener pagos" },
       { status: 500 }

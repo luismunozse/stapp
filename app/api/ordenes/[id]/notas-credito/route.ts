@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { COLUMNAS_VISTA_NC, leerFilasNC, type FilaVistaNC } from "@/lib/notas-credito/listado"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/ordenes/[id]/notas-credito — las NC de una orden, para el bloque
@@ -46,6 +47,7 @@ export async function GET(
     return NextResponse.json(filas, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error listando notas de credito de la orden:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/notas-credito" })
     return NextResponse.json({ error: "Error al obtener notas de crédito" }, { status: 500 })
   }
 }

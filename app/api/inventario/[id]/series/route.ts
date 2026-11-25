@@ -8,6 +8,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/[id]/series — filtros estado, search numero_serie
 export async function GET(
@@ -59,6 +60,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error listing series:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/series" })
     return NextResponse.json({ error: "Error al obtener series" }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchAllRows } from "@/lib/fetch-all-rows"
+import { reportarError } from "@/lib/api-error"
 
 /** Lo que devuelve superadmin_engagement_metricas (migración 398). */
 interface MetricasEngagement {
@@ -205,6 +206,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching engagement stats:", error)
+    reportarError(error, { ruta: "/api/superadmin/stats/engagement" })
     return NextResponse.json(
       { error: "Error al obtener estadísticas de engagement" },
       { status: 500 }

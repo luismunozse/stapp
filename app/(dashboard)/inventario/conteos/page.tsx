@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Conteo {
   id: string
@@ -135,7 +136,7 @@ export default function ConteosPage() {
       mutate()
       router.push(`/inventario/conteos/${json.conteoId}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear conteo")
+      setError(mensajeDeError(err, "Error al crear conteo"))
     } finally {
       setCreating(false)
     }

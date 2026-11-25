@@ -28,6 +28,7 @@ import { ESTADO_LABELS } from "@/lib/turno-colors"
 import { TurnoEstadoBadge } from "@/components/agenda/turno-estado-badge"
 import { useModal } from "@/contexts/modal-context"
 import { useTelefonoClienteOculto } from "@/hooks/use-telefono-cliente-oculto"
+import { leerError } from "@/lib/errores-cliente"
 
 const TIPO_LABELS: Record<TipoTurno, string> = {
   visita_diagnostico: "Visita de diagnóstico",
@@ -74,8 +75,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
         body: JSON.stringify({ estado: nuevo }),
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al cambiar estado")
+        throw new Error(await leerError(res, "Error al cambiar estado"))
       }
       onChanged()
     } catch (err: any) {
@@ -99,8 +99,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
     try {
       const res = await fetch(`/api/turnos/${turno.id}`, { method: "DELETE" })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al eliminar")
+        throw new Error(await leerError(res, "Error al eliminar"))
       }
       onChanged()
       onClose()
@@ -126,8 +125,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
         body: JSON.stringify({ tipo: "confirmacion" }),
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al enviar")
+        throw new Error(await leerError(res, "Error al enviar"))
       }
     } catch (err: any) {
       setError(err.message)

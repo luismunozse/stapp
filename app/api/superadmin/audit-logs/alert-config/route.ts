@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -19,6 +20,7 @@ export async function GET() {
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error fetching alert config:", error)
+    reportarError(error, { ruta: "/api/superadmin/audit-logs/alert-config" })
     return NextResponse.json(
       { error: "Error al obtener configuración de alertas" },
       { status: 500 }
@@ -85,6 +87,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error updating alert config:", error)
+    reportarError(error, { ruta: "/api/superadmin/audit-logs/alert-config" })
     return NextResponse.json(
       { error: "Error al actualizar configuración de alertas" },
       { status: 500 }

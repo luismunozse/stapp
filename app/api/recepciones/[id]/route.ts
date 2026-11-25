@@ -6,6 +6,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
+import { reportarError } from "@/lib/api-error"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -149,6 +150,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })
   } catch (error) {
     console.error("Error fetching recepcion:", error)
+    reportarError(error, { ruta: "/api/recepciones/[id]" })
     return NextResponse.json({ error: "Error al obtener la recepcion" }, { status: 500 })
   }
 }
@@ -226,6 +228,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error updating recepcion discount:", error)
+    reportarError(error, { ruta: "/api/recepciones/[id]" })
     return NextResponse.json({ error: "Error al modificar el descuento" }, { status: 500 })
   }
 }

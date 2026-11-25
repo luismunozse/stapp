@@ -7,6 +7,7 @@ import {
   hashBackupCodes,
 } from "@/lib/totp"
 import QRCode from "qrcode"
+import { respuestaError } from "@/lib/api-error"
 
 // One-shot endpoint to enable 2FA for a superadmin account without being able
 // to log in (chicken-and-egg: SUPERADMIN_REQUIRES_2FA_SETUP blocks login).
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
 
   if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    return respuestaError(updateErr, { ruta: "/api/bootstrap-2fa" })
   }
 
   const qrDataUrl = await QRCode.toDataURL(uri)

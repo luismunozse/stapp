@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching subscription history:", err)
+    reportarError(err, { ruta: "/api/superadmin/subscriptions/history" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

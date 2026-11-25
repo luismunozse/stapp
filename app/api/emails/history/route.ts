@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching email history:", error)
+    reportarError(error, { ruta: "/api/emails/history" })
     return NextResponse.json(
       { error: "Error al obtener historial de emails" },
       { status: 500 }

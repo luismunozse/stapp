@@ -7,6 +7,7 @@ import {
   IMPERSONATION_BACKUP_COOKIE,
 } from "@/lib/impersonation"
 import { sessionCookieDomain } from "@/lib/session-cookie"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Ends an impersonation session. Restores the superadmin's original session
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, url })
   } catch (error) {
     console.error("Error ending impersonation:", error)
+    reportarError(error, { ruta: "/api/auth/impersonate/exit" })
     return NextResponse.json({ error: "Error al finalizar impersonación" }, { status: 500 })
   }
 }

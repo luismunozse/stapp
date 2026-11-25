@@ -5,6 +5,7 @@ import { getPlatformEvolutionConfig, buildSucursalInstanceName } from "@/lib/wha
 import { createInstance, connectInstance } from "@/lib/whatsapp/providers/evolution"
 import { upsertSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function POST(
   _req: Request,
@@ -64,6 +65,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("Error connect Evolution sucursal:", err)
+    reportarError(err, { ruta: "/api/sucursales/[id]/whatsapp/connect" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

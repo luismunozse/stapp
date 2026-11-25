@@ -5,6 +5,7 @@ import { HORA_RECORDATORIOS_LOCAL } from "@/lib/cron-config"
 import { DEFAULT_TIMEZONE, getZonedParts } from "@/lib/timezone"
 import { configGarantiasDeFila } from "@/lib/garantias/config"
 import { avisarGarantiasPorVencerDeOrg } from "@/lib/garantias/aviso-vencimiento"
+import { reportarError } from "@/lib/api-error"
 
 // El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
 export const maxDuration = 60
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error en cron de garantías por vencer:", error)
+    reportarError(error, { ruta: "/api/cron/garantias-por-vencer", source: "CRON" })
     return NextResponse.json({ error: "Error procesando avisos de garantías por vencer" }, { status: 500 })
   }
 }

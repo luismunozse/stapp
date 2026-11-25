@@ -6,6 +6,7 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { formatReclamos } from "@/lib/garantias/formato"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+import { reportarError } from "@/lib/api-error"
 
 const updateGarantiaSchema = z.object({
   estado: z.enum(["ACTIVA", "VENCIDA", "RECLAMADA"]).optional(),
@@ -89,6 +90,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching garantia:", error)
+    reportarError(error, { ruta: "/api/garantias/[id]" })
     return NextResponse.json(
       { error: "Error al obtener garantía" },
       { status: 500 }

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Trash2, TrendingUp, TrendingDown, Loader2, Paperclip, Repeat } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -55,14 +56,13 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
     try {
       const res = await fetch(`/api/caja/movimientos/${deleteId}`, { method: "DELETE" })
       if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || "Error al eliminar")
+        throw new Error(await leerError(res, "Error al eliminar"))
       }
       setDeleteId(null)
       mutate()
     } catch (err) {
       setDeleteId(null)
-      await showError(err instanceof Error ? err.message : "Error al eliminar movimiento")
+      await showError(mensajeDeError(err, "Error al eliminar movimiento"))
     } finally {
       setDeleteLoading(false)
     }

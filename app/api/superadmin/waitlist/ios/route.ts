@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -20,6 +21,7 @@ export async function GET() {
     return NextResponse.json({ entries: data ?? [], total: data?.length ?? 0 })
   } catch (error) {
     console.error("Error fetching iOS waitlist:", error)
+    reportarError(error, { ruta: "/api/superadmin/waitlist/ios" })
     return NextResponse.json(
       { error: "Error al obtener la waitlist" },
       { status: 500 }
@@ -55,6 +57,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting waitlist entry:", error)
+    reportarError(error, { ruta: "/api/superadmin/waitlist/ios" })
     return NextResponse.json(
       { error: "Error al eliminar el registro" },
       { status: 500 }

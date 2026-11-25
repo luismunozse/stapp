@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { readCommissionRows, summarizeByBeneficiary } from "@/lib/commissions/rows"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ items, resumen }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error fetching comisiones vendedores:", err)
+    reportarError(err, { ruta: "/api/comisiones/vendedores" })
     return NextResponse.json(
       { error: "Error al obtener comisiones de vendedores" },
       { status: 500 }

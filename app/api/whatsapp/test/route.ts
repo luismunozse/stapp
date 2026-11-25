@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sendWhatsAppText } from "@/lib/whatsapp/providers"
 import { persistentRateLimit } from "@/lib/rate-limit"
+import { reportarError } from "@/lib/api-error"
 
 // E.164-ish: optional leading +, 8–15 digits, spaces/dashes stripped before validation
 const PHONE_REGEX = /^\+?\d{8,15}$/
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     console.error("Error sending test message:", err)
+    reportarError(err, { ruta: "/api/whatsapp/test" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getEntityHistory, generateDescription } from "@/lib/audit"
+import { reportarError } from "@/lib/api-error"
 
 // Campos de AUDITED_FIELDS (ver lib/inventario-eventos.ts) que exponen
 // costo de compra. El audit log guarda before/after crudos, así que el valor
@@ -113,6 +114,7 @@ export async function GET(
     return NextResponse.json({ data })
   } catch (err) {
     console.error("Error fetching audit history:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/audit" })
     return NextResponse.json({ error: "Error al obtener historial" }, { status: 500 })
   }
 }

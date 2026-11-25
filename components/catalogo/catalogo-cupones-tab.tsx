@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Cupon {
   id: string
@@ -47,7 +48,7 @@ export function CatalogoCuponesTab() {
       if (!res.ok) throw new Error(data.error)
       setCupones(data.cupones ?? [])
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error cargando cupones")
+      toast.error(mensajeDeError(err, "Error cargando cupones"))
     } finally {
       setLoading(false)
     }
@@ -313,7 +314,7 @@ function CuponDialog({
       toast.success(cupon ? "Cupón actualizado" : "Cupón creado")
       onSaved()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al guardar")
+      toast.error(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

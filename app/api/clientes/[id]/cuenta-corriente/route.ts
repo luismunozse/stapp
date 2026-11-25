@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Obtener saldo y movimientos de cuenta corriente del cliente
 export async function GET(
@@ -94,6 +95,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching cuenta corriente:", error)
+    reportarError(error, { ruta: "/api/clientes/[id]/cuenta-corriente" })
     return NextResponse.json({ error: "Error al obtener cuenta corriente" }, { status: 500 })
   }
 }

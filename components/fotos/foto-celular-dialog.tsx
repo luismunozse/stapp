@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface FotoCelularDialogProps {
   /**
@@ -123,7 +124,7 @@ export function FotoCelularDialog({
           }
         }
       } catch (e) {
-        if (!cerrando) setError(e instanceof Error ? e.message : "No se pudo generar el enlace")
+        if (!cerrando) setError(mensajeDeError(e, "No se pudo generar el enlace"))
         return
       }
 

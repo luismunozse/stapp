@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess } from "@/lib/auth-utils"
 import { cargarDocumentoNC } from "@/lib/notas-credito/documento"
 import { respuestaPdfNotaCredito } from "@/lib/notas-credito/pdf"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/ventas/[id]/devolucion/[devolucionId]/pdf — el PDF de una
@@ -32,6 +33,7 @@ export async function GET(
     return await respuestaPdfNotaCredito(doc)
   } catch (error) {
     console.error("Error generating devolucion PDF:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]/devolucion/[devolucionId]/pdf" })
     return NextResponse.json({ error: "Error al generar PDF de devolución" }, { status: 500 })
   }
 }

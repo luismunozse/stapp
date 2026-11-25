@@ -38,6 +38,7 @@ import { DialogoCambioMoneda } from "@/components/moneda/dialogo-cambio-moneda"
 import { useMoneda } from "@/hooks/use-moneda"
 import { convertirPrecioCatalogo, cotizacionDe, type MonedaCatalogo } from "@/lib/currency/catalogo"
 import { unidadRedondeo } from "@/lib/currency/convert"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface ProveedorLite {
   id: string
@@ -893,8 +894,7 @@ export function InventarioForm({
         }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || "Error al sumar stock")
+        throw new Error(await leerError(res, "Error al sumar stock"))
       }
       // El alta se consumio: el stock que se estaba cargando ya entro contra el
       // item existente. Dejar el borrador vivo reabriria "Nuevo Item" con ese
@@ -910,7 +910,7 @@ export function InventarioForm({
       })
     } catch (err) {
       console.error("Error consolidando stock:", err)
-      await showError(err instanceof Error ? err.message : "Error al sumar stock")
+      await showError(mensajeDeError(err, "Error al sumar stock"))
     } finally {
       setConsolidating(null)
     }
@@ -1005,8 +1005,7 @@ export function InventarioForm({
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || "Error al crear tipo")
+        throw new Error(await leerError(res, "Error al crear tipo"))
       }
 
       await refetchTipos()
@@ -1015,7 +1014,7 @@ export function InventarioForm({
       setNewTipo("")
     } catch (error) {
       console.error("Error adding device type:", error)
-      await showError(error instanceof Error ? error.message : "Error al agregar tipo")
+      await showError(mensajeDeError(error, "Error al agregar tipo"))
     } finally {
       setSavingTipo(false)
     }
@@ -1099,8 +1098,7 @@ export function InventarioForm({
         body: formData,
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || "Error al subir imagen")
+        throw new Error(await leerError(res, "Error al subir imagen"))
       }
     } finally {
       setUploadingImage(false)

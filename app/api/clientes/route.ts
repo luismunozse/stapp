@@ -5,6 +5,7 @@ import { formatCliente } from "@/lib/db-utils"
 import { conTelefonoSegunPermiso, puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const clienteSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
@@ -118,6 +119,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching clientes:", error)
+    reportarError(error, { ruta: "/api/clientes" })
     return NextResponse.json(
       { error: "Error al obtener clientes" },
       { status: 500 }

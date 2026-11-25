@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid("ID inválido")).min(1, "Debe seleccionar al menos un registro"),
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, count })
   } catch (error) {
     console.error("Error bulk deleting waitlist entries:", error)
+    reportarError(error, { ruta: "/api/superadmin/waitlist/ios/bulk-delete" })
     return NextResponse.json(
       { error: "Error al eliminar registros en lote" },
       { status: 500 }

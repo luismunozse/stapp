@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   categoriaGastoId: z.string().nullable().optional(),
@@ -80,6 +81,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error(err)
+    reportarError(err, { ruta: "/api/gastos-recurrentes/[id]" })
     return NextResponse.json({ error: "Error al eliminar" }, { status: 500 })
   }
 }

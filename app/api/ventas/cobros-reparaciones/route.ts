@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
 import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const METODOS_PAGO = new Set([
   "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
@@ -106,6 +107,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching cobros de reparaciones:", err)
+    reportarError(err, { ruta: "/api/ventas/cobros-reparaciones" })
     return NextResponse.json({ error: "Error al obtener los cobros de reparaciones" }, { status: 500 })
   }
 }

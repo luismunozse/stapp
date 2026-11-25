@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -17,6 +18,7 @@ export async function GET() {
     return NextResponse.json(data || [])
   } catch (err) {
     console.error("Error fetching kiosk tokens:", err)
+    reportarError(err, { ruta: "/api/kiosco" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -57,6 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json(data, { status: 201 })
   } catch (err) {
     console.error("Error creating kiosk token:", err)
+    reportarError(err, { ruta: "/api/kiosco" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

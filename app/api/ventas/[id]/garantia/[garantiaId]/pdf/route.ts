@@ -4,6 +4,7 @@ import { puedeVerTelefonoClientes } from "@/lib/telefono-cliente"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateGarantiaVentaPDF } from "@/lib/pdf"
 import { leerConfigGarantias } from "@/lib/garantias/config-org"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -166,6 +167,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating garantia PDF:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]/garantia/[garantiaId]/pdf" })
     return NextResponse.json(
       { error: "Error al generar certificado de garantía" },
       { status: 500 }

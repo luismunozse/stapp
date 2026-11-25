@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET/PUT /api/configuracion/danos — si la org exige registrar el estado físico
@@ -26,6 +27,7 @@ export async function GET() {
     return NextResponse.json({ obligatorio: data.danos_recepcion_obligatorio === true })
   } catch (err) {
     console.error("Error leyendo la configuración de daños:", err)
+    reportarError(err, { ruta: "/api/configuracion/danos" })
     return NextResponse.json({ error: "Error al obtener la configuración de daños" }, { status: 500 })
   }
 }
@@ -60,6 +62,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ obligatorio })
   } catch (err) {
     console.error("Error guardando la configuración de daños:", err)
+    reportarError(err, { ruta: "/api/configuracion/danos" })
     return NextResponse.json({ error: "No se pudo guardar la configuración del estado físico" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sendAccountActivatedEmail } from "@/lib/email"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: NextRequest) {
   try {
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Verify email error:", error)
+    reportarError(error, { ruta: "/api/auth/verify-email" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

@@ -15,6 +15,7 @@ import {
 import { Undo2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { toast } from "sonner"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface RevertirCargoDialogProps {
   clienteId: string
@@ -61,7 +62,7 @@ export function RevertirCargoDialog({
       onOpenChange(false)
       onDone()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al revertir")
+      toast.error(mensajeDeError(err, "Error al revertir"))
     } finally {
       setLoading(false)
     }

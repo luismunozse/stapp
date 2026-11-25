@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import type { CatalogoCategoria } from "@/types/database"
 import { useDragReorder } from "./use-drag-reorder"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 export function CatalogoCategoriasTab() {
   const [categorias, setCategorias] = useState<CatalogoCategoria[]>([])
@@ -189,7 +190,7 @@ function CategoriaDialog({
       if (!res.ok) throw new Error(data.error || "Error al subir imagen")
       setImagenUrl(data.url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir imagen")
+      toast.error(mensajeDeError(err, "Error al subir imagen"))
     } finally {
       setUploading(false)
     }
@@ -218,7 +219,7 @@ function CategoriaDialog({
       toast.success(categoria ? "Categoría actualizada" : "Categoría creada")
       onSaved()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error")
+      toast.error(mensajeDeError(err, "Error"))
     } finally {
       setSaving(false)
     }

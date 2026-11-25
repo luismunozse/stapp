@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/onboarding/status
@@ -53,6 +54,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error fetching onboarding status:", err)
+    reportarError(err, { ruta: "/api/onboarding/status" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // Sanitizar input para prevenir inyección en patrones ilike
 function sanitizeSearchInput(input: string): string {
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error in global search:", error)
+    reportarError(error, { ruta: "/api/superadmin/search" })
     return NextResponse.json(
       { error: "Error al realizar la búsqueda" },
       { status: 500 }

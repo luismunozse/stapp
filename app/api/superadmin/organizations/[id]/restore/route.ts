@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * POST /api/superadmin/organizations/[id]/restore
@@ -67,6 +68,7 @@ export async function POST(
     return NextResponse.json({ success: true, message: `Organización "${org.nombre}" restaurada` })
   } catch (error) {
     console.error("Error in POST restore:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/[id]/restore" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

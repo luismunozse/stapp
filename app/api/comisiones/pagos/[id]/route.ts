@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // What annulling a payout would un-pay: the annul dialog reads this before asking for the reason.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -47,6 +48,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     )
   } catch (err) {
     console.error("Error fetching commission payout:", err)
+    reportarError(err, { ruta: "/api/comisiones/pagos/[id]" })
     return NextResponse.json({ error: "Error al obtener el pago" }, { status: 500 })
   }
 }

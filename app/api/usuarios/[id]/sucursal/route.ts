@@ -6,6 +6,7 @@ import { safeParseBody } from "@/lib/api-utils"
 import { assertSucursalEnOrg } from "@/lib/sucursal"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
 import type { EstadoTurno } from "@/types"
+import { reportarError } from "@/lib/api-error"
 
 // Always a concrete branch: clearing it would orphan the user (CHECK from
 // migration 241) and an ADMIN is never a valid target anyway.
@@ -181,6 +182,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     )
   } catch (err) {
     console.error("Error leyendo lo que quedaría atrás al mover al usuario:", err)
+    reportarError(err, { ruta: "/api/usuarios/[id]/sucursal" })
     return NextResponse.json({ error: "No pudimos leer el trabajo pendiente del usuario" }, { status: 500 })
   }
 }
@@ -297,6 +299,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     })
   } catch (err) {
     console.error("Error moviendo al usuario de sucursal:", err)
+    reportarError(err, { ruta: "/api/usuarios/[id]/sucursal" })
     return NextResponse.json({ error: "No pudimos mover al usuario de sucursal" }, { status: 500 })
   }
 }

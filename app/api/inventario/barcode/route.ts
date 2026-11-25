@@ -9,6 +9,7 @@ import {
   resolverDestinoVenta,
   derivarLecturaVenta,
 } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 // The name of a variant's group, or null. Best-effort: a scan must never fail because of it.
 async function nombreDelGrupo(organizationId: string, grupoId: string): Promise<string | null> {
@@ -169,6 +170,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error searching by barcode:", error)
+    reportarError(error, { ruta: "/api/inventario/barcode" })
     return NextResponse.json({ error: "Error al buscar por código de barras" }, { status: 500 })
   }
 }

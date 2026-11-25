@@ -8,6 +8,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/[id]/lotes
 // Lista lotes del item (filtrable por estado).
@@ -56,6 +57,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error listing lotes:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/lotes" })
     return NextResponse.json({ error: "Error al obtener lotes" }, { status: 500 })
   }
 }

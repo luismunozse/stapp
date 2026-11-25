@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isValidMediumSize } from "@/lib/labels/etiqueta-inventario"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Medio (térmica/hoja) y tamaño de las etiquetas de INVENTARIO de la org
@@ -52,6 +53,7 @@ export async function GET() {
     return NextResponse.json({ medio, tamano })
   } catch (error) {
     console.error("Error en GET configuracion/etiqueta-inventario:", error)
+    reportarError(error, { ruta: "/api/configuracion/etiqueta-inventario" })
     return NextResponse.json({ error: "Error al obtener la etiqueta de inventario" }, { status: 500 })
   }
 }
@@ -101,6 +103,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ medio, tamano })
   } catch (error) {
     console.error("Error en PATCH configuracion/etiqueta-inventario:", error)
+    reportarError(error, { ruta: "/api/configuracion/etiqueta-inventario" })
     return NextResponse.json({ error: "Error al guardar la etiqueta de inventario" }, { status: 500 })
   }
 }

@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 const overrideSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("Error setting limit overrides:", err)
+    reportarError(err, { ruta: "/api/superadmin/subscriptions/limit-overrides" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -123,6 +125,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true, message: "Límites restaurados al plan" })
   } catch (err) {
     console.error("Error removing limit overrides:", err)
+    reportarError(err, { ruta: "/api/superadmin/subscriptions/limit-overrides" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

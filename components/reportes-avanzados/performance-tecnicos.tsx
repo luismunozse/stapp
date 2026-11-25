@@ -20,6 +20,7 @@ import {
 } from "recharts"
 import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { CHART_STATUS_COLORS } from "@/lib/chart-colors"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface TecnicoData {
   tecnicoId: string
@@ -58,13 +59,12 @@ export function PerformanceTecnicos() {
       setLoading(true)
       const response = await fetch("/api/reportes/performance-tecnicos")
       if (!response.ok) {
-        const errData = await response.json().catch(() => null)
-        throw new Error(errData?.error || "Error al cargar datos")
+        throw new Error(await leerError(response, "Error al cargar datos"))
       }
       const result = await response.json()
       setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

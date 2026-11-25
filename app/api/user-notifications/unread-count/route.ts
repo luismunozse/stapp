@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -15,12 +16,13 @@ export async function GET() {
       .is("read_at", null)
 
     if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+      return respuestaError(dbError, { ruta: "/api/user-notifications/unread-count" })
     }
 
     return NextResponse.json({ count: count || 0 })
   } catch (err) {
     console.error("Error fetching unread count:", err)
+    reportarError(err, { ruta: "/api/user-notifications/unread-count" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

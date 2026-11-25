@@ -8,6 +8,7 @@ import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const vendedorCreateSchema = z.object({
   nombre: z.string().trim().min(1, "El nombre es requerido"),
@@ -130,6 +131,7 @@ export async function GET(request: Request) {
     )
   } catch (error) {
     console.error("Error fetching vendedores:", error)
+    reportarError(error, { ruta: "/api/vendedores" })
     return NextResponse.json(
       { error: "Error al obtener vendedores" },
       { status: 500 }

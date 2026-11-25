@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // Prefijos para categorías
 const CATEGORIA_PREFIJOS: Record<string, string> = {
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ codigo: data })
   } catch (error) {
     console.error("Error generating next code:", error)
+    reportarError(error, { ruta: "/api/inventario/next-code" })
     return NextResponse.json(
       { error: "Error al generar código" },
       { status: 500 }

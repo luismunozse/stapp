@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Detalle completo de una sesión
 export async function GET(
@@ -83,6 +84,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error fetching sesion detail:", err)
+    reportarError(err, { ruta: "/api/caja/sesiones/[id]" })
     return NextResponse.json({ error: "Error al obtener sesión" }, { status: 500 })
   }
 }

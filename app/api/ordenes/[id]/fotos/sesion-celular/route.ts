@@ -9,6 +9,7 @@ import {
   generarTokenCarga,
   hashTokenCarga,
 } from "@/lib/fotos/carga-sesion"
+import { reportarError } from "@/lib/api-error"
 
 // Enlace temporal (QR) para subir fotos de la orden desde el celular sin
 // iniciar sesión ahí. El token solo viaja en la respuesta del POST: en la base
@@ -131,6 +132,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error consultando sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/fotos/sesion-celular" })
     return NextResponse.json({ error: "Error al consultar el enlace" }, { status: 500 })
   }
 }
@@ -167,6 +169,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error revocando sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/fotos/sesion-celular" })
     return NextResponse.json({ error: "Error al cerrar el enlace" }, { status: 500 })
   }
 }

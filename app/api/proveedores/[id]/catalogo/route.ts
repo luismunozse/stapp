@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorCatalogoItem } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const itemSchema = z.object({
   nombre: z.string().min(1, "Nombre requerido"),
@@ -73,6 +74,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error fetching catalogo:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/catalogo" })
     return NextResponse.json({ error: "Error al obtener catálogo" }, { status: 500 })
   }
 }

@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface ApiKey {
   id: string
@@ -87,8 +88,7 @@ export function ApiKeysManager() {
         body: JSON.stringify({ name: name.trim() }),
       })
       if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || "Error al crear la key")
+        throw new Error(await leerError(res, "Error al crear la key"))
       }
       const created = await res.json()
       setDialogOpen(false)
@@ -96,7 +96,7 @@ export function ApiKeysManager() {
       fetchKeys()
       toast.success("API key creada")
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Error al crear la key")
+      setFormError(mensajeDeError(err, "Error al crear la key"))
     } finally {
       setSaving(false)
     }
@@ -108,14 +108,13 @@ export function ApiKeysManager() {
     try {
       const res = await fetch(`/api/keys/${revokeId}`, { method: "DELETE" })
       if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || "Error al revocar")
+        throw new Error(await leerError(res, "Error al revocar"))
       }
       setRevokeId(null)
       fetchKeys()
       toast.success("API key revocada")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al revocar la key")
+      toast.error(mensajeDeError(err, "Error al revocar la key"))
     } finally {
       setSaving(false)
     }

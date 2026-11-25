@@ -5,6 +5,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
 import { ESTADOS_ORDEN_NUNCA_DEVENGAN, NC_ORDEN_ESTADO_EMBED, notaCreditoRestaDevengado } from "@/lib/reportes/notas-credito-devengado"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Tendencia financiera mensual — últimos N meses.
@@ -438,6 +439,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error en tendencia-financiera:", err)
+    reportarError(err, { ruta: "/api/reportes/tendencia-financiera" })
     return NextResponse.json(
       { error: "Error al calcular tendencia financiera" },
       { status: 500 }

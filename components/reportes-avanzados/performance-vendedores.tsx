@@ -25,6 +25,7 @@ import {
 import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { useCurrency } from "@/contexts/currency-context"
 import { CHART_CONCEPT_COLORS, chartSeriesColor } from "@/lib/chart-colors"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface VendedorData {
   vendedorId: string
@@ -131,13 +132,12 @@ export function PerformanceVendedores() {
       const params = new URLSearchParams({ desde: desdeISO, hasta: hastaISO })
       const response = await fetch(`/api/reportes/performance-vendedores?${params}`)
       if (!response.ok) {
-        const errData = await response.json().catch(() => null)
-        throw new Error(errData?.error || "Error al cargar datos")
+        throw new Error(await leerError(response, "Error al cargar datos"))
       }
       const result = await response.json()
       setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

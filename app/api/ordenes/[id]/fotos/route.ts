@@ -8,6 +8,7 @@ import { formatFoto } from "@/lib/db-utils"
 import { firmarCampo } from "@/lib/storage-privado"
 import { updateStorageUsage } from "@/lib/subscriptions"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const fotoSchema = z.object({
   data: z.string().min(1, "Imagen requerida"),
@@ -60,6 +61,7 @@ export async function GET(
     return NextResponse.json(firmadas.map(formatFoto))
   } catch (error) {
     console.error("Error fetching fotos:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/fotos" })
     return NextResponse.json(
       { error: "Error al obtener fotos" },
       { status: 500 }
@@ -178,6 +180,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Foto eliminada" })
   } catch (error) {
     console.error("Error deleting foto:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/fotos" })
     return NextResponse.json(
       { error: "Error al eliminar foto" },
       { status: 500 }

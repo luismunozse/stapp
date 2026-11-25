@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Obtener calendario de cuotas de una orden
 export async function GET(
@@ -43,6 +44,7 @@ export async function GET(
     )
   } catch (err) {
     console.error("Error fetching cuotas:", err)
+    reportarError(err, { ruta: "/api/ordenes/[id]/cuotas" })
     return NextResponse.json({ error: "Error al obtener cuotas" }, { status: 500 })
   }
 }

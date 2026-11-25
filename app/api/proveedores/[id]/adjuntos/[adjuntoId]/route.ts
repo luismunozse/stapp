@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 const BUCKET = "proveedor-adjuntos"
 
@@ -40,6 +41,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error deleting adjunto:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/adjuntos/[adjuntoId]" })
     return NextResponse.json({ error: "Error al eliminar adjunto" }, { status: 500 })
   }
 }

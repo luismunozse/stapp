@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError, respuestaError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     const { data, error: dbError } = await query
 
     if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+      return respuestaError(dbError, { ruta: "/api/user-notifications" })
     }
 
     const hasMore = (data?.length || 0) > limit
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ notifications, nextCursor })
   } catch (err) {
     console.error("Error fetching notifications:", err)
+    reportarError(err, { ruta: "/api/user-notifications" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

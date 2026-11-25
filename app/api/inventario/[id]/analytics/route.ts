@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   _request: Request,
@@ -103,6 +104,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching item analytics:", error)
+    reportarError(error, { ruta: "/api/inventario/[id]/analytics" })
     return NextResponse.json(
       { error: "Error al obtener analytics del item" },
       { status: 500 }

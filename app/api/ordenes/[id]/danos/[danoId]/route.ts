@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { mensajeErrorDanos } from "@/lib/ordenes/danos"
+import { reportarError } from "@/lib/api-error"
 
 // DELETE - Borrar un daño de diagnóstico (el trigger limita la ventana a 10 minutos).
 // Un pin de recepción no coincide con el filtro momento = 'diagnostico': responde 404.
@@ -39,6 +40,7 @@ export async function DELETE(
     return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error("Error deleting order damage:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/danos/[danoId]" })
     return NextResponse.json({ error: "No se pudo borrar el daño" }, { status: 500 })
   }
 }

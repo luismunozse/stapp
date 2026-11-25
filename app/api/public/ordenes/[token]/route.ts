@@ -7,6 +7,7 @@ import { parseRecepcionTerminos } from "@/lib/terminos"
 import { resolveTerminologia } from "@/lib/terminologia"
 import { aplicadoNotasCreditoDeOrden, pendienteOrden } from "@/lib/ordenes/pendiente"
 import { puedeInformarPago, redondearMonto } from "@/lib/ordenes/pagos-informados"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -220,6 +221,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching public order:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]" })
     return NextResponse.json(
       { error: "Error interno" },
       { status: 500 }

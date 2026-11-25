@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // Datos cambian 1x/día (cuando corre el cron de feature-usage). Cache 1h.
 export const revalidate = 3600
@@ -138,6 +139,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching feature usage:", error)
+    reportarError(error, { ruta: "/api/superadmin/stats/feature-usage" })
     return NextResponse.json({ error: "Error al obtener feature usage" }, { status: 500 })
   }
 }

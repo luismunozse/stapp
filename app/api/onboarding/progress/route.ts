@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -27,6 +28,7 @@ export async function GET() {
     return NextResponse.json(data)
   } catch (err) {
     console.error("Error fetching onboarding progress:", err)
+    reportarError(err, { ruta: "/api/onboarding/progress" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -64,6 +66,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(data)
   } catch (err) {
     console.error("Error updating onboarding progress:", err)
+    reportarError(err, { ruta: "/api/onboarding/progress" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

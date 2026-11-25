@@ -4,6 +4,7 @@ import { requireCronAuth } from "@/lib/cron-auth"
 import { ANON_EMAIL_DOMAIN, DELETION_REASON, graceCutoff } from "@/lib/account-deletion/state"
 import { purgeOrganization } from "@/lib/account-deletion/purge-organization"
 import { anonymizeUser } from "@/lib/account-deletion/anonymize-user"
+import { reportarError } from "@/lib/api-error"
 
 export const maxDuration = 60
 
@@ -109,6 +110,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, results, timestamp: now.toISOString() })
   } catch (error) {
     console.error("Error en cron account-deletion-purge:", error)
+    reportarError(error, { ruta: "/api/cron/account-deletion-purge", source: "CRON" })
     return NextResponse.json({ error: "Error procesando eliminaciones de cuenta" }, { status: 500 })
   }
 }

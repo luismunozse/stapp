@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, puedeVerDeudaClientes, respuestaDeudaNoPermitida } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Deuda combinada (fiado + ordenes) del cliente, filtrada por la sucursal activa.
 // Fuente de verdad para el recordatorio de pago por WhatsApp (no usar clientes.saldo_cuenta,
@@ -69,6 +70,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error fetching deuda cliente sucursal:", err)
+    reportarError(err, { ruta: "/api/clientes/[id]/deuda-sucursal" })
     return NextResponse.json({ error: "Error al obtener la deuda del cliente" }, { status: 500 })
   }
 }

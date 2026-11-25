@@ -23,6 +23,7 @@ import {
   pedidoColumns,
   GARANTIAS_COLUMNS,
 } from "@/lib/csv-export"
+import { reportarError } from "@/lib/api-error"
 
 type EntityType = "ordenes" | "ventas" | "clientes" | "inventario" | "garantias"
 
@@ -219,6 +220,7 @@ async function runExport(entity: string, filters: Record<string, string>) {
     })
   } catch (error) {
     console.error("Error exporting data:", error)
+    reportarError(error, { ruta: "/api/export/[entity]" })
     return NextResponse.json(
       { error: "Error al exportar datos" },
       { status: 500 }

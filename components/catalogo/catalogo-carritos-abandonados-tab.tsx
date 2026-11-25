@@ -14,6 +14,7 @@ import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
 import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface CarritoItem {
   itemId: string
@@ -88,7 +89,7 @@ export function CatalogoCarritosAbandonadosTab() {
       setCarritos(data.carritos)
       setPendientes(data.pendientes)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error cargando carritos")
+      toast.error(mensajeDeError(err, "Error cargando carritos"))
     } finally {
       setLoading(false)
     }
@@ -112,7 +113,7 @@ export function CatalogoCarritosAbandonadosTab() {
       setCarritos((prev) => prev.map((c) => (c.id === id ? data.carrito : c)))
       toast.success("Marcado como contactado")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error")
+      toast.error(mensajeDeError(err, "Error"))
     } finally {
       setActingId(null)
     }
@@ -128,13 +129,12 @@ export function CatalogoCarritosAbandonadosTab() {
         body: JSON.stringify({ action: "discard" }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error")
+        throw new Error(await leerError(res, "Error"))
       }
       setCarritos((prev) => prev.filter((c) => c.id !== discardId))
       toast.success("Descartado")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error")
+      toast.error(mensajeDeError(err, "Error"))
     } finally {
       setActingId(null)
       setDiscardId(null)

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { ImagePlus, Loader2, Star, Trash2, Package, ArrowUp, ArrowDown } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
 import { useModal } from "@/contexts/modal-context"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface Imagen {
   id: string
@@ -68,13 +69,12 @@ export function GaleriaImagenes({ open, onOpenChange, inventarioId, inventarioNo
         body: form,
       })
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || "Error al subir")
+        throw new Error(await leerError(res, "Error al subir"))
       }
       await refetch()
       onChange?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al subir imagen")
+      setError(mensajeDeError(err, "Error al subir imagen"))
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""

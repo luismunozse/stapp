@@ -11,6 +11,7 @@ import {
   TRIAL_NET_EXTENSION_CAP_DAYS,
 } from "@/lib/trial"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 // `dias` accepts negative values (shorten) and the schema also supports
 // `remove: true` to end the trial immediately. Either `remove` or a non-zero
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error extending trial:", error)
+    reportarError(error, { ruta: "/api/superadmin/trial-extension" })
     return NextResponse.json(
       { error: "Error al extender trial" },
       { status: 500 }

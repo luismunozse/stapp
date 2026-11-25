@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { leerConfigGarantias } from "@/lib/garantias/config-org"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -124,6 +125,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating delivery receipt PDF:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/comprobante-entrega" })
     return NextResponse.json({ error: "Error al generar comprobante" }, { status: 500 })
   }
 }

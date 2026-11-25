@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { reportarError } from "@/lib/api-error"
 
 // Archivado masivo (soft delete). El borrado definitivo NO se hace en masa:
 // es de a una organización desde DELETE /organizations/[id]?hard=true, que pide
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Error in bulk delete:", error)
+    reportarError(error, { ruta: "/api/superadmin/organizations/bulk-delete" })
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }

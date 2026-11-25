@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { ChatMessage } from "./chat-message"
 import { LeadCaptureForm } from "./lead-capture-form"
 import { v4 as uuidv4 } from "uuid"
+import { leerError } from "@/lib/errores-cliente"
 
 const WHATSAPP_NUMBER = "5491169625733"
 const WHATSAPP_MESSAGE = encodeURIComponent(
@@ -110,8 +111,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Error en la respuesta")
+        throw new Error(await leerError(response, "Error en la respuesta"))
       }
 
       const data = await response.json()

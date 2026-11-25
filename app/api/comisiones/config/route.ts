@@ -7,6 +7,7 @@ import {
   commissionConfigSchema,
   type CommissionConfig,
 } from "@/lib/commissions/config"
+import { reportarError } from "@/lib/api-error"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 
@@ -65,6 +66,7 @@ export async function GET() {
     return NextResponse.json(config, { headers: NO_STORE })
   } catch (err) {
     console.error("[comisiones] config GET failed", err)
+    reportarError(err, { ruta: "/api/comisiones/config" })
     return NextResponse.json({ error: "No se pudieron cargar las reglas de comisiones" }, { status: 500 })
   }
 }

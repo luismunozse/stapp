@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createCreemCheckout } from "@/lib/creem"
 import { isCreemTestKey, isProductionDeployment } from "@/lib/creem-mode"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Crea un checkout de Creem (cobro internacional en USD) para la org del
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ checkoutUrl: checkout.checkoutUrl })
   } catch (e) {
     console.error("[creem-checkout] Error creando checkout:", e)
+    reportarError(e, { ruta: "/api/creem/checkout" })
     return NextResponse.json(
       { error: "Error al crear el checkout de Creem" },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function DELETE(
   request: Request,
@@ -30,6 +31,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Plantilla eliminada" })
   } catch (error) {
     console.error("Error deleting template:", error)
+    reportarError(error, { ruta: "/api/cotizacion-templates/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar plantilla" },
       { status: 500 }

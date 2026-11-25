@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const createSchema = z.object({
   nombre: z.string().trim().min(1, "Nombre requerido").max(100),
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: (data || []).map(formatDeposito) })
   } catch (err) {
     console.error("Error fetching depositos:", err)
+    reportarError(err, { ruta: "/api/depositos" })
     return NextResponse.json({ error: "Error al obtener depósitos" }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@ import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const createSchema = z.object({
   nombre: z.string().trim().min(1, "Nombre requerido").max(120),
@@ -76,6 +77,7 @@ const { error, organizationId } = await requireInventarioAccess()
     return NextResponse.json({ data: (data || []).map(formatConteo) })
   } catch (err) {
     console.error("Error fetching conteos:", err)
+    reportarError(err, { ruta: "/api/conteos" })
     return NextResponse.json({ error: "Error al obtener conteos" }, { status: 500 })
   }
 }

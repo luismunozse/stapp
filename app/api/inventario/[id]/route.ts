@@ -10,6 +10,7 @@ import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
 import { validarMonedaEscritura } from "@/lib/currency/catalogo"
 import { cargarConfigMoneda } from "@/lib/currency/tipo-cambio.server"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const inventarioSchema = z.object({
   codigo: z.string().min(1).optional(),
@@ -73,6 +74,7 @@ export async function GET(
     return NextResponse.json(formatInventario(item, canViewCost))
   } catch (error) {
     console.error("Error fetching inventario:", error)
+    reportarError(error, { ruta: "/api/inventario/[id]" })
     return NextResponse.json(
       { error: "Error al obtener item" },
       { status: 500 }
@@ -422,6 +424,7 @@ export async function DELETE(
     return NextResponse.json({ success: true, archived: false })
   } catch (error) {
     console.error("Error deleting inventario:", error)
+    reportarError(error, { ruta: "/api/inventario/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar item" },
       { status: 500 }

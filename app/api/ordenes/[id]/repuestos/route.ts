@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { rechazarItemsEnDivisa } from "@/lib/currency/bloqueo-divisa.server"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { reportarError } from "@/lib/api-error"
 
 // Schema para repuesto de inventario
 const repuestoInventarioSchema = z.object({
@@ -279,6 +280,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error removing repuesto:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/repuestos" })
     return NextResponse.json(
       { error: "Error al eliminar repuesto" },
       { status: 500 }

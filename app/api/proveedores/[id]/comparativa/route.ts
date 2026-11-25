@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/proveedores/[id]/comparativa
 // Compara precios de items de este proveedor contra los mismos códigos
@@ -137,6 +138,7 @@ export async function GET(
     )
   } catch (err) {
     console.error("Error en comparativa proveedor:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/comparativa" })
     return NextResponse.json({ error: "Error al calcular comparativa" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import { generarRefCliente, reportarErrorCliente } from "@/lib/errores-cliente"
 import { AlertTriangle, RefreshCw, Home, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -11,9 +12,13 @@ export default function DashboardError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  // Se genera una vez por montaje: es lo que el usuario le pasa a soporte.
+  const [ref] = useState(generarRefCliente)
+
   useEffect(() => {
     console.error("Dashboard Error:", error)
-  }, [error])
+    reportarErrorCliente(error, "dashboard", ref)
+  }, [error, ref])
 
   const handleGoHome = () => {
     window.location.href = "/dashboard"
@@ -47,9 +52,10 @@ export default function DashboardError({
           No se pudo cargar esta sección. Intentá de nuevo o volvé al inicio.
         </p>
 
-        {process.env.NODE_ENV === "development" && error.digest && (
-          <p className="text-xs text-muted-foreground mb-4 font-mono bg-muted p-2 rounded">
-            Error ID: {error.digest}
+        {ref && (
+          <p className="text-xs text-muted-foreground mb-4">
+            Si sigue pasando, pasale a soporte este código:{" "}
+            <span className="font-mono font-semibold select-all">{ref}</span>
           </p>
         )}
 

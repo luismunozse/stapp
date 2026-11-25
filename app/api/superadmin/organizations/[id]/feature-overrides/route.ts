@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { getSubscriptionInfo } from "@/lib/subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 // ── GET /api/superadmin/organizations/[id]/feature-overrides ──────────────────
 // Returns:
@@ -43,6 +44,7 @@ export async function GET(
     return NextResponse.json({ overrides, featureKeys, planFlags })
   } catch (err) {
     console.error("Error fetching feature overrides:", err)
+    reportarError(err, { ruta: "/api/superadmin/organizations/[id]/feature-overrides" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -103,6 +105,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("Error setting feature override:", err)
+    reportarError(err, { ruta: "/api/superadmin/organizations/[id]/feature-overrides" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -153,6 +156,7 @@ export async function DELETE(
     })
   } catch (err) {
     console.error("Error clearing feature override:", err)
+    reportarError(err, { ruta: "/api/superadmin/organizations/[id]/feature-overrides" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

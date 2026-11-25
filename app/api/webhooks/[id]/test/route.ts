@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { dispatch } from "@/lib/webhooks/dispatcher"
+import { reportarError } from "@/lib/api-error"
 
 // Test ping: crea una delivery del evento "webhook.test" para ESTE webhook
 // (sin importar a qué eventos esté suscripto) y la despacha sincrónicamente.
@@ -64,6 +65,7 @@ export async function POST(
     })
   } catch (err) {
     console.error("Error testing webhook:", err)
+    reportarError(err, { ruta: "/api/webhooks/[id]/test", source: "WEBHOOK" })
     return NextResponse.json({ error: "Error al probar webhook" }, { status: 500 })
   }
 }

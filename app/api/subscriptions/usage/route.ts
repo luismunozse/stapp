@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { getSubscriptionInfo, getUsageInfo } from "@/lib/subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -47,6 +48,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error fetching usage:", error)
+    reportarError(error, { ruta: "/api/subscriptions/usage" })
     return NextResponse.json(
       { error: "Error al obtener uso" },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Verificar si debe mostrarse el NPS al usuario actual
 export async function GET() {
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error submitting NPS:", error)
+    reportarError(error, { ruta: "/api/nps" })
     return NextResponse.json({ error: "Error al enviar respuesta" }, { status: 500 })
   }
 }
@@ -137,6 +139,7 @@ export async function PATCH() {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error dismissing NPS:", error)
+    reportarError(error, { ruta: "/api/nps" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

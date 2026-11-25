@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 const cancelSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -120,6 +121,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("Error canceling subscription:", err)
+    reportarError(err, { ruta: "/api/superadmin/subscriptions/cancel" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

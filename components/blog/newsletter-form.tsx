@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, AlertCircle } from "lucide-react"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 export function NewsletterForm() {
   const [email, setEmail] = useState("")
@@ -22,15 +23,14 @@ export function NewsletterForm() {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al registrar")
+        throw new Error(await leerError(res, "Error al registrar"))
       }
 
       setStatus("success")
       setEmail("")
     } catch (err) {
       setStatus("error")
-      setErrorMsg(err instanceof Error ? err.message : "Error al registrar")
+      setErrorMsg(mensajeDeError(err, "Error al registrar"))
     }
   }
 

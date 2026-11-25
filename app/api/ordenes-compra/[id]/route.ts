@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   estado: z.enum(["BORRADOR", "ENVIADA", "CANCELADA"]).optional(),
@@ -42,6 +43,7 @@ export async function GET(
     return NextResponse.json(formatOC(oc))
   } catch (error) {
     console.error("Error fetching OC:", error)
+    reportarError(error, { ruta: "/api/ordenes-compra/[id]" })
     return NextResponse.json({ error: "Error al obtener orden de compra" }, { status: 500 })
   }
 }
@@ -150,6 +152,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Orden de compra eliminada" })
   } catch (error) {
     console.error("Error deleting OC:", error)
+    reportarError(error, { ruta: "/api/ordenes-compra/[id]" })
     return NextResponse.json({ error: "Error al eliminar orden de compra" }, { status: 500 })
   }
 }

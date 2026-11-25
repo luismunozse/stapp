@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { reportarError } from "@/lib/api-error"
 
 export const maxDuration = 60
 
@@ -159,6 +160,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("[feature-usage] Error fatal en cron:", error)
+    reportarError(error, { ruta: "/api/cron/feature-usage", source: "CRON" })
     return NextResponse.json(
       { error: "Error calculando feature usage", detail: String(error) },
       { status: 500 }

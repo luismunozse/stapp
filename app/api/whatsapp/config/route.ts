@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { encrypt } from "@/lib/whatsapp/encryption"
 import { verifyCredentials } from "@/lib/whatsapp/client"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET() {
   try {
@@ -51,6 +52,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error fetching WA config:", err)
+    reportarError(err, { ruta: "/api/whatsapp/config" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -119,6 +121,7 @@ export async function PUT(request: Request) {
     }
   } catch (err) {
     console.error("Error updating WA config:", err)
+    reportarError(err, { ruta: "/api/whatsapp/config" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
@@ -136,6 +139,7 @@ export async function DELETE() {
     return NextResponse.json({ message: "Configuración eliminada" })
   } catch (err) {
     console.error("Error deleting WA config:", err)
+    reportarError(err, { ruta: "/api/whatsapp/config" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

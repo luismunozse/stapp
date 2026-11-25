@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
+import { reportarError } from "@/lib/api-error"
 
 const createChangelogSchema = z.object({
   titulo: z.string().min(1, "Titulo requerido").max(200),
@@ -36,6 +37,7 @@ export async function GET() {
     return NextResponse.json(data || [])
   } catch (error) {
     console.error("Error fetching changelog:", error)
+    reportarError(error, { ruta: "/api/superadmin/changelog" })
     return NextResponse.json({ error: "Error al obtener changelog" }, { status: 500 })
   }
 }
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error creating changelog:", error)
+    reportarError(error, { ruta: "/api/superadmin/changelog" })
     return NextResponse.json({ error: "Error al crear entrada" }, { status: 500 })
   }
 }
@@ -105,6 +108,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error) {
     console.error("Error updating changelog:", error)
+    reportarError(error, { ruta: "/api/superadmin/changelog" })
     return NextResponse.json({ error: "Error al actualizar entrada" }, { status: 500 })
   }
 }
@@ -134,6 +138,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting changelog:", error)
+    reportarError(error, { ruta: "/api/superadmin/changelog" })
     return NextResponse.json({ error: "Error al eliminar entrada" }, { status: 500 })
   }
 }

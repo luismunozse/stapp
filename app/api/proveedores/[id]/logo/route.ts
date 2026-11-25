@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
+import { reportarError } from "@/lib/api-error"
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -123,6 +124,7 @@ export async function DELETE(
     return NextResponse.json(formatProveedor(updated))
   } catch (err) {
     console.error("Error deleting proveedor logo:", err)
+    reportarError(err, { ruta: "/api/proveedores/[id]/logo" })
     return NextResponse.json({ error: "Error al eliminar logo" }, { status: 500 })
   }
 }

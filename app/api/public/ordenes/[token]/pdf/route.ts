@@ -7,6 +7,7 @@ import { cargarAvancesVisibles } from "@/lib/ordenes/avances-server"
 import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
 import { listarDanosOrden } from "@/lib/ordenes/danos-server"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -199,6 +200,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating public orden PDF:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]/pdf" })
     return NextResponse.json(
       { error: "Error al generar PDF" },
       { status: 500 }

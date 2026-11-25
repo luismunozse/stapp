@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolverContextoValuacion, valuarLocal, contarExcluidos, montoLocal } from "@/lib/currency/valuacion.server"
+import { reportarError } from "@/lib/api-error"
 
 interface ItemInventario {
   id: string
@@ -238,6 +239,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error en análisis de inventario:", error)
+    reportarError(error, { ruta: "/api/reportes/analisis-inventario" })
     return NextResponse.json(
       { error: "Error al obtener análisis de inventario" },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoUsableDesde } from "@/lib/depositos"
+import { reportarError } from "@/lib/api-error"
 
 // GET /api/inventario/[id]/depositos
 // Devuelve stock split por depósito para un item. Incluye depósitos sin stock
@@ -86,6 +87,7 @@ export async function GET(
     })
   } catch (err) {
     console.error("Error fetching item depositos:", err)
+    reportarError(err, { ruta: "/api/inventario/[id]/depositos" })
     return NextResponse.json({ error: "Error al obtener stock por depósito" }, { status: 500 })
   }
 }

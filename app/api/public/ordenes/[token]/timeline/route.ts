@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { firmarCampo } from "@/lib/storage-privado"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Endpoint PÚBLICO (sin auth, sólo el token de seguimiento). Todo lo que sale
@@ -95,6 +96,7 @@ export async function GET(
     return NextResponse.json({ timeline })
   } catch (error) {
     console.error("Error fetching timeline:", error)
+    reportarError(error, { ruta: "/api/public/ordenes/[token]/timeline" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

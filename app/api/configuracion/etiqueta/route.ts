@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isLabelSize } from "@/lib/etiqueta-tamano"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * Tamaño de etiqueta térmica de la org (organizations.etiqueta_tamano).
@@ -46,6 +47,7 @@ export async function GET() {
     return NextResponse.json({ tamano: isLabelSize(tamano) ? tamano : null })
   } catch (error) {
     console.error("Error en GET configuracion/etiqueta:", error)
+    reportarError(error, { ruta: "/api/configuracion/etiqueta" })
     return NextResponse.json({ error: "Error al obtener el tamaño de etiqueta" }, { status: 500 })
   }
 }
@@ -94,6 +96,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ tamano })
   } catch (error) {
     console.error("Error en PATCH configuracion/etiqueta:", error)
+    reportarError(error, { ruta: "/api/configuracion/etiqueta" })
     return NextResponse.json({ error: "Error al guardar el tamaño de etiqueta" }, { status: 500 })
   }
 }

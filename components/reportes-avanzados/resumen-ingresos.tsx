@@ -29,6 +29,7 @@ import {
 import { ChartTooltipContent } from "@/components/ui/chart-tooltip"
 import { chartSeriesColor } from "@/lib/chart-colors"
 import { formatCompactCurrency } from "@/lib/utils"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface ResumenData {
   resumen: {
@@ -110,7 +111,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
       const conIngresos = [...meses].reverse().find((m) => m.total > 0)
       setMesSeleccionado((conIngresos || meses[meses.length - 1])?.mesKey ?? null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido")
+      setError(mensajeDeError(err, "Error desconocido"))
     } finally {
       setLoading(false)
     }

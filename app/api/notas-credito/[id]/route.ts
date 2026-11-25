@@ -3,6 +3,7 @@ import { requireAdmin, requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cargarDocumentoNC, NC_NO_ENCONTRADA } from "@/lib/notas-credito/documento"
 import { motivoBloqueoAnulacionNC, type NotaCreditoParaAnular } from "@/lib/notas-credito/anulacion"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/notas-credito/[id] — el documento de una NC de cualquiera de los
@@ -29,6 +30,7 @@ export async function GET(
     return NextResponse.json(documento, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error leyendo nota de credito:", err)
+    reportarError(err, { ruta: "/api/notas-credito/[id]" })
     return NextResponse.json({ error: "Error al obtener la nota de crédito" }, { status: 500 })
   }
 }
@@ -88,6 +90,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Error anulando NC:", err)
+    reportarError(err, { ruta: "/api/notas-credito/[id]" })
     return NextResponse.json({ error: "Error" }, { status: 500 })
   }
 }

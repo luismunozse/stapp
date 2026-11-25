@@ -3,6 +3,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
 import type { SubscriptionListItem } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -213,6 +214,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error fetching subscriptions:", error)
+    reportarError(error, { ruta: "/api/superadmin/subscriptions" })
     return NextResponse.json(
       { error: "Error al obtener suscripciones" },
       { status: 500 }

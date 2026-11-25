@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/usuarios — el equipo completo de la organizacion.
@@ -59,6 +60,7 @@ export async function GET() {
     )
   } catch (err) {
     console.error("Error listando usuarios:", err)
+    reportarError(err, { ruta: "/api/usuarios" })
     return NextResponse.json(
       { error: "No se pudo leer el equipo de la organización" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { readCommissionRows, summarizeByBeneficiary } from "@/lib/commissions/rows"
 import type { CommissionRole } from "@/lib/commissions/types"
+import { reportarError } from "@/lib/api-error"
 
 const ROLES_BY_PARAM: Record<string, CommissionRole[]> = {
   TECNICO: ["TECNICO"],
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ items, resumen }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error fetching comisiones:", err)
+    reportarError(err, { ruta: "/api/comisiones" })
     return NextResponse.json({ error: "Error al obtener comisiones" }, { status: 500 })
   }
 }

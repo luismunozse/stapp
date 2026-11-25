@@ -26,6 +26,7 @@ import {
   motivoNoEditable,
   motivoNoEliminable,
 } from "@/lib/ventas/bloqueos"
+import { reportarError } from "@/lib/api-error"
 
 const METODOS_PAGO = [
   "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
@@ -111,6 +112,7 @@ export async function GET(
     return NextResponse.json(conTelefonoSegunPermiso(formatVenta(venta), await puedeVerTelefonoClientes(role, organizationId!)))
   } catch (error) {
     console.error("Error fetching venta:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]" })
     return NextResponse.json(
       { error: "Error al obtener venta" },
       { status: 500 }
@@ -515,6 +517,7 @@ export async function PUT(
     )
   } catch (error) {
     console.error("Error updating venta:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]" })
     return NextResponse.json(
       { error: "Error al actualizar venta" },
       { status: 500 }
@@ -609,6 +612,7 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error deleting venta:", error)
+    reportarError(error, { ruta: "/api/ventas/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar venta" },
       { status: 500 }

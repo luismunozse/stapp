@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateSchema = z.object({
   nombre: z.string().min(1).max(50).optional(),
@@ -58,6 +59,7 @@ export async function GET(
     return NextResponse.json(formatTipoDispositivo(tipo))
   } catch (error) {
     console.error("Error fetching tipo dispositivo:", error)
+    reportarError(error, { ruta: "/api/tipos-dispositivo/[id]" })
     return NextResponse.json(
       { error: "Error al obtener tipo de dispositivo" },
       { status: 500 }
@@ -220,6 +222,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Tipo eliminado correctamente" })
   } catch (error) {
     console.error("Error deleting tipo dispositivo:", error)
+    reportarError(error, { ruta: "/api/tipos-dispositivo/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar tipo de dispositivo" },
       { status: 500 }

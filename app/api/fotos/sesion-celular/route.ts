@@ -7,6 +7,7 @@ import {
   generarTokenCarga,
   hashTokenCarga,
 } from "@/lib/fotos/carga-sesion"
+import { reportarError } from "@/lib/api-error"
 
 // Enlace temporal (QR) para sacar fotos con el celular mientras se carga una
 // orden NUEVA en la PC. Como la orden todavía no existe, las fotos quedan en
@@ -72,6 +73,7 @@ export async function POST() {
     )
   } catch (error) {
     console.error("Error creando sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/fotos/sesion-celular" })
     return NextResponse.json({ error: "No se pudo generar el enlace" }, { status: 500 })
   }
 }
@@ -127,6 +129,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error consultando sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/fotos/sesion-celular" })
     return NextResponse.json({ error: "Error al consultar el enlace" }, { status: 500 })
   }
 }
@@ -158,6 +161,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Error revocando sesión de carga de fotos:", error)
+    reportarError(error, { ruta: "/api/fotos/sesion-celular" })
     return NextResponse.json({ error: "Error al cerrar el enlace" }, { status: 500 })
   }
 }

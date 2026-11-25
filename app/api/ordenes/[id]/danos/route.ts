@@ -4,6 +4,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { danoInputSchema, ESTADOS_SIN_NUEVOS_DANOS, mensajeErrorDanos, type DanoOrden } from "@/lib/ordenes/danos"
 import { listarDanosOrden, vistaExisteEnDiagrama } from "@/lib/ordenes/danos-server"
+import { reportarError } from "@/lib/api-error"
 
 // GET - Daños marcados en la orden
 export async function GET(
@@ -25,6 +26,7 @@ export async function GET(
     return NextResponse.json({ ...resultado, puedeAgregar })
   } catch (error) {
     console.error("Error fetching order damages:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/danos" })
     return NextResponse.json({ error: "Error al obtener los daños" }, { status: 500 })
   }
 }
@@ -102,6 +104,7 @@ export async function POST(
     return NextResponse.json(respuesta, { status: 201 })
   } catch (error) {
     console.error("Error creating order damage:", error)
+    reportarError(error, { ruta: "/api/ordenes/[id]/danos" })
     return NextResponse.json({ error: "No se pudo guardar el daño" }, { status: 500 })
   }
 }

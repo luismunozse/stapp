@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -67,6 +68,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error fetching historial precios:", error)
+    reportarError(error, { ruta: "/api/inventario/[id]/historial-precios" })
     return NextResponse.json(
       { error: "Error al obtener historial de precios" },
       { status: 500 }

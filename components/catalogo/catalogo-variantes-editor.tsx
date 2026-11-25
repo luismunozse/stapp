@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Loader2, Plus, Trash2, Pencil, Layers, Upload, X, ImageOff } from "lucide-react"
 import { toast } from "sonner"
+import { mensajeDeError } from "@/lib/errores-cliente"
 
 interface Variante {
   id: string
@@ -41,7 +42,7 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
       if (!res.ok) throw new Error(data.error)
       setVariantes(data.variantes ?? [])
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error cargando variantes")
+      toast.error(mensajeDeError(err, "Error cargando variantes"))
     } finally {
       setLoading(false)
     }
@@ -204,7 +205,7 @@ function VarianteForm({
       if (!res.ok) throw new Error(data.error)
       setImagenUrl(data.url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al subir")
+      toast.error(mensajeDeError(err, "Error al subir"))
     } finally {
       setUploading(false)
     }
@@ -238,7 +239,7 @@ function VarianteForm({
       toast.success(variante ? "Variante actualizada" : "Variante creada")
       onSaved()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al guardar")
+      toast.error(mensajeDeError(err, "Error al guardar"))
     } finally {
       setSaving(false)
     }

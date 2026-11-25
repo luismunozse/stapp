@@ -57,6 +57,7 @@ import {
 } from "./danos/estado-fisico-recepcion"
 import type { EstadoFisicoPDF } from "@/lib/ordenes/estado-fisico-lineas"
 import { esPcDeEscritorio } from "@/lib/ordenes/checklist-obligatorio"
+import { leerError } from "@/lib/errores-cliente"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -709,8 +710,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) {
-          const j = await r.json().catch(() => ({}))
-          throw new Error(j.error || "No se pudo cargar el turno")
+          throw new Error(await leerError(r, "No se pudo cargar el turno"))
         }
         return r.json()
       })

@@ -10,6 +10,7 @@ import {
   ComprobanteIncompletoError,
   type ComprobanteFiscalRow,
 } from "@/lib/comprobante-fiscal-react-pdf"
+import { reportarError } from "@/lib/api-error"
 
 // react-pdf necesita el runtime de Node (no Edge).
 export const runtime = "nodejs"
@@ -186,6 +187,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating comprobante fiscal PDF:", error)
+    reportarError(error, { ruta: "/api/facturacion-electronica/comprobantes/[id]/pdf" })
     return NextResponse.json({ error: "Error al generar el PDF del comprobante" }, { status: 500 })
   }
 }

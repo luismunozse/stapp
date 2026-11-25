@@ -4,6 +4,7 @@ import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { DEFAULT_TIMEZONE, todayInTimeZone, dayRangeUtc } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error exporting caja:", err)
+    reportarError(err, { ruta: "/api/caja/export" })
     return NextResponse.json({ error: "Error al exportar" }, { status: 500 })
   }
 }

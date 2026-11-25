@@ -14,6 +14,7 @@ import {
   monthRangeUtc,
   todayInTimeZone,
 } from "@/lib/timezone"
+import { reportarError } from "@/lib/api-error"
 
 /** Día calendario "YYYY-MM-DD" desplazado `dias` desde `fecha`. */
 function sumarDias(fecha: string, dias: number): string {
@@ -295,6 +296,7 @@ export async function GET() {
     })
   } catch (err) {
     console.error("Error en ventas-analytics:", err)
+    reportarError(err, { ruta: "/api/reportes/ventas-analytics" })
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }

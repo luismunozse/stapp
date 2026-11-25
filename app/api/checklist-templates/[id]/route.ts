@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const updateTemplateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").optional(),
@@ -34,6 +35,7 @@ export async function GET(
     return NextResponse.json(template)
   } catch (error) {
     console.error("Error fetching checklist template:", error)
+    reportarError(error, { ruta: "/api/checklist-templates/[id]" })
     return NextResponse.json(
       { error: "Error al obtener template" },
       { status: 500 }
@@ -154,6 +156,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Template eliminado" })
   } catch (error) {
     console.error("Error deleting checklist template:", error)
+    reportarError(error, { ruta: "/api/checklist-templates/[id]" })
     return NextResponse.json(
       { error: "Error al eliminar template" },
       { status: 500 }

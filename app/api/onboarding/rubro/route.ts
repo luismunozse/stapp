@@ -6,6 +6,7 @@ import { DEFAULT_RUBRO_ID } from "@/lib/rubros"
 import { validarSeleccionRubro, mismoRubro, type SeleccionRubro } from "@/lib/rubros/seleccion"
 import { aplicarCambioDeRubro, estadoCoincideConRubro } from "@/lib/rubros/cambio"
 import { countRealOrders, deletePracticeData } from "@/lib/onboarding/practica"
+import { reportarError } from "@/lib/api-error"
 
 /** Same limit as the signup (app/api/auth/register/route.ts:32). */
 const MAX_DETALLE = 120
@@ -104,6 +105,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ...pedido, tiposActivos })
   } catch (err) {
     console.error("Error changing rubro:", err)
+    reportarError(err, { ruta: "/api/onboarding/rubro" })
     return NextResponse.json({ error: ERROR_INTERNO }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 interface VendedorPerformance {
   vendedorId: string
@@ -127,6 +128,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("Error en performance vendedores:", error)
+    reportarError(error, { ruta: "/api/reportes/performance-vendedores" })
     return NextResponse.json(
       { error: "Error al obtener performance de vendedores" },
       { status: 500 }

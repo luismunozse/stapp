@@ -6,6 +6,7 @@ import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { exceedsTrialCap, trialAdjustmentStatus } from "@/lib/trial"
 import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
+import { reportarError } from "@/lib/api-error"
 
 const bulkActionSchema = z.object({
   action: z.enum(["extend_trial", "activate", "cancel"]),
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("Error in bulk subscription action:", err)
+    reportarError(err, { ruta: "/api/superadmin/subscriptions/bulk" })
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { getPrincipalId } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
+import { reportarError } from "@/lib/api-error"
 
 // Los tres valores del enum `user_role` (001_schema.sql:5). No hay mas: no
 // existe ningun ALTER TYPE que lo amplie en toda la carpeta de migraciones.
@@ -237,6 +238,7 @@ export async function PATCH(
     })
   } catch (err) {
     console.error("Error cambiando el rol del usuario:", err)
+    reportarError(err, { ruta: "/api/usuarios/[id]/rol" })
     return NextResponse.json(
       { error: "Error al cambiar el rol del usuario" },
       { status: 500 }

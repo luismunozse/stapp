@@ -8,6 +8,7 @@ import {
   resolverDestinoVenta,
   derivarLecturaVenta,
 } from "@/lib/sucursal"
+import { reportarError } from "@/lib/api-error"
 
 // POST /api/inventario/check-stock?scope=venta  body: { ids: string[], precios?: boolean }
 // Returns the CURRENT available stock per inventory id, scoped to the caller's
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ stock })
   } catch (error) {
     console.error("Error checking stock:", error)
+    reportarError(error, { ruta: "/api/inventario/check-stock" })
     return NextResponse.json({ error: "Error al verificar stock" }, { status: 500 })
   }
 }

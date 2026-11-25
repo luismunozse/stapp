@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
 import { escapeOrIlikeTerm } from "@/lib/pg-search"
 import type { AuditLogsResponse } from "@/types/superadmin"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(request: Request) {
   try {
@@ -154,6 +155,7 @@ export async function GET(request: Request) {
     return NextResponse.json(response)
   } catch (error) {
     console.error("Error fetching audit logs:", error)
+    reportarError(error, { ruta: "/api/superadmin/audit-logs" })
     return NextResponse.json(
       { error: "Error al obtener logs de auditoría" },
       { status: 500 }

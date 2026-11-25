@@ -8,6 +8,7 @@ import {
   DORMANT_DAYS,
   ARCHIVE_GRACE_DAYS,
 } from "@/lib/dormancy"
+import { reportarError } from "@/lib/api-error"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -251,6 +252,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, results, timestamp: now.toISOString() })
   } catch (error) {
     console.error("Error en cron auto-archive-dormant:", error)
+    reportarError(error, { ruta: "/api/cron/auto-archive-dormant", source: "CRON" })
     return NextResponse.json({ error: "Error procesando auto-archivado" }, { status: 500 })
   }
 }

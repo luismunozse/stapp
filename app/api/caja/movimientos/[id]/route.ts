@@ -3,6 +3,7 @@ import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { esErrorColumnaOrigen, esOrigenNoEliminable, resolverOrigen } from "@/lib/caja-utils"
+import { reportarError } from "@/lib/api-error"
 
 // DELETE - Eliminar movimiento manual
 export async function DELETE(
@@ -88,6 +89,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("Error deleting movimiento:", err)
+    reportarError(err, { ruta: "/api/caja/movimientos/[id]" })
     return NextResponse.json({ error: "Error al eliminar movimiento" }, { status: 500 })
   }
 }

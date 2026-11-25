@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { respuestaError } from "@/lib/api-error"
 
 /**
  * Diagnóstico de stock de un item del catálogo público.
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
     .ilike("nombre", `%${q}%`)
     .limit(50)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return respuestaError(error, { ruta: "/api/catalogo/diagnose" })
 
   const report = (items ?? []).map((it: any) => {
     const variantesActivas: any[] = (it.variantes ?? []).filter((v: any) => v.activo)

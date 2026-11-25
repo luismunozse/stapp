@@ -13,6 +13,7 @@ import {
   resolverOrigen,
 } from "@/lib/caja-utils"
 import { esMarcaDeSena } from "@/lib/caja-observaciones"
+import { reportarError } from "@/lib/api-error"
 
 // Métodos a los que se puede corregir un movimiento. CUENTA_CORRIENTE queda
 // afuera a propósito: pasar de/a fiado no es "corregir una etiqueta", mueve la
@@ -601,6 +602,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, metodoPago })
   } catch (err) {
     console.error("Error corrigiendo método de pago:", err)
+    reportarError(err, { ruta: "/api/caja/movimientos/metodo-pago" })
     return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
   }
 }

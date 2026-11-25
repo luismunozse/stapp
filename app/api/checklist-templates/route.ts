@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const templateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
     return NextResponse.json(mappedTemplates)
   } catch (error) {
     console.error("Error fetching checklist templates:", error)
+    reportarError(error, { ruta: "/api/checklist-templates" })
     return NextResponse.json(
       { error: "Error al obtener templates" },
       { status: 500 }

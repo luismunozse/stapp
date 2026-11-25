@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { resolverTipoCambio } from "@/lib/currency/tipo-cambio.server"
+import { reportarError } from "@/lib/api-error"
 
 /** GET /api/moneda/tipo-cambio: cotización vigente de la org. Cualquier rol autenticado. */
 export async function GET() {
@@ -12,6 +13,7 @@ export async function GET() {
     return NextResponse.json(resultado, { headers: { "Cache-Control": "private, max-age=60" } })
   } catch (e) {
     console.error("[tipo-cambio] error:", e)
+    reportarError(e, { ruta: "/api/moneda/tipo-cambio" })
     return NextResponse.json({ error: "Error al obtener la cotización" }, { status: 500 })
   }
 }

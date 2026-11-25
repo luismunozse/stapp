@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
+import { reportarError } from "@/lib/api-error"
 
 export async function GET(
   request: Request,
@@ -104,6 +105,7 @@ export async function GET(
     })
   } catch (error) {
     console.error("Error generating public cotizacion PDF:", error)
+    reportarError(error, { ruta: "/api/public/cotizaciones/[token]/pdf" })
     return NextResponse.json(
       { error: "Error al generar PDF" },
       { status: 500 }

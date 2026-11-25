@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Loader2, ArrowRightLeft } from "lucide-react"
 import { toast } from "sonner"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 interface TecnicoOpt {
   id: string
@@ -77,8 +78,7 @@ export function ReasignarOrdenesDialog({
         body: JSON.stringify({ tecnicoDestinoId: destinoId }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Error al reasignar")
+        throw new Error(await leerError(res, "Error al reasignar"))
       }
       const data = await res.json()
       toast.success(
@@ -90,7 +90,7 @@ export function ReasignarOrdenesDialog({
       onOpenChange(false)
       setDestinoId("")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al reasignar")
+      toast.error(mensajeDeError(err, "Error al reasignar"))
     } finally {
       setSubmitting(false)
     }

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { createRebillCheckout } from "@/lib/rebill"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const checkoutSchema = z.object({
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional(),
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error creating Rebill checkout:", error)
+    reportarError(error, { ruta: "/api/rebill/checkout" })
     return NextResponse.json(
       { error: "Error al crear checkout de pago" },
       { status: 500 }

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { DEFAULT_TIMEZONE, getZonedParts, monthRangeUtc } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
+import { reportarError } from "@/lib/api-error"
 
 /**
  * GET /api/reportes/comparativa-ingresos
@@ -167,6 +168,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error("Error en comparativa de ingresos:", error)
+    reportarError(error, { ruta: "/api/reportes/comparativa-ingresos" })
     return NextResponse.json(
       { error: "Error al obtener comparativa de ingresos" },
       { status: 500 }

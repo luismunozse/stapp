@@ -32,6 +32,7 @@ import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
 import { GenerarFacturaModal } from "./generar-factura-modal"
 import { toast } from "sonner"
+import { leerError, mensajeDeError } from "@/lib/errores-cliente"
 
 type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
@@ -84,15 +85,14 @@ export function FacturacionList() {
         method: "DELETE",
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al eliminar remito")
+        throw new Error(await leerError(res, "Error al eliminar remito"))
       }
       setDeleteDialogOpen(false)
       setSelectedFactura(null)
       mutate()
     } catch (error) {
       console.error("Error deleting factura:", error)
-      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el remito")
+      toast.error(mensajeDeError(error, "No se pudo eliminar el remito"))
     } finally {
       setActionLoading(false)
     }
@@ -108,15 +108,14 @@ export function FacturacionList() {
         body: JSON.stringify({ estadoPago: "ANULADA" }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Error al anular remito")
+        throw new Error(await leerError(res, "Error al anular remito"))
       }
       setVoidDialogOpen(false)
       setSelectedFactura(null)
       mutate()
     } catch (error) {
       console.error("Error voiding factura:", error)
-      toast.error(error instanceof Error ? error.message : "No se pudo anular el remito")
+      toast.error(mensajeDeError(error, "No se pudo anular el remito"))
     } finally {
       setActionLoading(false)
     }

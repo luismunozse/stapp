@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sendAdminEmail } from "@/lib/email"
 import { EmailSuprimidoError } from "@/lib/email/index"
 import { persistentRateLimit } from "@/lib/rate-limit"
+import { reportarError } from "@/lib/api-error"
 
 /** Cupo diario de correos manuales por organización. */
 const MAX_EMAILS_POR_DIA = 50
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Error sending admin email:", error)
+    reportarError(error, { ruta: "/api/emails/send" })
     return NextResponse.json(
       { error: "Error al enviar email" },
       { status: 500 }

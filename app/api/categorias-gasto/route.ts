@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { reportarError } from "@/lib/api-error"
 
 const categoriaSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").max(80),
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Error fetching categorias:", err)
+    reportarError(err, { ruta: "/api/categorias-gasto" })
     return NextResponse.json({ error: "Error al obtener categorías" }, { status: 500 })
   }
 }
