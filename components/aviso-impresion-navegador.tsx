@@ -13,7 +13,7 @@ import { readAlinearArriba, saveAlinearArriba } from "@/lib/thermal-paper"
  */
 export function AvisoImpresionNavegador() {
   const id = useId()
-  const [alinearArriba, setAlinearArriba] = useState(false)
+  const [alinearArriba, setAlinearArriba] = useState(true)
 
   useEffect(() => {
     setAlinearArriba(readAlinearArriba())
@@ -35,7 +35,7 @@ export function AvisoImpresionNavegador() {
           }}
         />
         <label htmlFor={id}>
-          Alinear arriba al imprimir por navegador (si el blanco queda antes del comprobante)
+          Alinear arriba al imprimir por navegador (evita el papel en blanco antes del comprobante)
         </label>
       </div>
     </div>

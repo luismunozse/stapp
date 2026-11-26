@@ -17,6 +17,7 @@ import {
   readAncho,
   saveAncho,
   anchoToPx,
+  anchoImprimibleMm,
   ANCHOS_TERMICOS,
   DEFAULT_ANCHO,
   type AnchoTermico,
@@ -116,8 +117,8 @@ ${styles}
 <style>
   @page { size: ${ancho}mm auto; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { width: ${ancho}mm; }
-  #recepcion-receipt-print-area { width: ${ancho}mm !important; padding: 2mm; box-sizing: border-box; }
+  body { width: ${anchoImprimibleMm(ancho)}mm; }
+  #recepcion-receipt-print-area { width: ${anchoImprimibleMm(ancho)}mm !important; padding: 2mm; box-sizing: border-box; }
   img { max-width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>

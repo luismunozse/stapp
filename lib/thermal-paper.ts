@@ -34,6 +34,17 @@ export function anchoToPx(a: AnchoTermico): number {
   return Math.round((a * 96) / 25.4) // 58 -> 219, 80 -> 302
 }
 
+/**
+ * Ancho que el cabezal realmente imprime, en mm: 48mm en rollo de 58 y 72mm en
+ * rollo de 80 (384 y 576 puntos a 8 puntos/mm). La impresión por navegador
+ * maqueta el comprobante a este ancho; si usara el ancho del papel, la
+ * impresora corta lo que pasa del cabezal (se perdía el final de cada renglón
+ * alineado a la derecha).
+ */
+export function anchoImprimibleMm(a: AnchoTermico): number {
+  return a === 58 ? 48 : 72
+}
+
 /** Ancho de raster del logo en puntos según el cabezal (58mm≈384pt, 80mm≈576pt). */
 export function anchoLogoDots(a: AnchoTermico): number {
   return a === 58 ? 384 : 576
@@ -54,23 +65,26 @@ const ALINEAR_ARRIBA_KEY = "stapp:comprobante-alinear-arriba"
 /**
  * Preferencia por dispositivo para la impresión por navegador: no achicar la
  * página al alto del comprobante, así sale pegado al borde superior de la hoja
- * del driver. Sirve en impresoras con papel de largo fijo que cortan al final
- * de lo impreso (ver ajustarPaginaImpresion en lib/print-fit-page.ts).
+ * del driver (ver ajustarPaginaImpresion en lib/print-fit-page.ts).
+ *
+ * Activada por defecto: los drivers de rollo (58 y 80mm) suelen ofrecer un
+ * papel de largo fijo muy largo (p. ej. 58 x 3276mm) y cortan al final de lo
+ * impreso. Una página achicada al alto del comprobante queda centrada en esa
+ * hoja y sale más de un metro de papel en blanco antes del comprobante.
  */
 export function readAlinearArriba(): boolean {
-  if (typeof window === "undefined") return false
+  if (typeof window === "undefined") return true
   try {
-    return window.localStorage.getItem(ALINEAR_ARRIBA_KEY) === "1"
+    return window.localStorage.getItem(ALINEAR_ARRIBA_KEY) !== "0"
   } catch {
-    return false
+    return true
   }
 }
 
 export function saveAlinearArriba(valor: boolean): void {
   if (typeof window === "undefined") return
   try {
-    if (valor) window.localStorage.setItem(ALINEAR_ARRIBA_KEY, "1")
-    else window.localStorage.removeItem(ALINEAR_ARRIBA_KEY)
+    window.localStorage.setItem(ALINEAR_ARRIBA_KEY, valor ? "1" : "0")
   } catch {
     /* localStorage no disponible (modo privado, etc.) */
   }

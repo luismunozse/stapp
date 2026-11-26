@@ -17,24 +17,32 @@ function reglasPage(doc: Document) {
 describe("ajustarPaginaImpresion", () => {
   beforeEach(() => localStorage.clear())
 
-  it("por defecto ajusta la página al alto del contenido", () => {
+  it("con 'Alinear arriba' desactivado ajusta la página al alto del contenido", () => {
+    saveAlinearArriba(false)
     const { doc, el } = docConContenido(378) // 100mm
     ajustarPaginaImpresion(doc, el, 80)
     expect(reglasPage(doc)).toEqual(["@page { size: 80mm 103mm; margin: 0; }"])
   })
 
-  it("con 'Alinear arriba' deja el tamaño de hoja del driver", () => {
-    saveAlinearArriba(true)
+  it("por defecto ('Alinear arriba') deja el tamaño de hoja del driver", () => {
     const { doc, el } = docConContenido(378)
     ajustarPaginaImpresion(doc, el, 80)
     expect(reglasPage(doc)).toEqual(["@page { size: auto; margin: 0; }"])
   })
 
   it("la preferencia se guarda y se puede apagar", () => {
-    expect(readAlinearArriba()).toBe(false)
-    saveAlinearArriba(true)
     expect(readAlinearArriba()).toBe(true)
     saveAlinearArriba(false)
     expect(readAlinearArriba()).toBe(false)
+    saveAlinearArriba(true)
+    expect(readAlinearArriba()).toBe(true)
+  })
+})
+
+describe("anchoImprimibleMm", () => {
+  it("usa el ancho del cabezal, no el del papel", async () => {
+    const { anchoImprimibleMm } = await import("@/lib/thermal-paper")
+    expect(anchoImprimibleMm(58)).toBe(48)
+    expect(anchoImprimibleMm(80)).toBe(72)
   })
 })

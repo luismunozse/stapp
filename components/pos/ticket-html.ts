@@ -98,7 +98,7 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
 <style>
   @page { size: ${Number(printerWidth)}mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: ${printerWidth === 80 ? 13 : 12}px; width: ${Number(printerWidth)}mm; padding: ${printerWidth === 80 ? 10 : 8}px; color: #000; }
+  body { font-family: 'Courier New', Courier, monospace; font-size: ${printerWidth === 80 ? 13 : 12}px; width: ${Number(printerWidth) === 58 ? 48 : 72}mm; padding: ${printerWidth === 80 ? 10 : 8}px; color: #000; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
   .sep { border-top: 1px dashed #999; margin: 6px 0; }

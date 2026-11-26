@@ -71,7 +71,15 @@ describe("NotaCreditoTicketDialog", () => {
   it("imprime por navegador escribiendo el HTML del ticket", async () => {
     stubFetch()
     const ventana = {
-      document: { write: vi.fn(), close: vi.fn(), readyState: "complete", body: {}, fonts: { ready: Promise.resolve() } },
+      document: {
+        write: vi.fn(),
+        close: vi.fn(),
+        readyState: "complete",
+        body: {},
+        head: { appendChild: vi.fn() },
+        createElement: () => ({ textContent: "" }),
+        fonts: { ready: Promise.resolve() },
+      },
       focus: vi.fn(),
       print: vi.fn(),
     }

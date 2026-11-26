@@ -37,7 +37,7 @@ export function buildNotaCreditoTicketHTML(data: NotaCreditoTicketData, opts: { 
 <style>
   @page { size: ${ancho}mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: ${ancho === 80 ? 13 : 12}px; width: ${ancho}mm; padding: ${ancho === 80 ? 10 : 8}px; color: #000; }
+  body { font-family: 'Courier New', Courier, monospace; font-size: ${ancho === 80 ? 13 : 12}px; width: ${ancho === 58 ? 48 : 72}mm; padding: ${ancho === 80 ? 10 : 8}px; color: #000; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
   .big { font-size: 16px; }
