@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ParsedRow } from './csv-parser'
 import { parseMonto } from './parse-money'
+import { normalizarTelefonoNacional } from './countries'
 
 // Cells reach the validators as STRINGS (CSV) or native numbers (Excel). Text
 // fields accept both: a numeric Excel cell for telefono/dni/codigo is a valid
@@ -14,8 +15,12 @@ const toText = (val: unknown): unknown => {
 const optionalText = z.preprocess(toText, z.string().nullish())
 const emailShape = z.string().email()
 
-// Cliente validation schema (matches existing API schema)
-const clienteRowSchema = z.object({
+/**
+ * Cliente validation schema. The phone rule depends on the organization's
+ * country: it accepts the number with or without the country code and keeps the
+ * national number (see `normalizarTelefonoNacional`).
+ */
+const buildClienteRowSchema = (pais?: string | null) => z.object({
   nombre: z.preprocess(
     toText,
     z.string({ error: 'El nombre es requerido' })
@@ -27,17 +32,12 @@ const clienteRowSchema = z.object({
       ctx.addIssue({ code: 'custom', fatal: true, message: 'El teléfono es requerido' })
       return z.NEVER
     }
-    // Spaces, dashes, dots and parentheses are formatting, not content.
-    const digits = typeof raw === 'string' ? raw.replace(/[\s().-]/g, '') : raw
-    if (typeof digits !== 'string' || !/^\d{10}$/.test(digits)) {
-      ctx.addIssue({
-        code: 'custom',
-        fatal: true,
-        message: `El teléfono debe tener exactamente 10 dígitos (recibido: "${String(raw)}")`,
-      })
+    const normalizado = normalizarTelefonoNacional(String(raw), pais)
+    if (!normalizado.ok) {
+      ctx.addIssue({ code: 'custom', fatal: true, message: normalizado.motivo })
       return z.NEVER
     }
-    return digits
+    return normalizado.telefono
   }, z.string()),
   email: z.preprocess(
     toText,
@@ -49,6 +49,17 @@ const clienteRowSchema = z.object({
   direccion: optionalText,
   dni: optionalText,
 })
+
+const clienteRowSchemas = new Map<string, ReturnType<typeof buildClienteRowSchema>>()
+function clienteRowSchemaFor(pais?: string | null) {
+  const key = pais ?? ''
+  let schema = clienteRowSchemas.get(key)
+  if (!schema) {
+    schema = buildClienteRowSchema(pais)
+    clienteRowSchemas.set(key, schema)
+  }
+  return schema
+}
 
 /**
  * Number column. `emptyValue` is what a blank cell becomes. Parsing goes through
@@ -152,9 +163,14 @@ function invalidResult(error: unknown, rowNumber: number): ValidationResult {
  * @param rowNumber real spreadsheet line to report; defaults to `rowIndex + 2`
  *   (header = line 1), which only holds for CSVs without blank lines.
  */
-export function validateClienteRow(row: ParsedRow, rowIndex: number, rowNumber = rowIndex + 2): ValidationResult {
+export function validateClienteRow(
+  row: ParsedRow,
+  rowIndex: number,
+  rowNumber = rowIndex + 2,
+  pais?: string | null,
+): ValidationResult {
   try {
-    const data = clienteRowSchema.parse(row)
+    const data = clienteRowSchemaFor(pais).parse(row)
     return { valid: true, data }
   } catch (error) {
     return invalidResult(error, rowNumber)

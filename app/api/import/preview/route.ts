@@ -5,6 +5,7 @@ import { validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-va
 import { validateImportRows, collectInvalidRows, compactRow } from "@/lib/import-rows"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
+import { paisParaImportar } from "@/lib/import-pais"
 import { z } from "zod"
 
 const previewSchema = z.object({
@@ -112,7 +113,9 @@ export async function POST(request: Request) {
     // Validate EVERY row once (sync, no I/O). Row numbers are the spreadsheet
     // lines the user sees (header = 1); structural problems found by the parser
     // show up here as invalid rows instead of aborting the whole file.
-    const checked = validateImportRows(normalizedRows, parseResult, data.entityType)
+    // Los teléfonos se leen según el país del taller (con o sin código de país).
+    const pais = data.entityType === 'CLIENTES' ? await paisParaImportar(organizationId!) : null
+    const checked = validateImportRows(normalizedRows, parseResult, data.entityType, pais)
 
     const validatedPreview = checked.slice(0, 5).map(({ rowNumber, row, validation }) => ({
       row: rowNumber,

@@ -191,3 +191,21 @@ describe("validateCSVHeaders", () => {
     expect(result.error).toContain("Faltan columnas requeridas")
   })
 })
+
+describe("validateClienteRow — teléfono según el país de la organización", () => {
+  it("México: acepta el número con código de país y guarda el nacional", () => {
+    const result = validateClienteRow({ nombre: "Ana", telefono: "+52 1 55 1234 5678" }, 0, 2, "MX")
+    expect(result.valid).toBe(true)
+    expect(result.data.telefono).toBe("5512345678")
+  })
+
+  it("Chile: acepta 9 dígitos, que con la regla fija de 10 se rechazaban", () => {
+    const result = validateClienteRow({ nombre: "Ana", telefono: "912345678" }, 0, 2, "CL")
+    expect(result.valid).toBe(true)
+  })
+
+  it("lee un teléfono que Excel entregó como número", () => {
+    const result = validateClienteRow({ nombre: "Ana", telefono: 525512345678 }, 0, 2, "MX")
+    expect(result.data.telefono).toBe("5512345678")
+  })
+})
