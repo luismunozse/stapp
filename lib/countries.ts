@@ -16,6 +16,17 @@ export interface CountryConfig {
    * completa del pais.
    */
   phoneNationalMinDigits: number
+  /**
+   * Largo exacto del numero nacional cuando el pais tiene numeracion de largo
+   * fijo y lo sabemos con certeza. Sin valor, el techo es el de E.164.
+   */
+  phoneNationalMaxDigits?: number
+  /**
+   * Digito que algunos paises intercalaban entre el codigo de pais y el numero
+   * de un celular y que ya no forma parte del numero (Mexico: +52 1 ...).
+   * Solo se descarta cuando el numero vino con codigo de pais.
+   */
+  phoneLegacyMobilePrefix?: string
   defaultCurrency: CurrencyCode
   defaultTimezone: string
   locale: string
@@ -56,6 +67,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     name: "Argentina",
     phoneCode: "54",
     phoneNationalMinDigits: 10,
+    phoneNationalMaxDigits: 10,
     defaultCurrency: "ARS",
     defaultTimezone: "America/Argentina/Buenos_Aires",
     locale: "es-AR",
@@ -75,6 +87,8 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     name: "México",
     phoneCode: "52",
     phoneNationalMinDigits: 10,
+    phoneNationalMaxDigits: 10,
+    phoneLegacyMobilePrefix: "1",
     defaultCurrency: "MXN",
     defaultTimezone: "America/Mexico_City",
     locale: "es-MX",
@@ -522,4 +536,94 @@ export function formatPhoneForCountry(phone: string, countryCode?: string | null
   }
 
   return cleaned
+}
+
+/** Largo maximo de un numero E.164, codigo de pais incluido. */
+const E164_MAX_DIGITS = 15
+
+export type TelefonoNormalizado =
+  | { ok: true; telefono: string }
+  | { ok: false; motivo: string }
+
+/**
+ * Lleva un telefono escrito de cualquier forma razonable ("+52 55 1234 5678",
+ * "5215512345678", "(55) 1234-5678") al numero NACIONAL del pais de la
+ * organizacion, que es como se guarda: `formatPhoneForCountry` le antepone el
+ * codigo de pais recien al enviar por WhatsApp.
+ *
+ * Guardar siempre la misma forma es lo que hace que la deduplicacion por
+ * telefono funcione: "+52 55 1234 5678" y "5512345678" son el mismo cliente.
+ *
+ * Un numero con "+" o "00" y codigo de OTRO pais se conserva completo con el
+ * "+" adelante, siempre que tenga mas de 10 digitos: por debajo de eso
+ * `formatPhoneForCountry` lo tomaria por local y le antepondria nuestro codigo.
+ */
+export function normalizarTelefonoNacional(
+  raw: string,
+  countryCode?: string | null,
+): TelefonoNormalizado {
+  const country = getCountryConfig(countryCode)
+  const recibido = `(recibido: "${raw}")`
+  const compacto = raw.trim().replace(/[\s().-]/g, "")
+
+  const conMas = compacto.startsWith("+")
+  let digitos = conMas ? compacto.slice(1) : compacto
+  if (!/^\d+$/.test(digitos)) {
+    return { ok: false, motivo: `El teléfono solo puede tener números ${recibido}` }
+  }
+
+  let internacional = conMas
+  if (!conMas && digitos.startsWith("00")) {
+    internacional = true
+    digitos = digitos.slice(2)
+  }
+
+  const min = country.phoneNationalMinDigits
+  const max = country.phoneNationalMaxDigits ?? E164_MAX_DIGITS - country.phoneCode.length
+
+  if (!internacional) {
+    // Un numero que ya tiene el largo nacional se guarda tal cual, aunque
+    // empiece con 0: es lo que el import acepto siempre.
+    if (digitos.length >= min && digitos.length <= (country.phoneNationalMaxDigits ?? min)) {
+      return { ok: true, telefono: digitos }
+    }
+    // Si no, el 0 de larga distancia no forma parte del numero.
+    digitos = digitos.replace(/^0+/, "")
+  }
+
+  let nacional = digitos
+  // Solo tratamos el prefijo como codigo de pais si lo que queda sigue siendo
+  // un numero plausible; si no, es parte del numero nacional.
+  if (
+    digitos.startsWith(country.phoneCode) &&
+    digitos.length - country.phoneCode.length >= min
+  ) {
+    nacional = digitos.slice(country.phoneCode.length)
+    const legacy = country.phoneLegacyMobilePrefix
+    if (legacy && nacional.length === max + legacy.length && nacional.startsWith(legacy)) {
+      nacional = nacional.slice(legacy.length)
+    }
+  } else if (internacional) {
+    if (digitos.length > 10 && digitos.length <= E164_MAX_DIGITS) {
+      return { ok: true, telefono: `+${digitos}` }
+    }
+    return {
+      ok: false,
+      motivo: `El teléfono tiene un código de país que no es el de ${country.name} (+${country.phoneCode}) y no parece un número completo ${recibido}`,
+    }
+  }
+
+  if (nacional.length < min || nacional.length > max) {
+    const largo = min === max ? `exactamente ${min}` : `entre ${min} y ${max}`
+    // Para Argentina el mensaje queda igual que antes de que el import mirara el pais.
+    const aclaracion = country.code === DEFAULT_COUNTRY
+      ? ""
+      : `, sin contar el código de país +${country.phoneCode}`
+    return {
+      ok: false,
+      motivo: `El teléfono debe tener ${largo} dígitos${aclaracion} ${recibido}`,
+    }
+  }
+
+  return { ok: true, telefono: nacional }
 }

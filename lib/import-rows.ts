@@ -38,6 +38,8 @@ export function validateImportRows(
   rows: ParsedRow[],
   parsed: Pick<ParseResult, 'rowNumbers' | 'rowErrors'>,
   entityType: ImportEntity,
+  /** País de la organización: define cómo se leen los teléfonos de CLIENTES. */
+  pais?: string | null,
 ): RowValidation[] {
   const structural = new Map(parsed.rowErrors.map(e => [e.index, e.message]))
 
@@ -53,7 +55,7 @@ export function validateImportRows(
       }
     }
     const validation = entityType === 'CLIENTES'
-      ? validateClienteRow(row, index, rowNumber)
+      ? validateClienteRow(row, index, rowNumber, pais)
       : validateInventarioRow(row, index, rowNumber)
     return { index, rowNumber, row, validation }
   })

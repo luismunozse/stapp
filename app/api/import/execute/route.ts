@@ -10,6 +10,7 @@ import { enforcePlanLimit } from "@/lib/plan-limits"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { buildInventarioPayload } from "@/lib/import-inventario-payload"
+import { paisParaImportar } from "@/lib/import-pais"
 import { z } from "zod"
 
 const executeSchema = z.object({
@@ -173,7 +174,9 @@ export async function POST(request: Request) {
     const validRows: Array<{ rowNumber: number; row: any; data: any; sinPrecio?: boolean }> = []
 
     // Same validation and numbering as /preview: rowNumber is the spreadsheet line.
-    const checked = validateImportRows(parseResult.data, parseResult, data.entityType)
+    // Los teléfonos se leen según el país del taller (con o sin código de país).
+    const pais = data.entityType === 'CLIENTES' ? await paisParaImportar(organizationId!) : null
+    const checked = validateImportRows(parseResult.data, parseResult, data.entityType, pais)
     for (const { rowNumber, row, validation } of checked) {
       if (!validation.valid) {
         results.errors.push({
