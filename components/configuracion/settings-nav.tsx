@@ -14,6 +14,7 @@ import {
   Store,
   Type,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -45,6 +46,13 @@ const SECTIONS: SettingSection[] = [
     title: "Operación",
     accent: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
     cards: [
+      {
+        href: "/configuracion/rubro",
+        icon: Wrench,
+        label: "Rubro",
+        desc: "Qué reparás: tipos de equipo, checklist y vocabulario",
+        descShort: "Qué reparás",
+      },
       {
         href: "/configuracion/checklist",
         icon: ClipboardCheck,

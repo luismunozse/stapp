@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,10 +27,15 @@ interface RubroSelectorProps {
   deshabilitado?: boolean
   onGuardado: (rubro: RubroVigente) => void
   onBloqueado: () => void
+  /** What the locked state says. Defaults to a one-line reason with the way out. */
+  motivoBloqueo?: ReactNode
 }
 
 const MOTIVO_BLOQUEO_ID = "rubro-bloqueado-motivo"
-const MENSAJE_BLOQUEO = "Ya cargaste órdenes, así que el rubro no se puede cambiar desde acá."
+const MENSAJE_BLOQUEO =
+  "Ya tenés órdenes cargadas, así que el rubro no se puede cambiar. Si eran de prueba, eliminalas desde Órdenes y probá de nuevo."
+const MOTIVO_BLOQUEO_POR_DEFECTO =
+  "Ya cargaste órdenes, así que el rubro queda como está. Si eran de prueba, eliminalas desde Órdenes y lo vas a poder cambiar."
 
 export function RubroSelector({
   rubro,
@@ -39,6 +44,7 @@ export function RubroSelector({
   deshabilitado = false,
   onGuardado,
   onBloqueado,
+  motivoBloqueo = MOTIVO_BLOQUEO_POR_DEFECTO,
 }: RubroSelectorProps) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
@@ -134,7 +140,7 @@ export function RubroSelector({
       </div>
       {bloqueado && (
         <p id={MOTIVO_BLOQUEO_ID} ref={motivoRef} tabIndex={-1} className="mt-1 text-xs text-muted-foreground outline-none">
-          Ya cargaste órdenes, así que el rubro queda como está.
+          {motivoBloqueo}
         </p>
       )}
       {cambiado && !bloqueado && (
@@ -164,8 +170,8 @@ export function RubroSelector({
           <DialogHeader>
             <DialogTitle>Cambiar rubro</DialogTitle>
             <DialogDescription>
-              Preparamos tus tipos de equipo, el checklist de recepción y el vocabulario del sistema. Si hiciste una
-              práctica, se borra.
+              Cargamos los tipos de equipo y el checklist de recepción del rubro nuevo, y el vocabulario pasa a ser el
+              de ese rubro. Los tipos y checklists que creaste a mano quedan. Si hiciste una práctica, se borra.
             </DialogDescription>
           </DialogHeader>
           <RubroPicker

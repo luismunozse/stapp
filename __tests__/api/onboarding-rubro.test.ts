@@ -192,7 +192,9 @@ describe("PUT /api/onboarding/rubro", () => {
     const { status, body } = await parseResponse(await put({ rubro: "electronica" }))
 
     expect(status).toBe(409)
-    expect(body.error).toBe("Ya tenés órdenes cargadas: el rubro no se puede cambiar desde acá.")
+    expect(body.error).toBe(
+      "Ya tenés órdenes cargadas, así que el rubro no se puede cambiar. Si eran de prueba, eliminalas desde Órdenes y probá de nuevo."
+    )
     expect(deletePracticeData).not.toHaveBeenCalled()
     expect(aplicarCambioDeRubro).not.toHaveBeenCalled()
   })

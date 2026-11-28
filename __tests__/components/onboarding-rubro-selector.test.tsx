@@ -57,7 +57,7 @@ describe("RubroSelector", () => {
 
     const cambiar = screen.getByRole("button", { name: "Cambiar rubro" })
     expect(cambiar).toBeDisabled()
-    const motivo = screen.getByText("Ya cargaste órdenes, así que el rubro queda como está.")
+    const motivo = screen.getByText("Ya cargaste órdenes, así que el rubro queda como está. Si eran de prueba, eliminalas desde Órdenes y lo vas a poder cambiar.")
     expect(cambiar).toHaveAttribute("aria-describedby", motivo.id)
   })
 
@@ -191,7 +191,7 @@ describe("RubroSelector", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
 
-    const motivo = await screen.findByText("Ya cargaste órdenes, así que el rubro queda como está.")
+    const motivo = await screen.findByText("Ya cargaste órdenes, así que el rubro queda como está. Si eran de prueba, eliminalas desde Órdenes y lo vas a poder cambiar.")
     await waitFor(() => expect(motivo).toHaveFocus())
     expect(motivo).toHaveAttribute("tabindex", "-1")
   })

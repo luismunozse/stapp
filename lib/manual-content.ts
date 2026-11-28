@@ -57,7 +57,7 @@ export const manualSections: ManualSection[] = [
       {
         subtitle: "Rubro de tu negocio",
         body: "El rubro que elegís al registrarte prepara tus tipos de equipo, el checklist de recepción y el vocabulario del sistema. Los rubros son: Electrónica y computación; Electrodomésticos y refrigeración; Taller mecánico / Automotor; Motos y bicicleterías; Relojería y joyería; y Otro servicio técnico (donde contás qué reparás).",
-        tip: "Podés cambiar el rubro desde el asistente de bienvenida (\"Tu rubro · Cambiar\") mientras no hayas cargado órdenes reales; si hiciste la práctica, se borra. Después podés ajustar todo a mano en Tipos de dispositivo, Checklist y Configuración > Vocabulario.",
+        tip: "Si te equivocaste de rubro, cambialo en Configuración > Rubro (o en el asistente de bienvenida, en \"Tu rubro · Cambiar\") mientras no hayas cargado órdenes. Si las órdenes que cargaste eran de prueba, eliminalas desde Órdenes y vas a poder cambiarlo; si son trabajos reales, escribinos a soporte. Al cambiarlo se cargan los tipos de equipo y el checklist del rubro nuevo, el vocabulario pasa a ser el de ese rubro y, si hiciste la práctica, se borra. Lo que creaste a mano queda, y podés ajustar todo en Tipos de dispositivo, Checklist y Configuración > Vocabulario.",
         roles: ["ADMIN"],
         seeAlso: ["configuracion"],
       },

@@ -11,12 +11,14 @@ interface ListoStepProps {
   practica: PracticaOrden | null
   completando: boolean
   onCompletar: (destino: string) => void
+  /** Back to the business step: Listo is where a finished practice lands, so it is the only way to reach the rubro. */
+  onCambiarRubro: () => void
 }
 
 const PRIMERA_ORDEN = "/ordenes?nueva=1"
 const PANEL = "/dashboard"
 
-export function ListoStep({ practica, completando, onCompletar }: ListoStepProps) {
+export function ListoStep({ practica, completando, onCompletar, onCambiarRubro }: ListoStepProps) {
   const [destino, setDestino] = useState<string | null>(null)
   const ir = (siguiente: string) => {
     setDestino(siguiente)
@@ -57,6 +59,18 @@ export function ListoStep({ practica, completando, onCompletar }: ListoStepProps
         </Button>
         <p className="text-center text-xs text-muted-foreground">
           La práctica queda en tu lista hasta que cargues tu primera orden real.
+        </p>
+        <p className="text-center text-sm text-muted-foreground">
+          ¿Te equivocaste de rubro?{" "}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0 align-baseline"
+            onClick={onCambiarRubro}
+            disabled={completando}
+          >
+            Cambialo
+          </Button>
         </p>
       </CardContent>
     </>

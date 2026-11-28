@@ -63,7 +63,7 @@ describe("OnboardingWizard — rubro change", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Cambiar rubro" })).toBeDisabled())
-    expect(screen.getByText("Ya cargaste órdenes, así que el rubro queda como está.")).toBeInTheDocument()
+    expect(screen.getByText("Ya cargaste órdenes, así que el rubro queda como está. Si eran de prueba, eliminalas desde Órdenes y lo vas a poder cambiar.")).toBeInTheDocument()
     expect(refresh).not.toHaveBeenCalled()
   })
 
@@ -86,6 +86,6 @@ describe("OnboardingWizard — rubro change", () => {
     await irANegocio({ ordenesRealesCount: 2 })
 
     expect(screen.getByRole("button", { name: "Cambiar rubro" })).toBeDisabled()
-    expect(screen.getByText("Ya cargaste órdenes, así que el rubro queda como está.")).toBeInTheDocument()
+    expect(screen.getByText("Ya cargaste órdenes, así que el rubro queda como está. Si eran de prueba, eliminalas desde Órdenes y lo vas a poder cambiar.")).toBeInTheDocument()
   })
 })

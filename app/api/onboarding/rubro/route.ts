@@ -23,7 +23,10 @@ const bodySchema = z.object(
 )
 
 const ERROR_INTERNO = "No pudimos cambiar el rubro. Probá de nuevo."
-const ERROR_CON_ORDENES = "Ya tenés órdenes cargadas: el rubro no se puede cambiar desde acá."
+// Says what to do next: the lock is the only dead end of the change, and an
+// admin can delete test orders (DELETE /api/ordenes/[id]) to get past it.
+const ERROR_CON_ORDENES =
+  "Ya tenés órdenes cargadas, así que el rubro no se puede cambiar. Si eran de prueba, eliminalas desde Órdenes y probá de nuevo."
 
 /**
  * Changes the rubro from the onboarding wizard while the shop has no real

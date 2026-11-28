@@ -54,4 +54,5 @@ export const panelRoutes: PanelRoute[] = [
   { ruta: "/configuracion/api-keys", descripcion: "API keys para la API REST" },
   { ruta: "/configuracion/webhooks", descripcion: "Webhooks salientes" },
   { ruta: "/configuracion/vocabulario", descripcion: "Vocabulario/terminología del rubro" },
+  { ruta: "/configuracion/rubro", descripcion: "Rubro del taller (qué repara): ver qué preparó y cambiarlo mientras no haya órdenes cargadas" },
 ]

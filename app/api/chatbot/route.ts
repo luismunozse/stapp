@@ -459,6 +459,7 @@ SUCURSALES Y MULTI-MONEDA:
 
 RUBROS SOPORTADOS:
 - Al registrarte elegís qué reparás: Electrónica y computación, Electrodomésticos y refrigeración, Taller mecánico / Automotor, Motos y bicicleterías, Relojería y joyería u Otro servicio técnico (nos contás qué reparás). STApp precarga tus tipos de equipo, el checklist de recepción y el vocabulario de tu rubro.
+- Si te equivocaste de rubro: Configuración > Rubro > Cambiar (el administrador). Se puede mientras no haya órdenes cargadas; si eran de prueba, se eliminan desde Órdenes (Eliminar orden) y después se cambia. Si ya hay trabajos reales, que escriba a soporte. Al cambiarlo se cargan los tipos de equipo y el checklist del rubro nuevo y el vocabulario pasa a ser el de ese rubro; lo que creó a mano queda.
 
 PAÍSES:
 - Disponible en Argentina, España y 18 países de Latinoamérica (México, Chile, Colombia, Perú, Uruguay, Brasil, Bolivia, Paraguay, Venezuela, Ecuador, Costa Rica, Panamá, República Dominicana, Guatemala, Honduras, El Salvador, Nicaragua y Cuba). El país ajusta la moneda, la zona horaria, el formato de teléfono para WhatsApp, el IVA y la identificación fiscal.

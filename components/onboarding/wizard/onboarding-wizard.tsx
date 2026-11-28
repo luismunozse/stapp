@@ -159,7 +159,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
                 completando={completando}
                 ordenesRealesCount={hayOrdenesReales ? Math.max(props.ordenesRealesCount, 1) : 0}
                 onSi={() => void completar("/ordenes?nueva=1", "real")}
-                onPracticar={() => irA("practica")}
+                // A finished practice has nothing left to do in its step: Listo is next.
+                onPracticar={() => irA(subPaso === "terminada" ? "listo" : "practica")}
                 onAtras={() => irA("negocio")}
               />
             )}
@@ -175,7 +176,12 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               />
             )}
             {paso === "listo" && (
-              <ListoStep practica={practica} completando={completando} onCompletar={(destino) => void completar(destino)} />
+              <ListoStep
+                practica={practica}
+                completando={completando}
+                onCompletar={(destino) => void completar(destino)}
+                onCambiarRubro={() => irA("negocio")}
+              />
             )}
           </div>
         </Card>
